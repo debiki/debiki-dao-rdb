@@ -14,3 +14,7 @@ project/boot/
 debiki-dao-oracle.iml
 project/project.iml
 
+# The Oracle JDBC driver (not added to the repo,
+# licensing issues).
+lib/ojdbc6.jar
+
