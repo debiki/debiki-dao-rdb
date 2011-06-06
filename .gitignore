@@ -1,0 +1,16 @@
+scratch.txt
+scratch/
+
+# Maven
+target/
+
+# SBT
+lib_managed/
+src_managed/
+project/boot/
+
+# Idea
+.idea/
+debiki-dao-oracle.iml
+project/project.iml
+
