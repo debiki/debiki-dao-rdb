@@ -4,9 +4,7 @@
 
 package com.debiki.v0
 
-import _root_.net.liftweb._
-import common._
-import actor._
+import _root_.net.liftweb.common.{Logger, Box, Empty, Full, Failure}
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
@@ -45,8 +43,10 @@ object OracleDao {
 }
 
 
-class OracleDao(val schema: OracleSchema) extends Dao with Logger {
+class OracleDao(val schema: OracleSchema) extends Dao {
   // COULD serialize access, per page?
+
+  import OracleDb._
 
   def db = schema.oradb
 
@@ -55,49 +55,116 @@ class OracleDao(val schema: OracleSchema) extends Dao with Logger {
   def checkRepoVersion() = schema.readCurVersion()
 
   def create(tenantId: String, debatePerhapsId: Debate): Box[Debate] = {
-    var debateWithId = if (debatePerhapsId.id != "?") {
+    var debate = if (debatePerhapsId.id != "?") {
       debatePerhapsId
     } else {
       debatePerhapsId.copy(id = nextRandomString)  // TODO use the same
                                               // method in all DAO modules!
     }
-    // _impl.createPage(tenantId, debate.id)
-    try { db.transaction { conn =>
-      //db.execUpdate("insert into DW000_ACTIONS ...")
-
-    }} catch {
-      case e: Exception => Failure(
-        "Database error [debiki_error_3rtsk7kS]", Full(e), Empty)
+    db.transaction { implicit connection =>
+      _createPage(tenantId, debate)
+      _insert(tenantId, debate.id, debate.posts)
+      Full(debate)
     }
-    unimplemented
   }
 
   def save(tenantId: String, debateId: String, x: AnyRef): Box[AnyRef] = {
-    unimplemented // delete this overload
+    save(tenantId, debateId, x::Nil).map(_.head)
   }
 
   def save[T](tenantId: String, debateId: String,
                 xs: List[T]): Box[List[T]] = {
-    db.execUpdate("update dual set muu = 'mää'")
-
-//      var failure: Box[List[T]] = Empty
-//      for (x <- xs) yield x match {
-//        case g: Debate => _impl.savePage(tenantId, p)
-//        case p: Post => _impl.savePost(tenantId, p)
-//        case e: Edit => _impl.saveEdit(tenantId, e)
-//        case x: failure = Failure(
-//      "Cannot save a `"+ classNameFor(x) +"' [debiki_error_983hUzq5J]")
-//    }
-    unimplemented
+    db.transaction { implicit connection =>
+      _insert(tenantId, debateId, xs)
+    }
   }
 
   def load(tenantId: String, debateId: String): Box[Debate] = {
-    //db.execQuery("select 1 from dual", Nil, _ match {
-    //  case Right(resultSet) =>
-    //  case Left(exception) =>
-    //})
-    Failure("Not implemented [debiki_error_335k23355s3]")
+    // Consider using TRANSACTION_REPEATABLE_READ? Not needed right now.
+    // Order by TIME desc, because when the action list is constructed
+    // the order is reversed again.
+    db.queryAtnms("""
+        select ID, TYPE, TIME, WHO, IP, RELA, DATA, DATA2
+        from DW0_ACTIONS
+        where TENANT = ? and PAGE = ?
+        order by TIME desc
+        """,
+        List(tenantId, debateId), rs => {
+      var actions = List[AnyRef]()
+
+      while (rs.next) {
+        val id = rs.getString("ID");
+        val typee = rs.getString("TYPE");
+        val at = ts2d(rs.getTimestamp("TIME"))
+        val by = rs.getString("WHO")
+        val ip = rs.getString("IP")
+        val rela_? = rs.getString("RELA")  // can be null
+        val data_? = rs.getString("DATA")
+        val data2_? = rs.getString("DATA2")
+
+        val action = typee match {
+          case "Post" =>
+            new Post(id = id, parent = n2e(rela_?), date = at,
+              by = by, ip = ip, text = n2e(data_?),
+              where = Option(data2_?))
+          case x => return Failure(
+              "Bad DW0_ACTIONS.TYPE: "+ safed(typee) +" [debiki_error_Y8k3B]")
+        }
+        actions ::= action  // this reverses above `order by TIME desc'
+      }
+
+      Full(Debate.fromActions(id = debateId, actions))
+    })
   }
+
+  private def _createPage[T](tenantId: String, debate: Debate)
+                            (implicit conn: js.Connection): Box[Int] = {
+    db.update("""
+        insert into DW0_PAGES (TENANT, GUID) values (?, ?)
+        """,
+        List(tenantId, debate.id))
+  }
+
+  private def _insert[T](tenantId: String, debateId: String, xs: List[T])
+                        (implicit conn: js.Connection): Box[List[T]] = {
+    var xsWithIds = (new Debate("dummy")).assignIdTo(
+                      xs.asInstanceOf[List[AnyRef]]).asInstanceOf[List[T]]
+                          // COULD make `assignIdTo' member of object Debiki$
+    var bindPos = 0
+    for (x <- xsWithIds) {
+      // TODO don't insert sysdate, but the same timestamp for all entries!
+      val insertIntoActions = """
+          insert into DW0_ACTIONS(TENANT, PAGE, ID, TYPE,
+              TIME, WHO, IP, RELA, DATA, DATA2)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          """
+      x match {
+        case p: Post =>
+          db.update(insertIntoActions,
+            List(tenantId, debateId, p.id, "Post", p.date, p.by,
+                p.ip, p.parent, p.text,
+                p.where.getOrElse(Null(js.Types.NVARCHAR))))
+        case e: Edit =>
+          db.update(insertIntoActions,
+            List(tenantId, debateId, e.id, "Edit", e.date, e.by,
+                  e.ip, e.postId, e.text, e.desc))
+        case x => unimplemented(
+          "Saving this: "+ classNameOf(x) +" [debiki_error_38rkRF]")
+      }
+    }
+    Full(xsWithIds)
+  }
+
+  /** Adds a can be Empty Prefix.
+   *
+   * Oracle converts the empty string to NULL, so prefix strings that might
+   * be empty with a magic value, and remove it when reading data from
+   * the db.
+   */
+  //private def _aep(str: String) = "-"+ str
+
+  /** Removes a can be Empty Prefix. */
+  //private def _rep(str: String) = str drop 1
 
   // TODO:
   /*

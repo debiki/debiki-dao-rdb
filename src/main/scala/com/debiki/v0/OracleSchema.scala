@@ -13,7 +13,20 @@ import java.{sql => js}
 import oracle.{jdbc => oj}
 import oracle.jdbc.{pool => op}
 
-/* Create a user like so: (the tablespace and user name can be anything)
+/*
+
+*** Read this ***
+
+CAPITALIZE table, column and conotrtaint names but use lowercase for SQL
+keywords. Then one can easily find all occurrences of a certain table or
+column name, by searching for the capitalized name, e.g. the "TIME" column.
+If you, however, use lowercase names, then you will find lots of irrellevant
+occurrances of "when".
+
+*****************
+
+
+Create a user like so: (the tablespace and user name can be anything)
 
 CREATE USER "DEBIKI_TEST"
   PROFILE "DEFAULT"
@@ -32,34 +45,42 @@ GRANT "CONNECT" TO "DEBIKI_TEST";
 
 Tables, version 0.0.2:
 
-For now, only one huge DW_ACTIONS table, and a DW_USERS table:
-(just to get started quickly)
+For now, just a few tables, not normalized (just to get started quickly).
 
-"DW002" means DebateWiki (Debiki) version 0.0.2
-When upgrading, one can copy data to new tables, e.g. DW003_..., instead of
+"DW0_TABLE" means a Debiki ("DW_") version 0 ("0") table named "TABLE",
+When upgrading, one can copy data to new tables, i.e. DW<X>_TABLE instead of
 modifying data in the current tables. Then it's almost impossible to
 corrupt any existing data.
-  --- and if you don't need to upgrade, then keep the DW002 tables,
-  (and perhaps let new DW00X tables reference DW002 tables).
+  --- and if you don't need to upgrade, then keep the DW0_TABLE tables.
+  (and let any new DW<X>_TABLE refer to DW0_TABLE).
 
-DW002_ACTIONS  Description
-  PAGE_GUID
+DW0_PAGES    Description
+  TENANT       The tenant
+  GUID         Globally unique identifier.
+                But a certain page might have been copied to another tenant,
+                so the tenant is also part of the primary key, If the GUID
+                is identical, it's the same page thoug.
+  (created at, by? not needed, check the root post instead?)
+
+DW0_ACTIONS  Description
+  TENANT
+  PAGE
   ID           The id of this action is unique within the page only.
   TYPE         Post / Edit / EditApp / Rating.
-  DATE
-  BY
+  TIME         Creation timestamp
+  WHO          User
   IP
-  TO_ACTION    reply/rate-which-post / edit-of-which-post / apply-which-edit
+  RELA         related action (which post/edit to reply/edit/rate/apply)
   DATA         post-text / edit-diff / edit-app-result / rating-tags
   DATA2        post-where / edit-description / edit-app-debug / empty
 
-DW002_USERS
-  PK           locally generated sequence number used as primary key
+DW0_USERS (todo ...)
+  PK           locally generated sequence number, primary key
   NAME
   EMAIL
   URL
 
-DW_VERSION
+DW0_VERSION
   VERSION      one single row: "0.0.2"
 
 
@@ -142,8 +163,8 @@ class OracleSchema(val oradb: OracleDb) {
 
   import OracleSchema._
 
-  private def exUp(sql: String) = oradb.execUpdate(sql, Nil, Full(_))
-  private def exQy = oradb.execQuery _
+  private def exUp(sql: String) = oradb.updateAtnms(sql, Nil)
+  private def exQy = oradb.queryAtnms _
 
   /* All upgrades done, by this server instance, to convert the
    * database schema to the most recent version.
@@ -153,17 +174,17 @@ class OracleSchema(val oradb: OracleDb) {
 
   def readCurVersion(): Box[String] = {
     for {
-      ok <- oradb.execQuery("""
+      ok <- oradb.queryAtnms("""
           select count(*) c from USER_TABLES
-          where TABLE_NAME = 'DW_VERSION'
+          where TABLE_NAME = 'DW0_VERSION'
           """,  Nil, rs => {
         val v = { rs.next; rs.getString("c") }
         if (v == "0") return Full("0")  // version 0 means an empty schema
         if (v == "1") Full("1")
         else Failure("[debiki_error_6rshk23r]")
       })
-      v <- oradb.execQuery("""
-          select VERSION v from DW_VERSION
+      v <- oradb.queryAtnms("""
+          select VERSION v from DW0_VERSION
           """,  Nil, rs => {
         if (!rs.next) {
           Failure("Empty version table [debiki_error_7sh3RK]")
@@ -185,7 +206,7 @@ class OracleSchema(val oradb: OracleDb) {
    */
   def upgrade(): Box[List[String]] = {
     var vs = List[String]()
-    var i = 9
+    var i = 3
     while ({ i -= 1; i > 0 }) {
       val v: Box[String] = readCurVersion()
       if (!v.isDefined) return v.asA[List[String]]  // failure
@@ -206,14 +227,54 @@ class OracleSchema(val oradb: OracleDb) {
 
   /** Creates tables in an empty schema. */
   def createTablesVersion0(): Box[String] = {
+    //  drop table DW0_VERSION;
+    //  drop table DW0_ACTIONS;
+    //  drop table DW0_PAGES;
     for {
       ok <- exUp("""
-              create table DW_VERSION(
-                VERSION NVARCHAR2(2000))
-              """)
+        create table DW0_PAGES(
+          TENANT nvarchar2(100),
+          GUID nvarchar2(100),
+          constraint DW0_PAGES_TENANT_GUID__P primary key (TENANT, GUID)
+        )
+        """)
+      // (( I think there is an index on the foreign key columns TENANT and
+      // PAGE, because Oracle creates an index on the primary key columns
+      // TENANT, PAGE (and ID). Without this index, the whole DW0_ACTIONS
+      // table would be locked, if a transaction updated a row in DW0_PAGES.
+      // (Google for "index foreign key oracle")  ))
       ok <- exUp("""
-              insert into DW_VERSION(VERSION) values ('0.0.2')
-              """)
+        create table DW0_ACTIONS(
+          TENANT nvarchar2(100),
+          PAGE nvarchar2(100),
+          ID nvarchar2(100)     constraint DW0_ACTIONS_ID__N not null,
+          TYPE nvarchar2(100),
+          TIME timestamp        constraint DW0_ACTIONS_TIME__N not null,
+          WHO nvarchar2(100)    constraint DW0_ACTIONS_WHO__N not null,
+          IP nvarchar2(100)     constraint DW0_ACTIONS_IP__N not null,
+          RELA nvarchar2(100),
+          DATA nclob,
+          DATA2 nclob,
+          constraint DW0_ACTIONS__P
+              primary key (TENANT, PAGE, ID),
+          constraint DW0_ACTIONS__R__PAGES
+              foreign key (TENANT, PAGE)
+              references DW0_PAGES (TENANT, GUID) deferrable,
+          constraint DW0_ACTIONS_RELA__R__ACTIONS
+              foreign key (TENANT, PAGE, RELA)
+              references DW0_ACTIONS (TENANT, PAGE, ID) deferrable,
+          constraint DW0_ACTIONS_TYPE__C
+              check (TYPE in ('Post'))
+        )
+        """)
+      ok <- exUp("""
+        create table DW0_VERSION(
+          VERSION nvarchar2(100) constraint DW0_VERSION_VERSION__N not null
+        )
+        """)
+      ok <- exUp("""
+        insert into DW0_VERSION(VERSION) values ('0.0.2')
+        """)
     } yield
       "0.0.2"
   }

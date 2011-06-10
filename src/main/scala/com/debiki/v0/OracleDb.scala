@@ -5,16 +5,37 @@
 
 package com.debiki.v0
 
-import _root_.net.liftweb._
-import common._
+import _root_.net.liftweb.common.{Logger, Box, Empty, Full, Failure}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
 import oracle.{jdbc => oj}
 import oracle.jdbc.{pool => op}
 
+trait OraLogger extends Logger {
+  def logAndFailure[T](errorMessage: String, ex: Exception): Box[T] = {
+    warn(errorMessage +": ", ex)
+    Failure(errorMessage, Full(ex), Empty)
+  }
+}
+
+object OracleDb {
+  case class Null(sqlType: Int)
+
+  /** Converts null to the empty string ("Null To Empty"). */
+  def n2e(s: String) = if (s eq null) "" else s
+
+  /** Converts java.util.Date to java.sql.Timestamp. */
+  def d2ts(d: ju.Date) = new js.Timestamp(d.getTime)
+
+  /** Converts java.sql.Timestamp to java.util.Date. */
+  def ts2d(ts: js.Timestamp) = new ju.Date(ts.getTime)
+}
+
 class OracleDb(val connUrl: String, val user: String, pswd: String)
-extends Logger {
+extends OraLogger {
+
+  import OracleDb._
 
   val daSo = {
     // COULD disable deprecations. (You'll notice some warnings, e.g.
@@ -71,7 +92,8 @@ extends Logger {
     daSo.close()
   }
 
-  def transaction(f: (js.Connection) => Unit) = {
+  /*
+  def transactionThrow(f: (js.Connection) => Unit) = {
     val conn: js.Connection = daSo.getConnection()
     try {
       conn.setAutoCommit(false)
@@ -83,48 +105,113 @@ extends Logger {
         conn.close()
         throw e
     }
+  } */
+
+  def transaction[T](f: (js.Connection) => Box[T]): Box[T] = {
+    var conn: js.Connection = null
+    var box: Box[T] = Empty
+    try {
+      conn = daSo.getConnection()
+      conn.setAutoCommit(false)
+      box = f(conn)
+      conn.commit()
+    } catch {
+      case e: Exception =>
+        box = logAndFailure("Error updating database [debiki_error_83ImQF]", e)
+    } finally {
+      if (conn ne null) {
+        conn.setAutoCommit(true)  // reset to default mode
+        conn.close()
+      }
+    }
+    box
   }
 
-  def execQuery[T](query: String,
+  //def transactionThrow[T](f: (js.Connection) => Box[T]): Box[T] = {
+  //  var conn: js.Connection = null
+  //  var box: Box[T] = Empty
+  //  try {
+  //    conn = daSo.getConnection()
+  //    conn.setAutoCommit(false)
+  //    box = f(conn)
+  //    conn.commit()
+  //  } finally {
+  //    if (conn ne null) {
+  //      conn.setAutoCommit(true)  // reset to default mode
+  //      conn.close()
+  //    }
+  //  }
+  //  box
+  //}
+
+  def query[T](sql: String, binds: List[AnyRef],
+               resultSetHandler: js.ResultSet => Box[T])
+              (implicit conn: js.Connection): Box[T] = {
+    execImpl(sql, binds, resultSetHandler, conn).asInstanceOf[Box[T]]
+  }
+
+  def queryAtnms[T](sql: String,
                     binds: List[AnyRef],
                     resultSetHandler: js.ResultSet => Box[T]): Box[T] = {
-    execImpl(query, binds, resultSetHandler, null)
+    execImpl(sql, binds, resultSetHandler, conn = null).asInstanceOf[Box[T]]
   }
 
-  def execUpdate[T](query: String,
-                     binds: List[AnyRef] = Nil,
-                     updateCountHandler: Int => Box[T] = null): Box[T] = {
-    val handler =
-      if (updateCountHandler ne null) updateCountHandler
-      else { count: Int => Full(count) }
-    execImpl(query, binds, null, updateCountHandler)
+  /** Returns Full(num-lines-updated) or Failure.
+    */
+  def update(sql: String, binds: List[AnyRef] = Nil)
+            (implicit conn: js.Connection): Box[Int] = {
+    execImpl(sql, binds, null, conn).asInstanceOf[Box[Int]]
   }
 
-  def execImpl[T](query: String, binds: List[AnyRef],
-                resultSetHandler: js.ResultSet => Box[T],
-                numUpdatesHandler: Int => Box[T]): Box[T] = {
+  def updateAtnms(sql: String, binds: List[AnyRef] = Nil): Box[Int] = {
+    execImpl(sql, binds, null, conn = null).asInstanceOf[Box[Int]]
+  }
+
+  private def execImpl(query: String, binds: List[AnyRef],
+                resultSetHandler: js.ResultSet => Box[Any],
+                conn: js.Connection): Box[Any] = {
+    val isAutonomous = conn eq null
+    var conn2: js.Connection = null
+    var pstmt: js.PreparedStatement = null
     try {
-      val conn: js.Connection = daSo.getConnection()
-      val pstmt: js.PreparedStatement = conn.prepareStatement(query)
-      TODO // handle binds
+      conn2 = if (conn ne null) conn else daSo.getConnection()
+      pstmt = conn2.prepareStatement(query)
+      var bindPos = 0
+      import java.{lang => jl}
+      for (b <- binds) {
+        bindPos += 1
+        b match {
+          case i: jl.Integer => pstmt.setInt(bindPos, i.intValue)
+          case s: String => pstmt.setString(bindPos, s)
+          case d: js.Date => assErr("Use Timestamp not Date")
+          case t: js.Time => assErr("Use Timestamp not Time")
+          case t: js.Timestamp => pstmt.setTimestamp(bindPos, t)
+          case d: ju.Date => pstmt.setTimestamp(bindPos, d2ts(d))
+          case Null(sqlType) => pstmt.setNull(bindPos, sqlType)
+          case x => unimplemented("Binding this: "+ classNameOf(x))
+        }
+      }
       //s.setPoolable(false)  // don't cache infrequently used statements
       val result = (if (resultSetHandler ne null) {
         val rs = pstmt.executeQuery()
         resultSetHandler(rs)
       } else {
         val updateCount = pstmt.executeUpdate()
-        numUpdatesHandler(updateCount)
+        val result = Box !! updateCount
+        if (isAutonomous) conn2.commit()
+        result
       })
       TODO // handle errors, return a failure
-      pstmt.close()
-      conn.close()
       result
     } catch {
       case ex: js.SQLException =>
-        val errmsg = "Database error [debiki_error_83ikrK92]"
+        val errmsg = "Database error [debiki_error_83ikrK9]"
         warn(errmsg +": ", ex)
         //warn("{}: {}", errmsg, ex.printStackTrace)
         Failure(errmsg, Full(ex), Empty)
+    } finally {
+      if (pstmt ne null) pstmt.close()
+      if (isAutonomous) conn2.close()
     }
   }
 
