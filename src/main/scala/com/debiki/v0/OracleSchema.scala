@@ -238,6 +238,22 @@ class OracleSchema(val oradb: OracleDb) {
           constraint DW0_PAGES_TENANT_GUID__P primary key (TENANT, GUID)
         )
         """)
+      // There might be many paths to one page. For example, if the page
+      // is initialy created /some/where, and later moved /else/where, then
+      // /some/where should redirect (not implemented though) to /else/where,
+      // and DW0_PATHS will know this.
+      // The canonical URL for a page is always serveraddr/0/-<guid>.
+      ok <- exUp("""
+        create table DW0_PATHS(
+          TENANT nvarchar2(100),
+          PATH nvarchar2(1000),
+          PAGE nvarchar2(100),
+          constraint DW0_PATHS_TENANT_PATH__P primary key (TENANT, PATH),
+          constraint DW0_PATHS__R__PAGES
+              foreign key (TENANT, PAGE)
+              references DW0_PAGES (TENANT, GUID) deferrable
+        )
+        """)
       // (( I think there is an index on the foreign key columns TENANT and
       // PAGE, because Oracle creates an index on the primary key columns
       // TENANT, PAGE (and ID). Without this index, the whole DW0_ACTIONS
