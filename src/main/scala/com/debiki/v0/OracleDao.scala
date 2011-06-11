@@ -80,6 +80,18 @@ class OracleDao(val schema: OracleSchema) extends Dao {
   }
 
   def load(tenantId: String, debateId: String): Box[Debate] = {
+    val pageGuid: String =
+      if (debateId startsWith "/") {
+        _lookupGuidByPath(tenantId, debateId) match {
+          case Full(guid) => guid
+          case Empty => return Failure("Not found: "+ safed(debateId))
+          case f: Failure => return f.asA[Debate] ~> 403
+        }
+      }
+      else if (debateId startsWith "-") debateId.drop(1)
+      else return Failure("Debate id "+ safed(debateId) +
+          " should start with - or / [debiki_error_89kRsNe3]") ~> 403
+
     // Consider using TRANSACTION_REPEATABLE_READ? Not needed right now.
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
@@ -89,7 +101,7 @@ class OracleDao(val schema: OracleSchema) extends Dao {
         where TENANT = ? and PAGE = ?
         order by TIME desc
         """,
-        List(tenantId, debateId), rs => {
+        List(tenantId, pageGuid), rs => {
       var actions = List[AnyRef]()
 
       while (rs.next) {
@@ -114,6 +126,22 @@ class OracleDao(val schema: OracleSchema) extends Dao {
       }
 
       Full(Debate.fromActions(id = debateId, actions))
+    })
+  }
+
+  private def _lookupGuidByPath(tenantId: String,
+                                path: String): Box[String] = {
+    db.queryAtnms("""
+        select PAGE from DW0_PATHS
+        where TENANT = ? and PATH = ?
+        """,
+        tenantId::path::Nil, rs => {
+      var guid: Box[String] = Empty
+      if (rs.next) {
+        guid = Full(rs.getString("PAGE"))
+      }
+      assert(!rs.next)  // selected by primary key
+      guid
     })
   }
 
