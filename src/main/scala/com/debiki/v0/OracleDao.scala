@@ -54,16 +54,16 @@ class OracleDao(val schema: OracleSchema) extends Dao {
 
   def checkRepoVersion() = schema.readCurVersion()
 
-  def create(tenantId: String, debatePerhapsId: Debate): Box[Debate] = {
-    var debate = if (debatePerhapsId.id != "?") {
-      debatePerhapsId
+  def create(tenantId: String, debatePerhapsGuid: Debate): Box[Debate] = {
+    var debate = if (debatePerhapsGuid.guid != "?") {
+      debatePerhapsGuid
     } else {
-      debatePerhapsId.copy(id = nextRandomString)  // TODO use the same
+      debatePerhapsGuid.copy(guid = nextRandomString)  // TODO use the same
                                               // method in all DAO modules!
     }
     db.transaction { implicit connection =>
       _createPage(tenantId, debate)
-      _insert(tenantId, debate.id, debate.posts)
+      _insert(tenantId, debate.guidd, debate.posts)
       Full(debate)
     }
   }
@@ -119,6 +119,15 @@ class OracleDao(val schema: OracleSchema) extends Dao {
             new Post(id = id, parent = n2e(rela_?), date = at,
               by = by, ip = ip, text = n2e(data_?),
               where = Option(data2_?))
+          case "Edit" =>
+            // COULD assert rela_? is not null.
+            new Edit(id = id, postId = n2e(rela_?), date = at,
+              by = by, ip = ip, text = n2e(data_?),
+              desc = n2e(data2_?))
+          case "EdAp" =>
+            // COULD assert rela_? is not null.
+            new EditApplied(editId = n2e(rela_?), date = at,
+              result = n2e(data_?), debug = n2e(data2_?))
           case x => return Failure(
               "Bad DW0_ACTIONS.TYPE: "+ safed(typee) +" [debiki_error_Y8k3B]")
         }
@@ -150,11 +159,15 @@ class OracleDao(val schema: OracleSchema) extends Dao {
     db.update("""
         insert into DW0_PAGES (TENANT, GUID) values (?, ?)
         """,
-        List(tenantId, debate.id))
+        List(tenantId, debate.guid))
   }
 
   private def _insert[T](tenantId: String, debateId: String, xs: List[T])
                         (implicit conn: js.Connection): Box[List[T]] = {
+    if (debateId(0) != '-')  // COULD allow /path/to/page too
+      return Failure("ID should start with `-': "+
+          safed(debateId) +" [debiki_error_3k2rK]")
+    val pageGuid = debateId.drop(1)
     var xsWithIds = (new Debate("dummy")).assignIdTo(
                       xs.asInstanceOf[List[AnyRef]]).asInstanceOf[List[T]]
                           // COULD make `assignIdTo' member of object Debiki$
@@ -169,13 +182,18 @@ class OracleDao(val schema: OracleSchema) extends Dao {
       x match {
         case p: Post =>
           db.update(insertIntoActions,
-            List(tenantId, debateId, p.id, "Post", p.date, p.by,
+            List(tenantId, pageGuid, p.id, "Post", p.date, p.by,
                 p.ip, p.parent, p.text,
                 p.where.getOrElse(Null(js.Types.NVARCHAR))))
         case e: Edit =>
           db.update(insertIntoActions,
-            List(tenantId, debateId, e.id, "Edit", e.date, e.by,
+            List(tenantId, pageGuid, e.id, "Edit", e.date, e.by,
                   e.ip, e.postId, e.text, e.desc))
+        case a: EditApplied =>
+          val id = nextRandomString()  ; TODO // guid field
+          db.update(insertIntoActions,
+            List(tenantId, pageGuid, id, "EdAp", a.date, "<system>",
+              "?.?.?.?", a.editId, a.result, ""))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [debiki_error_38rkRF]")
       }

@@ -211,7 +211,7 @@ extends OraLogger {
         Failure(errmsg, Full(ex), Empty)
     } finally {
       if (pstmt ne null) pstmt.close()
-      if (isAutonomous) conn2.close()
+      if (isAutonomous && (conn2 ne null)) conn2.close()
     }
   }
 

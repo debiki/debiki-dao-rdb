@@ -230,6 +230,9 @@ class OracleSchema(val oradb: OracleDb) {
     //  drop table DW0_VERSION;
     //  drop table DW0_ACTIONS;
     //  drop table DW0_PAGES;
+    // COULD add:
+    // constraint DW0_PAGES_GUID__C
+    //  check (regexp_like (GUID, '[0-9a-z_]+', 'c')),
     for {
       ok <- exUp("""
         create table DW0_PAGES(
@@ -243,6 +246,7 @@ class OracleSchema(val oradb: OracleDb) {
       // /some/where should redirect (not implemented though) to /else/where,
       // and DW0_PATHS will know this.
       // The canonical URL for a page is always serveraddr/0/-<guid>.
+      // TODO rename to DW0_PAGEPATHS, update constraint names.
       ok <- exUp("""
         create table DW0_PATHS(
           TENANT nvarchar2(100),
@@ -259,12 +263,32 @@ class OracleSchema(val oradb: OracleDb) {
       // TENANT, PAGE (and ID). Without this index, the whole DW0_ACTIONS
       // table would be locked, if a transaction updated a row in DW0_PAGES.
       // (Google for "index foreign key oracle")  ))
+
+//      alter table DW0_ACTIONS modify (TYPE nchar(4));
+//
+//      alter table DW0_ACTIONS add constraint DW0_ACTIONS_TYPE__C2
+//          check (TYPE in ('Post', 'Rtng', 'Edit', 'EdAp', 'EdRv'))
+//
+//      alter table DW0_ACTIONS drop constraint DW0_ACTIONS_TYPE__C
+//      alter table DW0_ACTIONS rename constraint DW0_ACTIONS_TYPE__C2 to DW0_ACTIONS_TYPE__C
+//
+//  ---
+//      alter table DW0_ACTIONS modify  constraint DW0_ACTIONS_TYPE__C
+//              check (TYPE in ('Post', 'Edit', 'EdAp', 'EdRe', 'Rtng'))
+//
+//              alter table DW0_ACTIONS add TYPE_ nchar2(4);
+//              update DW0_ACTIONS set TYPE_ = TYPE;
+//              alter table DW0_ACTIONS rename  ...
+//              alter table DW0_ACTIONS drop  ...
+//  ---
+
+
       ok <- exUp("""
         create table DW0_ACTIONS(
           TENANT nvarchar2(100),
           PAGE nvarchar2(100),
           ID nvarchar2(100)     constraint DW0_ACTIONS_ID__N not null,
-          TYPE nvarchar2(100),
+          TYPE nchar2(4),
           TIME timestamp        constraint DW0_ACTIONS_TIME__N not null,
           WHO nvarchar2(100)    constraint DW0_ACTIONS_WHO__N not null,
           IP nvarchar2(100)     constraint DW0_ACTIONS_IP__N not null,
@@ -280,7 +304,7 @@ class OracleSchema(val oradb: OracleDb) {
               foreign key (TENANT, PAGE, RELA)
               references DW0_ACTIONS (TENANT, PAGE, ID) deferrable,
           constraint DW0_ACTIONS_TYPE__C
-              check (TYPE in ('Post'))
+              check (TYPE in ('Post', 'Edit', 'EdAp', 'EdRe', 'Rtng'))
         )
         """)
       ok <- exUp("""
