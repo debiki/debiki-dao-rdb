@@ -138,6 +138,33 @@ class OracleDao(val schema: OracleSchema) extends Dao {
     })
   }
 
+  def findRulesFor(tenantId: String, pageId: String, userId: String
+                    ): Either[String, PageRules] = {
+    // TODO:
+    // val path = canonicalPathTo(actions.pageId)
+    // (The canonical path would be the path in the canonical URL)
+    // FOR NOW:
+    val path = pageId
+    // And simply deny access via guid (instead of looking up the path to
+    // the page identified by the guid), by not matching any if statement
+    // below.
+
+    // COULD consider who is the user when determining rules.
+
+    import PageRules._
+
+    // TODO lookup access permissions and rules for `path'.
+    // FOR NOW hardcode /wiki/, /forum/, /test/ etc. paths:
+    val rules: PageRules = {
+      if (path startsWith "-") Forbidden  // deny /0/.../-guid/ access
+      else if (path startsWith "/test/") AllOk
+      else if (path startsWith "/wiki/") AllOk
+      else if (path startsWith "/forum/") AllOk
+      else HiddenTalk
+    }
+    return Right(rules)
+  }
+
   private def _lookupGuidByPath(tenantId: String,
                                 path: String): Box[String] = {
     db.queryAtnms("""
