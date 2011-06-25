@@ -68,30 +68,18 @@ class OracleDao(val schema: OracleSchema) extends Dao {
     }
   }
 
-  def save(tenantId: String, debateId: String, x: AnyRef): Box[AnyRef] = {
-    save(tenantId, debateId, x::Nil).map(_.head)
+  def save(tenantId: String, pageGuid: String, x: AnyRef): Box[AnyRef] = {
+    save(tenantId, pageGuid, x::Nil).map(_.head)
   }
 
-  def save[T](tenantId: String, debateId: String,
+  def save[T](tenantId: String, pageGuid: String,
                 xs: List[T]): Box[List[T]] = {
     db.transaction { implicit connection =>
-      _insert(tenantId, debateId, xs)
+      _insert(tenantId, pageGuid, xs)
     }
   }
 
-  def load(tenantId: String, debateId: String): Box[Debate] = {
-    val pageGuid: String =
-      if (debateId startsWith "/") {
-        _lookupGuidByPath(tenantId, debateId) match {
-          case Full(guid) => guid
-          case Empty => return Failure("Not found: "+ safed(debateId))
-          case f: Failure => return f.asA[Debate] ~> 403
-        }
-      }
-      else if (debateId startsWith "-") debateId.drop(1)
-      else return Failure("Debate id "+ safed(debateId) +
-          " should start with - or / [debiki_error_89kRsNe3]") ~> 403
-
+  def load(tenantId: String, pageGuid: String): Box[Debate] = {
     // Consider using TRANSACTION_REPEATABLE_READ? Not needed right now.
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
@@ -134,35 +122,75 @@ class OracleDao(val schema: OracleSchema) extends Dao {
         actions ::= action  // this reverses above `order by TIME desc'
       }
 
-      Full(Debate.fromActions(id = debateId, actions))
+      Full(Debate.fromActions(guid = pageGuid, actions))
     })
   }
 
-  def findRulesFor(tenantId: String, pageId: String, userId: String
-                    ): Either[String, PageRules] = {
-    // TODO:
-    // val path = canonicalPathTo(actions.pageId)
-    // (The canonical path would be the path in the canonical URL)
-    // FOR NOW:
-    val path = pageId
-    // And simply deny access via guid (instead of looking up the path to
-    // the page identified by the guid), by not matching any if statement
-    // below.
+  def findPageInfo(tenantId: String, parentFolder: String,
+                   pageGuid: String, pageName: String, userId: String
+                   ): Box[PageInfo] = {
+    /*
+    The algorithm:
 
-    // COULD consider who is the user when determining rules.
+    if guid:
+      lookup path in PAGEPATHS
+    else
+      lookup guid in PAGEPATHS (given parentFolder & pageName)
 
+    lookup PageRules in PATHRULES:  (not implemented! paths hardcoded instead)
+      if guid, try:  parentFolder / -* /   (i.e. any guid in folder)
+      else, try:
+        first: parentFolder / pageName /   (this particular page)
+        then:  parentFolder / * /          (any page in folder)
+      Then continue with the parent folders:
+        first: parentsParent / parentFolderName /
+        then: parentsParent / * /
+      and so on with the parent's parent ...
+     */
+
+    val (path, guid) = {
+      if (pageGuid nonEmpty) {
+        _lookupPathByGuid(tenantId, pageGuid) match {
+          case Full(p) =>
+            // If the user agent is'n aware of the actual location of
+            // the page, return a BadPath so the caller can issue a redirect
+            if (p != (parentFolder +"-"+ pageGuid +"-"+ pageName +"/") &&
+                p != (parentFolder + pageName +"/")) {
+              // COULD change the table layout so the guid in the path
+              // cannot possibly differ from the page's guid.
+              // Right now, if the guid in the path doesn't match the actual
+              // guid, a redirection loop might follow?!
+              // See a "COULD" in OracleSchema.scala.
+              return Full(PageInfo.BadPath(p))
+            }
+            (p, pageGuid)
+          case Empty => return Empty
+          case f: Failure => return f.asA[PageInfo]
+        }
+      }
+      else {
+        // COULD extract make-path function, place in debiki-core?
+        val p = parentFolder + pageName +"/"
+        _lookupGuidByPath(tenantId, p) match {
+          case Full(g) => (p, g)
+          case Empty => return Empty
+          case f: Failure => return f.asA[PageInfo]
+        }
+      }
+    }
+
+    // Now the path and guid are known and correct.
+    // Should look up rules, for `path' and `userId', in PATHRULES
+    // (doesn't exist), but for now, hardcode /wiki/, /forum/, /test/ etc
+    // paths, for all users:
     import PageRules._
-
-    // TODO lookup access permissions and rules for `path'.
-    // FOR NOW hardcode /wiki/, /forum/, /test/ etc. paths:
     val rules: PageRules = {
-      if (path startsWith "-") Forbidden  // deny /0/.../-guid/ access
-      else if (path startsWith "/test/") AllOk
-      else if (path startsWith "/wiki/") AllOk
-      else if (path startsWith "/forum/") AllOk
+      if (parentFolder startsWith "/test/") AllOk
+      else if (parentFolder startsWith "/wiki/") AllOk
+      else if (parentFolder startsWith "/forum/") AllOk
       else HiddenTalk
     }
-    return Right(rules)
+    return Full(PageInfo.Info(guid = guid, path = path, rules = rules))
   }
 
   private def _lookupGuidByPath(tenantId: String,
@@ -181,6 +209,23 @@ class OracleDao(val schema: OracleSchema) extends Dao {
     })
   }
 
+  private def _lookupPathByGuid(tenantId: String,
+                                guid: String): Box[String] = {
+    db.queryAtnms("""
+        select PATH from DW0_PATHS
+        where TENANT = ? and PAGE = ?
+        """,
+        tenantId::guid::Nil,
+        rs => {
+      var path: Box[String] = Empty
+      if (rs.next) {
+        path = Full(rs.getString("PATH"))
+      }
+      assert(!rs.next)  // selected by unique key
+      path
+    })
+  }
+
   private def _createPage[T](tenantId: String, debate: Debate)
                             (implicit conn: js.Connection): Box[Int] = {
     db.update("""
@@ -189,12 +234,8 @@ class OracleDao(val schema: OracleSchema) extends Dao {
         List(tenantId, debate.guid))
   }
 
-  private def _insert[T](tenantId: String, debateId: String, xs: List[T])
+  private def _insert[T](tenantId: String, pageGuid: String, xs: List[T])
                         (implicit conn: js.Connection): Box[List[T]] = {
-    if (debateId(0) != '-')  // COULD allow /path/to/page too
-      return Failure("ID should start with `-': "+
-          safed(debateId) +" [debiki_error_3k2rK]")
-    val pageGuid = debateId.drop(1)
     var xsWithIds = (new Debate("dummy")).assignIdTo(
                       xs.asInstanceOf[List[AnyRef]]).asInstanceOf[List[T]]
                           // COULD make `assignIdTo' member of object Debiki$
