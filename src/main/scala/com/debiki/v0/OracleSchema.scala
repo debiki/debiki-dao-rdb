@@ -17,11 +17,11 @@ import oracle.jdbc.{pool => op}
 
 *** Read this ***
 
-CAPITALIZE table, column and conotrtaint names but use lowercase for SQL
+CAPITALIZE table, column and constraint names but use lowercase for SQL
 keywords. Then one can easily find all occurrences of a certain table or
 column name, by searching for the capitalized name, e.g. the "TIME" column.
 If you, however, use lowercase names, then you will find lots of irrellevant
-occurrances of "when".
+occurrances of "time".
 
 *****************
 
@@ -247,6 +247,21 @@ class OracleSchema(val oradb: OracleDb) {
       // and DW0_PATHS will know this.
       // The canonical URL for a page is always serveraddr/0/-<guid>.
       // TODO rename to DW0_PAGEPATHS, update constraint names.
+      // COULD replace PATH with a function based column,
+      // based on:
+      //   FOLDER nchar2(100),
+      //   GUID (rename PAGE to GUID)
+      //   NAME nchar2(150),
+      //   GUID_IN_PATH nchar(1) = T/F
+      // like so:  if GUID_IN_PATH then "FOLDER/-GUID-NAME" else "FOLDER/NAME"
+      // This would elliminate the possibility of corrupt rows, where
+      // the guid in the PATH doesn't match the actuala GUID column!
+      // Then I should probably also place the PK on TENANT+GUID, not +PATH.
+      // COULD add a CANONICAL = T/NULL column, which is T if PATH is the
+      // path in the canonical URL. Then, TENANT + PAGE-guid + CANONICAL
+      // would be a unique key. TENANT + PAGE-guid + NULL could however
+      // occur many times and the server would then redirect the browser to
+      // the canonical URL.
       ok <- exUp("""
         create table DW0_PATHS(
           TENANT nvarchar2(100),
