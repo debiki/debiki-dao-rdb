@@ -123,7 +123,9 @@ extends OraLogger {
       conn.commit()
     } catch {
       case e: Exception =>
-        box = logAndFailure("Error updating database [debiki_error_83ImQF]", e)
+        //box = logAndFailure("Error updating database [debiki_error_83ImQF]", e)
+        warn("Error updating database [debiki_error_83ImQF]")
+        throw e
     } finally {
       if (conn ne null) {
         conn.setAutoCommit(true)  // reset to default mode
@@ -212,9 +214,10 @@ extends OraLogger {
     } catch {
       case ex: js.SQLException =>
         val errmsg = "Database error [debiki_error_83ikrK9]"
-        warn(errmsg +": ", ex)
+        warn(errmsg) // +": ", ex)
         //warn("{}: {}", errmsg, ex.printStackTrace)
-        Failure(errmsg, Full(ex), Empty)
+        //Failure(errmsg, Full(ex), Empty)
+       throw ex
     } finally {
       if (pstmt ne null) pstmt.close()
       if (isAutonomous && (conn2 ne null)) conn2.close()
