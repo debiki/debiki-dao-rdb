@@ -4,6 +4,9 @@
 
 package com.debiki.v0
 
+import com.debiki.v0.PagePath._
+import com.debiki.v0.IntrsAllowed._
+import com.debiki.v0.{Action => A}
 import _root_.net.liftweb.common.{Logger, Box, Empty, Full, Failure}
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
@@ -63,7 +66,7 @@ class OracleDao(val schema: OracleSchema) extends Dao {
     }
     db.transaction { implicit connection =>
       _createPage(tenantId, debate)
-      _insert(tenantId, debate.guidd, debate.posts)
+      _insert(tenantId, debate.guid, debate.posts)
       Full(debate)
     }
   }
@@ -126,18 +129,15 @@ class OracleDao(val schema: OracleSchema) extends Dao {
     })
   }
 
-  def findPageInfo(tenantId: String, parentFolder: String,
-                   pageGuid: String, pageName: String, userId: String
-                   ): Box[PageInfo] = {
+  def checkPagePath(pathToCheck: PagePath): Box[PagePath] = {
+    _findCorrectPagePath(pathToCheck)
+  }
+
+  def checkAccess(pagePath: PagePath, userId: String, action: Action
+                     ): Option[IntrsAllowed] = {
     /*
-    The algorithm:
-
-    if guid:
-      lookup path in PAGEPATHS
-    else
-      lookup guid in PAGEPATHS (given parentFolder & pageName)
-
-    lookup PageRules in PATHRULES:  (not implemented! paths hardcoded instead)
+    The algorithm: (a sketch)
+    lookup rules in PATHRULES:  (not implemented! paths hardcoded instead)
       if guid, try:  parentFolder / -* /   (i.e. any guid in folder)
       else, try:
         first: parentFolder / pageName /   (this particular page)
@@ -146,83 +146,53 @@ class OracleDao(val schema: OracleSchema) extends Dao {
         first: parentsParent / parentFolderName /
         then: parentsParent / * /
       and so on with the parent's parent ...
-     */
+    */
 
-    val (path, guid) = {
-      if (pageGuid nonEmpty) {
-        _lookupPathByGuid(tenantId, pageGuid) match {
-          case Full(p) =>
-            // If the user agent is'n aware of the actual location of
-            // the page, return a BadPath so the caller can issue a redirect
-            if (p != (parentFolder +"-"+ pageGuid +"-"+ pageName +"/") &&
-                p != (parentFolder + pageName +"/")) {
-              // COULD change the table layout so the guid in the path
-              // cannot possibly differ from the page's guid.
-              // Right now, if the guid in the path doesn't match the actual
-              // guid, a redirection loop might follow?!
-              // See a "COULD" in OracleSchema.scala.
-              return Full(PageInfo.BadPath(p))
-            }
-            (p, pageGuid)
-          case Empty => return Empty
-          case f: Failure => return f.asA[PageInfo]
-        }
-      }
-      else {
-        // COULD extract make-path function, place in debiki-core?
-        val p = parentFolder + pageName +"/"
-        _lookupGuidByPath(tenantId, p) match {
-          case Full(g) => (p, g)
-          case Empty => return Empty
-          case f: Failure => return f.asA[PageInfo]
-        }
-      }
-    }
-
-    // Now the path and guid are known and correct.
-    // Should look up rules, for `path' and `userId', in PATHRULES
-    // (doesn't exist), but for now, hardcode /wiki/, /forum/, /test/ etc
-    // paths, for all users:
-    import PageRules._
-    val rules: PageRules = {
-      if (parentFolder startsWith "/test/") AllOk
-      else if (parentFolder startsWith "/wiki/") AllOk
-      else if (parentFolder startsWith "/forum/") AllOk
+    val intrsOk: IntrsAllowed = {
+      val p = pagePath.path
+      if (p startsWith "/test/") VisibleTalk
+      else if (p startsWith "/wiki/") VisibleTalk
+      else if (p startsWith "/forum/") VisibleTalk
+      else if (action == A.Create)
+        return Empty  // don't allow new pages anywhere
       else HiddenTalk
     }
-    return Full(PageInfo.Info(guid = guid, path = path, rules = rules))
+    Some(intrsOk)
   }
 
-  private def _lookupGuidByPath(tenantId: String,
-                                path: String): Box[String] = {
-    db.queryAtnms("""
-        select PAGE from DW0_PATHS
-        where TENANT = ? and PATH = ?
-        """,
-        tenantId::path::Nil, rs => {
-      var guid: Box[String] = Empty
+  // Looks up the correct PagePath for a possibly incorrect PagePath.
+  private def _findCorrectPagePath(pagePathIn: PagePath): Box[PagePath] = {
+    var query = """
+        select PARENT, PAGE_GUID, PAGE_NAME, GUID_IN_PATH
+        from DW0_PAGEPATHS
+        where TENANT = ?
+        """
+    var binds = List(pagePathIn.tenantId)
+    pagePathIn.guid.value match {
+      case Some(guid) =>
+        query += " and PAGE_GUID = ?"
+        binds ::= guid
+      case None =>
+        query += " and PARENT = ? and PAGE_NAME = ?"
+        binds ::= pagePathIn.parent
+        binds ::= e2s(pagePathIn.name)
+    }
+    db.queryAtnms(query, binds.reverse, rs => {
+      var correctPath: Box[PagePath] = Empty
       if (rs.next) {
-        guid = Full(rs.getString("PAGE"))
+        val guidVal = rs.getString("PAGE_GUID")
+        val guid =
+            if (s2e(rs.getString("GUID_IN_PATH")) == "") GuidHidden(guidVal)
+            else GuidInPath(guidVal)
+        correctPath = Full(pagePathIn.copy(  // keep tenantId
+            parent = rs.getString("PARENT"),
+            guid = guid,
+            // If there is a root page ("serveraddr/") with no name,
+            // it is stored as a single space; s2e removes such a space:
+            name = s2e(rs.getString("PAGE_NAME"))))
       }
-      assert(!rs.next)  // selected by primary key
-      guid
-    })
-  }
-
-  private def _lookupPathByGuid(tenantId: String,
-                                guid: String): Box[String] = {
-    db.queryAtnms("""
-        select PATH from DW0_PATHS
-        where TENANT = ? and PAGE = ?
-        """,
-        tenantId::guid::Nil,
-        rs => {
-      var path: Box[String] = Empty
-      if (rs.next) {
-        path = Full(rs.getString("PATH"))
-      }
-      assert(!rs.next)  // selected by unique key
-      path
+      assert(!rs.next)  // there's an unique key
+      correctPath
     })
   }
 
@@ -232,6 +202,13 @@ class OracleDao(val schema: OracleSchema) extends Dao {
         insert into DW0_PAGES (TENANT, GUID) values (?, ?)
         """,
         List(tenantId, debate.guid))
+
+    db.update("""
+        insert into DW0_PAGEPATHS (TENANT, PARENT, PAGE_GUID,
+                                   PAGE_NAME, GUID_IN_PATH)
+        values (?, ?, ?, ?, ?)
+        """,
+        List(tenantId, "/", debate.guid, "title", debate.guid))
   }
 
   private def _insert[T](tenantId: String, pageGuid: String, xs: List[T])

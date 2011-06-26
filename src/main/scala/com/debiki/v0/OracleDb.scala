@@ -25,6 +25,12 @@ object OracleDb {
   /** Converts null to the empty string ("Null To Empty"). */
   def n2e(s: String) = if (s eq null) "" else s
 
+  /** Converts space to the empty string ("Space To Empty"). */
+  def s2e(s: String) = if (s == " ") "" else s
+
+  /** Converts the empty string to space ("Empty To Space"). */
+  def e2s(s: String) = if (s isEmpty) " " else s
+
   /** Converts java.util.Date to java.sql.Timestamp. */
   def d2ts(d: ju.Date) = new js.Timestamp(d.getTime)
 

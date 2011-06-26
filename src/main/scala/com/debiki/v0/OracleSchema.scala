@@ -246,31 +246,38 @@ class OracleSchema(val oradb: OracleDb) {
       // /some/where should redirect (not implemented though) to /else/where,
       // and DW0_PATHS will know this.
       // The canonical URL for a page is always serveraddr/0/-<guid>.
-      // TODO rename to DW0_PAGEPATHS, update constraint names.
-      // COULD replace PATH with a function based column,
-      // based on:
-      //   FOLDER nchar2(100),
-      //   GUID (rename PAGE to GUID)
-      //   NAME nchar2(150),
-      //   GUID_IN_PATH nchar(1) = T/F
-      // like so:  if GUID_IN_PATH then "FOLDER/-GUID-NAME" else "FOLDER/NAME"
-      // This would elliminate the possibility of corrupt rows, where
-      // the guid in the PATH doesn't match the actuala GUID column!
-      // Then I should probably also place the PK on TENANT+GUID, not +PATH.
       // COULD add a CANONICAL = T/NULL column, which is T if PATH is the
       // path in the canonical URL. Then, TENANT + PAGE-guid + CANONICAL
       // would be a unique key. TENANT + PAGE-guid + NULL could however
       // occur many times and the server would then redirect the browser to
-      // the canonical URL.
+      // the canonical URL. -- no? it seems that results in a unique key
+      // violation, just tested the same thing with
+      //                                TENANT+PARENT+NAME+GUID_IN_PATH.
+      //
+      // GUID_HIDDEN = 'T' prevents pages with the same GUID from having
+      // the same PARENT+NAME.
+      // If GUID_HIDDEN is NULL, then the constraint DW0_PATHS_TENANT_PATH__U
+      // has no effect, so when the guid is *not* hidden (but instead included
+      // in the path: /parent/-guid-name/), then TENANT+PARENT+NAME need not
+      // be unique.
       ok <- exUp("""
-        create table DW0_PATHS(
-          TENANT nvarchar2(100),
-          PATH nvarchar2(1000),
-          PAGE nvarchar2(100),
-          constraint DW0_PATHS_TENANT_PATH__P primary key (TENANT, PATH),
-          constraint DW0_PATHS__R__PAGES
-              foreign key (TENANT, PAGE)
-              references DW0_PAGES (TENANT, GUID) deferrable
+        create table DW0_PAGEPATHS(
+          TENANT nvarchar2(100) not null,
+          PARENT nvarchar2(100) not null,
+          PAGE_GUID nvarchar2(100) not null,
+          PAGE_NAME nvarchar2(100) not null,
+          GUID_IN_PATH nvarchar2(100) not null,
+          constraint DW0_PAGEPATHS_TENANT_GUID__P
+              primary key (TENANT, PAGE_GUID),
+          constraint DW0_PAGEPATHS_TENANT_PATH__U
+              unique (TENANT, PARENT, PAGE_NAME, GUID_IN_PATH),
+          constraint DW0_PAGEPATHS__R__PAGES
+              foreign key (TENANT, PAGE_GUID)
+              references DW0_PAGES (TENANT, GUID) deferrable,
+          constraint DW0_PAGEPATHS_PARENT__C
+              check (PARENT not like '%/-%'), -- '-' means guid follows
+          constraint DW0_PAGEPATHS_GUIDINPATH__C
+              check (GUID_IN_PATH in (' ', PAGE_GUID))
         )
         """)
       // (( I think there is an index on the foreign key columns TENANT and
