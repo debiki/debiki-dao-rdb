@@ -57,16 +57,20 @@ class OracleDao(val schema: OracleSchema) extends Dao {
 
   def checkRepoVersion() = schema.readCurVersion()
 
-  def create(tenantId: String, debatePerhapsGuid: Debate): Box[Debate] = {
+  def create(where: PagePath, debatePerhapsGuid: Debate): Box[Debate] = {
     var debate = if (debatePerhapsGuid.guid != "?") {
-      debatePerhapsGuid
+      unimplemented
+      // Could use debatePerhapsGuid, instead of generatinig a new guid,
+      // but i have to test that this works. But should where.guid.value
+      // be Some or None? Would Some be the guid to reuse, or would Some
+      // indicate that the page already exists, an error!?
     } else {
       debatePerhapsGuid.copy(guid = nextRandomString)  // TODO use the same
                                               // method in all DAO modules!
     }
     db.transaction { implicit connection =>
-      _createPage(tenantId, debate)
-      _insert(tenantId, debate.guid, debate.posts)
+      _createPage(where, debate)
+      _insert(where.tenantId, debate.guid, debate.posts)
       Full(debate)
     }
   }
@@ -150,11 +154,13 @@ class OracleDao(val schema: OracleSchema) extends Dao {
 
     val intrsOk: IntrsAllowed = {
       val p = pagePath.path
-      if (p startsWith "/test/") VisibleTalk
-      else if (p startsWith "/wiki/") VisibleTalk
-      else if (p startsWith "/forum/") VisibleTalk
+      if (p == "/test/") VisibleTalk
+      else if (p == "/allt/") VisibleTalk
+      else if (p == "/forum/") VisibleTalk
       else if (action == A.Create)
-        return Empty  // don't allow new pages anywhere
+        return Empty  // don't allow new pages in the below paths
+      else if (p == "/blogg/") VisibleTalk
+      else if (p == "/arkiv/") VisibleTalk
       else HiddenTalk
     }
     Some(intrsOk)
@@ -173,7 +179,14 @@ class OracleDao(val schema: OracleSchema) extends Dao {
         query += " and PAGE_GUID = ?"
         binds ::= guid
       case None =>
-        query += " and PARENT = ? and PAGE_NAME = ?"
+        // GUID_IN_PATH = ' ' means that the page guid must not be part
+        // of the page url. ((So you cannot look up [a page that has its guid
+        // as part of its url] by searching for its url without including
+        // the guid. Had that been possible, many pages could have been found
+        // since pages with different guids can have the same name.
+        // Hmm, could search for all pages, as if the guid hadn't been
+        // part of their name, and list all pages with matching names?))
+        query += " and PARENT = ? and PAGE_NAME = ? and GUID_IN_PATH = ' '"
         binds ::= pagePathIn.parent
         binds ::= e2s(pagePathIn.name)
     }
@@ -196,19 +209,21 @@ class OracleDao(val schema: OracleSchema) extends Dao {
     })
   }
 
-  private def _createPage[T](tenantId: String, debate: Debate)
+  private def _createPage[T](where: PagePath, debate: Debate)
                             (implicit conn: js.Connection): Box[Int] = {
     db.update("""
         insert into DW0_PAGES (TENANT, GUID) values (?, ?)
         """,
-        List(tenantId, debate.guid))
+        List(where.tenantId, debate.guid))
 
     db.update("""
         insert into DW0_PAGEPATHS (TENANT, PARENT, PAGE_GUID,
                                    PAGE_NAME, GUID_IN_PATH)
         values (?, ?, ?, ?, ?)
         """,
-        List(tenantId, "/", debate.guid, "title", debate.guid))
+        List(where.tenantId, where.parent, debate.guid, e2s(where.name),
+          debate.guid  // means the guid will prefix the page name
+        ))
   }
 
   private def _insert[T](tenantId: String, pageGuid: String, xs: List[T])
