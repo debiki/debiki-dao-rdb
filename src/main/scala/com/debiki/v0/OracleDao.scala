@@ -174,6 +174,7 @@ class OracleDao(val schema: OracleSchema) extends Dao {
         where TENANT = ?
         """
     var binds = List(pagePathIn.tenantId)
+    var maxRowsFound = 1  // there's a unique key
     pagePathIn.guid.value match {
       case Some(guid) =>
         query += " and PAGE_GUID = ?"
@@ -186,9 +187,47 @@ class OracleDao(val schema: OracleSchema) extends Dao {
         // since pages with different guids can have the same name.
         // Hmm, could search for all pages, as if the guid hadn't been
         // part of their name, and list all pages with matching names?))
-        query += " and PARENT = ? and PAGE_NAME = ? and GUID_IN_PATH = ' '"
+        query += """
+            and GUID_IN_PATH = ' '
+            and (
+              (PARENT = ? and PAGE_NAME = ?)
+            """
         binds ::= pagePathIn.parent
         binds ::= e2s(pagePathIn.name)
+        // Try to correct bad URL links.
+        // COULD skip (some of) the two if tests below, if action is ?newpage.
+        // (Otherwise you won't be able to create a page in
+        // /some/path/ if /some/path already exists.)
+        if (pagePathIn.name nonEmpty) {
+          // Perhaps the correct path is /folder/page/ not /folder/page.
+          // Try that path too. Choose sort orter so /folder/page appears
+          // first, and skip /folder/page/ if /folder/page is found.
+          query += """
+              or (PARENT = ? and PAGE_NAME = ' ')
+              )
+            order by length(PARENT)
+            """
+          binds ::= pagePathIn.parent + pagePathIn.name +"/"
+          maxRowsFound = 2
+        }
+        else if (pagePathIn.parent.count(_ == '/') >= 2) {
+          // Perhaps the correct path is /folder/page not /folder/page/.
+          // But prefer /folder/page/ if both pages are found.
+          query += """
+              or (PARENT = ? and PAGE_NAME = ?)
+              )
+            order by length(PARENT) desc
+            """
+          val perhapsPath = pagePathIn.parent.dropRight(1)  // drop `/'
+          val lastSlash = perhapsPath.lastIndexOf("/")
+          val (shorterPath, nonEmptyName) = perhapsPath.splitAt(lastSlash + 1)
+          binds ::= shorterPath
+          binds ::= nonEmptyName
+          maxRowsFound = 2
+        }
+        else {
+          query += ")"
+        }
     }
     db.queryAtnms(query, binds.reverse, rs => {
       var correctPath: Box[PagePath] = Empty
@@ -204,7 +243,7 @@ class OracleDao(val schema: OracleSchema) extends Dao {
             // it is stored as a single space; s2e removes such a space:
             name = s2e(rs.getString("PAGE_NAME"))))
       }
-      assert(!rs.next)  // there's an unique key
+      assert(maxRowsFound == 2 || !rs.next)
       correctPath
     })
   }
