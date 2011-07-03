@@ -57,6 +57,8 @@ class OracleDao(val schema: OracleSchema) extends Dao {
 
   def checkRepoVersion() = schema.readCurVersion()
 
+  def secretSalt(): String = "9KsAyFqw_"
+
   def create(where: PagePath, debatePerhapsGuid: Debate): Box[Debate] = {
     var debate = if (debatePerhapsGuid.guid != "?") {
       unimplemented
