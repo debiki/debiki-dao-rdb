@@ -34,6 +34,15 @@ object OracleDao {
     // COULD catch connection errors, and return Failure.
     val oradb = new OracleDb(connUrl, user, pswd)  // can throw SQLException
     val schema = new OracleSchema(oradb)
+    // COULD skip schema.upgrade(). Cannot really do the upgrade automatically,
+    // because > 1 appserver might connect to the database at the same time
+    // but only 1 appserver should do the upgrade. Also, if an older
+    // appserver (that doesn't understand the new schema structure) uses
+    // the schema, then another appserver with a higher version should not
+    // upgrade the db. Not until the old appserver has been upgraded so it
+    // will understand the schema, after the upgrade.
+    // COULD skip upgrade() because it makes the setup(EmptySchema)
+    // unit tests (in DaoTckTest) fail.
     val ups: Box[List[String]] = schema.upgrade()
     val curVer = OracleSchema.CurVersion
     ups match {

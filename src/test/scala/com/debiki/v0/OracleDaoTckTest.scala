@@ -44,6 +44,7 @@ object OracleDaoTckTest {
     import tck.DaoTckTest._
     val schema = (version, what) match {
       case ("0", EmptySchema) => "DEBIKI_TEST_0"
+                                 // ^ COULD run PurgeSchema (defined below)
       case ("0.0.2", EmptyTables) => "DEBIKI_TEST_0_0_2_EMPTY"
       case ("0.0.2", TablesWithData) => "DEBIKI_TEST_0_0_2_DATA"
       case _ => assErr("Broken test suite")
@@ -184,4 +185,34 @@ END;
 
 }
 
+object OracleTestSql {
+  val PurgeSchema = """
+declare
+  cursor c_constraints is
+    select 'alter table '||table_name||' drop constraint '||
+            constraint_name stmt
+    from user_constraints;
+  cursor c_tables is
+    select 'drop table '|| table_name stmt
+    from user_tables;
+  cursor c_all is
+    select 'drop '||object_type||' '|| object_name stmt
+            -- || DECODE(OBJECT_TYPE,'TABLE',' CASCADE CONSTRAINTS;',';') stmt
+    from user_objects;
+begin
+  for x in c_constraints loop
+    execute immediate x.stmt;
+  end loop;
+  for x in c_tables loop
+    execute immediate x.stmt;
+  end loop;
+  for x in c_all loop
+    execute immediate x.stmt;
+  end loop;
+  -- execute immediate 'purge recyclebin'; -- drops som weird `LOB' objects.
+     -- ^ Perhaps better skip this, in case I one day
+     -- specify wrong schema to purge?
+end;
+  """
+}
 // vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
