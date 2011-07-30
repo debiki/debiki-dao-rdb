@@ -15,11 +15,11 @@ import java.{sql => js}
 import oracle.{jdbc => oj}
 import oracle.jdbc.{pool => op}
 
-object OracleDao {
+object OracleDaoSpi {
 
   /** Returns a failure or a Full(dao). */
   def connectAndUpgradeSchema(
-      connUrl: String, user: String, pswd: String): Box[OracleDao] = {
+      connUrl: String, user: String, pswd: String): Box[OracleDaoSpi] = {
     try {
       Full(connectAndUpgradeSchemaThrow(connUrl, user, pswd))
     } catch {
@@ -30,7 +30,7 @@ object OracleDao {
 
   /** Returns a working DAO or throws an error. */
   def connectAndUpgradeSchemaThrow(
-      connUrl: String, user: String, pswd: String): OracleDao = {
+      connUrl: String, user: String, pswd: String): OracleDaoSpi = {
     // COULD catch connection errors, and return Failure.
     val oradb = new OracleDb(connUrl, user, pswd)  // can throw SQLException
     val schema = new OracleSchema(oradb)
@@ -46,7 +46,7 @@ object OracleDao {
     val ups: Box[List[String]] = schema.upgrade()
     val curVer = OracleSchema.CurVersion
     ups match {
-      case Full(`curVer`::_) => new OracleDao(schema)
+      case Full(`curVer`::_) => new OracleDaoSpi(schema)
       case Full(_) => assErr("[debiki_error_77Kce29h]")
       case Empty => assErr("[debiki_error_33k2kSE]")
       case f: Failure => throw f.exception.open_!
@@ -55,7 +55,7 @@ object OracleDao {
 }
 
 
-class OracleDao(val schema: OracleSchema) extends Dao {
+class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi {
   // COULD serialize access, per page?
 
   import OracleDb._
@@ -81,16 +81,13 @@ class OracleDao(val schema: OracleSchema) extends Dao {
     }
     db.transaction { implicit connection =>
       _createPage(where, debate)
-      _insert(where.tenantId, debate.guid, debate.posts)
-      Full(debate)
+      val postsWithIds = _insert(where.tenantId, debate.guid, debate.posts
+                                  ).open_!
+      Full(debate.copy(posts = postsWithIds))
     }
   }
 
-  def save(tenantId: String, pageGuid: String, x: AnyRef): Box[AnyRef] = {
-    save(tenantId, pageGuid, x::Nil).map(_.head)
-  }
-
-  def save[T](tenantId: String, pageGuid: String,
+  override def save[T](tenantId: String, pageGuid: String,
                 xs: List[T]): Box[List[T]] = {
     db.transaction { implicit connection =>
       _insert(tenantId, pageGuid, xs)
