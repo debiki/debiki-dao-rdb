@@ -28,8 +28,10 @@ occurrances of "time".
 
 Create a user like so: (the tablespace and user name can be anything)
 
+create profile DEBIKI limit idle_time 20;
+
 CREATE USER "DEBIKI_TEST"
-  PROFILE "DEFAULT"
+  PROFILE "DEBIKI"
   IDENTIFIED BY "*******"
   DEFAULT TABLESPACE "DEBIKI"
   TEMPORARY TABLESPACE "TEMP"
@@ -307,10 +309,10 @@ class OracleSchema(val oradb: OracleDb) {
 
       ok <- exUp("""
         create table DW0_ACTIONS(
-          TENANT nvarchar2(100),
-          PAGE nvarchar2(100),
+          TENANT nvarchar2(100) constraint DW0_ACTIONS_TENANT__N not null,
+          PAGE nvarchar2(100)   constraint DW0_ACTIONS_PAGE__N not null,
           ID nvarchar2(100)     constraint DW0_ACTIONS_ID__N not null,
-          TYPE nchar2(4),
+          TYPE nchar(4)         constraint DW0_ACTIONS_TYPE__N not null,
           TIME timestamp        constraint DW0_ACTIONS_TIME__N not null,
           WHO nvarchar2(100)    constraint DW0_ACTIONS_WHO__N not null,
           IP nvarchar2(100)     constraint DW0_ACTIONS_IP__N not null,
@@ -336,7 +338,7 @@ class OracleSchema(val oradb: OracleDb) {
         """)
       ok <- exUp("""
         insert into DW0_VERSION(VERSION) values ('0.0.2')
-        """)
+        """)  // BUG? I've forgotten to commit?
     } yield
       "0.0.2"
   }
