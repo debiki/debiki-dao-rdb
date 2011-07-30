@@ -89,7 +89,14 @@ extends OraLogger {
     ds.setConnectionCacheProperties(props)
     ds.setConnectionCacheName("DebikiConnCache01")
     // Test the data source.
-    val conn: js.Connection = ds.getConnection()
+    val conn: js.Connection = try {
+      ds.getConnection()
+    } catch {
+      case e: Exception => {
+        error("Error connecting to `"+ connUrl +"' as `"+ user +"'")
+        throw e
+      }
+    }
     conn.close()
     ds
   }
