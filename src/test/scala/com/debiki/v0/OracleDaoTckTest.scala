@@ -24,9 +24,9 @@ DEBIKI_TEST_0_0_2_DATA
 Password (for all users): "auto-dropped"
 */
 
-class OracleTestContext(override val dao: OracleDao) extends tck.TestContext {
-  val schema = dao.schema
-  val db = dao.schema.oradb
+class OracleTestContext(val daoImpl: OracleDaoSpi) extends tck.TestContext {
+  val schema = daoImpl.schema
+  val db = daoImpl.schema.oradb
 
   override def createRestorePoint() {
     unimplemented
@@ -38,7 +38,7 @@ class OracleTestContext(override val dao: OracleDao) extends tck.TestContext {
 }
 
 object OracleDaoTckTest {
-  val connStr = "jdbc:oracle:thin:@//192.168.0.120:1521/debiki.ex.com"
+  val connStr = "jdbc:oracle:thin:@//192.168.0.102:1521/debiki.ex.com"
 
   def testContextBuilder(what: tck.DaoTckTest.What, version: String) = {
     import tck.DaoTckTest._
@@ -49,14 +49,14 @@ object OracleDaoTckTest {
       case ("0.0.2", TablesWithData) => "DEBIKI_TEST_0_0_2_DATA"
       case _ => assErr("Broken test suite")
     }
-    val dao = OracleDao.connectAndUpgradeSchemaThrow(
+    val dao = OracleDaoSpi.connectAndUpgradeSchemaThrow(
                           connStr, schema, "auto-dropped")
     new OracleTestContext(dao)
   }
 
   val testContextBuilder2 =
     (what: tck.DaoTckTest.What, version: String) => {
-      val dao = OracleDao.connectAndUpgradeSchemaThrow(
+      val dao = OracleDaoSpi.connectAndUpgradeSchemaThrow(
         connStr, "DEBIKI_TEST", "apabanan454")
       new OracleTestContext(dao)
     }

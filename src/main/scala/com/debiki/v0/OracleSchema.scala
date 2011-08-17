@@ -119,11 +119,13 @@ DW0_USERS
   URL
 
 DW0_ACTIONS
-  PK
+  SNO         sequence number
+  TENANT
   PAGE        foreign key to DW_PAGE.PK
   ID
-  DATE
-  BY
+  TYPE
+  TIME
+  WHO
   IP
 
 DW0_POSTS
@@ -145,12 +147,12 @@ DW0_EDIT_APPS
   DEBUG
 
 DW0_RATINGS
-  ACTION
-  TAGVAL
+  ACTION_SNO  foreign key to DW_ACTIONS.SNO
+  TAG
 
-DW0_VALS
+(DW0_VALS
   PK
-  VALUE
+  VALUE)
 
 
  */
@@ -306,9 +308,10 @@ class OracleSchema(val oradb: OracleDb) {
 //              alter table DW0_ACTIONS drop  ...
 //  ---
 
-
+      // UNTESTED the SNO column
       ok <- exUp("""
         create table DW0_ACTIONS(
+          SNO number(20)        constraint DW0_ACTIONS_SNO__N not null,
           TENANT nvarchar2(100) constraint DW0_ACTIONS_TENANT__N not null,
           PAGE nvarchar2(100)   constraint DW0_ACTIONS_PAGE__N not null,
           ID nvarchar2(100)     constraint DW0_ACTIONS_ID__N not null,
@@ -319,6 +322,8 @@ class OracleSchema(val oradb: OracleDb) {
           RELA nvarchar2(100),
           DATA nclob,
           DATA2 nclob,
+          constraint DW0_ACTIONS_SNO__U
+              unique key (SNO),
           constraint DW0_ACTIONS__P
               primary key (TENANT, PAGE, ID),
           constraint DW0_ACTIONS__R__PAGES
@@ -331,7 +336,25 @@ class OracleSchema(val oradb: OracleDb) {
               check (TYPE in ('Post', 'Edit', 'EdAp', 'EdRe', 'Rtng'))
         )
         """)
+
+      // UNTESTED
       ok <- exUp("""
+        create sequence DW0_ACTIONS_SNO start with 1
+        """)
+
+      ok <- exUp("""
+        create table DW0_RATINGS(
+          ACTION_SNO number(20) constraint DW0_RATINGS_ASNO__N not null,
+          TAG nvarchar2(100)    constraint DW0_RATINGS_TAG__N not null,
+          constraint DW0_RATINGS__R__ACTIONS
+              foreign key (ACTION_SNO)
+              references DW0_ACTIONS(SNO) deferrable,
+          constraint DW0_RATINGS__P
+              primary key (ACTION_SNO, TAG)
+        )
+        """)
+
+       ok <- exUp("""
         create table DW0_VERSION(
           VERSION nvarchar2(100) constraint DW0_VERSION_VERSION__N not null
         )
@@ -348,5 +371,40 @@ class OracleSchema(val oradb: OracleDb) {
   }
 
 }
+
+/* Add DW0_RATINGS:
+
+  alter table DW0_ACTIONS add SNO number(20)
+      constraint DW0_ACTIONS_SNO__U unique;
+
+  update DW0_ACTIONS set SNO = (
+    select rno from (
+      select rownum rno, rid from (
+        select rowid rid from DW0_ACTIONS order by TIME, TYPE desc))
+  where DW0_ACTIONS.rowid = rid);
+
+  alter table DW0_ACTIONS modify (SNO constraint DW0_ACTIONS_SNO__N not null);
+
+  create table DW0_RATINGS(
+          ACTION_SNO number(20) constraint DW0_RATINGS_ASNO__N not null,
+          TAG nvarchar2(100)    constraint DW0_RATINGS_TAG__N not null,
+        constraint DW0_RATINGS__R__ACTIONS
+            foreign key (ACTION_SNO)
+            references DW0_ACTIONS(SNO) deferrable,
+          constraint DW0_RATINGS__P
+            primary key (ACTION_SNO, TAG)
+        );
+
+  declare
+    sno number;
+  begin
+    select max(SNO) + 1 into sno from DW0_ACTIONS;
+    execute immediate 'create sequence DW0_ACTIONS_SNO start with '|| sno;
+  end;
+  /
+
+
+*/
+
 
 // vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list

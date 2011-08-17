@@ -14,6 +14,7 @@ import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
 import oracle.{jdbc => oj}
 import oracle.jdbc.{pool => op}
+import scala.collection.{mutable => mut}
 
 object OracleDaoSpi {
 
@@ -95,11 +96,50 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi {
   }
 
   def load(tenantId: String, pageGuid: String): Box[Debate] = {
-    // Consider using TRANSACTION_REPEATABLE_READ? Not needed right now.
+    /*
+    db.transaction { implicit connection =>
+
+      // Prevent phantom reads from DW0_ACTIONS. (E.g. rating tags are read
+      // from DW0_RATINGS before _ACTIONS is considered, and another session
+      // might insert a row into _ACTIONS just after _RATINGS was queried.)
+      connection.setTransactionIsolation(
+        Connection.TRANSACTION_SERIALIZABLE)
+      */
+
+    // Load rating tags.
+    val ratingTags: mut.HashMap[Long, List[String]] = db.queryAtnms("""
+        select r.ACTION_SNO, r.TAG from DW0_RATINGS r, DW0_ACTIONS a
+        where r.ACTION_SNO = a.SNO and a.TYPE = 'Rtng'
+        and TENANT = ? and PAGE = ?
+        order by ACTION_SNO
+        """,
+      List(tenantId, pageGuid), rs => {
+        val map = mut.HashMap[Long, List[String]]()
+        var tags = List[String]()
+        var curSno: Long = -1
+
+        while (rs.next) {
+          val sno = rs.getLong("ACTION_SNO");
+          val tag = rs.getString("TAG");
+          if (curSno == -1) curSno = sno
+          if (sno == curSno) tags ::= tag
+          else {
+            // All tags found for the rating with ACTION_SNO = curSno.
+            map(curSno) = tags
+            tags = tag::Nil
+            curSno = sno
+          }
+        }
+        if (tags.nonEmpty)
+          map(curSno) = tags
+
+        Full(map)
+      }).open_!  // COULD throw exceptions, don't use boxes?
+
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
     db.queryAtnms("""
-        select ID, TYPE, TIME, WHO, IP, RELA, DATA, DATA2
+        select SNO, ID, TYPE, TIME, WHO, IP, RELA, DATA, DATA2
         from DW0_ACTIONS
         where TENANT = ? and PAGE = ?
         order by TIME desc
@@ -108,6 +148,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi {
       var actions = List[AnyRef]()
 
       while (rs.next) {
+        val sno = rs.getLong("SNO");
         val id = rs.getString("ID");
         val typee = rs.getString("TYPE");
         val at = ts2d(rs.getTimestamp("TIME"))
@@ -122,6 +163,10 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi {
             new Post(id = id, parent = n2e(rela_?), date = at,
               by = by, ip = ip, text = n2e(data_?),
               where = Option(data2_?))
+          case "Rtng" =>  // COULD assert rela_? is not null.
+            val tags = ratingTags(sno)
+            new Rating(id = id, postId = n2e(rela_?), date = at,
+              by = by, ip = ip, tags = tags)
           case "Edit" =>
             // COULD assert rela_? is not null.
             new Edit(id = id, postId = n2e(rela_?), date = at,
@@ -280,26 +325,44 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi {
                           // COULD make `assignIdTo' member of object Debiki$
     var bindPos = 0
     for (x <- xsWithIds) {
-      // TODO don't insert sysdate, but the same timestamp for all entries!
+      // Could optimize:  (but really *not* important!)
+      // Use a CallableStatement and `insert into ... returning ...'
+      // to create the _ACTIONS row and read the SNO in one single roundtrip.
+      // Or select many SNO:s in one single query? and then do a batch
+      // insert into _ACTIONS (instead of one insert per row), and then
+      // batch inserts into other tables e.g. _RATINGS.
+      val sno = db.query("select DW0_ACTIONS_SNO.nextval SNO from dual", Nil,
+          rs => {
+        rs.next
+        Full(rs.getLong("SNO"))
+      }).open_!.asInstanceOf[AnyRef]
+
       val insertIntoActions = """
-          insert into DW0_ACTIONS(TENANT, PAGE, ID, TYPE,
+          insert into DW0_ACTIONS(SNO, TENANT, PAGE, ID, TYPE,
               TIME, WHO, IP, RELA, DATA, DATA2)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """
       x match {
         case p: Post =>
           db.update(insertIntoActions,
-            List(tenantId, pageGuid, p.id, "Post", p.date, p.by,
+            List(sno, tenantId, pageGuid, p.id, "Post", p.date, p.by,
                 p.ip, p.parent, p.text,
                 p.where.getOrElse(Null(js.Types.NVARCHAR))))
+        case r: Rating =>
+          db.update(insertIntoActions,
+            List(sno, tenantId, pageGuid, r.id, "Rtng", r.date, r.by,
+              r.ip, r.postId, "", ""))  // Oracle converts "" to null
+          db.batchUpdate("""
+            insert into DW0_RATINGS(ACTION_SNO, TAG) values (?, ?)
+            """, r.tags.map(t => List(sno, t)))
         case e: Edit =>
           db.update(insertIntoActions,
-            List(tenantId, pageGuid, e.id, "Edit", e.date, e.by,
+            List(sno, tenantId, pageGuid, e.id, "Edit", e.date, e.by,
                   e.ip, e.postId, e.text, e.desc))
         case a: EditApplied =>
           val id = nextRandomString()  ; TODO // guid field
           db.update(insertIntoActions,
-            List(tenantId, pageGuid, id, "EdAp", a.date, "<system>",
+            List(sno, tenantId, pageGuid, id, "EdAp", a.date, "<system>",
               "?.?.?.?", a.editId, a.result, ""))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [debiki_error_38rkRF]")

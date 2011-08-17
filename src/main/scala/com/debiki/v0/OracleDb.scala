@@ -8,7 +8,7 @@ package com.debiki.v0
 import _root_.net.liftweb.common.{Logger, Box, Empty, Full, Failure}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
-import java.{sql => js}
+import java.{sql => js, lang => jl}
 import oracle.{jdbc => oj}
 import oracle.jdbc.{pool => op}
 
@@ -73,6 +73,9 @@ extends OraLogger {
     // Article: "High-Performance Oracle JDBC Programming"
     // e.g. info on statement caching:
     //  <javacolors.blogspot.com/2010/12/high-performance-oracle-jdbc.html>
+
+    // Batch insert example: (ignores prepared statements though)
+    //  <http://www.roseindia.net/jdbc/Jdbc-batch-insert.shtml>
 
     // set cache properties
     val props = new ju.Properties()
@@ -191,21 +194,7 @@ extends OraLogger {
     try {
       conn2 = if (conn ne null) conn else daSo.getConnection()
       pstmt = conn2.prepareStatement(query)
-      var bindPos = 0
-      import java.{lang => jl}
-      for (b <- binds) {
-        bindPos += 1
-        b match {
-          case i: jl.Integer => pstmt.setInt(bindPos, i.intValue)
-          case s: String => pstmt.setString(bindPos, s)
-          case d: js.Date => assErr("Use Timestamp not Date")
-          case t: js.Time => assErr("Use Timestamp not Time")
-          case t: js.Timestamp => pstmt.setTimestamp(bindPos, t)
-          case d: ju.Date => pstmt.setTimestamp(bindPos, d2ts(d))
-          case Null(sqlType) => pstmt.setNull(bindPos, sqlType)
-          case x => unimplemented("Binding this: "+ classNameOf(x))
-        }
-      }
+      _bind(binds, pstmt)
       //s.setPoolable(false)  // don't cache infrequently used statements
       val result = (if (resultSetHandler ne null) {
         val rs = pstmt.executeQuery()
@@ -228,6 +217,58 @@ extends OraLogger {
     } finally {
       if (pstmt ne null) pstmt.close()
       if (isAutonomous && (conn2 ne null)) conn2.close()
+    }
+  }
+
+  def batchUpdate(
+         stmt: String, batchValues: List[List[AnyRef]], batchSize: Int = 100)
+         (implicit conn: js.Connection): Seq[Array[Int]] = {
+    assert(batchSize > 0)
+    val isAutonomous = conn eq null
+    var conn2: js.Connection = null
+    var pstmt: js.PreparedStatement = null
+    var result = List[Array[Int]]()
+    try {
+      conn2 = if (conn ne null) conn else daSo.getConnection()
+      pstmt = conn2.prepareStatement(stmt)
+      var rowCount = 0
+      for (values <- batchValues) {
+        rowCount += 1
+        _bind(values, pstmt)
+        pstmt.addBatch()
+        if (rowCount == batchSize) {
+          val updateCounts = pstmt.executeBatch() ; UNTESTED
+          result ::= updateCounts
+          rowCount = 0
+        }
+      }
+      if (rowCount > 0) {
+        val updateCounts = pstmt.executeBatch()
+        result ::= updateCounts
+      }
+      if (isAutonomous) conn2.commit()
+      result.reverse
+    } finally {
+      if (pstmt ne null) pstmt.close()
+      if (isAutonomous && (conn2 ne null)) conn2.close()
+    }
+  }
+
+  private def _bind(values: List[AnyRef], pstmt: js.PreparedStatement) {
+    var bindPos = 0
+    for (v <- values) {
+      bindPos += 1
+      v match {
+        case i: jl.Integer => pstmt.setInt(bindPos, i.intValue)
+        case l: jl.Long => pstmt.setLong(bindPos, l.longValue)
+        case s: String => pstmt.setString(bindPos, s)
+        case d: js.Date => assErr("Use Timestamp not Date")
+        case t: js.Time => assErr("Use Timestamp not Time")
+        case t: js.Timestamp => pstmt.setTimestamp(bindPos, t)
+        case d: ju.Date => pstmt.setTimestamp(bindPos, d2ts(d))
+        case Null(sqlType) => pstmt.setNull(bindPos, sqlType)
+        case x => unimplemented("Binding this: "+ classNameOf(x))
+      }
     }
   }
 
