@@ -7,7 +7,7 @@ package com.debiki.v0
 import com.debiki.v0.PagePath._
 import com.debiki.v0.IntrsAllowed._
 import com.debiki.v0.{Action => A}
-import _root_.net.liftweb.common.{Logger, Box, Empty, Full, Failure}
+import _root_.net.liftweb.common.{Loggable, Box, Empty, Full, Failure}
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
@@ -56,7 +56,7 @@ object OracleDaoSpi {
 }
 
 
-class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi {
+class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
   // COULD serialize access, per page?
 
   import OracleDb._
@@ -184,6 +184,41 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi {
 
       Full(Debate.fromActions(guid = pageGuid, actions))
     })
+  }
+
+  def loadTemplates(perhapsTmpls: List[PagePath]): List[Debate] = {
+    // TODO: TRANSACTION_SERIALIZABLE, or someone might delete
+    // a template after its guid has been looked up.
+    if (perhapsTmpls isEmpty) return Nil
+    val tenantId = perhapsTmpls.head.tenantId
+    // For now, do 1 lookup per location.
+    // Minor bug: if template /some-page.tmpl does not exist, but there's
+    // an odd page /some-page.tmpl/, then that *page* is found and
+    // returned although it's probably not a template.  ? Solution:
+    // TODO disallow '.' in directory names? but allow e.g. style.css,
+    // scripts.js, template.tpl.
+    var guids = List[String]()
+    perhapsTmpls map { tmplPath =>
+      assert(tmplPath.tenantId == tenantId)
+      _findCorrectPagePath(tmplPath) match {
+        case Full(pagePath) => guids ::= pagePath.guid.value.get
+        case Empty => // fine, template does not exist
+        case f: Failure => error(
+          "Error loading template guid [debiki_error_309sU32]:\n"+ f)
+      }
+    }
+    val pages: List[Debate] = guids.reverse map { guid =>
+      load(tenantId, guid) match {
+        case Full(d: Debate) => d
+        case x =>
+          // Database inaccessible? If I fixed TRANSACTION_SERIALIZABLE
+          // (see above) the template would have been found for sure.
+          val err = "Error loading template [debiki_error_983keCK31]"
+          logger.error(err +":"+ x.toString) // COULD fix consistent err reprt
+          error(err)
+      }
+    }
+    pages
   }
 
   def checkPagePath(pathToCheck: PagePath): Box[PagePath] = {
