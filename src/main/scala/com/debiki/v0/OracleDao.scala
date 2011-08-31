@@ -157,11 +157,12 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         val rela_? = rs.getString("RELA")  // can be null
         val data_? = rs.getString("DATA")
         val data2_? = rs.getString("DATA2")
+        val markup = "" // for now, TODO a MARKUP column
 
         val action = typee match {
           case "Post" =>
             new Post(id = id, parent = n2e(rela_?), date = at,
-              by = by, ip = ip, text = n2e(data_?),
+              by = by, ip = ip, text = n2e(data_?), markup = markup,
               where = Option(data2_?))
           case "Rtng" =>  // COULD assert rela_? is not null.
             val tags = ratingTags(sno)
