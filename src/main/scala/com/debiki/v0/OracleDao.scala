@@ -92,35 +92,35 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                             ): LoginStuff = {
     // Load user SNO or create new.
 
-    // 1. Write all LoginCredsSimple, new SNO from DW1_LOGINS_SNO
+    // 1. Write all IdentitySimple, new SNO from DW1_IDS_SNO
     // 2. Select most recent row from _OPENID, where CLAIMED_ID = oidClaimedId
-    // 3.   if found, cmp w/ LoginCredsOpenId
+    // 3.   if found, cmp w/ IdentityOpenId
     //      if identical, use its SNO
     //      else, get new SNO, write row with USR SNO just fetched.
     // 4. Write Logins
 
     var loginWithId: Login = null
-    var loginCredsWithId: LoginCreds = null
-    var loginCredsSno: Option[Long] = None
+    var identityWithId: Identity = null
+    var identitySno: Option[Long] = None
     var user: Option[User] = None
 
     db.transaction { implicit connection =>
       val loginNoId = loginStuffNoId.login
-      loginStuffNoId.creds match {
-        case s: LoginCredsSimple =>
+      loginStuffNoId.identity match {
+        case s: IdentitySimple =>
           // Find or create _SIMPLE row.
-          for (i <- 1 to 2 if loginCredsSno.isEmpty) {
+          for (i <- 1 to 2 if identitySno.isEmpty) {
             db.query("""
-                select SNO from DW1_LOGINS_SIMPLE
+                select SNO from DW1_IDS_SIMPLE
                 where NAME = ? and EMAIL = ? and LOCATION = ? and
                       WEBSITE = ?""",
                 List(e2d(s.name), e2d(s.email), e2d(s.location),
                     e2d(s.website)),
                 rs => {
-              if (rs.next) loginCredsSno = Some(rs.getLong("SNO"))
+              if (rs.next) identitySno = Some(rs.getLong("SNO"))
               Empty // dummy
             })
-            if (loginCredsSno isEmpty) {
+            if (identitySno isEmpty) {
               // Create simple user info.
               // There is a unique constraint on NAME, EMAIL, LOCATION,
               // WEBSITE, so this insert might fail (if another thread does
@@ -128,19 +128,19 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               // is run again and all is fine. Could avoid logging any error
               // though!
               db.update("""
-                  insert into DW1_LOGINS_SIMPLE(
+                  insert into DW1_IDS_SIMPLE(
                       SNO, NAME, EMAIL, LOCATION, WEBSITE)
-                  values (DW1_LOGIN_CREDS_SNO.nextval, ?, ?, ?, ?)""",
+                  values (DW1_IDS_SNO.nextval, ?, ?, ?, ?)""",
                   List(s.name, e2d(s.email), e2d(s.location), e2d(s.website)))
                   // COULD fix: returning SNO into ?""", saves 1 roundtrip.
               // Loop one more lap to read SNO.
             }
           }
-          assErrIf(loginCredsSno.isEmpty, "[debiki_error_93kRhk20")
-          loginCredsWithId = s.copy(id = loginCredsSno.get.toString)
+          assErrIf(identitySno.isEmpty, "[debiki_error_93kRhk20")
+          identityWithId = s.copy(id = identitySno.get.toString)
 
-        case c: LoginCredsOpenId =>
-          // Find a matching DW1_LOGINS_OPENID row.
+        case c: IdentityOpenId =>
+          // Find a matching DW1_IDS_OPENID row.
           // If there is none, create one, and a new _USERS row (i.e. create
           // a new user!).
           // Create a _LOGINS row that points to _OPENID.
@@ -158,9 +158,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                      u.WEBSITE,
                      u.SUPERADMIN,
                      atrs.SNO OID_SNO
-              from DW1_LOGINS_OPENID o2u,
+              from DW1_IDS_OPENID o2u,
                    DW1_USERS u,
-                   DW1_LOGINS_OPENID atrs
+                   DW1_IDS_OPENID atrs
               where
                   o2u.TENANT = (
                         select SNO from DW1_TENANTS where NAME = ?)
@@ -190,7 +190,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                 e2d(c.firstName), e2d(c.email), e2d(c.country)),
               rs => {
             if (rs.next) {
-              loginCredsSno = Option(rs.getLong("OID_SNO"))
+              identitySno = Option(rs.getLong("OID_SNO"))
               user = Some(User(
                   id = rs.getLong("USR").toString,
                   displayName = n2e(rs.getString("DISPLAY_NAME")),
@@ -245,38 +245,38 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               // Do nothing. A user was found with up-to-date name, email etc.
           }
 
-          if (loginCredsSno isEmpty) {
+          if (identitySno isEmpty) {
             // This is a new user *or* it's an old user but with new
             // OpenID attributes, e.g. s/he has changed her name or email.
             // Create a _OPENID row for this new set of attributes.
-            loginCredsSno = Some(db.nextSeqNo("DW1_LOGIN_CREDS_SNO"))
+            identitySno = Some(db.nextSeqNo("DW1_IDS_SNO"))
             db.update("""
-                insert into DW1_LOGINS_OPENID(
+                insert into DW1_IDS_OPENID(
                     SNO, TENANT, USR, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
                     OID_REALM, OID_ENDPOINT, OID_VERSION,
                     FIRST_NAME, EMAIL, COUNTRY)
                 values (
                     ?, (select SNO from DW1_TENANTS where NAME = ?), ?,
                     ?, ?, ?, ?, ?, ?, ?, ?)""",
-                List(loginCredsSno.get.asInstanceOf[AnyRef],
+                List(identitySno.get.asInstanceOf[AnyRef],
                     tenantId, user.get.id, c.oidClaimedId, e2d(c.oidOpLocalId),
                     e2d(c.oidRealm), e2d(c.oidEndpoint), e2d(c.oidVersion),
                     e2d(c.firstName), e2d(c.email), e2d(c.country)))
           }
 
-          loginCredsWithId = c.copy(id = loginCredsSno.get.toString)
+          identityWithId = c.copy(id = identitySno.get.toString)
 
-        case LoginCredsUnknown =>
+        case IdentityUnknown =>
           assErr("[debiki_error_32ks30016")
       }
 
       // Create a new _LOGINS row, pointing to the _SIMPLE table
       // (rather than the OpenID login table).
-      val loginSno = db.nextSeqNoAnyRef("DW1_LOGINS_SNO")
+      val loginSno = db.nextSeqNoAnyRef("DW1_IDS_SNO")
       val prevLoginId = ""  // for now
-      val loginType = loginCredsWithId match {
-        case _: LoginCredsSimple => "Simple"
-        case _: LoginCredsOpenId => "OpenID"
+      val loginType = identityWithId match {
+        case _: IdentitySimple => "Simple"
+        case _: IdentityOpenId => "OpenID"
         case _ => assErr("[debiki_error_03k2r21K5]")
       }
 
@@ -284,19 +284,19 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       // to find good plans.)
       db.update("""
           insert into DW1_LOGINS(
-              SNO, TENANT, PREV_LOGIN, LOGIN_TYPE, LOGIN_TYPE_SNO,
+              SNO, TENANT, PREV_LOGIN, ID_TYPE, ID_SNO,
               LOGIN_IP, LOGIN_TIME)
           values (?, (select SNO from DW1_TENANTS where NAME = ?), ?,
               '"""+ loginType +"', ?, ?, ?)",  // don't bind
           List(loginSno, tenantId, prevLoginId,
-              loginCredsSno.get.asInstanceOf[AnyRef], loginNoId.ip,
+              identitySno.get.asInstanceOf[AnyRef], loginNoId.ip,
               loginNoId.date))
       loginWithId = loginNoId.copy(id = loginSno.toString)
 
       Empty // pointless box
     }
 
-    LoginStuff(login = loginWithId, creds = loginCredsWithId, user = user)
+    LoginStuff(login = loginWithId, identity = identityWithId, user = user)
   }
 
   override def saveLogout(loginId: String, logoutIp: String) {
@@ -331,7 +331,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
 
     var pageSno: Long = -1
     var logins = List[Login]()
-    var loginCreds = List[LoginCreds]()
+    var identities = List[Identity]()
     var users = List[User]()
 
     // Load all logins for pageGuid. Load DW1_PAGES.SNO at the same time
@@ -339,7 +339,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     db.queryAtnms("""
         select p.SNO PAGE_SNO,
             l.SNO LOGIN_SNO, l.PREV_LOGIN,
-            l.LOGIN_TYPE, l.LOGIN_TYPE_SNO,
+            l.ID_TYPE, l.ID_SNO,
             l.LOGIN_IP, l.LOGIN_TIME,
             l.LOGOUT_IP, l.LOGOUT_TIME
         from DW1_TENANTS t, DW1_PAGES p, DW1_PAGE_ACTIONS a, DW1_LOGINS l
@@ -354,13 +354,13 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         val prevLogin = Option(rs.getLong("PREV_LOGIN")).map(_.toString)
         val ip = rs.getString("LOGIN_IP")
         val date = rs.getDate("LOGIN_TIME")
-        // LOGIN_TYPE need not be remembered, since each LOGIN_TYPE_SNO value
+        // ID_TYPE need not be remembered, since each ID_SNO value
         // is unique over all DW1_LOGIN_OPENID/SIMPLE/... tables.
-        // (So you'd find the appropriate LoginCredsSimple/OpenId by doing
-        // People.loginCreds.find(_.id = x).)
-        val credsId = rs.getLong("LOGIN_TYPE_SNO").toString
+        // (So you'd find the appropriate IdentitySimple/OpenId by doing
+        // People.identities.find(_.id = x).)
+        val idId = rs.getLong("ID_SNO").toString
         logins ::= Login(id = loginId, prevLoginId = prevLogin, ip = ip,
-                        date = date, loginCredsId = credsId)
+                        date = date, identityId = idId)
       }
       Empty
     })
@@ -368,18 +368,18 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     // Load simple logins.
     db.queryAtnms("""
         select s.SNO, s.NAME, s.EMAIL, s.LOCATION, s.WEBSITE
-        from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_LOGINS_SIMPLE s
+        from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_SIMPLE s
         where a.PAGE = ?
           and a.LOGIN = l.SNO
-          and l.LOGIN_TYPE = 'Simple'
-          and l.LOGIN_TYPE_SNO = s.SNO""", List(pageSno.toString), rs => {
+          and l.ID_TYPE = 'Simple'
+          and l.ID_SNO = s.SNO""", List(pageSno.toString), rs => {
       while (rs.next) {
         val sno = rs.getLong("SNO")
         val name = d2e(rs.getString("NAME"))
         val email = d2e(rs.getString("EMAIL"))
         val location = d2e(rs.getString("LOCATION"))
         val website = d2e(rs.getString("WEBSITE"))
-        loginCreds ::= LoginCredsSimple(id = sno.toString, name = name,
+        identities ::= IdentitySimple(id = sno.toString, name = name,
             email = email, location = location, website = website)
       }
       Empty
@@ -390,13 +390,13 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         select o.SNO, o.OID_ENDPOINT, o.OID_VERSION, o.OID_REALM,
               o.OID_CLAIMED_ID, o.OID_OP_LOCAL_ID, o.FIRST_NAME,
               o.EMAIL, o.COUNTRY
-        from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_LOGINS_OPENID o
+        from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_OPENID o
         where a.PAGE = ?
           and a.LOGIN = l.SNO
-          and l.LOGIN_TYPE = 'OpenID'
-          and l.LOGIN_TYPE_SNO = o.SNO""", List(pageSno.toString), rs => {
+          and l.ID_TYPE = 'OpenID'
+          and l.ID_SNO = o.SNO""", List(pageSno.toString), rs => {
       while (rs.next) {
-        loginCreds ::= LoginCredsOpenId(
+        identities ::= IdentityOpenId(
             id = rs.getLong("SNO").toString,
             oidEndpoint = rs.getString("OID_ENDPOINT"),
             oidVersion = rs.getString("OID_VERSION"),
@@ -414,12 +414,12 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     db.queryAtnms("""
         select u.SNO, u.DISPLAY_NAME, u.EMAIL, u.COUNTRY,
                 u.WEBSITE, u.SUPERADMIN
-          from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_LOGINS_OPENID o,
+          from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_OPENID o,
                 DW1_USERS u
           where a.PAGE = ?
             and a.LOGIN = l.SNO
-            and l.LOGIN_TYPE = 'OpenID'
-            and l.LOGIN_TYPE_SNO = o.SNO
+            and l.ID_TYPE = 'OpenID'
+            and l.ID_SNO = o.SNO
             and o.USR = u.SNO
             and u.TENANT = (select SNO from DW1_TENANTS where NAME = ?) """,
         List(pageSno.toString, tenantId), rs => {
@@ -513,7 +513,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       }
 
       Full(Debate.fromActions(guid = pageGuid,
-          logins, loginCreds, users, actions))
+          logins, identities, users, actions))
     })
   }
 

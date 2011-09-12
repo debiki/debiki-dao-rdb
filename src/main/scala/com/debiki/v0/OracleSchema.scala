@@ -411,14 +411,14 @@ drop table DW1_PAGE_ACTIONS;
 drop table DW1_PATHS;
 drop table DW1_PAGES;
 drop table DW1_LOGINS;
-drop table DW1_LOGINS_SIMPLE;
-drop table DW1_LOGINS_OPENID;
+drop table DW1_IDS_SIMPLE;
+drop table DW1_IDS_OPENID;
 drop table DW1_USERS;
 drop table DW1_TENANTS;
 drop sequence DW1_TENANTS_SNO;
 drop sequence DW1_USERS_SNO;
 drop sequence DW1_LOGINS_SNO;
-drop sequence DW1_LOGIN_CREDS_SNO;
+drop sequence DW1_IDS_SNO;
 drop sequence DW1_PAGES_SNO;
 
 
@@ -437,7 +437,7 @@ commit;
 -- A user is identified by its SNO. You cannot trust the specified name or
 -- email, not even with OpenID or OpenAuth login. This means it's *not*
 -- possible to lookup a user in this table, given e.g. name and email.
--- Instead, you need to e.g. lookup DW1_LOGINS_OPENID.OID_CLAIMED_ID,
+-- Instead, you need to e.g. lookup DW1_IDS_OPENID.OID_CLAIMED_ID,
 -- to find _OPENID.USR, which is the relevant user SNO.
 -- However, the same _CLAIMED_ID might point to many different _USERS,
 -- because users can (not implemented) merge different OpenID accounts to
@@ -474,21 +474,21 @@ create table DW1_LOGINS(  -- logins and logouts
   SNO number(20)             not null,
   TENANT number(10)          not null,
   PREV_LOGIN number(20),
-  LOGIN_TYPE varchar2(10)    not null,
-  LOGIN_TYPE_SNO number(20)  not null,
+  ID_TYPE varchar2(10)       not null,
+  ID_SNO number(20)          not null,
   LOGIN_IP varchar2(39)      not null,
   LOGIN_TIME timestamp       not null,
   LOGOUT_IP varchar2(39),
   LOGOUT_TIME timestamp,
   constraint DW1_LOGINS_SNO__P primary key (SNO),
   constraint DW1_LOGINS_TNT__R__TENANTS
-      foreign key (TENANT) -- without index, fine, I think
+      foreign key (TENANT)
       references DW1_TENANTS(SNO) deferrable,
   constraint DW1_LOGINS__R__LOGINS
       foreign key (PREV_LOGIN)
       references DW1_LOGINS(SNO) deferrable,
-  constraint DW1_LOGINS_LOGINTYPE__C
-      check (LOGIN_TYPE in ('System', 'Simple', 'OpenID'))
+  constraint DW1_LOGINS_IDTYPE__C
+      check (ID_TYPE in ('Simple', 'OpenID'))
 ) PCTFREE 40;
 -- The default PCTFREE is 10%. LOGOUT_IP and LOGOUT_TIME will be
 -- updated for users that click Log Out, or logs in as other users.
@@ -500,41 +500,31 @@ create table DW1_LOGINS(  -- logins and logouts
 -- Grows w 39 + 11 = 50 bytes ~= 40% if updated with LOGOUT_IP and LOGOUT_TIME.
 -- So if PCTFREE is set to 40%, there'll be no row chaining?
 
--- I think it's OK to lock DW1_LOGINS when renaming a tenant.
--- (There's no index on TENANT, although it's a FK to DW1_TENANTS.)
--- Should happen extremely infrequently.
-
-create index DW1_LOGINS_TNT_PREVL on DW1_LOGINS(PREV_LOGIN);
+create index DW1_LOGINS_TNT on DW1_LOGINS(TENANT);
+create index DW1_LOGINS_PREVL on DW1_LOGINS(PREV_LOGIN);
 
 create sequence DW1_LOGINS_SNO start with 10;
 
--- Create a _LOGINS row that automatic actions in _PAGE_ACTIONS can refer to.
--- SNO 1 is the system user login.
- --  No! System user not needed! :-)
--- insert into DW1_LOGINS(SNO, TENANT, LOGIN_TYPE, LOGIN_TYPE_SNO,
---                       LOGIN_IP, LOGIN_TIME)
---   values (1, 1, 'System', 1, '127.0.0.1', sysdate);
-
--- For usage by _LOGINS_SIMPLE and _OPENID, so a login-credentials-SNO
--- is found in either _SIMPLE or _OPENID.
-create sequence DW1_LOGIN_CREDS_SNO start with 10;
+-- For usage by both _IDS_SIMPLE and _OPENID, so a given identity-SNO
+-- is found in only one of _SIMPLE and _OPENID.
+create sequence DW1_IDS_SNO start with 10;
 
 
--- Login credentials for simple logins (no password needed).
-create table DW1_LOGINS_SIMPLE(
+-- Simple login identities (no password needed).
+create table DW1_IDS_SIMPLE(
   SNO number(20)          not null,
   NAME nvarchar2(100)     not null,
   EMAIL nvarchar2(100)    not null,
   LOCATION nvarchar2(100) not null,
   WEBSITE nvarchar2(100)  not null,
-  constraint DW1_LGNSIMPLE_SNO__P primary key (SNO),
-  constraint DW1_LGNSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE)
+  constraint DW1_IDSSIMPLE_SNO__P primary key (SNO),
+  constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE)
 );
 
--- (Uses sequence nunmber from DW1_LOGIN_CREDS_SNO.)
+-- (Uses sequence nunmber from DW1_IDS_SNO.)
 
 
--- Login credentials for OpenID logins.
+-- OpenID identities.
 --
 -- This table is denormalized:
 -- If a user changes his/her name, a new _OPENID row is created.
@@ -558,7 +548,7 @@ create table DW1_LOGINS_SIMPLE(
 -- even if this table is denormalized, there'd mostly be only 1 row
 -- per claimed-id anyway.
 --
-create table DW1_LOGINS_OPENID(
+create table DW1_IDS_OPENID(
   SNO number(20)                  not null,
   TENANT number(10)               not null,
   USR number(20)                  not null,
@@ -571,19 +561,19 @@ create table DW1_LOGINS_OPENID(
   FIRST_NAME nvarchar2(100)       not null,
   EMAIL nvarchar2(100)            not null,
   COUNTRY nvarchar2(100)          not null,
-  constraint DW1_LGNOID_SNO__P primary key (SNO),
-  constraint DW1_LGNOID__U
+  constraint DW1_IDSOID_SNO__P primary key (SNO),
+  constraint DW1_IDSOID__U
       unique (TENANT, OID_CLAIMED_ID, OID_OP_LOCAL_ID, OID_REALM,
         OID_ENDPOINT, OID_VERSION, FIRST_NAME, EMAIL, COUNTRY),
-  constraint DW1_LGNOID_USR_TNT__R__USERS
+  constraint DW1_IDSOID_USR_TNT__R__USERS
       foreign key (TENANT, USR)
       references DW1_USERS(TENANT, SNO) deferrable
 );
 
-create index DW1_LGNOID_TNT_USR on DW1_LOGINS_OPENID(TENANT, USR);
-create index DW1_LGNOID_EMAIL on DW1_LOGINS_OPENID(EMAIL);
+create index DW1_IDSOID_TNT_USR on DW1_IDS_OPENID(TENANT, USR);
+create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 
--- (Uses sequence nunmber from DW1_LOGIN_CREDS_SNO.)
+-- (Uses sequence nunmber from DW1_IDS_SNO.)
 
 
 -- Later: DW1_USER_ACTIONS?

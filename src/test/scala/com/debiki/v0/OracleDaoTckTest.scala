@@ -66,8 +66,8 @@ object OracleDaoTckTest {
             delete from DW1_PATHS
             delete from DW1_PAGES
             delete from DW1_LOGINS
-            delete from DW1_LOGINS_SIMPLE
-            delete from DW1_LOGINS_OPENID
+            delete from DW1_IDS_SIMPLE
+            delete from DW1_IDS_OPENID
             delete from DW1_USERS
             delete from DW1_TENANTS where name <> 'default'
             """.trim.split("\n") foreach { dao.db.update(_) }
