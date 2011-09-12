@@ -19,6 +19,8 @@ trait OraLogger extends Logger {
   }
 }
 
+// Could: UpdateThrow / UpdateBox / UpdateBoxErrOk / UpdateThrowErrOk
+
 object OracleDb {
   case class Null(sqlType: Int)
 
@@ -30,6 +32,12 @@ object OracleDb {
 
   /** Converts the empty string to space ("Empty To Space"). */
   def e2s(s: String) = if (s isEmpty) " " else s
+
+  /** Converts a dash to the empty string ("Dash To Empty"). */
+  def d2e(s: String) = if (s == "-") " " else s
+
+  /** Converts the empty string to a dash ("Empty To Dash"). */
+  def e2d(s: String) = if (s isEmpty) "-" else s
 
   /** Converts java.util.Date to java.sql.Timestamp. */
   def d2ts(d: ju.Date) = new js.Timestamp(d.getTime)
@@ -110,14 +118,14 @@ extends OraLogger {
 
   /*
   def transactionThrow(f: (js.Connection) => Unit) = {
-    val conn: js.Connection = daSo.getConnection()
+    val conn: js.Connection = _getConnection()
     try {
-      conn.setAutoCommit(false)
       f(conn)
       conn.commit()
-      conn.setAutoCommit(true)  // reset to default mode
     } catch {
       case e =>
+        ! use _closeEtc instead
+        if (!committed) conn.rollback()
         conn.close()
         throw e
     }
@@ -126,21 +134,20 @@ extends OraLogger {
   def transaction[T](f: (js.Connection) => Box[T]): Box[T] = {
     var conn: js.Connection = null
     var box: Box[T] = Empty
+    var committed = false
     try {
-      conn = daSo.getConnection()
-      conn.setAutoCommit(false)
+      conn = _getConnection()
       box = f(conn)
       conn.commit()
+      committed = true
     } catch {
       case e: Exception =>
         //box = logAndFailure("Error updating database [debiki_error_83ImQF]", e)
-        warn("Error updating database [debiki_error_83ImQF]")
+        warn("Error updating database [debiki_error_83ImQF]: "+
+            e.getMessage.trim)
         throw e
     } finally {
-      if (conn ne null) {
-        conn.setAutoCommit(true)  // reset to default mode
-        conn.close()
-      }
+      _closeEtc(conn, committed = committed)
     }
     box
   }
@@ -149,12 +156,12 @@ extends OraLogger {
   //  var conn: js.Connection = null
   //  var box: Box[T] = Empty
   //  try {
-  //    conn = daSo.getConnection()
-  //    conn.setAutoCommit(false)
+  //    conn = _getConnection()
   //    box = f(conn)
   //    conn.commit()
   //  } finally {
   //    if (conn ne null) {
+  //      ! use _closeEtc instead
   //      conn.setAutoCommit(true)  // reset to default mode
   //      conn.close()
   //    }
@@ -191,8 +198,9 @@ extends OraLogger {
     val isAutonomous = conn eq null
     var conn2: js.Connection = null
     var pstmt: js.PreparedStatement = null
+    var committed = false
     try {
-      conn2 = if (conn ne null) conn else daSo.getConnection()
+      conn2 = if (conn ne null) conn else _getConnection()
       pstmt = conn2.prepareStatement(query)
       _bind(binds, pstmt)
       //s.setPoolable(false)  // don't cache infrequently used statements
@@ -202,21 +210,23 @@ extends OraLogger {
       } else {
         val updateCount = pstmt.executeUpdate()
         val result = Box !! updateCount
-        if (isAutonomous) conn2.commit()
+        if (isAutonomous) {
+          conn2.commit()
+          committed = true
+        }
         result
       })
       TODO // handle errors, return a failure
       result
     } catch {
       case ex: js.SQLException =>
-        val errmsg = "Database error [debiki_error_83ikrK9]"
-        warn(errmsg) // +": ", ex)
+        warn("Database error [debiki_error_83ikrK9]: "+ ex.getMessage.trim)
         //warn("{}: {}", errmsg, ex.printStackTrace)
         //Failure(errmsg, Full(ex), Empty)
        throw ex
     } finally {
       if (pstmt ne null) pstmt.close()
-      if (isAutonomous && (conn2 ne null)) conn2.close()
+      if (isAutonomous) _closeEtc(conn2, committed = committed)
     }
   }
 
@@ -228,8 +238,9 @@ extends OraLogger {
     var conn2: js.Connection = null
     var pstmt: js.PreparedStatement = null
     var result = List[Array[Int]]()
+    var committed = false
     try {
-      conn2 = if (conn ne null) conn else daSo.getConnection()
+      conn2 = if (conn ne null) conn else _getConnection()
       pstmt = conn2.prepareStatement(stmt)
       var rowCount = 0
       for (values <- batchValues) {
@@ -246,11 +257,14 @@ extends OraLogger {
         val updateCounts = pstmt.executeBatch()
         result ::= updateCounts
       }
-      if (isAutonomous) conn2.commit()
+      if (isAutonomous) {
+        conn2.commit()
+        committed = true
+      }
       result.reverse
     } finally {
       if (pstmt ne null) pstmt.close()
-      if (isAutonomous && (conn2 ne null)) conn2.close()
+      if (isAutonomous) _closeEtc(conn2, committed = committed)
     }
   }
 
@@ -272,11 +286,30 @@ extends OraLogger {
     }
   }
 
+  private def _getConnection(): js.Connection = {
+    val conn = daSo.getConnection()
+    if (conn ne null) conn.setAutoCommit(false)
+    conn
+  }
+
+  private def _closeEtc(conn: js.Connection, committed: Boolean) {
+    // Need to rollback before closing? Read:
+    // http://download.oracle.com/javase/6/docs/api/java/sql/Connection.html:
+    // "It is strongly recommended that an application explicitly commits
+    // or rolls back an active transaction prior to calling the close method.
+    // If the close method is called and there is an active transaction,
+    // the results are implementation-defined."
+    if (conn eq null) return
+    if (!committed) conn.rollback()
+    conn.setAutoCommit(true)  // reset to default mode
+    conn.close()
+  }
+
   /*
   def execQueryOLD(query: String, binds: List[AnyRef],
                         resultHandler: (Either[Exception, js.ResultSet])
                             => Unit) = {
-    val conn: js.Connection = daSo.getConnection()
+    val conn: js.Connection = _getConnection()
     val pstmt: js.PreparedStatement = conn.prepareStatement(query)
     TODO // handle binds
     //s.setPoolable(false)  // don't cache infrequently used statements
@@ -288,7 +321,7 @@ extends OraLogger {
 
   def execUpdateX(dml: String, binds: List[AnyRef],
                          resultHandler: (Either[Exception, Int]) => Unit) = {
-    val conn: js.Connection = daSo.getConnection()
+    val conn: js.Connection = _getConnection()
     val pstmt: js.PreparedStatement = conn.prepareStatement(dml)
     TODO // handle binds
     val changedRowsCount = pstmt.executeUpdate()
@@ -298,6 +331,17 @@ extends OraLogger {
   }
   */
 
+  def nextSeqNoAnyRef(seqName: String)(implicit conn: js.Connection): AnyRef =
+    nextSeqNo(seqName).asInstanceOf[AnyRef]
+
+  def nextSeqNo(seqName: String)(implicit conn: js.Connection): Long = {
+    val sno: Long = query("select "+ seqName +".nextval N from dual",
+          Nil, rs => {
+      rs.next
+      Full(rs.getLong("N"))
+    }).open_!
+    sno
+  }
 }
 
 
