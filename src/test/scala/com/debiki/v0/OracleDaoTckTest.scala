@@ -35,6 +35,8 @@ class OracleTestContext(val daoImpl: OracleDaoSpi) extends tck.TestContext {
   override def revertToRestorePoint() {
     unimplemented
   }
+
+  def hasRefConstraints = true
 }
 
 object OracleDaoTckTest {
@@ -42,15 +44,38 @@ object OracleDaoTckTest {
 
   def testContextBuilder(what: tck.DaoTckTest.What, version: String) = {
     import tck.DaoTckTest._
+    // Connect.
     val schema = (version, what) match {
+      // DO NOT CHANGE schema name. The schema is PURGED before each test!
       case ("0", EmptySchema) => "DEBIKI_TEST_0"
-                                 // ^ COULD run PurgeSchema (defined below)
+      // DO NOT CHANGE schema name. All tables are EMPTIED before each test!
       case ("0.0.2", EmptyTables) => "DEBIKI_TEST_0_0_2_EMPTY"
       case ("0.0.2", TablesWithData) => "DEBIKI_TEST_0_0_2_DATA"
       case _ => assErr("Broken test suite")
     }
     val dao = OracleDaoSpi.connectAndUpgradeSchemaThrow(
                           connStr, schema, "auto-dropped")
+    // Prepare schema.
+    (version, what) match {
+      case ("0", EmptySchema) =>
+        dao.db.updateAtnms(OracleTestSql.PurgeSchema)
+      case ("0.0.2", EmptyTables) =>
+          dao.db.transaction { implicit connection => """
+            delete from DW1_PAGE_RATINGS
+            delete from DW1_PAGE_ACTIONS
+            delete from DW1_PATHS
+            delete from DW1_PAGES
+            delete from DW1_LOGINS
+            delete from DW1_LOGINS_SIMPLE
+            delete from DW1_LOGINS_OPENID
+            delete from DW1_USERS
+            delete from DW1_TENANTS where name <> 'default'
+            """.trim.split("\n") foreach { dao.db.update(_) }
+            Empty // silly box
+          }
+        case ("0.0.2", TablesWithData) =>
+        case _ => assErr("Broken test suite")
+      }
     new OracleTestContext(dao)
   }
 
