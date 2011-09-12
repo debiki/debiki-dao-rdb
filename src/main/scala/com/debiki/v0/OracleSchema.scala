@@ -403,6 +403,299 @@ class OracleSchema(val oradb: OracleDb) {
   end;
   /
 
+Add DW1 tables
+-----------------
+
+drop table DW1_PAGE_RATINGS;
+drop table DW1_PAGE_ACTIONS;
+drop table DW1_PATHS;
+drop table DW1_PAGES;
+drop table DW1_LOGINS;
+drop table DW1_LOGINS_SIMPLE;
+drop table DW1_LOGINS_OPENID;
+drop table DW1_USERS;
+drop table DW1_TENANTS;
+drop sequence DW1_TENANTS_SNO;
+drop sequence DW1_USERS_SNO;
+drop sequence DW1_LOGINS_SNO;
+drop sequence DW1_LOGIN_CREDS_SNO;
+drop sequence DW1_PAGES_SNO;
+
+
+create table DW1_TENANTS(
+  SNO number(10) not null,
+  NAME nvarchar2(40) not null,
+  constraint DW1_TENANTS_SNO__P primary key (SNO),
+  constraint DW1_TENANTS_NAME__U unique (NAME)
+);
+
+create sequence DW1_TENANTS_SNO start with 10;
+
+insert into DW1_TENANTS(SNO, NAME) values (1, 'default');
+commit;
+
+-- A user is identified by its SNO. You cannot trust the specified name or
+-- email, not even with OpenID or OpenAuth login. This means it's *not*
+-- possible to lookup a user in this table, given e.g. name and email.
+-- Instead, you need to e.g. lookup DW1_LOGINS_OPENID.OID_CLAIMED_ID,
+-- to find _OPENID.USR, which is the relevant user SNO.
+-- However, the same _CLAIMED_ID might point to many different _USERS,
+-- because users can (not implemented) merge different OpenID accounts to
+-- one single account. Then a merged account might have 2 rows in _OPENID:
+-- One that points to the _USERS row before the merge, and one that points
+-- to the merged account.
+create table DW1_USERS(
+  TENANT number(10)           not null,
+  SNO number(20)              not null,
+  DISPLAY_NAME nvarchar2(100),
+  EMAIL nvarchar2(100),
+  COUNTRY nvarchar2(100),
+  WEBSITE nvarchar2(100),
+  SUPERADMIN char(1),
+  constraint DW1_USERS_TNT_SNO__P primary key (TENANT, SNO),
+  constraint DW1_USERS_SUPERADM__C check (SUPERADMIN in ('T')),
+  constraint DW1_USERS__R__TENANT
+      foreign key (TENANT)
+      references DW1_TENANTS(SNO) deferrable
+  -- No unique constraint on (TENANT, DISPLAY_NAME, EMAIL, SUPERADMIN).
+  -- People's emails aren't currently verified, so people can provide
+  -- someone else's email. So need to allow many rows with the same email.
+);
+
+create sequence DW1_USERS_SNO start with 10;
+
+-- create index DW1_USERS_TNT_NAME_EMAIL
+--  on DW1_USERS(TENANT, DISPLAY_NAME, EMAIL);
+
+
+-- DW1_LOGINS isn't named _SESSIONS because I'm not sure a login and logout
+-- defines a session? Cannot a session start before you login?
+create table DW1_LOGINS(  -- logins and logouts
+  SNO number(20)             not null,
+  TENANT number(10)          not null,
+  PREV_LOGIN number(20),
+  LOGIN_TYPE varchar2(10)    not null,
+  LOGIN_TYPE_SNO number(20)  not null,
+  LOGIN_IP varchar2(39)      not null,
+  LOGIN_TIME timestamp       not null,
+  LOGOUT_IP varchar2(39),
+  LOGOUT_TIME timestamp,
+  constraint DW1_LOGINS_SNO__P primary key (SNO),
+  constraint DW1_LOGINS_TNT__R__TENANTS
+      foreign key (TENANT) -- without index, fine, I think
+      references DW1_TENANTS(SNO) deferrable,
+  constraint DW1_LOGINS__R__LOGINS
+      foreign key (PREV_LOGIN)
+      references DW1_LOGINS(SNO) deferrable,
+  constraint DW1_LOGINS_LOGINTYPE__C
+      check (LOGIN_TYPE in ('System', 'Simple', 'OpenID'))
+) PCTFREE 40;
+-- The default PCTFREE is 10%. LOGOUT_IP and LOGOUT_TIME will be
+-- updated for users that click Log Out, or logs in as other users.
+-- If that happens frequently, these 10% might be too small,
+-- resulting in row chaining.
+-- How many bytes does a row occupy?
+--  3 * 21 (number) + 10 (usertype), 39 (start ip)
+--  11 (timestamp) = 63 + 10 + 39 + 11 = 133.
+-- Grows w 39 + 11 = 50 bytes ~= 40% if updated with LOGOUT_IP and LOGOUT_TIME.
+-- So if PCTFREE is set to 40%, there'll be no row chaining?
+
+-- I think it's OK to lock DW1_LOGINS when renaming a tenant.
+-- (There's no index on TENANT, although it's a FK to DW1_TENANTS.)
+-- Should happen extremely infrequently.
+
+create index DW1_LOGINS_TNT_PREVL on DW1_LOGINS(PREV_LOGIN);
+
+create sequence DW1_LOGINS_SNO start with 10;
+
+-- Create a _LOGINS row that automatic actions in _PAGE_ACTIONS can refer to.
+-- SNO 1 is the system user login.
+ --  No! System user not needed! :-)
+-- insert into DW1_LOGINS(SNO, TENANT, LOGIN_TYPE, LOGIN_TYPE_SNO,
+--                       LOGIN_IP, LOGIN_TIME)
+--   values (1, 1, 'System', 1, '127.0.0.1', sysdate);
+
+-- For usage by _LOGINS_SIMPLE and _OPENID, so a login-credentials-SNO
+-- is found in either _SIMPLE or _OPENID.
+create sequence DW1_LOGIN_CREDS_SNO start with 10;
+
+
+-- Login credentials for simple logins (no password needed).
+create table DW1_LOGINS_SIMPLE(
+  SNO number(20)          not null,
+  NAME nvarchar2(100)     not null,
+  EMAIL nvarchar2(100)    not null,
+  LOCATION nvarchar2(100) not null,
+  WEBSITE nvarchar2(100)  not null,
+  constraint DW1_LGNSIMPLE_SNO__P primary key (SNO),
+  constraint DW1_LGNSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE)
+);
+
+-- (Uses sequence nunmber from DW1_LOGIN_CREDS_SNO.)
+
+
+-- Login credentials for OpenID logins.
+--
+-- This table is denormalized:
+-- If a user changes his/her name, a new _OPENID row is created.
+-- So there's no unique constraint on the _CLAIMED_ID. To find up-to-date
+-- info, use the row with the highest SNO.
+-- The same user might log in to different tenants.
+-- So there might be many (TENANT, _CLAIMED_ID) with the same _CLAIMED_ID.
+-- Each (TENANT, _CLAIMED_ID) points to a DW1_USER row.
+--
+-- Merging OpenID users: In the future, I'll make
+-- it possible to merge OpenID accounts. Then perhaps USR will
+-- be renamed to USER_ORIG(inally) and point to the original unmerged
+-- _USER row. Another column USR_NOW would point to the _USER row
+-- that is to be used (after the merge)? If there has been no merge,
+-- then USER_ORIG = USER_NOW.
+--   When a user is merged, USER_NOW is updated for *all* rows with a
+-- matching (TENANT, _CLAIMED_ID) -- the table is denormalized.
+-- Alternatively, could normalize: create a link table, that links
+-- claimed-ids to user-ids. But I think that would be rather pointless,
+-- since people probably change their OpenID info very infrequently, so
+-- even if this table is denormalized, there'd mostly be only 1 row
+-- per claimed-id anyway.
+--
+create table DW1_LOGINS_OPENID(
+  SNO number(20)                  not null,
+  TENANT number(10)               not null,
+  USR number(20)                  not null,
+  OID_CLAIMED_ID nvarchar2(500)   not null, -- Google's ID hashes 200-300 long
+  OID_OP_LOCAL_ID nvarchar2(500)  not null,
+  OID_REALM nvarchar2(100)        not null,
+  OID_ENDPOINT nvarchar2(100)     not null,
+  -- The version is a URL, e.g. "http://specs.openid.net/auth/2.0/server".
+  OID_VERSION nvarchar2(100)      not null,
+  FIRST_NAME nvarchar2(100)       not null,
+  EMAIL nvarchar2(100)            not null,
+  COUNTRY nvarchar2(100)          not null,
+  constraint DW1_LGNOID_SNO__P primary key (SNO),
+  constraint DW1_LGNOID__U
+      unique (TENANT, OID_CLAIMED_ID, OID_OP_LOCAL_ID, OID_REALM,
+        OID_ENDPOINT, OID_VERSION, FIRST_NAME, EMAIL, COUNTRY),
+  constraint DW1_LGNOID_USR_TNT__R__USERS
+      foreign key (TENANT, USR)
+      references DW1_USERS(TENANT, SNO) deferrable
+);
+
+create index DW1_LGNOID_TNT_USR on DW1_LOGINS_OPENID(TENANT, USR);
+create index DW1_LGNOID_EMAIL on DW1_LOGINS_OPENID(EMAIL);
+
+-- (Uses sequence nunmber from DW1_LOGIN_CREDS_SNO.)
+
+
+-- Later: DW1_USER_ACTIONS?
+
+
+create table DW1_PAGES(
+  SNO number(20)        not null,
+  TENANT number(10)     not null,
+  GUID varchar2(50)     not null,
+  constraint DW1_PAGES_SNO__P primary key (SNO),
+  constraint DW1_PAGES__U unique (TENANT, GUID),
+  constraint DW1_PAGES__R__TENANT
+      foreign key (TENANT)
+      references DW1_TENANTS(SNO) deferrable
+);
+
+create sequence DW1_PAGES_SNO start with 10;
+
+
+
+-- Contains all posts, edits, ratings etc, everything that's needed to
+-- render a discussion.
+create table DW1_PAGE_ACTIONS(
+  PAGE number(20)      not null,
+  PAID varchar2(30)    not null,  -- page action id
+  LOGIN number(20)     not null,
+  TIME timestamp       not null,
+  TYPE varchar2(10)    not null,
+  RELPA varchar2(30)   not null,  -- related page action
+  TEXT nclob,
+  MARKUP nvarchar2(30),
+  WHEERE nvarchar2(150),
+  NEW_IP varchar2(39), -- null, unless differs from DW1_LOGINS.START_IP
+  DESCR nvarchar2(1001),
+  constraint DW1_PACTIONS_PAGE_PAID__P primary key (PAGE, PAID),
+  constraint DW1_PACTIONS__R__LOGINS
+      foreign key (LOGIN)
+      references DW1_LOGINS (SNO) deferrable,
+  constraint DW1_PACTIONS__R__PAGES
+      foreign key (PAGE)
+      references DW1_PAGES (SNO) deferrable,
+  constraint DW1_PACTIONS__R__PACTIONS
+      foreign key (PAGE, RELPA) -- no index: no deletes/upds in parent table
+                         -- and no joins (loading whole page at once instead)
+      references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
+  constraint DW1_PACTIONS_TYPE__C
+      check (TYPE in ('Post', 'Edit', 'EditApp', 'Rating',
+                      'Revert', 'NotfReq', 'NotfSent', 'NotfRep'))
+) -- Create an index organized table, but place edit DESCR-iptions in
+  -- the overflowsegment (i.e. not in the index) since they're only accessed
+  -- when someone decides to edit a Post:
+  organization index including NEW_IP  -- (but excluding DESCR)
+  -- By default, a (C)LOB is stored inline, if it's less than approximately
+  -- 4000 bytes. Unless the table is an index organized table. Then you
+  -- should:
+  lob (TEXT) store as (enable storage in row)
+  -- and you need to:
+  overflow;
+  -- Read about LOB:s and IOT:s here:
+  -- http://download.oracle.com/docs/cd/B28359_01/appdev.111/b28393/
+  --    adlob_tables.htm#i1006887
+  -- Quotes: "By default, all LOBs in an index organized table created
+  --        without an overflow segment will be stored out of line."
+  --  and: "if an overflow segment has been specified, then LOBs in index
+  --    organized tables will exactly mimic their semantics in conventional
+  --    tables"
+  -- More IOT links:
+  --  http://www.orafaq.com/wiki/Index-organized_table
+  --  http://tkyte.blogspot.com/2007/02/i-learn-something-new-every-day.html
+
+-- Needs an index on LOGIN: it's an FK to DW1_LOINGS, whose END_IP/TIME is
+-- updated at the end of the session.
+create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
+
+
+create table DW1_PAGE_RATINGS(
+  PAGE number(20) not null,
+  PAID varchar2(30) not null, -- page action id
+  TAG nvarchar2(30) not null,
+  constraint DW1_PRATINGS__P primary key (PAGE, PAID, TAG),
+  constraint DW1_PRATINGS__R__PACTIONS
+      foreign key (PAGE, PAID)
+      references DW1_PAGE_ACTIONS(PAGE, PAID) deferrable
+) organization index;
+
+
+create table DW1_PATHS(
+  TENANT number(10) not null,
+  FOLDER nvarchar2(100) not null,
+  PAGE_GUID varchar2(30) not null,
+  PAGE_NAME nvarchar2(100) not null,
+  GUID_IN_PATH char(1) not null,
+  constraint DW1_PATHS_TNT_PAGE__P primary key (TENANT, PAGE_GUID),
+  constraint DW1_PATHS_TNT_PAGE__R__PAGES
+      foreign key (TENANT, PAGE_GUID) -- indexed because of pk
+      references DW1_PAGES (TENANT, GUID) deferrable,
+  constraint DW1_PATHS_FOLDER__C
+      check (FOLDER not like '%/-%'), -- '-' means guid follows
+  constraint DW1_PATHS_GUIDINPATH__C
+      check (GUID_IN_PATH in ('T', 'F'))
+);
+
+-- TODO: Test case: no 2 pages with same path
+-- Create an index that ensures (tenant, folder, pagename) is unique,
+-- if the page guid is not included in the path to the page.
+-- That is, if the path is like:  /some/folder/pagename  (no guid in path)
+-- rather than:  /some/folder/-<guid>-pagename  (guid included in path)
+create unique index DW1_PATHS__U on DW1_PATHS(
+    TENANT, FOLDER, PAGE_NAME,
+    case when GUID_IN_PATH = 'T' then PAGE_GUID else 'F' end);
+
+
 
 */
 
