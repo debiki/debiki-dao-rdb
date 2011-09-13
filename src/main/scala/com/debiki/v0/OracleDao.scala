@@ -88,8 +88,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     }
   }
 
-  override def saveLogin(tenantId: String, loginStuffNoId: LoginStuff
-                            ): LoginStuff = {
+  override def saveLogin(tenantId: String, loginStuff: LoginStuff
+                            ): LoggedInStuff = {
     // Load user SNO or create new.
 
     // 1. Write all IdentitySimple, new SNO from DW1_IDS_SNO
@@ -99,21 +99,25 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     //      else, get new SNO, write row with USR SNO just fetched.
     // 4. Write Logins
 
-    var loginWithId: Login = null
-    var identityWithId: Identity = null
-    var identitySno: Option[Long] = None
-    var user: Option[User] = None
+    COULD // refactor: First load the identity, and the user id.
+    // Then create the user, or load it and update it (if needed).
+    // Instead of loading the identity and the user at the same time.
+    // Result: 1 more roundtrip (bad), and no duplicated user creation
+    // code (good).
 
-    db.transaction { implicit connection =>
-      val loginNoId = loginStuffNoId.login
-      loginStuffNoId.identity match {
+    /*
+      loginStuff.identity match {
         case s: IdentitySimple =>
           // Find or create _SIMPLE row.
           for (i <- 1 to 2 if identitySno.isEmpty) {
             db.query("""
-                select SNO from DW1_IDS_SIMPLE
-                where NAME = ? and EMAIL = ? and LOCATION = ? and
-                      WEBSITE = ?""",
+                select s2u.USR,
+                       u.DISPLAY_NAME,
+                       u.EMAIL,
+                       u.COUNTRY,
+                       u.WEBSITE,
+                       u.SUPERADMIN,
+                       i.SNO IDENTITY_SNO""",
                 List(e2d(s.name), e2d(s.email), e2d(s.location),
                     e2d(s.website)),
                 rs => {
@@ -130,7 +134,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               db.update("""
                   insert into DW1_IDS_SIMPLE(
                       SNO, NAME, EMAIL, LOCATION, WEBSITE)
-                  values (DW1_IDS_SNO.nextval, ?, ?, ?, ?)""",
+                  values (DW1_IDS_SNO.nextval, ?, ?, ?, ?)""",  // and TENANT, USR?
                   List(s.name, e2d(s.email), e2d(s.location), e2d(s.website)))
                   // COULD fix: returning SNO into ?""", saves 1 roundtrip.
               // Loop one more lap to read SNO.
@@ -138,118 +142,231 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           }
           assErrIf(identitySno.isEmpty, "[debiki_error_93kRhk20")
           identityWithId = s.copy(id = identitySno.get.toString)
+    */
 
-        case c: IdentityOpenId =>
-          // Find a matching DW1_IDS_OPENID row.
-          // If there is none, create one, and a new _USERS row (i.e. create
-          // a new user!).
-          // Create a _LOGINS row that points to _OPENID.
+    // Load the User, if any, and the Identity id:
+    // Construct a query that joins the relevant DW1_IDS_<id-type> table
+    // with DW1_USERS.
 
-          // Find an exactly matching _OPENID row.
-          // Also find any row that matches the tenant and the claimend ID,
-          // and remember the user ID from that row. (It's the same for all
-          // rows with the same tenant and claimed ID, the table is
-          // denormalized.)
-          db.query("""
-              select o2u.USR,
-                     u.DISPLAY_NAME,
-                     u.EMAIL,
-                     u.COUNTRY,
-                     u.WEBSITE,
-                     u.SUPERADMIN,
-                     atrs.SNO OID_SNO
-              from DW1_IDS_OPENID o2u,
-                   DW1_USERS u,
-                   DW1_IDS_OPENID atrs
-              where
-                  o2u.TENANT = (
-                        select SNO from DW1_TENANTS where NAME = ?)
-                  and o2u.OID_CLAIMED_ID = ?
-                  -- There's always a `o2u' row, if user has logged in before.
-                  -- So we'll be able to lookup user details.
-                  and o2u.TENANT = u.TENANT -- (not needed, u.SNO is unique)
-                  and o2u.USR = u.SNO
-                  -- There might be many rows matching the specified tenant
-                  -- and claimed id, but we only need one, since USR is the
-                  -- same for all those rows. (The table is denormalized.)
-                  and rownum <= 1
-                  -- There is zero or one `atrs' row that matches all OpenID
-                  -- attributes. If there is none, we'll create one (later).
-                  and o2u.TENANT = atrs.TENANT(+)
-                  and o2u.OID_CLAIMED_ID = atrs.OID_CLAIMED_ID(+)
-                  and atrs.OID_OP_LOCAL_ID(+) = ?
-                  and atrs.OID_REALM(+) = ?
-                  and atrs.OID_ENDPOINT(+) = ?
-                  and atrs.OID_VERSION(+) = ?
-                  and atrs.FIRST_NAME(+) = ?
-                  and atrs.EMAIL(+) = ?
-                  and atrs.COUNTRY(+) = ?
-                  """,
-              List(tenantId, c.oidClaimedId, e2d(c.oidOpLocalId),
-                e2d(c.oidRealm), e2d(c.oidEndpoint), e2d(c.oidVersion),
-                e2d(c.firstName), e2d(c.email), e2d(c.country)),
-              rs => {
-            if (rs.next) {
-              identitySno = Option(rs.getLong("OID_SNO"))
-              user = Some(User(
-                  id = rs.getLong("USR").toString,
-                  displayName = n2e(rs.getString("DISPLAY_NAME")),
-                  email = n2e(rs.getString("EMAIL")),
-                  country = n2e(rs.getString("COUNTRY")),
-                  website = n2e(rs.getString("WEBSITE")),
-                  isSuperAdmin = rs.getString("SUPERADMIN") == "T"))
-            }
-            Empty // stupid box
-          })
+    var sqlSelectList = """
+        select
+            u.SNO USER_SNO,
+            u.DISPLAY_NAME,
+            u.EMAIL,
+            u.COUNTRY,
+            u.WEBSITE,
+            u.SUPERADMIN,
+            i.SNO IDENTITY_SNO """
 
-          user match {
-            case None =>
-              // Create a new user for this new (tenant, claimed id) combo.
-              val userSno = db.nextSeqNoAnyRef("DW1_USERS_SNO")
-              val u = User(
-                  id = userSno.toString,
-                  displayName = c.firstName,
-                  email = c.email,
-                  country = c.country,
-                  website = "",
-                  isSuperAdmin = false)
-              user = Some(u)
-              db.update("""
-                  insert into DW1_USERS(
-                      TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
-                  values (
-                      (select SNO from DW1_TENANTS where NAME = ?),
-                      ?, ?, ?, ?)""",
-                  List(tenantId, userSno, u.displayName, u.email, u.country))
-            case Some(u) =>
-              val u2 = u.copy(displayName = c.firstName,
-                            email = c.email, country = c.country)
-              if (u != u2) {
-                // OpenID attributes have changed since the user was created.
-                // So update DW1_USERS.
-                // (COULD add fields to _USERS that the user him/herself fills
-                // in, that overrides any OpenID stuff.
-                // ?? What to do in the future, when supporting many OpenID
-                // accounts per user? Should attributes from the latest OpenID
-                // login be propagated to _USERS? Or should one OpenID
-                // claimed-id be the "main" id?)
-                user = Some(u2)
-                db.update("""
-                    update DW1_USERS
-                    set DISPLAY_NAME = ?, EMAIL = ?, COUNTRY = ?
-                    where tenant = (select SNO from DW1_TENANTS where NAME = ?)
-                      and SNO = ?""",
-                    List(u2.displayName, u2.email, u2.country, tenantId, u.id))
-              }
-            case _ =>
-              // Do nothing. A user was found with up-to-date name, email etc.
+    // The User:s fields and the table join SQL and the values to bind
+    // depends on the Identity type.
+    val (templateUser, sqlFromWhere, bindVals) = loginStuff.identity match {
+      case sid: IdentitySimple =>
+        (User(id = "?",
+              displayName = sid.name,
+              email = sid.email,
+              country = "",  // IdentitySimple.location is used instead
+              website = "",  // IdentitySimple.website is used instead
+              isSuperAdmin = false),
+          """
+          from DW1_IDS_SIMPLE s2u,
+               DW1_USERS u,
+               DW1_IDS_SIMPLE i
+          where
+            s2u.TENANT = (select SNO from DW1_TENANTS where NAME = ?)
+            -- A simple identity is identified by name+email:
+            and s2u.NAME = ?
+            and s2u.EMAIL = ?
+            -- There's always a `s2u' row, if this name+email has been
+            -- encountered before. So we'll be able to lookup the user
+            -- id.
+            and s2u.TENANT = u.TENANT -- (not needed, u.SNO is unique)
+            and s2u.USR = u.SNO
+            -- There might be many _IDS_SIMPLE rows with the same
+            -- name+email, but we only need one, since USR is the
+            -- same for all those rows. (The table is denormalized.)
+            and rownum <= 1
+            -- There is zero or one `i' row that matches all simple
+            -- identity attributes. If absent, we'll create one (later).
+            and s2u.TENANT = i.TENANT(+)
+            and s2u.NAME = i.NAME(+)
+            and s2u.EMAIL = i.EMAIL(+)
+            and i.LOCATION(+) = ?
+            and i.WEBSITE(+) = ?
+            """,
+          List(tenantId, e2d(sid.name), e2d(sid.email), e2d(sid.location),
+                e2d(sid.website))
+        )
+
+      case oid: IdentityOpenId =>
+        // Find a matching DW1_IDS_OPENID row.
+        // If there is none, create one, and a new _USERS row
+        // (i.e. create a new user!).
+        // Create a _LOGINS row that points to _OPENID.
+
+        // Find an exactly matching _OPENID row.
+        // Also find any row that matches the tenant and the claimend ID,
+        // and remember the user ID from that row. (It's the same for all
+        // rows with the same tenant and claimed ID, the table is
+        // denormalized.)
+        (User(id = "?",
+              displayName = oid.firstName,
+              email = oid.email,
+              country = oid.country,
+              website = "",
+              isSuperAdmin = false),
+        """
+          from DW1_IDS_OPENID o2u,
+             DW1_USERS u,
+             DW1_IDS_OPENID i
+          where
+            o2u.TENANT = (
+                  select SNO from DW1_TENANTS where NAME = ?)
+            and o2u.OID_CLAIMED_ID = ?
+            -- There's always a `o2u' row, if user has logged in before.
+            -- So we'll be able to lookup user details.
+            and o2u.TENANT = u.TENANT -- (not needed, u.SNO is unique)
+            and o2u.USR = u.SNO
+            -- There might be many rows matching the specified tenant
+            -- and claimed id, but we only need one, since USR is the
+            -- same for all those rows. (The table is denormalized.)
+            and rownum <= 1
+            -- There is zero or one `i. row that matches all OpenID
+            -- attributes. If there is none, we'll create one (later).
+            and o2u.TENANT = i.TENANT(+)
+            and o2u.OID_CLAIMED_ID = i.OID_CLAIMED_ID(+)
+            and i.OID_OP_LOCAL_ID(+) = ?
+            and i.OID_REALM(+) = ?
+            and i.OID_ENDPOINT(+) = ?
+            and i.OID_VERSION(+) = ?
+            and i.FIRST_NAME(+) = ?
+            and i.EMAIL(+) = ?
+            and i.COUNTRY(+) = ?
+            """,
+          List(tenantId, oid.oidClaimedId, e2d(oid.oidOpLocalId),
+              e2d(oid.oidRealm), e2d(oid.oidEndpoint), e2d(oid.oidVersion),
+              e2d(oid.firstName), e2d(oid.email), e2d(oid.country))
+        )
+      case IdentityUnknown => assErr("[debiki_error_92k2rI06]")
+    }
+
+    db.transaction { implicit connection =>
+      var identitySno: Option[Long] = None
+      var user: Option[User] = None
+
+      // Load the User (if found) and any matching Identity.
+      db.query(sqlSelectList + sqlFromWhere, bindVals, rs => {
+        if (rs.next) {
+          identitySno = Option(rs.getLong("IDENTITY_SNO"))
+          user = Some(User(
+              id = rs.getLong("USER_SNO").toString,
+              displayName = n2e(rs.getString("DISPLAY_NAME")),
+              email = n2e(rs.getString("EMAIL")),
+              country = n2e(rs.getString("COUNTRY")),
+              website = n2e(rs.getString("WEBSITE")),
+              isSuperAdmin = rs.getString("SUPERADMIN") == "T"))
+        }
+        Empty // stupid box
+      })
+
+      // Create a user if no one found, or update an existing user if
+      // the login identity attributes have been changed (e.g. new OpenID
+      // user email or country attributes).
+      user match {
+        case None =>
+          // Create new user.
+          val userSno = db.nextSeqNo("DW1_USERS_SNO")
+          val u = templateUser.copy(id = userSno.toString)
+          user = Some(u)
+          db.update("""
+              insert into DW1_USERS(
+                  TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
+              values (
+                  (select SNO from DW1_TENANTS where NAME = ?),
+                  ?, ?, ?, ?)""",
+              List(tenantId, userSno.asInstanceOf[AnyRef],
+                  u.displayName, u.email, u.country))
+        case Some(u) =>
+          // Compare user attributes, perhaps update user.
+          val u2 = templateUser.copy(id = u.id)
+          if (u != u2) {
+            // User attributes have changed since the user was created.
+            // So update DW1_USERS.
+            // (COULD add fields to _USERS that the user him/herself fills
+            // in, that overrides any identity stuff, e.g. OpenID attributes.
+            // But what to do in the future, when supporting many OpenID
+            // accounts per user? Should attributes from the latest OpenID
+            // login be propagated to _USERS? Or should one claimed_id
+            // be the "main" id?)
+            user = Some(u2)
+            db.update("""
+                update DW1_USERS
+                set DISPLAY_NAME = ?, EMAIL = ?, COUNTRY = ?
+                where tenant = (select SNO from DW1_TENANTS where NAME = ?)
+                  and SNO = ?""",  // ok cmp w String?
+                List(u2.displayName, u2.email, u2.country, tenantId, u.id))
           }
+        case _ =>
+          // Do nothing. A user was found with up to date name, email etc.
+      }
 
-          if (identitySno isEmpty) {
-            // This is a new user *or* it's an old user but with new
-            // OpenID attributes, e.g. s/he has changed her name or email.
-            // Create a _OPENID row for this new set of attributes.
-            identitySno = Some(db.nextSeqNo("DW1_IDS_SNO"))
+      if (identitySno isEmpty) {
+        // This is a new user *or* it's an old user but with modified
+        // Identity attributes (and there is no DW1_IDS_<identity-type>
+        // row matching the new set of attributes). (Example: an OpenID user
+        // who has changed her name or email.)
+        // Create a new DW1_IDS_<identity-type> row.
+        identitySno = Some(db.nextSeqNo("DW1_IDS_SNO"))
+        loginStuff.identity match {
+          case s: IdentitySimple =>
+            val userSno = user.get.id.toLong.asInstanceOf[AnyRef]
+            db.update("""
+                insert into DW1_IDS_SIMPLE(
+                    SNO, TENANT, USR, NAME, EMAIL, LOCATION, WEBSITE)
+                values (?, (select SNO from DW1_TENANTS where NAME = ?),
+                    ?, ?, ?, ?, ?)""",
+                List(identitySno.get.asInstanceOf[AnyRef],
+                    tenantId, userSno, s.name, e2d(s.email),
+                    e2d(s.location), e2d(s.website)))
+            // BUG: The insert might fail with a unique key error, because
+            // _IDS_SIMPLE contain identities shared by everyone. For example,
+            // if 2 users try to "log in" as "Bob" with no email/location/
+            // website specified, two threads would try to create a "Bob" row
+            // at the same time. And this thread could fail with a unique
+            // key violation error. Then, do this: Rollback the User we've
+            // just created. Then load from database the Identity and
+            // User created by the other thread. Then create a Login,
+            // and use the Identity just loaded.
+            // BUG2: What if 2 threads create 2 different _IDS_SIMPLE rows
+            // and 2 different users? But with the same name+email?
+            // Then there'll be no UK error, and 2 _SIMPLE users with the same
+            // name and email will exist, but that ought not to be allowed!
+            // This might happen also for OpenID users?? if two threads
+            // create an Identity and a User for the same claimed_id at the
+            // same time. However, OpenID user are supposedly real people
+            // and they shouldn't be able to login with one single OpenID
+            // account with *different* attributes at the same time.
+            // Anyway, there ought to be a table related to _IDS_SIMPLE
+            // with a UK on tenant+name+email. And one related to _IDS_OPENID
+            // with a UK on tenant+claimed_id.
+            // Or: Let the user ID be a hash of
+            //   tenant+name+email / tenant+claimed_id
+            //  But if the email is in the hash, there ought to be a secret
+            // salt too (or one could brute-force-crack/dictionary-attack/guess
+            // which email does he/she have). And e.g. SHA1 would have to
+            // be used forever.
+            // Perhaps better split tables:
+            //   DW1_IDS_SIMPLE(tenant+name+email --> user) +
+            //   DW1_IDS_SIMPLE_ATRS(location, website)
+            //   DW1_IDS_OPENID(tenant+claimed_id --> user) +
+            //   DW1_IDS_OPENID_ATRS(name, email..., and MAIN_SNO --> _OPENID)
+            // Actually, this'd be very useful:
+            //   _OPENID(tenant, claimed_id, latest_name, latest_email, ...)
+            // -- then the latest_name etc could be used, unless _USERS.name
+            // is non-null, then it takes precedence.
+            // So: TODO: Split _OPENID and _SIMPLE into 2 tables. (normalize)
+            //
+          case oid: IdentityOpenId =>
             db.update("""
                 insert into DW1_IDS_OPENID(
                     SNO, TENANT, USR, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
@@ -259,26 +376,29 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                     ?, (select SNO from DW1_TENANTS where NAME = ?), ?,
                     ?, ?, ?, ?, ?, ?, ?, ?)""",
                 List(identitySno.get.asInstanceOf[AnyRef],
-                    tenantId, user.get.id, c.oidClaimedId, e2d(c.oidOpLocalId),
-                    e2d(c.oidRealm), e2d(c.oidEndpoint), e2d(c.oidVersion),
-                    e2d(c.firstName), e2d(c.email), e2d(c.country)))
-          }
-
-          identityWithId = c.copy(id = identitySno.get.toString)
-
-        case IdentityUnknown =>
-          assErr("[debiki_error_32ks30016")
+                    tenantId, user.get.id, oid.oidClaimedId,
+                    e2d(oid.oidOpLocalId), e2d(oid.oidRealm),
+                    e2d(oid.oidEndpoint), e2d(oid.oidVersion),
+                    e2d(oid.firstName), e2d(oid.email), e2d(oid.country)))
+          case IdentityUnknown =>
+           assErr("[debiki_error_32ks30016")
+        }
       }
 
-      // Create a new _LOGINS row, pointing to the _SIMPLE table
-      // (rather than the OpenID login table).
-      val loginSno = db.nextSeqNoAnyRef("DW1_IDS_SNO")
+      val (loginType, identityWithId) = loginStuff.identity match {
+        case s: IdentitySimple => ("Simple", s.copy(
+                                        id = identitySno.get.toString,
+                                        userId = user.get.id))
+        case o: IdentityOpenId => ("OpenID", o.copy(
+                                        id = identitySno.get.toString,
+                                        userId = user.get.id))
+        case IdentityUnknown => assErr("[debiki_error_03k2r21K5]")
+      }
+
+      // Create a new _LOGINS row, pointing to the relevant
+      // DW1_IDS_<identity-type> table.
+      val loginSno = db.nextSeqNoAnyRef("DW1_LOGINS_SNO")
       val prevLoginId = ""  // for now
-      val loginType = identityWithId match {
-        case _: IdentitySimple => "Simple"
-        case _: IdentityOpenId => "OpenID"
-        case _ => assErr("[debiki_error_03k2r21K5]")
-      }
 
       // (Don't bind `loginType'. That could make it harder for the opimizer
       // to find good plans.)
@@ -289,14 +409,13 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           values (?, (select SNO from DW1_TENANTS where NAME = ?), ?,
               '"""+ loginType +"', ?, ?, ?)",  // don't bind
           List(loginSno, tenantId, prevLoginId,
-              identitySno.get.asInstanceOf[AnyRef], loginNoId.ip,
-              loginNoId.date))
-      loginWithId = loginNoId.copy(id = loginSno.toString)
+              identitySno.get.asInstanceOf[AnyRef], loginStuff.login.ip,
+              loginStuff.login.date))
+      val loginWithId = loginStuff.login.copy(id = loginSno.toString,
+                                              identityId = identityWithId.id)
 
-      Empty // pointless box
-    }
-
-    LoginStuff(login = loginWithId, identity = identityWithId, user = user)
+      Full(LoggedInStuff(loginWithId, identityWithId, user.get))
+    }.open_!  // pointless box
   }
 
   override def saveLogout(loginId: String, logoutIp: String) {
@@ -367,37 +486,46 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
 
     // Load simple logins.
     db.queryAtnms("""
-        select s.SNO, s.NAME, s.EMAIL, s.LOCATION, s.WEBSITE
+        select s.SNO, s.USR, s.NAME, s.EMAIL, s.LOCATION, s.WEBSITE
         from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_SIMPLE s
         where a.PAGE = ?
           and a.LOGIN = l.SNO
           and l.ID_TYPE = 'Simple'
-          and l.ID_SNO = s.SNO""", List(pageSno.toString), rs => {
+          and l.ID_SNO = s.SNO
+          and s.TENANT = (select SNO from DW1_TENANTS where NAME = ?)""",
+        List(pageSno.toString, tenantId), rs => {
       while (rs.next) {
-        val sno = rs.getLong("SNO")
+        val sno = rs.getLong("SNO").toString
+        val uid = rs.getLong("USR").toString
         val name = d2e(rs.getString("NAME"))
         val email = d2e(rs.getString("EMAIL"))
         val location = d2e(rs.getString("LOCATION"))
         val website = d2e(rs.getString("WEBSITE"))
-        identities ::= IdentitySimple(id = sno.toString, name = name,
+        identities ::= IdentitySimple(id = sno, userId = uid, name = name,
             email = email, location = location, website = website)
       }
       Empty
     })
 
     // Load OpenID logins.
+    // COULD split IdentityOpenId into IdentityOpenId and IdentityOpenIdDetails
+    // -- the latter would contain e.g. endpoint and op-local-id and such.
+    // And not load all attrs here.
     db.queryAtnms("""
-        select o.SNO, o.OID_ENDPOINT, o.OID_VERSION, o.OID_REALM,
+        select o.SNO, o.USR, o.OID_ENDPOINT, o.OID_VERSION, o.OID_REALM,
               o.OID_CLAIMED_ID, o.OID_OP_LOCAL_ID, o.FIRST_NAME,
               o.EMAIL, o.COUNTRY
         from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_OPENID o
         where a.PAGE = ?
           and a.LOGIN = l.SNO
           and l.ID_TYPE = 'OpenID'
-          and l.ID_SNO = o.SNO""", List(pageSno.toString), rs => {
+          and l.ID_SNO = o.SNO
+          and o.TENANT = (select SNO from DW1_TENANTS where NAME = ?)""",
+        List(pageSno.toString, tenantId), rs => {
       while (rs.next) {
         identities ::= IdentityOpenId(
             id = rs.getLong("SNO").toString,
+            userId = rs.getLong("USR").toString,
             oidEndpoint = rs.getString("OID_ENDPOINT"),
             oidVersion = rs.getString("OID_VERSION"),
             oidRealm = rs.getString("OID_REALM"),
@@ -410,19 +538,28 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       Empty
     })
 
-    // Load users.
+    // Load users. First find all relevant identities, by joining
+    // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
+    // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
     db.queryAtnms("""
+        with logins as (
+            select l.ID_SNO, l.ID_TYPE
+            from DW1_PAGE_ACTIONS a, DW1_LOGINS l
+            where a.PAGE = ? and a.LOGIN = l.SNO),
+          identities as (
+            select si.USR
+            from DW1_IDS_SIMPLE si, logins
+            where si.SNO = logins.ID_SNO and logins.ID_TYPE = 'Simple'
+            union
+            select oi.USR
+            from DW1_IDS_OPENID oi, logins
+            where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID')
         select u.SNO, u.DISPLAY_NAME, u.EMAIL, u.COUNTRY,
-                u.WEBSITE, u.SUPERADMIN
-          from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_OPENID o,
-                DW1_USERS u
-          where a.PAGE = ?
-            and a.LOGIN = l.SNO
-            and l.ID_TYPE = 'OpenID'
-            and l.ID_SNO = o.SNO
-            and o.USR = u.SNO
-            and u.TENANT = (select SNO from DW1_TENANTS where NAME = ?) """,
-        List(pageSno.toString, tenantId), rs => {
+            u.WEBSITE, u.SUPERADMIN
+        from DW1_USERS u, identities
+        where u.SNO = identities.USR
+          and u.TENANT = (select SNO from DW1_TENANTS where NAME = ?)
+        """, List(pageSno.toString, tenantId), rs => {
       while (rs.next) {
         users ::= User(
             id = rs.getLong("SNO").toString,
@@ -432,7 +569,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             website = n2e(rs.getString("WEBSITE")),
             isSuperAdmin = rs.getString("SUPERADMIN") == "T")
       }
-      Empty
+      Empty // silly box
     })
 
     // Load rating tags.

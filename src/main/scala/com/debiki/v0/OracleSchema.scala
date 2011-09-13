@@ -513,12 +513,17 @@ create sequence DW1_IDS_SNO start with 10;
 -- Simple login identities (no password needed).
 create table DW1_IDS_SIMPLE(
   SNO number(20)          not null,
+  TENANT number(10)       not null,
+  USR number(20)          not null,
   NAME nvarchar2(100)     not null,
   EMAIL nvarchar2(100)    not null,
   LOCATION nvarchar2(100) not null,
   WEBSITE nvarchar2(100)  not null,
   constraint DW1_IDSSIMPLE_SNO__P primary key (SNO),
-  constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE)
+  constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE),
+  constraint DW1_IDSSIMPLE__R__USERS
+      foreign key (TENANT, USR)
+      references DW1_USERS(TENANT, SNO) deferrable
 );
 
 -- (Uses sequence nunmber from DW1_IDS_SNO.)
@@ -579,6 +584,8 @@ create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 -- Later: DW1_USER_ACTIONS?
 
 
+-- (How do we know who created the page? The user who created
+-- the root post, id "0", unless I change to "1".)
 create table DW1_PAGES(
   SNO number(20)        not null,
   TENANT number(10)     not null,
