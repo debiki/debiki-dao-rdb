@@ -90,34 +90,49 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
 
   override def saveLogin(tenantId: String, loginStuff: LoginStuff
                             ): LoggedInStuff = {
-    // Load user SNO or create new.
 
-    // 1. Write all IdentitySimple, new SNO from DW1_IDS_SNO
-    // 2. Select most recent row from _OPENID, where CLAIMED_ID = oidClaimedId
-    // 3.   if found, cmp w/ IdentityOpenId
-    //      if identical, use its SNO
-    //      else, get new SNO, write row with USR SNO just fetched.
-    // 4. Write Logins
+    // Assigns an id to `login', saves it and returns it (with id assigned).
+    def _saveLogin(loginNoId: Login, identityType: String)
+                  (implicit connection: js.Connection): Login = {
+      // Create a new _LOGINS row, pointing to the relevant
+      // DW1_IDS_<identity-type> table.
+      require(loginNoId.id startsWith "?")
+      val loginSno = db.nextSeqNo("DW1_LOGINS_SNO")
+      val login = loginNoId.copy(id = loginSno.toString)
+      // (Need not bind `identityType'. It's not user supplied.
+      // Binding it could make it harder for the opimizer
+      // to find good plans.)
+      assErrIf(identityType.contains("'"), "[debiki_error_093kr112435]")
+      db.update("""
+          insert into DW1_LOGINS(
+              SNO, TENANT, PREV_LOGIN, ID_TYPE, ID_SNO,
+              LOGIN_IP, LOGIN_TIME)
+          values (?, (select SNO from DW1_TENANTS where NAME = ?), ?,
+              '"""+ identityType +"', ?, ?, ?)",  // need not bind
+      List(loginSno.asInstanceOf[AnyRef], tenantId,
+          login.prevLoginId.getOrElse(""),  // for now
+          login.identityId.toLong.asInstanceOf[AnyRef], login.ip, login.date))
+      login
+    }
 
-    COULD // refactor: First load the identity, and the user id.
-    // Then create the user, or load it and update it (if needed).
-    // Instead of loading the identity and the user at the same time.
-    // Result: 1 more roundtrip (bad), and no duplicated user creation
-    // code (good).
-
-    /*
-      loginStuff.identity match {
-        case s: IdentitySimple =>
+    // Special case for IdentitySimple, because they map to no User.
+    // Instead we create a "fake" User (that is not present in DW1_USERS)
+    // and assign it id = -IdentitySimple.id (i.e. a leading dash)
+    // and return it.
+    //    I don't want to save IdentitySimple people in DW1_USERS, because
+    // I think that'd make possible future security *bugs*, when privileges
+    // are granted to IdentitySimple users, which don't even need to
+    // specify any password to "login"!
+    loginStuff.identity match {
+      case s: IdentitySimple =>
+        val simpleLogin = db.transaction { implicit connection =>
           // Find or create _SIMPLE row.
+          var identitySno: Option[Long] = None
           for (i <- 1 to 2 if identitySno.isEmpty) {
             db.query("""
-                select s2u.USR,
-                       u.DISPLAY_NAME,
-                       u.EMAIL,
-                       u.COUNTRY,
-                       u.WEBSITE,
-                       u.SUPERADMIN,
-                       i.SNO IDENTITY_SNO""",
+                select SNO from DW1_IDS_SIMPLE
+                where NAME = ? and EMAIL = ? and LOCATION = ? and
+                      WEBSITE = ?""",
                 List(e2d(s.name), e2d(s.email), e2d(s.location),
                     e2d(s.website)),
                 rs => {
@@ -129,22 +144,31 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               // There is a unique constraint on NAME, EMAIL, LOCATION,
               // WEBSITE, so this insert might fail (if another thread does
               // the insert, just before). Should it fail, the above `select'
-              // is run again and all is fine. Could avoid logging any error
-              // though!
+              // is run again and finds the row inserted by the other thread.
+              // Could avoid logging any error though!
               db.update("""
                   insert into DW1_IDS_SIMPLE(
                       SNO, NAME, EMAIL, LOCATION, WEBSITE)
-                  values (DW1_IDS_SNO.nextval, ?, ?, ?, ?)""",  // and TENANT, USR?
+                  values (DW1_IDS_SNO.nextval, ?, ?, ?, ?)""",
                   List(s.name, e2d(s.email), e2d(s.location), e2d(s.website)))
                   // COULD fix: returning SNO into ?""", saves 1 roundtrip.
               // Loop one more lap to read SNO.
             }
           }
           assErrIf(identitySno.isEmpty, "[debiki_error_93kRhk20")
-          identityWithId = s.copy(id = identitySno.get.toString)
-    */
+          val identityId = identitySno.get.toString
+          val user = _dummyUserFor(identity = s,
+                                  id = _dummyUserIdFor(identityId))
+          val identityWithId = s.copy(id = identityId, userId = user.id)
+          val loginNoId = loginStuff.login.copy(identityId = identityId)
+          val loginWithId = _saveLogin(loginNoId, "Simple")
+          Full(LoggedInStuff(loginWithId, identityWithId, user))
+        }.open_!
+        return simpleLogin
+      case _ => ()
+    }
 
-    // Load the User, if any, and the Identity id:
+    // Load the User, if any, and the OpenID/Twitter/Facebook identity id:
     // Construct a query that joins the relevant DW1_IDS_<id-type> table
     // with DW1_USERS.
 
@@ -161,43 +185,6 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     // The User:s fields and the table join SQL and the values to bind
     // depends on the Identity type.
     val (templateUser, sqlFromWhere, bindVals) = loginStuff.identity match {
-      case sid: IdentitySimple =>
-        (User(id = "?",
-              displayName = sid.name,
-              email = sid.email,
-              country = "",  // IdentitySimple.location is used instead
-              website = "",  // IdentitySimple.website is used instead
-              isSuperAdmin = false),
-          """
-          from DW1_IDS_SIMPLE s2u,
-               DW1_USERS u,
-               DW1_IDS_SIMPLE i
-          where
-            s2u.TENANT = (select SNO from DW1_TENANTS where NAME = ?)
-            -- A simple identity is identified by name+email:
-            and s2u.NAME = ?
-            and s2u.EMAIL = ?
-            -- There's always a `s2u' row, if this name+email has been
-            -- encountered before. So we'll be able to lookup the user
-            -- id.
-            and s2u.TENANT = u.TENANT -- (not needed, u.SNO is unique)
-            and s2u.USR = u.SNO
-            -- There might be many _IDS_SIMPLE rows with the same
-            -- name+email, but we only need one, since USR is the
-            -- same for all those rows. (The table is denormalized.)
-            and rownum <= 1
-            -- There is zero or one `i' row that matches all simple
-            -- identity attributes. If absent, we'll create one (later).
-            and s2u.TENANT = i.TENANT(+)
-            and s2u.NAME = i.NAME(+)
-            and s2u.EMAIL = i.EMAIL(+)
-            and i.LOCATION(+) = ?
-            and i.WEBSITE(+) = ?
-            """,
-          List(tenantId, e2d(sid.name), e2d(sid.email), e2d(sid.location),
-                e2d(sid.website))
-        )
-
       case oid: IdentityOpenId =>
         // Find a matching DW1_IDS_OPENID row.
         // If there is none, create one, and a new _USERS row
@@ -247,6 +234,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               e2d(oid.oidRealm), e2d(oid.oidEndpoint), e2d(oid.oidVersion),
               e2d(oid.firstName), e2d(oid.email), e2d(oid.country))
         )
+      // case fid: IdentityTwitter => (User, SQL for Twitter identity table)
+      // case fid: IdentityFacebook => (User, ...)
+      case sid: IdentitySimple => assErr("[debiki_error_98239k2a2]")
       case IdentityUnknown => assErr("[debiki_error_92k2rI06]")
     }
 
@@ -318,32 +308,13 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         // Create a new DW1_IDS_<identity-type> row.
         identitySno = Some(db.nextSeqNo("DW1_IDS_SNO"))
         loginStuff.identity match {
-          case s: IdentitySimple =>
-            val userSno = user.get.id.toLong.asInstanceOf[AnyRef]
-            db.update("""
-                insert into DW1_IDS_SIMPLE(
-                    SNO, TENANT, USR, NAME, EMAIL, LOCATION, WEBSITE)
-                values (?, (select SNO from DW1_TENANTS where NAME = ?),
-                    ?, ?, ?, ?, ?)""",
-                List(identitySno.get.asInstanceOf[AnyRef],
-                    tenantId, userSno, s.name, e2d(s.email),
-                    e2d(s.location), e2d(s.website)))
-            // BUG: The insert might fail with a unique key error, because
-            // _IDS_SIMPLE contain identities shared by everyone. For example,
-            // if 2 users try to "log in" as "Bob" with no email/location/
-            // website specified, two threads would try to create a "Bob" row
-            // at the same time. And this thread could fail with a unique
-            // key violation error. Then, do this: Rollback the User we've
-            // just created. Then load from database the Identity and
-            // User created by the other thread. Then create a Login,
-            // and use the Identity just loaded.
-            // BUG2: What if 2 threads create 2 different _IDS_SIMPLE rows
-            // and 2 different users? But with the same name+email?
-            // Then there'll be no UK error, and 2 _SIMPLE users with the same
-            // name and email will exist, but that ought not to be allowed!
-            // This might happen also for OpenID users?? if two threads
-            // create an Identity and a User for the same claimed_id at the
-            // same time. However, OpenID user are supposedly real people
+          case oid: IdentityOpenId =>
+            // BUG: What if 2 threads create 2 different _IDS_OPENID rows
+            // and 2 different users? But with the same tenant+claimed_id
+            // Then there'll be no UK error if name/email/whatever differs,
+            // and 2 _OPENID users with the same tenant+claimed_id, but
+            // that should be forbidden!
+            // However, OpenID user are supposedly real people
             // and they shouldn't be able to login with one single OpenID
             // account with *different* attributes at the same time.
             // Anyway, there ought to be a table related to _IDS_SIMPLE
@@ -366,7 +337,6 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             // is non-null, then it takes precedence.
             // So: TODO: Split _OPENID and _SIMPLE into 2 tables. (normalize)
             //
-          case oid: IdentityOpenId =>
             db.update("""
                 insert into DW1_IDS_OPENID(
                     SNO, TENANT, USR, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
@@ -380,8 +350,10 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                     e2d(oid.oidOpLocalId), e2d(oid.oidRealm),
                     e2d(oid.oidEndpoint), e2d(oid.oidVersion),
                     e2d(oid.firstName), e2d(oid.email), e2d(oid.country)))
-          case IdentityUnknown =>
-           assErr("[debiki_error_32ks30016")
+          // case IdentityTwitter => insert into Twitter identities table
+          // case IdentityFacebook => ...
+          case _: IdentitySimple => assErr("[debiki_error_83209qk12kt0]")
+          case IdentityUnknown => assErr("[debiki_error_32ks30016")
         }
       }
 
@@ -395,24 +367,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         case IdentityUnknown => assErr("[debiki_error_03k2r21K5]")
       }
 
-      // Create a new _LOGINS row, pointing to the relevant
-      // DW1_IDS_<identity-type> table.
-      val loginSno = db.nextSeqNoAnyRef("DW1_LOGINS_SNO")
-      val prevLoginId = ""  // for now
-
-      // (Don't bind `loginType'. That could make it harder for the opimizer
-      // to find good plans.)
-      db.update("""
-          insert into DW1_LOGINS(
-              SNO, TENANT, PREV_LOGIN, ID_TYPE, ID_SNO,
-              LOGIN_IP, LOGIN_TIME)
-          values (?, (select SNO from DW1_TENANTS where NAME = ?), ?,
-              '"""+ loginType +"', ?, ?, ?)",  // don't bind
-          List(loginSno, tenantId, prevLoginId,
-              identitySno.get.asInstanceOf[AnyRef], loginStuff.login.ip,
-              loginStuff.login.date))
-      val loginWithId = loginStuff.login.copy(id = loginSno.toString,
-                                              identityId = identityWithId.id)
+      val loginWithId = _saveLogin(
+            loginStuff.login.copy(identityId = identityWithId.id),
+            identityType = "OpenID")
 
       Full(LoggedInStuff(loginWithId, identityWithId, user.get))
     }.open_!  // pointless box
@@ -484,25 +441,25 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       Empty
     })
 
-    // Load simple logins.
+    // Load simple logins and construct dummy users.
     db.queryAtnms("""
-        select s.SNO, s.USR, s.NAME, s.EMAIL, s.LOCATION, s.WEBSITE
+        select s.SNO, s.NAME, s.EMAIL, s.LOCATION, s.WEBSITE
         from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_SIMPLE s
         where a.PAGE = ?
           and a.LOGIN = l.SNO
           and l.ID_TYPE = 'Simple'
-          and l.ID_SNO = s.SNO
-          and s.TENANT = (select SNO from DW1_TENANTS where NAME = ?)""",
-        List(pageSno.toString, tenantId), rs => {
+          and l.ID_SNO = s.SNO """,
+        List(pageSno.toString), rs => {
       while (rs.next) {
         val sno = rs.getLong("SNO").toString
-        val uid = rs.getLong("USR").toString
         val name = d2e(rs.getString("NAME"))
         val email = d2e(rs.getString("EMAIL"))
         val location = d2e(rs.getString("LOCATION"))
         val website = d2e(rs.getString("WEBSITE"))
-        identities ::= IdentitySimple(id = sno, userId = uid, name = name,
-            email = email, location = location, website = website)
+        val identity =  IdentitySimple(id = sno, userId = _dummyUserIdFor(sno),
+            name = name, email = email, location = location, website = website)
+        identities ::= identity
+        users ::= _dummyUserFor(identity)  // there's no DW1_USERS row to load
       }
       Empty
     })
@@ -547,13 +504,12 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             from DW1_PAGE_ACTIONS a, DW1_LOGINS l
             where a.PAGE = ? and a.LOGIN = l.SNO),
           identities as (
-            select si.USR
-            from DW1_IDS_SIMPLE si, logins
-            where si.SNO = logins.ID_SNO and logins.ID_TYPE = 'Simple'
-            union
             select oi.USR
             from DW1_IDS_OPENID oi, logins
-            where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID')
+            where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID'
+            -- union
+            -- Twitter and Facebook identity tables, etc.
+            )
         select u.SNO, u.DISPLAY_NAME, u.EMAIL, u.COUNTRY,
             u.WEBSITE, u.SUPERADMIN
         from DW1_USERS u, identities
@@ -885,6 +841,14 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       }
     }
     Full(xsWithIds)
+  }
+
+  def _dummyUserIdFor(identityId: String) = "-"+ identityId
+
+  def _dummyUserFor(identity: IdentitySimple, id: String = null): User = {
+    User(id = (if (id ne null) id else identity.userId),
+      displayName = identity.name, email = identity.email, country = "",
+      website = identity.website, isSuperAdmin = false)
   }
 
   // Builds a query that finds the user's current DW1_LOGIN.SNO.

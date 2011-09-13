@@ -511,19 +511,17 @@ create sequence DW1_IDS_SNO start with 10;
 
 
 -- Simple login identities (no password needed).
+-- When loaded from database, a dummy User is created, with its id
+-- set to -SNO (i.e. "-" + SNO). Users with ids starting with "-"
+-- are thus unauthenticadet users (and don't exist in DW1_USERS).
 create table DW1_IDS_SIMPLE(
   SNO number(20)          not null,
-  TENANT number(10)       not null,
-  USR number(20)          not null,
   NAME nvarchar2(100)     not null,
   EMAIL nvarchar2(100)    not null,
   LOCATION nvarchar2(100) not null,
   WEBSITE nvarchar2(100)  not null,
   constraint DW1_IDSSIMPLE_SNO__P primary key (SNO),
-  constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE),
-  constraint DW1_IDSSIMPLE__R__USERS
-      foreign key (TENANT, USR)
-      references DW1_USERS(TENANT, SNO) deferrable
+  constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE)
 );
 
 -- (Uses sequence nunmber from DW1_IDS_SNO.)
