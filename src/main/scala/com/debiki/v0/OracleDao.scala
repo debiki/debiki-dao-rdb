@@ -88,8 +88,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     }
   }
 
-  override def saveLogin(tenantId: String, loginStuff: LoginStuff
-                            ): LoggedInStuff = {
+  override def saveLogin(tenantId: String, loginReq: LoginRequest
+                            ): LoginGrant = {
 
     // Assigns an id to `loginNoId', saves it and returns it (with id).
     def _saveLogin(loginNoId: Login, identityWithId: Identity)
@@ -129,7 +129,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     // I think that'd make possible future security *bugs*, when privileges
     // are granted to IdentitySimple users, which don't even need to
     // specify any password to "login"!
-    loginStuff.identity match {
+    loginReq.identity match {
       case s: IdentitySimple =>
         val simpleLogin = db.transaction { implicit connection =>
           // Find or create _SIMPLE row.
@@ -166,8 +166,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           val user = _dummyUserFor(identity = s,
                                   id = _dummyUserIdFor(identityId))
           val identityWithId = s.copy(id = identityId, userId = user.id)
-          val loginWithId = _saveLogin(loginStuff.login, identityWithId)
-          Full(LoggedInStuff(loginWithId, identityWithId, user))
+          val loginWithId = _saveLogin(loginReq.login, identityWithId)
+          Full(LoginGrant(loginWithId, identityWithId, user))
         }.open_!
         return simpleLogin
       case _ => ()
@@ -191,7 +191,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             """
 
     // SQL for selecting User and Identity. Depends on the Identity type.
-    val (templateUser, sqlFromWhere, bindVals) = loginStuff.identity match {
+    val (templateUser, sqlFromWhere, bindVals) = loginReq.identity match {
       case oid: IdentityOpenId =>
         (User(id = "?",
               displayName = oid.firstName,
@@ -236,7 +236,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               country = n2e(rs.getString("COUNTRY")),
               website = n2e(rs.getString("WEBSITE")),
               isSuperAdmin = rs.getString("SUPERADMIN") == "T")
-          val identityInDb = loginStuff.identity match {
+          val identityInDb = loginReq.identity match {
             case iod: IdentityOpenId =>
               IdentityOpenId(
                 id = rs.getLong("IDENTITY_SNO").toString,
@@ -294,7 +294,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           if (identityInDb.isDefined) None
           else Some(db.nextSeqNo("DW1_IDS_SNO"))
 
-      val identity = (identityInDb, loginStuff.identity) match {
+      val identity = (identityInDb, loginReq.identity) match {
         case (None, newNoId: IdentityOpenId) =>
           // Assign id and create.
           val nev = newNoId.copy(id = newIdentitySno.get.toString,
@@ -336,9 +336,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         case (_, IdentityUnknown) => assErr("[debiki_error_32ks30016")
       }
 
-      val login = _saveLogin(loginStuff.login, identity)
+      val login = _saveLogin(loginReq.login, identity)
 
-      Full(LoggedInStuff(login, identity, user))
+      Full(LoginGrant(login, identity, user))
     }.open_!  // pointless box
   }
 
