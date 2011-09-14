@@ -529,32 +529,31 @@ create table DW1_IDS_SIMPLE(
 
 -- OpenID identities.
 --
--- This table is denormalized:
--- If a user changes his/her name, a new _OPENID row is created.
--- So there's no unique constraint on the _CLAIMED_ID. To find up-to-date
--- info, use the row with the highest SNO.
 -- The same user might log in to different tenants.
 -- So there might be many (TENANT, _CLAIMED_ID) with the same _CLAIMED_ID.
 -- Each (TENANT, _CLAIMED_ID) points to a DW1_USER row.
 --
--- Merging OpenID users: In the future, I'll make
--- it possible to merge OpenID accounts. Then perhaps USR will
--- be renamed to USER_ORIG(inally) and point to the original unmerged
--- _USER row. Another column USR_NOW would point to the _USER row
--- that is to be used (after the merge)? If there has been no merge,
--- then USER_ORIG = USER_NOW.
---   When a user is merged, USER_NOW is updated for *all* rows with a
--- matching (TENANT, _CLAIMED_ID) -- the table is denormalized.
--- Alternatively, could normalize: create a link table, that links
--- claimed-ids to user-ids. But I think that would be rather pointless,
--- since people probably change their OpenID info very infrequently, so
--- even if this table is denormalized, there'd mostly be only 1 row
--- per claimed-id anyway.
+-- If a user logs in with a claimed_id already present in this table,
+-- but e.g. with modified name and email, the FIRST_NAME and EMAIL columns
+-- are updated to store the most recent name and email attributes sent by
+-- the OpenID provider. (Could create a _OPENID_HIST  history table, where old
+-- values are remembered. Perhaps useful if there's some old email address
+-- that someone used long ago, and now you wonder whose address was it?)
+-- Another solution: Splitting _OPENID into one table with the unique
+-- tenant+claimed_id and all most recent attribute values, and one table
+-- with the attribute values as of the point in time of the OpenID login.
 --
 create table DW1_IDS_OPENID(
   SNO number(20)                  not null,
   TENANT number(10)               not null,
+  -- When an OpenID identity is created, a User is usually created too.
+  -- It is stored in USR_ORIG. However, to allow many OpenID identities to
+  -- use the same User (i.e. merge OpenID accounts, and perhaps Twitter,
+  -- Facebok accounts), each _OPENID row can be remapped to another User.
+  -- This is done via the USR row (which is = USR_ORIG if not remapped).
+  -- (Not yet implemented though: currently USR = USR_ORIG always.)
   USR number(20)                  not null,
+  USR_ORIG number(20)             not null,
   OID_CLAIMED_ID nvarchar2(500)   not null, -- Google's ID hashes 200-300 long
   OID_OP_LOCAL_ID nvarchar2(500)  not null,
   OID_REALM nvarchar2(100)        not null,
@@ -565,9 +564,8 @@ create table DW1_IDS_OPENID(
   EMAIL nvarchar2(100)            not null,
   COUNTRY nvarchar2(100)          not null,
   constraint DW1_IDSOID_SNO__P primary key (SNO),
-  constraint DW1_IDSOID__U
-      unique (TENANT, OID_CLAIMED_ID, OID_OP_LOCAL_ID, OID_REALM,
-        OID_ENDPOINT, OID_VERSION, FIRST_NAME, EMAIL, COUNTRY),
+  constraint DW1_IDSOID_TNT_OID__U
+      unique (TENANT, OID_CLAIMED_ID),
   constraint DW1_IDSOID_USR_TNT__R__USERS
       foreign key (TENANT, USR)
       references DW1_USERS(TENANT, SNO) deferrable

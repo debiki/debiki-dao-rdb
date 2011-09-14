@@ -144,7 +144,7 @@ extends OraLogger {
       case e: Exception =>
         //box = logAndFailure("Error updating database [debiki_error_83ImQF]", e)
         warn("Error updating database [debiki_error_83ImQF]: "+
-            e.getMessage.trim)
+            classNameOf(e) +": "+ e.getMessage.trim)
         throw e
     } finally {
       _closeEtc(conn, committed = committed)
