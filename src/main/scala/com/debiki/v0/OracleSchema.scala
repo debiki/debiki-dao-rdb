@@ -414,8 +414,9 @@ drop table DW1_LOGINS;
 drop table DW1_IDS_SIMPLE;
 drop table DW1_IDS_OPENID;
 drop table DW1_USERS;
+drop table DW1_TENANT_HOSTS;
 drop table DW1_TENANTS;
-drop sequence DW1_TENANTS_SNO;
+drop sequence DW1_TENANTS_ID;
 drop sequence DW1_USERS_SNO;
 drop sequence DW1_LOGINS_SNO;
 drop sequence DW1_IDS_SNO;
@@ -423,16 +424,55 @@ drop sequence DW1_PAGES_SNO;
 
 
 create table DW1_TENANTS(
-  SNO number(10) not null,
-  NAME nvarchar2(40) not null,
-  constraint DW1_TENANTS_SNO__P primary key (SNO),
+  ID varchar2(10) not null,
+  NAME nvarchar2(100) not null,
+  CTIME timestamp default systimestamp not null,
+  constraint DW1_TENANTS_ID__P primary key (ID),
   constraint DW1_TENANTS_NAME__U unique (NAME)
 );
 
-create sequence DW1_TENANTS_SNO start with 10;
+-- The tenant id is a varchar2, althoug it's currently assigned to from
+-- this number sequence.
+create sequence DW1_TENANTS_ID start with 10;
 
-insert into DW1_TENANTS(SNO, NAME) values (1, 'default');
+
+-- Host addresses that handle requests for tenants. A tenant might be
+-- reachable via many addresses (e.g. www.debiki.se and debiki.se).
+-- One host is the canonical/primary host, and all other hosts currently
+-- redirect to that one. (In the future, could add a column that flags that
+-- a <link rel=canonical> is to be used instead of a HTTP 301 redirect.)
+--
+create table DW1_TENANT_HOSTS(
+  TENANT varchar2(10) not null,
+  HOST nvarchar2(50) not null,
+  CANONICAL varchar2(10),
+  -- HTTPS values: `Required': http redirects to https, `Allowed': https
+  -- won't redirect to http, but includes a <link rel=canonical>.
+  -- `No': https times out or redirects to http.
+  HTTPS varchar2(10),
+  CTIME timestamp default systimestamp not null,
+  MTIME timestamp default systimestamp not null,
+  constraint DW1_TNTHSTS__R__TENANTS
+      foreign key (TENANT)
+      references DW1_TENANTS(ID),
+  constraint DW1_TNTHSTS_HOST__U unique (HOST),
+  constraint DW1_TNTHSTS_CNCL__C check (CANONICAL in ('T', 'F')),
+  constraint DW1_TNTHSTS_HTTPS__C check (HTTPS in ('Required', 'Allowed', 'No'))
+);
+
+-- Make sure there's only one canonical host per tenant.
+create unique index DW1_TNTHSTS_TENANT_CNCL__U on DW1_TENANT_HOSTS(
+    case when CANONICAL = 'T' then TENANT else NULL end,
+    case when CANONICAL = 'T' then 'T' else NULL end);
+
+-- Create a Local tenant that redirects 127.0.0.1 to `localhost'.
+insert into DW1_TENANTS(ID, NAME) values ('1', 'Local');
+insert into DW1_TENANT_HOSTS(TENANT, HOST, CANONICAL, HTTPS)
+  values (1, 'localhost:8080', 'T', 'No');
+insert into DW1_TENANT_HOSTS(TENANT, HOST, CANONICAL, HTTPS)
+  values (1, '127.0.0.1:8080', 'F', 'No');
 commit;
+
 
 -- A user is identified by its SNO. You cannot trust the specified name or
 -- email, not even with OpenID or OpenAuth login. This means it's *not*
@@ -445,7 +485,7 @@ commit;
 -- One that points to the _USERS row before the merge, and one that points
 -- to the merged account.
 create table DW1_USERS(
-  TENANT number(10)           not null,
+  TENANT varchar2(10)         not null,
   SNO number(20)              not null,
   DISPLAY_NAME nvarchar2(100),
   EMAIL nvarchar2(100),
@@ -456,7 +496,7 @@ create table DW1_USERS(
   constraint DW1_USERS_SUPERADM__C check (SUPERADMIN in ('T')),
   constraint DW1_USERS__R__TENANT
       foreign key (TENANT)
-      references DW1_TENANTS(SNO) deferrable
+      references DW1_TENANTS(ID) deferrable
   -- No unique constraint on (TENANT, DISPLAY_NAME, EMAIL, SUPERADMIN).
   -- People's emails aren't currently verified, so people can provide
   -- someone else's email. So need to allow many rows with the same email.
@@ -472,7 +512,7 @@ create sequence DW1_USERS_SNO start with 10;
 -- defines a session? Cannot a session start before you login?
 create table DW1_LOGINS(  -- logins and logouts
   SNO number(20)             not null,
-  TENANT number(10)          not null,
+  TENANT varchar2(10)        not null,
   PREV_LOGIN number(20),
   ID_TYPE varchar2(10)       not null,
   ID_SNO number(20)          not null,
@@ -483,7 +523,7 @@ create table DW1_LOGINS(  -- logins and logouts
   constraint DW1_LOGINS_SNO__P primary key (SNO),
   constraint DW1_LOGINS_TNT__R__TENANTS
       foreign key (TENANT)
-      references DW1_TENANTS(SNO) deferrable,
+      references DW1_TENANTS(ID) deferrable,
   constraint DW1_LOGINS__R__LOGINS
       foreign key (PREV_LOGIN)
       references DW1_LOGINS(SNO) deferrable,
@@ -545,7 +585,7 @@ create table DW1_IDS_SIMPLE(
 --
 create table DW1_IDS_OPENID(
   SNO number(20)                  not null,
-  TENANT number(10)               not null,
+  TENANT varchar2(10)             not null,
   -- When an OpenID identity is created, a User is usually created too.
   -- It is stored in USR_ORIG. However, to allow many OpenID identities to
   -- use the same User (i.e. merge OpenID accounts, and perhaps Twitter,
@@ -584,13 +624,13 @@ create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 -- the root post, id "0", unless I change to "1".)
 create table DW1_PAGES(
   SNO number(20)        not null,
-  TENANT number(10)     not null,
+  TENANT varchar2(10)   not null,
   GUID varchar2(50)     not null,
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
   constraint DW1_PAGES__R__TENANT
       foreign key (TENANT)
-      references DW1_TENANTS(SNO) deferrable
+      references DW1_TENANTS(ID) deferrable
 );
 
 create sequence DW1_PAGES_SNO start with 10;
@@ -664,7 +704,7 @@ create table DW1_PAGE_RATINGS(
 
 
 create table DW1_PATHS(
-  TENANT number(10) not null,
+  TENANT varchar2(10) not null,
   FOLDER nvarchar2(100) not null,
   PAGE_GUID varchar2(30) not null,
   PAGE_NAME nvarchar2(100) not null,

@@ -69,7 +69,8 @@ object OracleDaoTckTest {
             delete from DW1_IDS_SIMPLE
             delete from DW1_IDS_OPENID
             delete from DW1_USERS
-            delete from DW1_TENANTS where name <> 'default'
+            delete from DW1_TENANT_HOSTS
+            delete from DW1_TENANTS
             """.trim.split("\n") foreach { dao.db.update(_) }
             Empty // silly box
           }

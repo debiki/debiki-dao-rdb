@@ -109,7 +109,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           insert into DW1_LOGINS(
               SNO, TENANT, PREV_LOGIN, ID_TYPE, ID_SNO,
               LOGIN_IP, LOGIN_TIME)
-          values (?, (select SNO from DW1_TENANTS where NAME = ?), ?,
+          values (?, ?, ?,
               '"""+
               // Don't bind identityType, that'd only make it harder for
               // the optimizer.
@@ -211,7 +211,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             -- which would store the FIRST_NAME, EMAIL, COUNTRY
             -- that the OpenID provider sent, originally (but which the
             -- user might have since changed).
-          where i.TENANT = (select SNO from DW1_TENANTS where NAME = ?)
+          where i.TENANT = ?
             and i.OID_CLAIMED_ID = ?
             and i.TENANT = u.TENANT -- (not needed, u.SNO is unique)
             and i.USR = u.SNO
@@ -269,9 +269,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           db.update("""
               insert into DW1_USERS(
                   TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
-              values (
-                  (select SNO from DW1_TENANTS where NAME = ?),
-                  ?, ?, ?, ?)""",
+              values (?, ?, ?, ?, ?)""",
               List(tenantId, userSno.asInstanceOf[AnyRef],
                   u.displayName, u.email, u.country))
           u
@@ -305,8 +303,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                   OID_REALM, OID_ENDPOINT, OID_VERSION,
                   FIRST_NAME, EMAIL, COUNTRY)
               values (
-                  ?, (select SNO from DW1_TENANTS where NAME = ?), ?, ?,
-                  ?, ?, ?, ?, ?, ?, ?, ?)""",
+                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
               List(newIdentitySno.get.asInstanceOf[AnyRef],
                   tenantId, nev.userId, nev.userId,
                   nev.oidClaimedId, e2d(nev.oidOpLocalId), e2d(nev.oidRealm),
@@ -321,8 +318,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                     USR = ?, OID_OP_LOCAL_ID = ?, OID_REALM = ?,
                     OID_ENDPOINT = ?, OID_VERSION = ?,
                     FIRST_NAME = ?, EMAIL = ?, COUNTRY = ?
-                where SNO = ?
-                  and TENANT = (select SNO from DW1_TENANTS where NAME = ?)
+                where SNO = ? and TENANT = ?
                 """,
                 List(nev.userId,  e2d(nev.oidOpLocalId), e2d(nev.oidRealm),
                   e2d(nev.oidEndpoint), e2d(nev.oidVersion),
@@ -386,8 +382,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             l.LOGIN_IP, l.LOGIN_TIME,
             l.LOGOUT_IP, l.LOGOUT_TIME
         from DW1_TENANTS t, DW1_PAGES p, DW1_PAGE_ACTIONS a, DW1_LOGINS l
-        where t.NAME = ?
-          and p.TENANT = t.SNO
+        where t.ID = ?
+          and p.TENANT = t.ID
           and p.GUID = ?
           and a.PAGE = p.SNO
           and a.LOGIN = l.SNO""", List(tenantId, pageGuid), rs => {
@@ -444,7 +440,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           and a.LOGIN = l.SNO
           and l.ID_TYPE = 'OpenID'
           and l.ID_SNO = o.SNO
-          and o.TENANT = (select SNO from DW1_TENANTS where NAME = ?)""",
+          and o.TENANT = ?""",
         List(pageSno.toString, tenantId), rs => {
       while (rs.next) {
         identities ::= IdentityOpenId(
@@ -481,7 +477,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             u.WEBSITE, u.SUPERADMIN
         from DW1_USERS u, identities
         where u.SNO = identities.USR
-          and u.TENANT = (select SNO from DW1_TENANTS where NAME = ?)
+          and u.TENANT = ?
         """, List(pageSno.toString, tenantId), rs => {
       while (rs.next) {
         users ::= User(
@@ -612,6 +608,70 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     pages
   }
 
+  def createTenant(name: String): Tenant = {
+    db.transaction { implicit connection =>
+      val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
+      db.update("""
+          insert into DW1_TENANTS (ID, NAME)
+          values (?, ?)
+          """, List(tenantId, name))
+      Full(Tenant(id = tenantId, name = name, hosts = Nil))
+    }.open_!
+  }
+
+  def addTenantHost(tenantId: String, host: TenantHost) = {
+    db.transaction { implicit connection =>
+      val cncl = if (host.isCanonical) "T" else "F"
+      val https = host.https match {
+        case TenantHost.HttpsRequired => "Required"
+        case TenantHost.HttpsAllowed => "Allowed"
+        case TenantHost.HttpsNone => "No"
+      }
+      db.update("""
+          insert into DW1_TENANT_HOSTS (TENANT, HOST, CANONICAL, HTTPS)
+          values (?, ?, ?, ?)
+          """,
+          List(tenantId, host.address, cncl, https))
+    }
+  }
+
+  def lookupTenant(scheme: String, host: String): TenantLookup = {
+    db.queryAtnms("""
+        select t.TENANT TID,
+            t.CANONICAL THIS_CANONICAL, t.HTTPS THIS_HTTPS,
+            c.HOST CANONICAL_HOST, c.HTTPS CANONICAL_HTTPS
+        from DW1_TENANT_HOSTS t, -- this host, the one connected to
+            DW1_TENANT_HOSTS c  -- the cannonical host
+        where t.HOST = ?
+          and c.TENANT = t.TENANT
+          and c.CANONICAL = 'T'
+        """, List(host), rs => {
+      if (!rs.next) return FoundNothing
+      val tenantId = rs.getString("TID")
+      val thisIsChost = rs.getString("THIS_CANONICAL") == "T"
+      val thisHttps = rs.getString("THIS_HTTPS")
+      val chost = rs.getString("CANONICAL_HOST")
+      val chostHttps = rs.getString("CANONICAL_HTTPS")
+      def chostUrl =  // the canonical host URL, e.g. http://www.example.com
+          (if (chostHttps == "Required") "https://" else "http://") + chost
+      assErrIf(thisIsChost != (host == chost), "[debiki_error_98h2kwi1215]")
+
+      def useThisHostAndScheme = FoundChost(tenantId)
+      def redirect = FoundAlias(tenantId, canonicalHostUrl = chostUrl,
+                              shouldRedirect = true)
+      def useLinkRelCanonical = redirect.copy(shouldRedirect = false)
+
+      Full((thisIsChost, scheme, thisHttps) match {
+        case (true, "http" , "Required") => redirect
+        case (true, "http" , _         ) => useThisHostAndScheme
+        case (true, "https", "Required") => useThisHostAndScheme
+        case (true, "https", "Allowed" ) => useLinkRelCanonical
+        case (true, "https", "No"      ) => redirect
+        case (false, _     , _         ) => redirect
+      })
+    }).open_!
+  }
+
   def checkPagePath(pathToCheck: PagePath): Box[PagePath] = {
     _findCorrectPagePath(pathToCheck)
   }
@@ -650,7 +710,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     var query = """
         select FOLDER, PAGE_GUID, PAGE_NAME, GUID_IN_PATH
         from DW1_PATHS
-        where TENANT = (select SNO from DW1_TENANTS where NAME = ?)
+        where TENANT = ?
         """
     var binds = List(pagePathIn.tenantId)
     var maxRowsFound = 1  // there's a unique key
@@ -731,16 +791,13 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                             (implicit conn: js.Connection): Box[Int] = {
     db.update("""
         insert into DW1_PAGES (SNO, TENANT, GUID)
-        values (
-            DW1_PAGES_SNO.nextval,
-            (select SNO from DW1_TENANTS where NAME = ?),
-            ?)
+        values (DW1_PAGES_SNO.nextval, ?, ?)
         """, List(where.tenantId, debate.guid))
 
     db.update("""
         insert into DW1_PATHS (TENANT, FOLDER, PAGE_GUID,
                                    PAGE_NAME, GUID_IN_PATH)
-        values ((select SNO from DW1_TENANTS where NAME = ?), ?, ?, ?, ?)
+        values (?, ?, ?, ?, ?)
         """,
         List(where.tenantId, where.parent, debate.guid, e2s(where.name),
           "T"  // means guid will prefix page name: /folder/-guid-pagename
@@ -766,8 +823,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       // user posts 1 reply at a time).
       val pageSno = db.query("""
           select SNO from DW1_PAGES
-            where TENANT = (select SNO from DW1_TENANTS where NAME = ?)
-              and GUID = ?
+            where TENANT = ? and GUID = ?
           """, List(tenantId, pageGuid), rs => {
         rs.next
         Full(rs.getLong("SNO").toString)
