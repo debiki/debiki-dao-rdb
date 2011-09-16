@@ -812,6 +812,11 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       return (identity, user,
           Some(VisibleTalk)) // weird name, should redesign permission system
 
+    // For now, hide .js and .css and .tmpl files for everyone but superadmins.
+    // (If people can *edit* them, they could conduct xss attacks.)
+    if (pagePath.name.contains('.'))
+      return (identity, user, None)
+
     val intrsOk: IntrsAllowed = {
       val p = pagePath.path
       if (p == "/test/") VisibleTalk
