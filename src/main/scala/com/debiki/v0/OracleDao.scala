@@ -176,7 +176,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     // Load the User, if any, and the OpenID/Twitter/Facebook identity id:
     // Construct a query that joins the relevant DW1_IDS_<id-type> table
     // with DW1_USERS.
-
+    // COULD move this user loading code to _loadUsers. This code
+    // loads a user and also its *identity* though.
     var sqlSelectList = """
         select
             u.SNO USER_SNO,
@@ -350,6 +351,58 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     }
   }
 
+  private def _loadUsers(onPageWithSno: Long = -1,
+                         withLoginId: String = null,
+                         tenantId: String): List[User] = {
+    // Load users. First find all relevant identities, by joining
+    // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
+    // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
+
+    require((onPageWithSno == -1) ^ (withLoginId eq null))
+    val (selectLoginIds, args) = (onPageWithSno, withLoginId) match {
+      case (-1, loginId) => ("""
+          select ID_SNO, ID_TYPE
+              from DW1_LOGINS
+              where SNO = ?
+          """, List(loginId)) // why not needed: .toLong.asInstanceOf[AnyRef]?
+      case (pageSno, null) => ("""
+          select distinct l.ID_SNO, l.ID_TYPE
+              from DW1_PAGE_ACTIONS a, DW1_LOGINS l
+              where a.PAGE = ? and a.LOGIN = l.SNO
+          """, List(pageSno.asInstanceOf[AnyRef]))
+    }
+
+    // Load users. First find identities by joining logins and
+    // identity tablese (only DW1_IDS_OPENID right now).
+    db.queryAtnms("""
+        with logins as ("""+ selectLoginIds +"""),
+        identities as (
+            select oi.USR
+            from DW1_IDS_OPENID oi, logins
+            where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID'
+            -- union
+            -- Twitter and Facebook identity tables, etc.
+            )
+        select u.SNO, u.DISPLAY_NAME, u.EMAIL, u.COUNTRY,
+            u.WEBSITE, u.SUPERADMIN
+        from DW1_USERS u, identities
+        where u.SNO = identities.USR
+          and u.TENANT = ?
+        """, args ::: List(tenantId), rs => {
+      var users = List[User]()
+      while (rs.next) {
+        users ::= User(
+          id = rs.getLong("SNO").toString,
+          displayName = n2e(rs.getString("DISPLAY_NAME")),
+          email = n2e(rs.getString("EMAIL")),
+          country = n2e(rs.getString("COUNTRY")),
+          website = n2e(rs.getString("WEBSITE")),
+          isSuperAdmin = rs.getString("SUPERADMIN") == "T")
+      }
+      Full(users)
+    }).open_! // silly box
+  }
+
   override def save[T](tenantId: String, pageGuid: String, xs: List[T]
                           ): Box[List[T]] = {
     db.transaction { implicit connection =>
@@ -428,6 +481,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     })
 
     // Load OpenID logins.
+    // COULD merge with _loadUsers?
     // COULD split IdentityOpenId into IdentityOpenId and IdentityOpenIdDetails
     // -- the latter would contain e.g. endpoint and op-local-id and such.
     // And not load all details here.
@@ -458,38 +512,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       Empty
     })
 
-    // Load users. First find all relevant identities, by joining
-    // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
-    // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
-    db.queryAtnms("""
-        with logins as (
-            select l.ID_SNO, l.ID_TYPE
-            from DW1_PAGE_ACTIONS a, DW1_LOGINS l
-            where a.PAGE = ? and a.LOGIN = l.SNO),
-          identities as (
-            select oi.USR
-            from DW1_IDS_OPENID oi, logins
-            where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID'
-            -- union
-            -- Twitter and Facebook identity tables, etc.
-            )
-        select u.SNO, u.DISPLAY_NAME, u.EMAIL, u.COUNTRY,
-            u.WEBSITE, u.SUPERADMIN
-        from DW1_USERS u, identities
-        where u.SNO = identities.USR
-          and u.TENANT = ?
-        """, List(pageSno.toString, tenantId), rs => {
-      while (rs.next) {
-        users ::= User(
-            id = rs.getLong("SNO").toString,
-            displayName = n2e(rs.getString("DISPLAY_NAME")),
-            email = n2e(rs.getString("EMAIL")),
-            country = n2e(rs.getString("COUNTRY")),
-            website = n2e(rs.getString("WEBSITE")),
-            isSuperAdmin = rs.getString("SUPERADMIN") == "T")
-      }
-      Empty // silly box
-    })
+    // Load users.
+    users :::= _loadUsers(onPageWithSno = pageSno, tenantId = tenantId)
 
     // Load rating tags.
     val ratingTags: mut.HashMap[String, List[String]] = db.queryAtnms("""
@@ -691,6 +715,28 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       and so on with the parent's parent ...
     */
 
+    val user: Option[User] = loginId flatMap { id =>
+      _loadUsers(withLoginId = id, tenantId = pagePath.tenantId
+                ) match {
+        case List(u: User) => Some(u)
+        case Nil =>
+          // Is an IdentitySimple user? Could verify (include info in cookie,
+          // or load identity + user).
+          // For other identity types: The webapp should never try to load
+          // non existing users? (The login id was once fetched from
+          // the database. It is sent to the client in a signed cookie so
+          // it cannot be tampered with.) If a user is deleted this can
+          // happen though. But currently users cannot be deleted.
+          None
+        case x => assErr("Found "+ x.length +" users with login ID "+
+                          safed(id) + " [debiki_error_72RxkW1]")
+      }
+    }
+
+    // Allow superadmins to do anything, e.g. create pages anywhere.
+    // (Currently users can edit their own pages only.)
+    if (user.map(_.isSuperAdmin) == Some(true))
+      return Some(VisibleTalk) // weird name, should redesign permission system
     val intrsOk: IntrsAllowed = {
       val p = pagePath.path
       if (p == "/test/") VisibleTalk
