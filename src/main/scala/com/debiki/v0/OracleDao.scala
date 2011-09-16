@@ -353,7 +353,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
 
   private def _loadUsers(onPageWithSno: Long = -1,
                          withLoginId: String = null,
-                         tenantId: String): List[User] = {
+                         tenantId: String
+                            ): Pair[List[Identity], List[User]] = {
     // Load users. First find all relevant identities, by joining
     // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
     // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
@@ -372,34 +373,97 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           """, List(pageSno.asInstanceOf[AnyRef]))
     }
 
-    // Load users. First find identities by joining logins and
-    // identity tablese (only DW1_IDS_OPENID right now).
+    // Load identities and users. Details: First find identities of all types
+    // by joining logins with each identity table, and then taking the union
+    // of all these joins. Use generic column names (since each identity
+    // table has identity provider specific column names).
+    // Then join all the identities found with DW1_USERS.
+    // Note: There are identities with no matching users (IdentitySimple),
+    // so do a left outer join.
+    // Note: There might be > 1 identity per user (if a user has merged
+    // e.g. her Twitter and Facebook identities to one single user account).
+    // So each user might be returned > 1 times, i.e. once per identity.
+    // This wastes some bandwidth, but I guess it's better than doing a
+    // separate query to fetch all relevant users exactly once -- that
+    // additional roundtrip to the database would probably be more expensive;
+    // I guess fairly few users will merge their identities.
     db.queryAtnms("""
         with logins as ("""+ selectLoginIds +"""),
         identities as (
-            select oi.USR
+            -- Simple identities
+            select ID_TYPE, s.SNO I_ID, 0 I_USR,
+                   s.NAME I_NAME, s.EMAIL I_EMAIL,
+                   s.LOCATION I_WHERE, s.WEBSITE I_WEBSITE
+            from DW1_IDS_SIMPLE s, logins
+            where s.SNO = logins.ID_SNO and logins.ID_TYPE = 'Simple'
+            union
+            -- OpenID
+            select ID_TYPE, oi.SNO I_ID, oi.USR,
+                   oi.FIRST_NAME I_NAME, oi.EMAIL I_EMAIL,
+                   oi.COUNTRY I_WHERE, cast('' as nvarchar2(100)) I_WEBSITE
             from DW1_IDS_OPENID oi, logins
             where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID'
             -- union
-            -- Twitter and Facebook identity tables, etc.
+            -- Twitter tables
+            -- Facebook tables
             )
-        select u.SNO, u.DISPLAY_NAME, u.EMAIL, u.COUNTRY,
-            u.WEBSITE, u.SUPERADMIN
-        from DW1_USERS u, identities
-        where u.SNO = identities.USR
-          and u.TENANT = ?
+        select i.ID_TYPE, i.I_ID,
+            i.I_NAME, i.I_EMAIL, i.I_WHERE, i.I_WEBSITE,
+            u.SNO U_ID,
+            u.DISPLAY_NAME U_DISP_NAME,
+            u.EMAIL U_EMAIL,
+            u.COUNTRY U_COUNTRY,
+            u.WEBSITE U_WEBSITE,
+            u.SUPERADMIN U_SUPERADMIN
+        from identities i, DW1_USERS u
+        where u.SNO(+) = i.I_USR
+          and u.TENANT(+) = ?
         """, args ::: List(tenantId), rs => {
-      var users = List[User]()
+      var usersById = mut.HashMap[String, User]()
+      var identities = List[Identity]()
       while (rs.next) {
-        users ::= User(
-          id = rs.getLong("SNO").toString,
-          displayName = n2e(rs.getString("DISPLAY_NAME")),
-          email = n2e(rs.getString("EMAIL")),
-          country = n2e(rs.getString("COUNTRY")),
-          website = n2e(rs.getString("WEBSITE")),
-          isSuperAdmin = rs.getString("SUPERADMIN") == "T")
+        val idId = rs.getString("I_ID")
+        val userId = rs.getLong("U_ID").toString
+        assErrIf(idId isEmpty, "[debiki_error_392Qvc89]")
+
+        if (!usersById.contains(userId)) usersById(userId) = User(
+            id = userId,
+            displayName = n2e(rs.getString("U_DISP_NAME")),
+            email = n2e(rs.getString("U_EMAIL")),
+            country = n2e(rs.getString("U_COUNTRY")),
+            website = n2e(rs.getString("U_WEBSITE")),
+            isSuperAdmin = rs.getString("U_SUPERADMIN") == "T")
+
+        identities ::= (rs.getString("ID_TYPE") match {
+          case "Simple" => {
+            IdentitySimple(
+                id = idId,
+                userId = userId,
+                name = n2e(rs.getString("I_NAME")),
+                email = n2e(rs.getString("I_EMAIL")),
+                location = n2e(rs.getString("I_WHERE")),
+                website = n2e(rs.getString("I_WEBSITE")))
+          }
+          case "OpenID" => {
+            assErrIf(userId isEmpty, "[debiki_error_9V86krR3]")
+            IdentityOpenId(
+                id = idId,
+                userId = userId,
+                // These uninteresting OpenID fields were never loaded.
+                // COULD place them in an Option[OpenIdInfo]?
+                oidEndpoint = "?",
+                oidVersion = "?",
+                oidRealm = "?",
+                oidClaimedId = "?",
+                oidOpLocalId = "?",
+                firstName = n2e(rs.getString("I_NAME")),
+                email = n2e(rs.getString("I_EMAIL")),
+                country = n2e(rs.getString("I_WHERE")))
+          }
+        })
       }
-      Full(users)
+      Full((identities,
+          usersById.values.toList))  // silly to throw away hash map
     }).open_! // silly box
   }
 
@@ -512,8 +576,10 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       Empty
     })
 
-    // Load users.
-    users :::= _loadUsers(onPageWithSno = pageSno, tenantId = tenantId)
+    // Load users.  COULD use _loadUsers instead above too, to load identitis?
+    val (identitiesIgnored, moreUsers) = _loadUsers(onPageWithSno = pageSno,
+                                                    tenantId = tenantId)
+    users :::= moreUsers
 
     // Load rating tags.
     val ratingTags: mut.HashMap[String, List[String]] = db.queryAtnms("""
@@ -701,9 +767,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
   }
 
   def checkAccess(pagePath: PagePath, loginId: Option[String], doo: Do
-                     ): Option[IntrsAllowed] = {
+                 ): (Option[Identity], Option[User], Option[IntrsAllowed]) = {
     /*
-    The algorithm: (a sketch)
+    The algorithm: (a sketch. And not yet implemented)
     lookup rules in PATHRULES:  (not implemented! paths hardcoded instead)
       if guid, try:  parentFolder / -* /   (i.e. any guid in folder)
       else, try:
@@ -715,40 +781,51 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       and so on with the parent's parent ...
     */
 
-    val user: Option[User] = loginId flatMap { id =>
+     val (identity: Option[Identity], user: Option[User]
+         ) = loginId map { id =>
       _loadUsers(withLoginId = id, tenantId = pagePath.tenantId
                 ) match {
-        case List(u: User) => Some(u)
-        case Nil =>
-          // Is an IdentitySimple user? Could verify (include info in cookie,
-          // or load identity + user).
-          // For other identity types: The webapp should never try to load
-          // non existing users? (The login id was once fetched from
-          // the database. It is sent to the client in a signed cookie so
-          // it cannot be tampered with.) If a user is deleted this can
-          // happen though. But currently users cannot be deleted.
-          None
-        case x => assErr("Found "+ x.length +" users with login ID "+
-                          safed(id) + " [debiki_error_72RxkW1]")
+        case (List(i: Identity), List(u: User)) => (Some(i), Some(u))
+        case (List(i: IdentitySimple), Nil) => (Some(i), Some(_dummyUserFor(i)))
+        case (List(i: Identity), Nil) => assErr(
+            "Found no user for login id "+ safed(id) +
+            " with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
+        case (Nil, Nil) =>
+          // The webapp should never try to load non existing identities?
+          // (The login id was once fetched from the database.
+          // It is sent to the client in a signed cookie so it cannot be
+          // tampered with.) Identities cannot be deleted!
+          logger.warn("Found no identity for login id "+ safed(id) +
+                    " [debiki_error_743xdk15]")
+          return (None, None, None)  // deny everything
+        case (is, us) =>
+          // There should be exactly one identity per login, and at most
+          // one user per identity.
+          assErr("Found "+ is.length +" identities and "+ us.length +
+              " users for login id " + safed(id) + " [debiki_error_42RxkW1]")
       }
-    }
+    } getOrElse (None, None)
 
     // Allow superadmins to do anything, e.g. create pages anywhere.
     // (Currently users can edit their own pages only.)
     if (user.map(_.isSuperAdmin) == Some(true))
-      return Some(VisibleTalk) // weird name, should redesign permission system
+      return (identity, user,
+          Some(VisibleTalk)) // weird name, should redesign permission system
+
     val intrsOk: IntrsAllowed = {
       val p = pagePath.path
       if (p == "/test/") VisibleTalk
       else if (p == "/allt/") VisibleTalk
       else if (p == "/forum/") VisibleTalk
-      else if (doo == Do.Create)
-        return Empty  // don't allow new pages in the below paths
+      else if (doo == Do.Create) {
+        // Don't allow new pages in the below paths.
+        return  (identity, user, None)
+      }
       else if (p == "/blogg/") VisibleTalk
       else if (p == "/arkiv/") VisibleTalk
       else HiddenTalk
     }
-    Some(intrsOk)
+    (identity, user, Some(intrsOk))
   }
 
   // Looks up the correct PagePath for a possibly incorrect PagePath.
