@@ -817,6 +817,16 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     if (pagePath.name.contains('.'))
       return (identity, user, None)
 
+    // Non-admins can only create pages whose names are prefixed
+    // with their guid, like so: /folder/-guid-pagename
+    // (Currently there are no admin users, only superadmins)
+    (doo, pagePath.guid) match {
+      case (Do.Create, GuidInPath(_)) => ()
+      case (Do.Create, GuidHidden(_)) => return (identity, user, None)
+      case (Do.Create, GuidUnknown) => assErr("[debiki_error_0128krRi315]")
+      case _ => ()
+    }
+
     val intrsOk: IntrsAllowed = {
       val p = pagePath.path
       if (p == "/test/") VisibleTalk
@@ -922,14 +932,21 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         values (DW1_PAGES_SNO.nextval, ?, ?)
         """, List(where.tenantId, debate.guid))
 
+    // Concerning prefixing the page name with the page guid:
+    // /folder/?createpage results in the guid prefixing the page name, like so:
+    //    /folder/-guid-pagename
+    // but /folder/pagename?createpage results in the guid being hidden,
+    // and this'll be the path to the page:
+    //    /folder/pagename
+    val guidInPath = if (where.isFolderPath) "T" else "F"
+
     db.update("""
         insert into DW1_PATHS (TENANT, FOLDER, PAGE_GUID,
                                    PAGE_NAME, GUID_IN_PATH)
         values (?, ?, ?, ?, ?)
         """,
         List(where.tenantId, where.parent, debate.guid, e2s(where.name),
-          "T"  // means guid will prefix page name: /folder/-guid-pagename
-        ))
+            guidInPath))
   }
 
   private def _insert[T](
