@@ -819,12 +819,15 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       return (identity, user, None)
 
     // Non-admins can only create pages whose names are prefixed
-    // with their guid, like so: /folder/-guid-pagename
+    // with their guid, like so: /folder/-guid-pagename.
     // (Currently there are no admin users, only superadmins)
-    (doo, pagePath.guid) match {
-      case (Do.Create, GuidInPath(_)) => ()
-      case (Do.Create, GuidHidden(_)) => return (identity, user, None)
-      case (Do.Create, GuidUnknown) => assErr("[debiki_error_0128krRi315]")
+    // This is done by invoking /folder/?createpage.
+    // Admins can do this: /folder/page-name?createpage
+    (doo, pagePath.isFolderPath) match {
+      case (Do.Create, true) => () // a page wil be created in this folder
+      case (Do.Create, false) =>
+        // A page name was specified, not a folder. Deny.
+        return (identity, user, None)
       case _ => ()
     }
 
