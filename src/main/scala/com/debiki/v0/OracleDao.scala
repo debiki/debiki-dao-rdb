@@ -192,15 +192,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             """
 
     // SQL for selecting User and Identity. Depends on the Identity type.
-    val (templateUser, sqlFromWhere, bindVals) = loginReq.identity match {
+    val (sqlFromWhere, bindVals) = loginReq.identity match {
       case oid: IdentityOpenId =>
-        (User(id = "?",
-              displayName = oid.firstName,
-              email = oid.email,
-              country = oid.country,
-              website = "",
-              isSuperAdmin = false),
-        """ i.OID_OP_LOCAL_ID,
+        ("""i.OID_OP_LOCAL_ID,
             i.OID_REALM,
             i.OID_ENDPOINT,
             i.OID_VERSION,
@@ -219,8 +213,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             """,
           List(tenantId, oid.oidClaimedId)
         )
-      // case fid: IdentityTwitter => (User, SQL for Twitter identity table)
-      // case fid: IdentityFacebook => (User, ...)
+      // case fid: IdentityTwitter => (SQL for Twitter identity table)
+      // case fid: IdentityFacebook => (...)
       case _: IdentitySimple => assErr("[debiki_error_98239k2a2]")
       case IdentityUnknown => assErr("[debiki_error_92k2rI06]")
     }
@@ -265,8 +259,14 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       val user = userInDb match {
         case Some(u) => u
         case None =>
+          // Leave the name/email/etc fields blank --  the name/email from
+          // the relevant identity is used instead. However, if the user
+          // manually fills in (not implemented) her user data,
+          // then those values take precedence (over the one from the
+          // identity provider).
           val userSno = db.nextSeqNo("DW1_USERS_SNO")
-          val u = templateUser.copy(id = userSno.toString)
+          val u =  User(id = userSno.toString, displayName = "", email = "",
+                        country = "", website = "", isSuperAdmin = false)
           db.update("""
               insert into DW1_USERS(
                   TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)

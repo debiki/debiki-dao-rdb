@@ -479,15 +479,29 @@ commit;
 -- possible to lookup a user in this table, given e.g. name and email.
 -- Instead, you need to e.g. lookup DW1_IDS_OPENID.OID_CLAIMED_ID,
 -- to find _OPENID.USR, which is the relevant user SNO.
--- However, the same _CLAIMED_ID might point to many different _USERS,
--- because users can (not implemented) merge different OpenID accounts to
--- one single account. Then a merged account might have 2 rows in _OPENID:
--- One that points to the _USERS row before the merge, and one that points
--- to the merged account.
+-- Many _CLAIMED_ID might point to the same _USERS row, because users can
+-- (not implemented) merge different OpenID accounts to one single account.
+--
+-- The name/email/etc columns are currently always empty! The name/email from
+-- the relevant identity (e.g. DW1_IDS_OPENID.FIRST_NAME) is used instead.
+-- However, if the user manually fills in (not implemented) her user data,
+-- then those values will take precedence (over the one from the
+-- identity provider). -- In the future, if one has mapped
+-- many identities to one single user account, the name/email/etc from
+-- DW1_USERS will be used, rather than identity specific data,
+-- because we wouldn't know which identity to use.
+--
+-- So most _USERS rows are essentially not used. However I think I'd like
+-- to create those rows anyway, to reserve a user id for the identity.
+-- (If the identity id was used, and a user row was later created,
+-- then we'd probably stop using the identity id and use the user id instead,
+-- then the id for that real world person would change, perhaps bad? So
+-- reserve and use a user id right away, on identity creation.)
+--
 create table DW1_USERS(
   TENANT varchar2(10)         not null,
   SNO number(20)              not null,
-  DISPLAY_NAME nvarchar2(100),
+  DISPLAY_NAME nvarchar2(100),  -- currently empty, always (2011-09-17)
   EMAIL nvarchar2(100),
   COUNTRY nvarchar2(100),
   WEBSITE nvarchar2(100),
