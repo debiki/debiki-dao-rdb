@@ -34,7 +34,7 @@ object OracleDb {
   def e2s(s: String) = if (s isEmpty) " " else s
 
   /** Converts a dash to the empty string ("Dash To Empty"). */
-  def d2e(s: String) = if (s == "-") " " else s
+  def d2e(s: String) = if (s == "-") "" else s
 
   /** Converts the empty string to a dash ("Empty To Dash"). */
   def e2d(s: String) = if (s isEmpty) "-" else s

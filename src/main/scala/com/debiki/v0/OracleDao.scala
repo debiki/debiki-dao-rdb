@@ -523,7 +523,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
 
     // Load simple logins and construct dummy users.
     db.queryAtnms("""
-        select s.SNO, s.NAME, s.EMAIL, s.LOCATION, s.WEBSITE
+        select distinct s.SNO, s.NAME, s.EMAIL, s.LOCATION, s.WEBSITE
         from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_SIMPLE s
         where a.PAGE = ?
           and a.LOGIN = l.SNO
@@ -550,7 +550,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     // -- the latter would contain e.g. endpoint and op-local-id and such.
     // And not load all details here.
     db.queryAtnms("""
-        select o.SNO, o.USR, o.OID_ENDPOINT, o.OID_VERSION, o.OID_REALM,
+        select distinct
+              o.SNO, o.USR, o.OID_ENDPOINT, o.OID_VERSION, o.OID_REALM,
               o.OID_CLAIMED_ID, o.OID_OP_LOCAL_ID, o.FIRST_NAME,
               o.EMAIL, o.COUNTRY
         from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_OPENID o
