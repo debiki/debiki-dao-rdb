@@ -428,7 +428,8 @@ create table DW1_TENANTS(
   NAME nvarchar2(100) not null,
   CTIME timestamp default systimestamp not null,
   constraint DW1_TENANTS_ID__P primary key (ID),
-  constraint DW1_TENANTS_NAME__U unique (NAME)
+  constraint DW1_TENANTS_NAME__U unique (NAME),
+  constraint DW1_TENANTS_ID_NOT_0__C check (ID <> '0')
 );
 
 -- The tenant id is a varchar2, althoug it's currently assigned to from
@@ -510,10 +511,11 @@ create table DW1_USERS(
   constraint DW1_USERS_SUPERADM__C check (SUPERADMIN in ('T')),
   constraint DW1_USERS__R__TENANT
       foreign key (TENANT)
-      references DW1_TENANTS(ID) deferrable
+      references DW1_TENANTS(ID) deferrable,
   -- No unique constraint on (TENANT, DISPLAY_NAME, EMAIL, SUPERADMIN).
   -- People's emails aren't currently verified, so people can provide
   -- someone else's email. So need to allow many rows with the same email.
+  constraint DW1_USERS_SNO_NOT_0__C check (SNO <> 0)
 );
 
 create sequence DW1_USERS_SNO start with 10;
@@ -542,7 +544,8 @@ create table DW1_LOGINS(  -- logins and logouts
       foreign key (PREV_LOGIN)
       references DW1_LOGINS(SNO) deferrable,
   constraint DW1_LOGINS_IDTYPE__C
-      check (ID_TYPE in ('Simple', 'OpenID'))
+      check (ID_TYPE in ('Simple', 'OpenID')),
+  constraint DW1_LOGINS_SNO_NOT_0__C check (SNO <> 0)
 ) PCTFREE 40;
 -- The default PCTFREE is 10%. LOGOUT_IP and LOGOUT_TIME will be
 -- updated for users that click Log Out, or logs in as other users.
@@ -575,7 +578,8 @@ create table DW1_IDS_SIMPLE(
   LOCATION nvarchar2(100) not null,
   WEBSITE nvarchar2(100)  not null,
   constraint DW1_IDSSIMPLE_SNO__P primary key (SNO),
-  constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE)
+  constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE),
+  constraint DW1_IDSSIMPLE_SNO_NOT_0__C check (SNO <> 0)
 );
 
 -- (Uses sequence nunmber from DW1_IDS_SNO.)
@@ -622,7 +626,8 @@ create table DW1_IDS_OPENID(
       unique (TENANT, OID_CLAIMED_ID),
   constraint DW1_IDSOID_USR_TNT__R__USERS
       foreign key (TENANT, USR)
-      references DW1_USERS(TENANT, SNO) deferrable
+      references DW1_USERS(TENANT, SNO) deferrable,
+  constraint DW1_IDSOID_SNO_NOT_0__C check (SNO <> 0)
 );
 
 create index DW1_IDSOID_TNT_USR on DW1_IDS_OPENID(TENANT, USR);
@@ -635,7 +640,7 @@ create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 
 
 -- (How do we know who created the page? The user who created
--- the root post, id "0", unless I change to "1".)
+-- the root post, its page-action-id is always "1".)
 create table DW1_PAGES(
   SNO number(20)        not null,
   TENANT varchar2(10)   not null,
@@ -644,7 +649,8 @@ create table DW1_PAGES(
   constraint DW1_PAGES__U unique (TENANT, GUID),
   constraint DW1_PAGES__R__TENANT
       foreign key (TENANT)
-      references DW1_TENANTS(ID) deferrable
+      references DW1_TENANTS(ID) deferrable,
+  constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> 0)
 );
 
 create sequence DW1_PAGES_SNO start with 10;
@@ -678,8 +684,18 @@ create table DW1_PAGE_ACTIONS(
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
   constraint DW1_PACTIONS_TYPE__C
       check (TYPE in ('Post', 'Edit', 'EditApp', 'Rating',
-                      'Revert', 'NotfReq', 'NotfSent', 'NotfRep'))
-) -- Create an index organized table, but place edit DESCR-iptions in
+                      'Revert', 'NotfReq', 'NotfSent', 'NotfRep')),
+  -- There must be no action with id 0; let 0 mean nothing.
+  constraint DW1_PACTIONS_PAID_NOT_0__C
+      check (PAID <> '0'),
+  -- The root post has id 1 and it must be its own parent.
+  constraint DW1_PACTIONS_ROOT_IS_1__C
+      check (RELPA = case when PAID = '1' then '1' else RELPA end),
+  -- The root post must be a 'Post'.
+  constraint DW1_PACTIONS_ROOT_IS_POST__C
+      check (TYPE = case when PAID = '1' then 'Post' else TYPE end)
+) --
+  -- Create an index organized table, but place edit DESCR-iptions in
   -- the overflowsegment (i.e. not in the index) since they're only accessed
   -- when someone decides to edit a Post:
   organization index including NEW_IP  -- (but excluding DESCR)
