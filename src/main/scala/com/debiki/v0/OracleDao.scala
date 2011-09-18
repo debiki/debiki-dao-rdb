@@ -423,28 +423,23 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       var identities = List[Identity]()
       while (rs.next) {
         val idId = rs.getString("I_ID")
-        val userId = rs.getLong("U_ID").toString
+        var userId = rs.getLong("U_ID").toString  // 0 if null
+        var user: Option[User] = None
         assErrIf(idId isEmpty, "[debiki_error_392Qvc89]")
 
-        if (!usersById.contains(userId)) usersById(userId) = User(
-            id = userId,
-            displayName = n2e(rs.getString("U_DISP_NAME")),
-            email = n2e(rs.getString("U_EMAIL")),
-            country = n2e(rs.getString("U_COUNTRY")),
-            website = n2e(rs.getString("U_WEBSITE")),
-            isSuperAdmin = rs.getString("U_SUPERADMIN") == "T")
-
         identities ::= (rs.getString("ID_TYPE") match {
-          case "Simple" => {
-            IdentitySimple(
+          case "Simple" =>
+            userId = _dummyUserIdFor(idId)
+            val i = IdentitySimple(
                 id = idId,
                 userId = userId,
-                name = n2e(rs.getString("I_NAME")),
-                email = n2e(rs.getString("I_EMAIL")),
-                location = n2e(rs.getString("I_WHERE")),
-                website = n2e(rs.getString("I_WEBSITE")))
-          }
-          case "OpenID" => {
+                name = d2e(rs.getString("I_NAME")),
+                email = d2e(rs.getString("I_EMAIL")),
+                location = d2e(rs.getString("I_WHERE")),
+                website = d2e(rs.getString("I_WEBSITE")))
+            user = Some(_dummyUserFor(i))
+            i
+          case "OpenID" =>
             assErrIf(userId isEmpty, "[debiki_error_9V86krR3]")
             IdentityOpenId(
                 id = idId,
@@ -459,8 +454,17 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                 firstName = n2e(rs.getString("I_NAME")),
                 email = n2e(rs.getString("I_EMAIL")),
                 country = n2e(rs.getString("I_WHERE")))
-          }
         })
+
+        if (user isEmpty) user = Some(User(
+            id = userId,
+            displayName = n2e(rs.getString("U_DISP_NAME")),
+            email = n2e(rs.getString("U_EMAIL")),
+            country = n2e(rs.getString("U_COUNTRY")),
+            website = n2e(rs.getString("U_WEBSITE")),
+            isSuperAdmin = rs.getString("U_SUPERADMIN") == "T"))
+
+        if (!usersById.contains(userId)) usersById(userId) = user.get
       }
       Full((identities,
           usersById.values.toList))  // silly to throw away hash map
@@ -477,7 +481,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
   def load(tenantId: String, pageGuid: String): Box[Debate] = {
     /*
     db.transaction { implicit connection =>
-
+      // BUG: There might be a NPE / None.get because of phantom reads.
       // Prevent phantom reads from DW1_ACTIONS. (E.g. rating tags are read
       // from DW1_RATINGS before _ACTIONS is considered, and another session
       // might insert a row into _ACTIONS just after _RATINGS was queried.)
@@ -487,8 +491,6 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
 
     var pageSno: Long = -1
     var logins = List[Login]()
-    var identities = List[Identity]()
-    var users = List[User]()
 
     // Load all logins for pageGuid. Load DW1_PAGES.SNO at the same time
     // (although it's then included on each row) to avoid db roundtrips.
@@ -521,66 +523,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       Empty
     })
 
-    // Load simple logins and construct dummy users.
-    db.queryAtnms("""
-        select distinct s.SNO, s.NAME, s.EMAIL, s.LOCATION, s.WEBSITE
-        from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_SIMPLE s
-        where a.PAGE = ?
-          and a.LOGIN = l.SNO
-          and l.ID_TYPE = 'Simple'
-          and l.ID_SNO = s.SNO """,
-        List(pageSno.toString), rs => {
-      while (rs.next) {
-        val sno = rs.getLong("SNO").toString
-        val name = d2e(rs.getString("NAME"))
-        val email = d2e(rs.getString("EMAIL"))
-        val location = d2e(rs.getString("LOCATION"))
-        val website = d2e(rs.getString("WEBSITE"))
-        val identity =  IdentitySimple(id = sno, userId = _dummyUserIdFor(sno),
-            name = name, email = email, location = location, website = website)
-        identities ::= identity
-        users ::= _dummyUserFor(identity)  // there's no DW1_USERS row to load
-      }
-      Empty
-    })
-
-    // Load OpenID logins.
-    // COULD merge with _loadUsers?
-    // COULD split IdentityOpenId into IdentityOpenId and IdentityOpenIdDetails
-    // -- the latter would contain e.g. endpoint and op-local-id and such.
-    // And not load all details here.
-    db.queryAtnms("""
-        select distinct
-              o.SNO, o.USR, o.OID_ENDPOINT, o.OID_VERSION, o.OID_REALM,
-              o.OID_CLAIMED_ID, o.OID_OP_LOCAL_ID, o.FIRST_NAME,
-              o.EMAIL, o.COUNTRY
-        from DW1_PAGE_ACTIONS a, DW1_LOGINS l, DW1_IDS_OPENID o
-        where a.PAGE = ?
-          and a.LOGIN = l.SNO
-          and l.ID_TYPE = 'OpenID'
-          and l.ID_SNO = o.SNO
-          and o.TENANT = ?""",
-        List(pageSno.toString, tenantId), rs => {
-      while (rs.next) {
-        identities ::= IdentityOpenId(
-            id = rs.getLong("SNO").toString,
-            userId = rs.getLong("USR").toString,
-            oidEndpoint = rs.getString("OID_ENDPOINT"),
-            oidVersion = rs.getString("OID_VERSION"),
-            oidRealm = rs.getString("OID_REALM"),
-            oidClaimedId = rs.getString("OID_CLAIMED_ID"),
-            oidOpLocalId = rs.getString("OID_OP_LOCAL_ID"),
-            firstName = rs.getString("FIRST_NAME"),
-            email = rs.getString("EMAIL"),
-            country = rs.getString("COUNTRY"))
-      }
-      Empty
-    })
-
-    // Load users.  COULD use _loadUsers instead above too, to load identitis?
-    val (identitiesIgnored, moreUsers) = _loadUsers(onPageWithSno = pageSno,
-                                                    tenantId = tenantId)
-    users :::= moreUsers
+    val (identities, users) =
+        _loadUsers(onPageWithSno = pageSno, tenantId = tenantId)
 
     // Load rating tags.
     val ratingTags: mut.HashMap[String, List[String]] = db.queryAtnms("""
@@ -787,7 +731,6 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       _loadUsers(withLoginId = id, tenantId = pagePath.tenantId
                 ) match {
         case (List(i: Identity), List(u: User)) => (Some(i), Some(u))
-        case (List(i: IdentitySimple), Nil) => (Some(i), Some(_dummyUserFor(i)))
         case (List(i: Identity), Nil) => assErr(
             "Found no user for login id "+ safed(id) +
             " with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
