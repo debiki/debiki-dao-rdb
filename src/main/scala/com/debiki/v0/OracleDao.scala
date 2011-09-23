@@ -361,16 +361,19 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
 
     require((onPageWithSno == -1) ^ (withLoginId eq null))
     val (selectLoginIds, args) = (onPageWithSno, withLoginId) match {
+      // (Need to specify tenant id here, and when selecting from DW1_USERS,
+      // because there's no foreign key from DW1_LOGINS to DW1_IDS_<type>.)
       case (-1, loginId) => ("""
           select ID_SNO, ID_TYPE
               from DW1_LOGINS
-              where SNO = ?
-          """, List(loginId)) // why not needed: .toLong.asInstanceOf[AnyRef]?
+              where SNO = ? and TENANT = ?
+          """, List(loginId, // why not needed: .toLong.asInstanceOf[AnyRef]?
+                     tenantId))
       case (pageSno, null) => ("""
           select distinct l.ID_SNO, l.ID_TYPE
               from DW1_PAGE_ACTIONS a, DW1_LOGINS l
-              where a.PAGE = ? and a.LOGIN = l.SNO
-          """, List(pageSno.asInstanceOf[AnyRef]))
+              where a.PAGE = ? and a.LOGIN = l.SNO and l.TENANT = ?
+          """, List(pageSno.asInstanceOf[AnyRef], tenantId))
     }
 
     // Load identities and users. Details: First find identities of all types

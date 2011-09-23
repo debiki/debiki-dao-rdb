@@ -641,6 +641,9 @@ create table DW1_LOGINS(  -- logins and logouts
   SNO number(20)             not null,
   TENANT varchar2(10)        not null,
   PREV_LOGIN number(20),
+  -- COULD replace ID_TYPE/_SNO with: ID_SIMPLE, ID_OPENID, ID_TWITTER, etc,
+  -- require that exactly one be non-NULL, and create foreign keys to the ID
+  -- tables. That would have avoided a few bugs! and more future bugs too!?
   ID_TYPE varchar2(10)       not null,
   ID_SNO number(20)          not null,
   LOGIN_IP varchar2(39)      not null,
