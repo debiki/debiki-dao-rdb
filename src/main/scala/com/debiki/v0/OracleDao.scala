@@ -68,7 +68,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
 
   def secretSalt(): String = "9KsAyFqw_"
 
-  def create(where: PagePath, debatePerhapsGuid: Debate): Box[Debate] = {
+  def createPage(where: PagePath, debatePerhapsGuid: Debate): Box[Debate] = {
     var debate = if (debatePerhapsGuid.guid != "?") {
       unimplemented
       // Could use debatePerhapsGuid, instead of generatinig a new guid,
@@ -473,14 +473,14 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     }).open_! // silly box
   }
 
-  override def save[T](tenantId: String, pageGuid: String, xs: List[T]
-                          ): Box[List[T]] = {
+  override def savePageActions[T](tenantId: String, pageGuid: String,
+                                  xs: List[T]): Box[List[T]] = {
     db.transaction { implicit connection =>
       _insert(tenantId, pageGuid, xs)
     }
   }
 
-  def load(tenantId: String, pageGuid: String): Box[Debate] = {
+  def loadPage(tenantId: String, pageGuid: String): Box[Debate] = {
     /*
     db.transaction { implicit connection =>
       // BUG: There might be a NPE / None.get because of phantom reads.
@@ -632,7 +632,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       }
     }
     val pages: List[Debate] = guids.reverse map { guid =>
-      load(tenantId, guid) match {
+      loadPage(tenantId, guid) match {
         case Full(d: Debate) => d
         case x =>
           // Database inaccessible? If I fixed TRANSACTION_SERIALIZABLE
@@ -713,8 +713,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     _findCorrectPagePath(pathToCheck)
   }
 
-  def checkAccess(pagePath: PagePath, loginId: Option[String], doo: Do
-                 ): (Option[Identity], Option[User], PermsOnPage) = {
+  def loadPermsOnPage(pagePath: PagePath, loginId: Option[String], doo: Do
+                         ): (Option[Identity], Option[User], PermsOnPage) = {
     // Currently all permissions are actually hardcoded in this function.
     // (There's no permissions db table.)
 
@@ -973,31 +973,6 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       website = identity.website, isSuperAdmin = false)
   }
 
-  // Builds a query that finds the user's current DW1_LOGIN.SNO.
-  // If another thread has just logged the user out, the SNO for the
-  // most recent 'LogIn' or 'NewIP' entry is returned.
-  // COULD cache SNO in signed cookie instead? -- yes, now fixed, cached.
-  /*
-  def _findLoginSnoQuery(user: User): Pair[String, List[AnyRef]] = user match {
-    case u @ UserSimple => ("""
-      select max(l.SNO) LOGIN_SNO from DW1_LOGINS l, DW1_USERS_SIMPLE s
-      where l.USER_TYPE = 'Simple' and l.WHAT in ('LogIn', 'NewIP')
-        and l.USER_SNO = s.SNO
-        and s.NAME = ? and s.EMAIL = ? and s.LOCATION = ? and s.WEBSITE = ?
-      """, u.name::u.email::u.location::u.website::Nil)
-    case u @ UserOpenID => ("""
-      select max(l.SNO) LOGIN_SNO from DW1_LOGINS s, DW1_USERS_OPENID o
-      where l.USER_TYPE = 'OpenID' and l.WHAT in ('LogIn', 'NewIP')
-        and l.USER_SNO = o.SNO
-        and o.PROVIDER = ? and o.REALM = ? and o.OID = ?
-        and o.FIRST_NAME = ? and o.EMAIL = ? and o.COUNTRY = ?
-      """, u.provider::u.realm::u.oid::u.firstName::u.email::u.country::Nil)
-    case u @ UserSystem =>
-      ("select 0 LOGIN_SNO from dual", Nil)  // the system user has ID 0
-        // TODO create system user row at startup if absent?
-    case x => unimplemented(
-      "Finding user type: "+ classNameOf(x) +" [debiki_error_0953kr2115]")
-  } */
 
   /** Adds a can be Empty Prefix.
    *
@@ -1033,7 +1008,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     }
 
   From http://www.exampledepot.com/egs/java.sql/GetSqlException.html:
-  
+
     try {
         // Execute SQL statements...
     } catch (SQLException e) {
