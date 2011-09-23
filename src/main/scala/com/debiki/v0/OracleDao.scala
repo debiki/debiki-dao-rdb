@@ -5,7 +5,6 @@
 package com.debiki.v0
 
 import com.debiki.v0.PagePath._
-import com.debiki.v0.IntrsAllowed._
 import com.debiki.v0.Dao._
 import _root_.net.liftweb.common.{Loggable, Box, Empty, Full, Failure}
 import _root_.scala.xml.{NodeSeq, Text}
@@ -73,7 +72,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     var debate = if (debatePerhapsGuid.guid != "?") {
       unimplemented
       // Could use debatePerhapsGuid, instead of generatinig a new guid,
-      // but i have to test that this works. But should where.guid.value
+      // but i have to test that this works. But should where.guid
       // be Some or None? Would Some be the guid to reuse, or would Some
       // indicate that the page already exists, an error!?
     } else {
@@ -626,7 +625,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     perhapsTmpls map { tmplPath =>
       assert(tmplPath.tenantId == tenantId)
       _findCorrectPagePath(tmplPath) match {
-        case Full(pagePath) => guids ::= pagePath.guid.value.get
+        case Full(pagePath) => guids ::= pagePath.guid.get
         case Empty => // fine, template does not exist
         case f: Failure => error(
           "Error loading template guid [debiki_error_309sU32]:\n"+ f)
@@ -715,7 +714,10 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
   }
 
   def checkAccess(pagePath: PagePath, loginId: Option[String], doo: Do
-                 ): (Option[Identity], Option[User], Option[IntrsAllowed]) = {
+                 ): (Option[Identity], Option[User], PermsOnPage) = {
+    // Currently all permissions are actually hardcoded in this function.
+    // (There's no permissions db table.)
+
     /*
     The algorithm: (a sketch. And not yet implemented)
     lookup rules in PATHRULES:  (not implemented! paths hardcoded instead)
@@ -729,40 +731,39 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       and so on with the parent's parent ...
     */
 
-     val (identity: Option[Identity], user: Option[User]
+    val (identity: Option[Identity], user: Option[User]
          ) = loginId map { id =>
+      def loginInfo = "login id "+ safed(id) +
+                      ", tenant "+ safed(pagePath.tenantId)
       _loadUsers(withLoginId = id, tenantId = pagePath.tenantId
                 ) match {
         case (List(i: Identity), List(u: User)) => (Some(i), Some(u))
         case (List(i: Identity), Nil) => assErr(
-            "Found no user for login id "+ safed(id) +
-            " with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
+            "Found no user for "+ loginInfo +
+            ", with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
         case (Nil, Nil) =>
           // The webapp should never try to load non existing identities?
           // (The login id was once fetched from the database.
           // It is sent to the client in a signed cookie so it cannot be
           // tampered with.) Identities cannot be deleted!
-          logger.warn("Found no identity for login id "+ safed(id) +
-                    " [debiki_error_743xdk15]")
-          return (None, None, None)  // deny everything
+          error("Found no identity for "+ loginInfo +" [debiki_error_743xdk15]")
         case (is, us) =>
           // There should be exactly one identity per login, and at most
           // one user per identity.
           assErr("Found "+ is.length +" identities and "+ us.length +
-              " users for login id " + safed(id) + " [debiki_error_42RxkW1]")
+              " users for "+ loginInfo +" [debiki_error_42RxkW1]")
       }
     } getOrElse (None, None)
 
     // Allow superadmins to do anything, e.g. create pages anywhere.
     // (Currently users can edit their own pages only.)
     if (user.map(_.isSuperAdmin) == Some(true))
-      return (identity, user,
-          Some(VisibleTalk)) // weird name, should redesign permission system
+      return (identity, user, PermsOnPage.All)
 
     // For now, hide .js and .css and .tmpl files for everyone but superadmins.
     // (If people can *edit* them, they could conduct xss attacks.)
     if (pagePath.name.contains('.'))
-      return (identity, user, None)
+      return (identity, user, PermsOnPage.None)
 
     // Non-admins can only create pages whose names are prefixed
     // with their guid, like so: /folder/-guid-pagename.
@@ -773,24 +774,30 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       case (Do.Create, true) => () // a page wil be created in this folder
       case (Do.Create, false) =>
         // A page name was specified, not a folder. Deny.
-        return (identity, user, None)
+        return (identity, user, PermsOnPage.None)
       case _ => ()
     }
 
-    val intrsOk: IntrsAllowed = {
+    // For now, hardcode rules here:
+    val mayCreatePage = {
       val p = pagePath.path
-      if (p == "/test/") VisibleTalk
-      else if (p == "/allt/") VisibleTalk
-      else if (p == "/forum/") VisibleTalk
-      else if (doo == Do.Create) {
-        // Don't allow new pages in the below paths.
-        return  (identity, user, None)
-      }
-      else if (p == "/blogg/") VisibleTalk
-      else if (p == "/arkiv/") VisibleTalk
-      else HiddenTalk
+      if (p == "/test/") true
+      else if (p == "/allt/") true
+      else if (p == "/forum/") true
+      else if (p == "/wiki/") true
+      else false
     }
-    (identity, user, Some(intrsOk))
+
+    val isWiki = pagePath.folder == "/wiki/"
+
+    (identity, user, PermsOnPage.Wiki.copy(
+      createPage = mayCreatePage,
+      editPage = isWiki,
+      // Authenticated users can edit others' comments.
+      // (In the future, the reputation system (not implemented) will make
+      // them lose this ability should they misuse it.)
+      editAnyReply = isWiki || user.map(_.isAuthenticated) == Some(true)
+      ))
   }
 
   // Looks up the correct PagePath for a possibly incorrect PagePath.
@@ -802,7 +809,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         """
     var binds = List(pagePathIn.tenantId)
     var maxRowsFound = 1  // there's a unique key
-    pagePathIn.guid.value match {
+    pagePathIn.guid match {
       case Some(guid) =>
         query += " and PAGE_GUID = ?"
         binds ::= guid
@@ -819,7 +826,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             and (
               (FOLDER = ? and PAGE_NAME = ?)
             """
-        binds ::= pagePathIn.parent
+        binds ::= pagePathIn.folder
         binds ::= e2s(pagePathIn.name)
         // Try to correct bad URL links.
         // COULD skip (some of) the two if tests below, if action is ?newpage.
@@ -834,10 +841,10 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               )
             order by length(FOLDER) asc
             """
-          binds ::= pagePathIn.parent + pagePathIn.name +"/"
+          binds ::= pagePathIn.folder + pagePathIn.name +"/"
           maxRowsFound = 2
         }
-        else if (pagePathIn.parent.count(_ == '/') >= 2) {
+        else if (pagePathIn.folder.count(_ == '/') >= 2) {
           // Perhaps the correct path is /folder/page not /folder/page/.
           // But prefer /folder/page/ if both pages are found.
           query += """
@@ -845,7 +852,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               )
             order by length(FOLDER) desc
             """
-          val perhapsPath = pagePathIn.parent.dropRight(1)  // drop `/'
+          val perhapsPath = pagePathIn.folder.dropRight(1)  // drop `/'
           val lastSlash = perhapsPath.lastIndexOf("/")
           val (shorterPath, nonEmptyName) = perhapsPath.splitAt(lastSlash + 1)
           binds ::= shorterPath
@@ -859,13 +866,10 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     db.queryAtnms(query, binds.reverse, rs => {
       var correctPath: Box[PagePath] = Empty
       if (rs.next) {
-        val guidVal = rs.getString("PAGE_GUID")
-        val guid =
-            if (rs.getString("GUID_IN_PATH") == "F") GuidHidden(guidVal)
-            else GuidInPath(guidVal)
         correctPath = Full(pagePathIn.copy(  // keep pagePathIn.tenantId
-            parent = rs.getString("FOLDER"),
-            guid = guid,
+            folder = rs.getString("FOLDER"),
+            guid = Some(rs.getString("PAGE_GUID")),
+            guidInPath = rs.getString("GUID_IN_PATH") == "T",
             // If there is a root page ("serveraddr/") with no name,
             // it is stored as a single space; s2e removes such a space:
             name = s2e(rs.getString("PAGE_NAME"))))
@@ -895,7 +899,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
                                    PAGE_NAME, GUID_IN_PATH)
         values (?, ?, ?, ?, ?)
         """,
-        List(where.tenantId, where.parent, debate.guid, e2s(where.name),
+        List(where.tenantId, where.folder, debate.guid, e2s(where.name),
             guidInPath))
   }
 
