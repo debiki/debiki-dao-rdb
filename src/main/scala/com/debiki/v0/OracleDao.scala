@@ -599,6 +599,19 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
             new EditApplied(editId = relpa, date = time,
               loginId = loginSno, //newIp = newIp,
               result = n2e(text_?), debug = n2e(desc_?))
+          case flag if flag startsWith "Flag" =>
+            val reasonStr = flag drop 4 // drop "Flag"
+            val reason = FlagReason withName reasonStr
+            Flag(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
+                date = time, reason = reason, details = n2e(text_?))
+          case delete if delete startsWith "Del" =>
+            val wholeTree = delete match {
+              case "DelTree" => true
+              case "DelPost" => false
+              case x => assErr("[debiki_error_0912k22]")
+            }
+            Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
+                date = time, wholeTree = wholeTree, reason = n2e(text_?))
           case x => return Failure(
               "Bad DW1_ACTIONS.TYPE: "+ safed(typee) +" [debiki_error_Y8k3B]")
         }
@@ -958,6 +971,15 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           db.update(insertIntoActions, commonVals:::List(
             a.loginId, pageSno, id, a.date, "EditApp",
             a.editId, a.result, "", "", ""))
+        case f: Flag =>
+          db.update(insertIntoActions, commonVals:::List(
+            f.loginId, pageSno, f.id, f.date, "Flag" + f.reason,
+            f.postId, f.details, "", "", ""))
+        case d: Delete =>
+          db.update(insertIntoActions, commonVals:::List(
+            d.loginId, pageSno, d.id, d.date,
+            "Del" + (if (d.wholeTree) "Tree" else "Post"),
+            d.postId, d.reason, "", "", ""))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [debiki_error_38rkRF]")
       }
