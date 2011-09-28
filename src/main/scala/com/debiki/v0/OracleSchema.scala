@@ -874,6 +874,22 @@ create unique index DW1_PATHS__U on DW1_PATHS(
 
 
 
+Add flags and deletions to DW1 tables
+-----------------
+
+-- Let TYPE be 20 chars not 10, so "FlagCopyVio" fits.
+alter table DW1_PAGE_ACTIONS modify (TYPE varchar2(20))
+
+-- Add new action types.
+alter table DW1_PAGE_ACTIONS rename constraint DW1_PACTIONS_TYPE__C
+    to DW1_PACTIONS_TYPE__C_OLD;
+alter table DW1_PAGE_ACTIONS add constraint DW1_PACTIONS_TYPE__C
+check (TYPE in (
+    'Post', 'Edit', 'EditApp', 'Rating',
+    'DelPost', 'DelTree',
+    'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_TYPE__C_OLD;
+
 */
 
 
