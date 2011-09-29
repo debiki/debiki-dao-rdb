@@ -596,8 +596,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
               loginId = loginSno, newIp = newIp, text = n2e(text_?),
               desc = n2e(desc_?))
           case "EditApp" =>
-            new EditApplied(editId = relpa, date = time,
-              loginId = loginSno, //newIp = newIp,
+            new EditApp(id = id, editId = relpa, date = time,
+              loginId = loginSno, newIp = newIp,
               result = n2e(text_?), debug = n2e(desc_?))
           case flag if flag startsWith "Flag" =>
             val reasonStr = flag drop 4 // drop "Flag"
@@ -919,9 +919,8 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
   private def _insert[T](
         tenantId: String, pageGuid: String, xs: List[T])
         (implicit conn: js.Connection): Box[List[T]] = {
-    var xsWithIds = (new Debate("dummy")).assignIdTo(
+    var xsWithIds = Debate.assignIdsTo(
                       xs.asInstanceOf[List[AnyRef]]).asInstanceOf[List[T]]
-                          // COULD make `assignIdTo' member of object Debiki$
     var bindPos = 0
     for (x <- xsWithIds) {
       // Could optimize:  (but really *not* important!)
@@ -966,10 +965,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
           db.update(insertIntoActions, commonVals:::List(
             e.loginId, pageSno, e.id, e.date, "Edit",
             e.postId, e.text, "", "", e.desc))
-        case a: EditApplied =>
-          val id = nextRandomString()  ; TODO // guid field
+        case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
-            a.loginId, pageSno, id, a.date, "EditApp",
+            a.loginId, pageSno, a.id, a.date, "EditApp",
             a.editId, a.result, "", "", ""))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
