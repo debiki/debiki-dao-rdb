@@ -350,6 +350,37 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     }
   }
 
+  private def _loadRequesterInfo(reqInfo: RequestInfo): RequesterInfo = {
+    val (identity: Option[Identity], user: Option[User]
+        ) = reqInfo.loginId map { id =>
+      def loginInfo = "login id "+ safed(id) +
+          ", tenant "+ safed(reqInfo.pagePath.tenantId)
+      _loadUsers(withLoginId = id, tenantId = reqInfo.tenantId
+      ) match {
+        case (List(i: Identity), List(u: User)) => (Some(i), Some(u))
+        case (List(i: Identity), Nil) => assErr(
+          "Found no user for "+ loginInfo +
+              ", with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
+        case (Nil, Nil) =>
+          // The webapp should never try to load non existing identities?
+          // (The login id was once fetched from the database.
+          // It is sent to the client in a signed cookie so it cannot be
+          // tampered with.) Identities cannot be deleted!
+          error("Found no identity for "+ loginInfo +" [debiki_error_743xdk15]")
+        case (is, us) =>
+          // There should be exactly one identity per login, and at most
+          // one user per identity.
+          assErr("Found "+ is.length +" identities and "+ us.length +
+              " users for "+ loginInfo +" [debiki_error_42RxkW1]")
+      }
+    } getOrElse (None, None)
+
+    var r = RequesterInfo(ip = reqInfo.ip, login = None, // not loaded
+        identity = identity, user = user, memships = Nil)
+    r = r.copy(memships = _loadMemships(reqInfo.tenantId, r))
+    r
+  }
+
   private def _loadUsers(onPageWithSno: Long = -1,
                          withLoginId: String = null,
                          tenantId: String
@@ -471,6 +502,11 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       Full((identities,
           usersById.values.toList))  // silly to throw away hash map
     }).open_! // silly box
+  }
+
+  private def _loadMemships(tenantId: String, r: RequesterInfo
+                               ): List[String] = {
+    Nil
   }
 
   override def savePageActions[T](tenantId: String, pageGuid: String,
@@ -726,8 +762,7 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
     _findCorrectPagePath(pathToCheck)
   }
 
-  def loadPermsOnPage(pagePath: PagePath, loginId: Option[String], doo: Do
-                         ): (Option[Identity], Option[User], PermsOnPage) = {
+  def loadPermsOnPage(reqInfo: RequestInfo): (RequesterInfo, PermsOnPage) = {
     // Currently all permissions are actually hardcoded in this function.
     // (There's no permissions db table.)
 
@@ -744,56 +779,38 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       and so on with the parent's parent ...
     */
 
-    val (identity: Option[Identity], user: Option[User]
-         ) = loginId map { id =>
-      def loginInfo = "login id "+ safed(id) +
-                      ", tenant "+ safed(pagePath.tenantId)
-      _loadUsers(withLoginId = id, tenantId = pagePath.tenantId
-                ) match {
-        case (List(i: Identity), List(u: User)) => (Some(i), Some(u))
-        case (List(i: Identity), Nil) => assErr(
-            "Found no user for "+ loginInfo +
-            ", with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
-        case (Nil, Nil) =>
-          // The webapp should never try to load non existing identities?
-          // (The login id was once fetched from the database.
-          // It is sent to the client in a signed cookie so it cannot be
-          // tampered with.) Identities cannot be deleted!
-          error("Found no identity for "+ loginInfo +" [debiki_error_743xdk15]")
-        case (is, us) =>
-          // There should be exactly one identity per login, and at most
-          // one user per identity.
-          assErr("Found "+ is.length +" identities and "+ us.length +
-              " users for "+ loginInfo +" [debiki_error_42RxkW1]")
-      }
-    } getOrElse (None, None)
+    val requester = _loadRequesterInfo(reqInfo)
+    def user = requester.user
+
+    // ?? Replace admin test with:
+    // if (requeuster.memships.contains(AdminGroupId)) return PermsOnPage.All
 
     // Allow superadmins to do anything, e.g. create pages anywhere.
     // (Currently users can edit their own pages only.)
     if (user.map(_.isSuperAdmin) == Some(true))
-      return (identity, user, PermsOnPage.All)
+      return (requester, PermsOnPage.All)
 
     // For now, hide .js and .css and .tmpl files for everyone but superadmins.
     // (If people can *edit* them, they could conduct xss attacks.)
-    if (pagePath.name.contains('.'))
-      return (identity, user, PermsOnPage.None)
+    if (reqInfo.pagePath.name.contains('.'))
+      return (requester, PermsOnPage.None)
 
     // Non-admins can only create pages whose names are prefixed
     // with their guid, like so: /folder/-guid-pagename.
     // (Currently there are no admin users, only superadmins)
     // This is done by invoking /folder/?createpage.
     // Admins can do this: /folder/page-name?createpage
-    (doo, pagePath.isFolderPath) match {
+    (reqInfo.doo, reqInfo.pagePath.isFolderPath) match {
       case (Do.Create, true) => () // a page wil be created in this folder
       case (Do.Create, false) =>
         // A page name was specified, not a folder. Deny.
-        return (identity, user, PermsOnPage.None)
+        return (requester, PermsOnPage.None)
       case _ => ()
     }
 
     // For now, hardcode rules here:
     val mayCreatePage = {
-      val p = pagePath.path
+      val p = reqInfo.pagePath.path
       if (p == "/test/") true
       else if (p == "/allt/") true
       else if (p == "/forum/") true
@@ -801,9 +818,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       else false
     }
 
-    val isWiki = pagePath.folder == "/wiki/"
+    val isWiki = reqInfo.pagePath.folder == "/wiki/"
 
-    (identity, user, PermsOnPage.Wiki.copy(
+    (requester, PermsOnPage.Wiki.copy(
       createPage = mayCreatePage,
       editPage = isWiki,
       // Authenticated users can edit others' comments.
