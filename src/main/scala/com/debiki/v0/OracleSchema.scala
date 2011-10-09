@@ -25,6 +25,10 @@ occurrances of "time".
 
 *****************
 
+Could delete old SQL / Scala from this file.
+Could rename TENANT.ID to TID. (can be searched for, no false hits)
+Could rename NEW_IP --> LOGIN_NEW_IP
+
 
 Create a user like so: (the tablespace and user name can be anything)
 
