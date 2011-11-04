@@ -784,11 +784,12 @@ create table DW1_PAGE_ACTIONS(
   TIME timestamp       not null,
   TYPE varchar2(10)    not null,
   RELPA varchar2(30)   not null,  -- related page action
+  -- STATUS char(1)    not null,  -- check in 'S', 'A' -- suggestion/applied
   TEXT nclob,
   MARKUP nvarchar2(30),
   WHEERE nvarchar2(150),
   NEW_IP varchar2(39), -- null, unless differs from DW1_LOGINS.START_IP
-  DESCR nvarchar2(1001),
+  DESCR nvarchar2(1001), -- remove? use a new Post instead, to descr this action
   constraint DW1_PACTIONS_PAGE_PAID__P primary key (PAGE, PAID),
   constraint DW1_PACTIONS__R__LOGINS
       foreign key (LOGIN)
@@ -893,6 +894,165 @@ check (TYPE in (
     'DelPost', 'DelTree',
     'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
 alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_TYPE__C_OLD;
+
+
+
+Apply edits — change Edit.TEXT format
+-----------------
+
+-- The Edit.TEXT format was changed to a diff.
+-- So, before upgrading the appserver, apply all old edits:
+
+-- Backup everything: posts, edits, ratings, etc.
+create table DW1_PAGE_ACTIONS_BKP111101 as select * from DW1_PAGE_ACTIONS;
+
+-- Update all Post:s to the most recent Edit applied.
+update dw1_page_actions pa
+set text = (select text from (
+  select page, edit_id, post_id, text from (
+    select
+      e.page, e.paid edit_id, e.relpa post_id, e.text,
+      e.time,
+      max(a.time) over (partition by e.page, e.relpa) max_time
+    from dw1_page_actions e, dw1_page_actions a
+    where a.type = 'EditApp'
+      and e.type = 'Edit'
+      and a.relpa = e.paid
+    order by e.page, e.relpa, e.time desc
+  )
+  where time = max_time
+) neew
+where neew.post_id = pa.paid
+  and neew.page = pa.page
+)
+where pa.type = 'Post'
+  -- Only update posts that have been edited (or other post texts
+  -- would be NULLed).
+  and exists (
+    select 1 from dw1_page_actions e, dw1_page_actions a
+    where e.relpa = pa.paid
+      and e.page = pa.page
+      and e.type = 'Edit'
+      and a.relpa = e.paid
+      and a.page = e.page
+      and a.type = 'EditApp'
+  )
+;
+
+-- Delete all edits — since we've already applied them.
+-- First delete [any DelPost/Tree that deletes an edit] though.
+delete from dw1_page_actions a
+where a.type in ('DelPost', 'DelTree')
+  and exists (select * from dw1_page_actions a2
+              where a.relpa = a2.paid
+               and a2.type in ('Edit', 'EditApp')
+               );
+delete from dw1_page_actions where type in ('Edit', 'EditApp');
+
+commit;
+
+
+Misc
+-----------------
+
+-- The description will have to be a separate Post instead.
+alter table DW1_PAGE_ACTIONS drop column DESCR;
+
+
+Views
+-----------------
+(Don't use for anything but statistics right now. Don't
+base Scala code on any views.)
+
+-- Most recent posts
+--    ('Post', 'Rtng', 'Edit', 'EdAp', 'EdRv')
+-- Flagged posts
+-- Edit suggestions
+
+-- Page tree:
+--  - Pages per directory
+--     New pages - sort by ctime
+--  - Posts per page
+--  - Users per page
+
+-- New authenticated users
+-- New anonymous users
+
+-- Posts by user
+-- & links to everything
+-- & filters
+
+
+-- Login identities
+create or replace view dw1v_logins as
+select l.tenant tid, l.sno lid, l.login_time, l.logout_time,
+    l.login_ip, l.prev_login, l.id_type, o.sno idid, o.first_name name,
+    o.email, o.country loc, N'-' url
+  from dw1_logins l, dw1_ids_openid o
+  where l.id_type = 'OpenID'
+    and l.id_sno = o.sno
+union
+select l.tenant tid, l.sno lid, l.login_time, l.logout_time,
+    l.login_ip, l.prev_login, l.id_type, s.sno idid, s.name,
+    s.email, s.location loc, s.website url
+  from dw1_logins l, dw1_ids_simple s
+  where l.id_type = 'Simple'
+    and l.id_sno = s.sno
+order by login_time;
+
+
+-- All identities
+create or replace view dw1v_ids_all as
+select 'OpenID' id_type, o.sno idid, o.usr usrid, o.first_name name,
+    o.email, o.country loc, N'-' url
+  from dw1_ids_openid o
+union
+select 'Simple' id_type, sno idid, -sno usrid, name,
+    email, location loc, website url
+  from dw1_ids_simple;
+
+
+-- Page actions
+create or replace view dw1v_page_actions as
+select
+  t.name tenant,
+  pt.folder, pt.page_name, pt.page_guid, pt.guid_in_path gip,
+  -- pt.folder || case pt.guid_in_path
+  --      when 'T' then '-'||pt.page_guid|| '-' || pt.page_name
+  --      else pt.page_name ||' ('|| pt.page_guid ||')'
+  --      end
+  --   path,
+  pg.sno page_sno,
+  lg.lid, lg.name, lg.email, lg.id_type, lg.idid,
+  a.time, a.type, a.paid, a.relpa, a.text, a.wheere, a.new_ip
+from dw1_page_actions a, dw1_pages pg, dw1_paths pt, dw1_tenants t,
+  dw1v_logins lg
+where
+  a.page = pg.sno and
+  pt.page_guid = pg.guid and
+  t.id = pg.tenant and
+  a.login = lg.lid;
+
+
+create or replace view dw1v_pages as
+--with posts_per_page as (
+--  select page page_sno, count(*) num from dw1_page_actions where type = 'Post'
+--)
+select
+  folder, page_name, gip, page_guid, page_sno,
+  count(distinct idid) n_ids,
+  count(*) n_as,
+  max(time) mtime,
+  min(time) ctime
+  -- posts_per_page.num
+from dw1v_page_actions -- , posts_per_page
+--where posts_per_page.page_sno = dw1v_page_actions.page_sno
+group by folder, page_name, gip, page_guid, page_sno
+;
+
+
+
+
 
 */
 
