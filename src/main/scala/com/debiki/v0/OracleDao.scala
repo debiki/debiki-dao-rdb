@@ -618,11 +618,12 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
         val desc_? = rs.getString("DESCR")
 
         val action = typee match {
-          case "Post" =>
+          case post if post == "Post" || post == "Meta" =>
             // How repr empty root post parent? ' ' or '-' or '_' or '0'?
             new Post(id = id, parent = relpa, date = time,
               loginId = loginSno, newIp = newIp, text = n2e(text_?),
-              markup = n2e(markup_?), where = Option(where_?))
+              markup = n2e(markup_?), isMeta = post == "Meta",
+              where = Option(where_?))
           case "Rating" =>
             val tags = ratingTags(id)
             new Rating(id = id, postId = relpa, date = time,
@@ -967,8 +968,9 @@ class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
       x match {
         case p: Post =>
           val markup = "" // TODO
+          val tyype = if (p.isMeta) "Meta" else "Post"
           db.update(insertIntoActions, commonVals:::List(
-            p.loginId, pageSno, p.id, p.date, "Post",
+            p.loginId, pageSno, p.id, p.date, tyype,
             p.parent, p.text, markup,
             p.where.getOrElse(Null(js.Types.NVARCHAR)), ""))
         case r: Rating =>
