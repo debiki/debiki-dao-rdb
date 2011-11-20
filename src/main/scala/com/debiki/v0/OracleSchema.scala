@@ -20,7 +20,7 @@ import oracle.jdbc.{pool => op}
 CAPITALIZE table, column and constraint names but use lowercase for SQL
 keywords. Then one can easily find all occurrences of a certain table or
 column name, by searching for the capitalized name, e.g. the "TIME" column.
-If you, however, use lowercase names, then you will find lots of irrellevant
+If you, however, use lowercase names, then you will find lots of irrelevant
 occurrances of "time".
 
 *****************
@@ -547,7 +547,7 @@ create table DW1_TENANTS(
   constraint DW1_TENANTS_ID_NOT_0__C check (ID <> '0')
 );
 
--- The tenant id is a varchar2, althoug it's currently assigned to from
+-- The tenant id is a varchar2, although it's currently assigned to from
 -- this number sequence.
 create sequence DW1_TENANTS_ID start with 10;
 
