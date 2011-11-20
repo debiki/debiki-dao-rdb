@@ -9,8 +9,6 @@ import _root_.net.liftweb.common.{Logger, Box, Empty, Full, Failure}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js, lang => jl}
-import oracle.{jdbc => oj}
-import oracle.jdbc.{pool => op}
 
 trait OraLogger extends Logger {
   def logAndFailure[T](errorMessage: String, ex: Exception): Box[T] = {
@@ -51,6 +49,7 @@ extends OraLogger {
 
   import OracleDb._
 
+  /*
   val daSo = {
     // COULD disable deprecations. (You'll notice some warnings, e.g.
     // "setConnectionCachingEnabled in class OracleDataSource is deprecated"
@@ -111,9 +110,10 @@ extends OraLogger {
     conn.close()
     ds
   }
+  */
 
   def close() {
-    daSo.close()
+    unimplemented //daSo.close()
   }
 
   /*
@@ -287,7 +287,7 @@ extends OraLogger {
   }
 
   private def _getConnection(): js.Connection = {
-    val conn = daSo.getConnection()
+    val conn: js.Connection = unimplemented // daSo.getConnection()
     if (conn ne null) conn.setAutoCommit(false)
     conn
   }

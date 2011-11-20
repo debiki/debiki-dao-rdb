@@ -11,8 +11,6 @@ import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
-import oracle.{jdbc => oj}
-import oracle.jdbc.{pool => op}
 import scala.collection.{mutable => mut}
 
 object OracleDaoSpi {
@@ -31,40 +29,20 @@ object OracleDaoSpi {
   /** Returns a working DAO or throws an error. */
   def connectAndUpgradeSchemaThrow(
       connUrl: String, user: String, pswd: String): OracleDaoSpi = {
-    // COULD catch connection errors, and return Failure.
     val oradb = new OracleDb(connUrl, user, pswd)  // can throw SQLException
-    val schema = new OracleSchema(oradb)
-    // COULD skip schema.upgrade(). Cannot really do the upgrade automatically,
-    // because > 1 appserver might connect to the database at the same time
-    // but only 1 appserver should do the upgrade. Also, if an older
-    // appserver (that doesn't understand the new schema structure) uses
-    // the schema, then another appserver with a higher version should not
-    // upgrade the db. Not until the old appserver has been upgraded so it
-    // will understand the schema, after the upgrade.
-    // COULD skip upgrade() because it makes the setup(EmptySchema)
-    // unit tests (in DaoTckTest) fail.
-    val ups: Box[List[String]] = schema.upgrade()
-    val curVer = OracleSchema.CurVersion
-    ups match {
-      case Full(`curVer`::_) => new OracleDaoSpi(schema)
-      case Full(_) => assErr("[debiki_error_77Kce29h]")
-      case Empty => assErr("[debiki_error_33k2kSE]")
-      case f: Failure => throw f.exception.open_!
-    }
+    new OracleDaoSpi(oradb)
   }
 }
 
 
-class OracleDaoSpi(val schema: OracleSchema) extends DaoSpi with Loggable {
+class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
   // COULD serialize access, per page?
 
   import OracleDb._
 
-  def db = schema.oradb
-
   def close() { db.close() }
 
-  def checkRepoVersion() = schema.readCurVersion()
+  def checkRepoVersion() = unimplemented
 
   def secretSalt(): String = "9KsAyFqw_"
 

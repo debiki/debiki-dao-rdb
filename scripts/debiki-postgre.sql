@@ -1,3 +1,25 @@
+/*
+
+*** Read this ***
+
+CAPITALIZE table, column and constraint names but use lowercase for SQL
+keywords. Then one can easily find all occurrences of a certain table or
+column name, by searching for the capitalized name, e.g. the "TIME" column.
+If you, however, use lowercase names, then you will find lots of irrelevant
+occurrances of "time".
+
+*****************
+
+"DW0_TABLE" means a Debiki ("DW_") version 0 ("0") table named "TABLE",
+When upgrading, one can copy data to new tables, i.e. DW<X>_TABLE instead of
+modifying data in the current tables. Then it's almost impossible to
+corrupt any existing data.
+  --- and if you don't need to upgrade, then keep the DW0_TABLE tables.
+  (and let any new DW<X>_TABLE refer to DW0_TABLE).
+
+*/
+
+
 -- Schema: debiki_dev_0_0_2
 -- DROP SCHEMA debiki_dev_0_0_2;
 CREATE SCHEMA debiki_dev_0_0_2
