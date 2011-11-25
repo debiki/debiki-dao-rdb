@@ -111,7 +111,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
               db.update("""
                   insert into DW1_IDS_SIMPLE(
                       SNO, NAME, EMAIL, LOCATION, WEBSITE)
-                  values (DW1_IDS_SNO.nextval, ?, ?, ?, ?)""",
+                  values (nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
                   List(s.name, e2d(s.email), e2d(s.location), e2d(s.website)))
                   // COULD fix: returning SNO into ?""", saves 1 roundtrip.
               // Loop one more lap to read SNO.
@@ -391,7 +391,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
             -- OpenID
             select ID_TYPE, oi.SNO I_ID, oi.USR,
                    oi.FIRST_NAME I_NAME, oi.EMAIL I_EMAIL,
-                   oi.COUNTRY I_WHERE, cast('' as nvarchar2(100)) I_WEBSITE
+                   oi.COUNTRY I_WHERE, cast('' as varchar(100)) I_WEBSITE
             from DW1_IDS_OPENID oi, logins
             where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID'
             -- union
@@ -406,9 +406,8 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
             u.COUNTRY U_COUNTRY,
             u.WEBSITE U_WEBSITE,
             u.SUPERADMIN U_SUPERADMIN
-        from identities i, DW1_USERS u
-        where u.SNO(+) = i.I_USR
-          and u.TENANT(+) = ?
+        from identities i left join DW1_USERS u on u.SNO = i.I_USR
+        where (u.TENANT is null or u.TENANT = ?)
         """, args ::: List(tenantId), rs => {
       var usersById = mut.HashMap[String, User]()
       var identities = List[Identity]()
@@ -870,7 +869,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
                             (implicit conn: js.Connection): Box[Int] = {
     db.update("""
         insert into DW1_PAGES (SNO, TENANT, GUID)
-        values (DW1_PAGES_SNO.nextval, ?, ?)
+        values (nextval('DW1_PAGES_SNO'), ?, ?)
         """, List(where.tenantId, debate.guid))
 
     // Concerning prefixing the page name with the page guid:

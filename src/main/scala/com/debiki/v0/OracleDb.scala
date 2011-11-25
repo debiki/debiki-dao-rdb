@@ -362,7 +362,7 @@ class OracleDb(val server: String,
     nextSeqNo(seqName).asInstanceOf[AnyRef]
 
   def nextSeqNo(seqName: String)(implicit conn: js.Connection): Long = {
-    val sno: Long = query("select "+ seqName +".nextval N from dual",
+    val sno: Long = query("select nextval('"+ seqName +"') N",
           Nil, rs => {
       rs.next
       Full(rs.getLong("N"))
