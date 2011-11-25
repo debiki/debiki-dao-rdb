@@ -25,6 +25,13 @@ object OracleDb {
   /** Converts null to the empty string ("Null To Empty"). */
   def n2e(s: String) = if (s eq null) "" else s
 
+  /** Converts empty to SQL NULL. */
+  def e2n(o: Option[String]) = o.getOrElse(Null(js.Types.VARCHAR))
+    // Oracle: use NVARCHAR ?
+
+  /** Converts empty to SQL NULL. */
+  def e2n(s: String) = if (s != "") s else Null(js.Types.VARCHAR)
+
   /** Converts space to the empty string ("Space To Empty"). */
   def s2e(s: String) = if (s == " ") "" else s
 

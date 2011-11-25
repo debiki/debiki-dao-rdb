@@ -17,14 +17,11 @@ corrupt any existing data.
   --- and if you don't need to upgrade, then keep the DW0_TABLE tables.
   (and let any new DW<X>_TABLE refer to DW0_TABLE).
 
-*/
-
-
 -- Schema: debiki_dev_0_0_2
 -- DROP SCHEMA debiki_dev_0_0_2;
 CREATE SCHEMA debiki_dev_0_0_2
   AUTHORIZATION debiki_dev_0_0_2;
-
+*/
 
 ----- Reset schema
 
@@ -54,7 +51,7 @@ create table DW0_VERSION(
 ----- Tenants
 
 create table DW1_TENANTS(
-  ID varchar(10) not null,
+  ID varchar(32) not null,  -- COULD rename to GUID?
   NAME varchar(100) not null,
   CTIME timestamp default now() not null,
   constraint DW1_TENANTS_ID__P primary key (ID),
@@ -73,7 +70,7 @@ create sequence DW1_TENANTS_ID start with 10;
 -- a <link rel=canonical> is to be used instead of a HTTP 301 redirect.)
 --
 create table DW1_TENANT_HOSTS(
-  TENANT varchar(10) not null,
+  TENANT varchar(32) not null,
   HOST varchar(50) not null,
   CANONICAL varchar(10),
   -- HTTPS values: `Required': http redirects to https, `Allowed': https
@@ -130,8 +127,8 @@ commit;
 -- reserve and use a user id right away, on identity creation.)
 --
 create table DW1_USERS(
-  TENANT varchar(10)          not null,
-  SNO bigint                  not null,
+  TENANT varchar(32)          not null,
+  SNO varchar(32)             not null,  -- COULD rename to GUID
   DISPLAY_NAME varchar(100),  -- currently empty, always (2011-09-17)
   EMAIL varchar(100),
   COUNTRY varchar(100),
@@ -145,7 +142,7 @@ create table DW1_USERS(
   -- No unique constraint on (TENANT, DISPLAY_NAME, EMAIL, SUPERADMIN).
   -- People's emails aren't currently verified, so people can provide
   -- someone else's email. So need to allow many rows with the same email.
-  constraint DW1_USERS_SNO_NOT_0__C check (SNO <> 0)
+  constraint DW1_USERS_SNO_NOT_0__C check (SNO <> '0')
 );
 
 create sequence DW1_USERS_SNO start with 10;
@@ -156,14 +153,14 @@ create sequence DW1_USERS_SNO start with 10;
 -- DW1_LOGINS isn't named _SESSIONS because I'm not sure a login and logout
 -- defines a session? Cannot a session start before you login?
 create table DW1_LOGINS(  -- logins and logouts
-  SNO bigint                 not null,
-  TENANT varchar(10)         not null,
-  PREV_LOGIN bigint,
+  SNO varchar(32)            not null,  -- COULD rename to GUID
+  TENANT varchar(32)         not null,
+  PREV_LOGIN varchar(32),
   -- COULD replace ID_TYPE/_SNO with: ID_SIMPLE, ID_OPENID, ID_TWITTER, etc,
   -- require that exactly one be non-NULL, and create foreign keys to the ID
   -- tables. That would have avoided a few bugs! and more future bugs too!?
   ID_TYPE varchar(10)        not null,
-  ID_SNO bigint              not null,
+  ID_SNO varchar(32)         not null,
   LOGIN_IP varchar(39)       not null,
   LOGIN_TIME timestamp       not null,
   LOGOUT_IP varchar(39),
@@ -177,7 +174,7 @@ create table DW1_LOGINS(  -- logins and logouts
       references DW1_LOGINS(SNO) deferrable,
   constraint DW1_LOGINS_IDTYPE__C
       check (ID_TYPE in ('Simple', 'OpenID')),
-  constraint DW1_LOGINS_SNO_NOT_0__C check (SNO <> 0)
+  constraint DW1_LOGINS_SNO_NOT_0__C check (SNO <> '0')
 );
 
 create index DW1_LOGINS_TNT on DW1_LOGINS(TENANT);
@@ -194,14 +191,14 @@ create sequence DW1_IDS_SNO start with 10;
 -- set to -SNO (i.e. "-" + SNO). Users with ids starting with "-"
 -- are thus unauthenticadet users (and don't exist in DW1_USERS).
 create table DW1_IDS_SIMPLE(
-  SNO bigint              not null,
+  SNO varchar(32)         not null,  -- COULD rename to GUID
   NAME varchar(100)       not null,
   EMAIL varchar(100)      not null,
   LOCATION varchar(100)   not null,
   WEBSITE varchar(100)    not null,
   constraint DW1_IDSSIMPLE_SNO__P primary key (SNO),
   constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE),
-  constraint DW1_IDSSIMPLE_SNO_NOT_0__C check (SNO <> 0)
+  constraint DW1_IDSSIMPLE_SNO_NOT_0__C check (SNO <> '0')
 );
 
 -- (Uses sequence nunmber from DW1_IDS_SNO.)
@@ -223,16 +220,16 @@ create table DW1_IDS_SIMPLE(
 -- with the attribute values as of the point in time of the OpenID login.
 --
 create table DW1_IDS_OPENID(
-  SNO bigint                     not null,
-  TENANT varchar(10)             not null,
+  SNO varchar(32)                not null,  -- COULD rename to GUID
+  TENANT varchar(32)             not null,
   -- When an OpenID identity is created, a User is usually created too.
   -- It is stored in USR_ORIG. However, to allow many OpenID identities to
   -- use the same User (i.e. merge OpenID accounts, and perhaps Twitter,
   -- Facebok accounts), each _OPENID row can be remapped to another User.
   -- This is done via the USR row (which is = USR_ORIG if not remapped).
   -- (Not yet implemented though: currently USR = USR_ORIG always.)
-  USR bigint                     not null,
-  USR_ORIG bigint                not null,
+  USR varchar(32)                not null,
+  USR_ORIG varchar(32)           not null,
   OID_CLAIMED_ID varchar(500)    not null, -- Google's ID hashes 200-300 long
   OID_OP_LOCAL_ID varchar(500)   not null,
   OID_REALM varchar(100)         not null,
@@ -248,7 +245,7 @@ create table DW1_IDS_OPENID(
   constraint DW1_IDSOID_USR_TNT__R__USERS
       foreign key (TENANT, USR)
       references DW1_USERS(TENANT, SNO) deferrable,
-  constraint DW1_IDSOID_SNO_NOT_0__C check (SNO <> 0)
+  constraint DW1_IDSOID_SNO_NOT_0__C check (SNO <> '0')
 );
 
 create index DW1_IDSOID_TNT_USR on DW1_IDS_OPENID(TENANT, USR);
@@ -265,15 +262,15 @@ create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 -- (How do we know who created the page? The user who created
 -- the root post, its page-action-id is always "1".)
 create table DW1_PAGES(
-  SNO bigint            not null,
-  TENANT varchar(10)    not null,
-  GUID varchar(50)      not null,
+  SNO varchar(32)       not null,   -- COULD remove, use only GUID
+  TENANT varchar(32)    not null,
+  GUID varchar(32)      not null,
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
   constraint DW1_PAGES__R__TENANT
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
-  constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> 0)
+  constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0')
 );
 
 create sequence DW1_PAGES_SNO start with 10;
@@ -284,18 +281,17 @@ create sequence DW1_PAGES_SNO start with 10;
 -- Contains all posts, edits, ratings etc, everything that's needed to
 -- render a discussion.
 create table DW1_PAGE_ACTIONS(
-  PAGE bigint          not null,
-  PAID varchar(30)     not null,  -- page action id
-  LOGIN bigint         not null,
+  PAGE varchar(32)     not null,
+  PAID varchar(32)     not null,  -- page action id
+  LOGIN varchar(32)    not null,
   TIME timestamp       not null,
-  TYPE varchar(10)     not null,
-  RELPA varchar(30)    not null,  -- related page action
+  TYPE varchar(20)     not null,
+  RELPA varchar(32)    not null,  -- related page action
   -- STATUS char(1)    not null,  -- check in 'S', 'A' -- suggestion/applied
   TEXT text,
   MARKUP varchar(30),
   WHEERE varchar(150),
   NEW_IP varchar(39), -- null, unless differs from DW1_LOGINS.START_IP
-  DESCR varchar(1001), -- remove? use a new Post instead, to descr this action
   constraint DW1_PACTIONS_PAGE_PAID__P primary key (PAGE, PAID),
   constraint DW1_PACTIONS__R__LOGINS
       foreign key (LOGIN)
@@ -308,8 +304,10 @@ create table DW1_PAGE_ACTIONS(
                          -- and no joins (loading whole page at once instead)
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
   constraint DW1_PACTIONS_TYPE__C
-      check (TYPE in ('Post', 'Edit', 'EditApp', 'Rating',
-                      'Revert', 'NotfReq', 'NotfSent', 'NotfRep')),
+      check (TYPE in (
+        'Post', 'Meta', 'Edit', 'EditApp', 'Rating',
+        'DelPost', 'DelTree',
+        'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther')),
   -- There must be no action with id 0; let 0 mean nothing.
   constraint DW1_PACTIONS_PAID_NOT_0__C
       check (PAID <> '0'),
@@ -327,8 +325,8 @@ create table DW1_PAGE_ACTIONS(
 create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
 create table DW1_PAGE_RATINGS(
-  PAGE bigint not null,
-  PAID varchar(30) not null, -- page action id
+  PAGE varchar(32) not null,
+  PAID varchar(32) not null, -- page action id
   TAG varchar(30) not null,
   constraint DW1_PRATINGS__P primary key (PAGE, PAID, TAG),
   constraint DW1_PRATINGS__R__PACTIONS
@@ -339,9 +337,9 @@ create table DW1_PAGE_RATINGS(
 ----- Paths (move to Pages section above?)
 
 create table DW1_PATHS(
-  TENANT varchar(10) not null,
+  TENANT varchar(32) not null,
   FOLDER varchar(100) not null,
-  PAGE_GUID varchar(30) not null,
+  PAGE_GUID varchar(32) not null,
   PAGE_NAME varchar(100) not null,
   GUID_IN_PATH varchar(1) not null,
   constraint DW1_PATHS_TNT_PAGE__P primary key (TENANT, PAGE_GUID),
@@ -365,22 +363,4 @@ where GUID_IN_PATH = 'T';
 
 -- Also create an index that covers *all* pages (even those without GUID in path).
 create index DW1_PATHS_ALL on DW1_PATHS(TENANT, FOLDER, PAGE_NAME, PAGE_GUID);
-
-
-
------ Misc changes
-
--- Add flags and deletions and meta to DW1 tables.
--- Let TYPE be 20 chars not 10, so "FlagCopyVio" fits.
-alter table DW1_PAGE_ACTIONS alter TYPE type varchar(20);
--- Add new action types.
-alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_TYPE__C;
-alter table DW1_PAGE_ACTIONS add constraint DW1_PACTIONS_TYPE__C
-check (TYPE in (
-    'Post', 'Meta', 'Edit', 'EditApp', 'Rating',
-    'DelPost', 'DelTree',
-    'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
-
--- Drop unneeded column.
-alter table DW1_PAGE_ACTIONS drop column DESCR;
 

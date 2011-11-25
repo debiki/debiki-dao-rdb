@@ -92,7 +92,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
               // the optimizer.
               identityType +"', ?, ?, ?)",
           List(loginSno.asInstanceOf[AnyRef], tenantId,
-              login.prevLoginId.getOrElse(""),  // UNTESTED unless empty
+              e2n(login.prevLoginId),  // UNTESTED unless empty
               login.identityId.toLong.asInstanceOf[AnyRef],
               login.ip, login.date))
       login
@@ -359,7 +359,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
     r
   }
 
-  private def _loadUsers(onPageWithSno: Long = -1,
+  private def _loadUsers(onPageWithSno: String = null,
                          withLoginId: String = null,
                          tenantId: String
                             ): Pair[List[Identity], List[User]] = {
@@ -367,11 +367,10 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
     // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
     // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
 
-    require((onPageWithSno == -1) ^ (withLoginId eq null))
     val (selectLoginIds, args) = (onPageWithSno, withLoginId) match {
       // (Need to specify tenant id here, and when selecting from DW1_USERS,
       // because there's no foreign key from DW1_LOGINS to DW1_IDS_<type>.)
-      case (-1, loginId) => ("""
+      case (null, loginId) => ("""
           select ID_SNO, ID_TYPE
               from DW1_LOGINS
               where SNO = ? and TENANT = ?
@@ -382,6 +381,8 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
               from DW1_PAGE_ACTIONS a, DW1_LOGINS l
               where a.PAGE = ? and a.LOGIN = l.SNO and l.TENANT = ?
           """, List(pageSno.asInstanceOf[AnyRef], tenantId))
+      case (a, b) =>
+          illegalArg("onPageWithSno: "+ safed(a) +", withLoginId: "+ safed(b))
     }
 
     // Load identities and users. Details: First find identities of all types
@@ -402,7 +403,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
         with logins as ("""+ selectLoginIds +"""),
         identities as (
             -- Simple identities
-            select ID_TYPE, s.SNO I_ID, 0 I_USR,
+            select ID_TYPE, s.SNO I_ID, '' I_USR,
                    s.NAME I_NAME, s.EMAIL I_EMAIL,
                    s.LOCATION I_WHERE, s.WEBSITE I_WEBSITE
             from DW1_IDS_SIMPLE s, logins
@@ -505,7 +506,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
         Connection.TRANSACTION_SERIALIZABLE)
       */
 
-    var pageSno: Long = -1
+    var pageSno = ""
     var logins = List[Login]()
 
     // Load all logins for pageGuid. Load DW1_PAGES.SNO at the same time
@@ -523,7 +524,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
           and a.PAGE = p.SNO
           and a.LOGIN = l.SNO""", List(tenantId, pageGuid), rs => {
       while (rs.next) {
-        pageSno = rs.getLong("PAGE_SNO")
+        pageSno = rs.getString("PAGE_SNO")
         val loginId = rs.getLong("LOGIN_SNO").toString
         val prevLogin = Option(rs.getLong("PREV_LOGIN")).map(_.toString)
         val ip = rs.getString("LOGIN_IP")
@@ -576,7 +577,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
     // the order is reversed again.
     db.queryAtnms("""
         select PAID, LOGIN, TIME, TYPE, RELPA,
-              TEXT, MARKUP, WHEERE, NEW_IP, DESCR
+              TEXT, MARKUP, WHEERE, NEW_IP
         from DW1_PAGE_ACTIONS
         where PAGE = ?
         order by TIME desc
@@ -593,7 +594,6 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
         val markup_? = rs.getString("MARKUP")
         val where_? = rs.getString("WHEERE")
         val newIp = Option(rs.getString("NEW_IP"))
-        val desc_? = rs.getString("DESCR")
 
         val action = typee match {
           case post if post == "Post" || post == "Meta" =>
@@ -608,12 +608,11 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
               loginId = loginSno, newIp = newIp, tags = tags)
           case "Edit" =>
             new Edit(id = id, postId = relpa, date = time,
-              loginId = loginSno, newIp = newIp, text = n2e(text_?),
-              desc = n2e(desc_?))
+              loginId = loginSno, newIp = newIp, text = n2e(text_?))
           case "EditApp" =>
             new EditApp(id = id, editId = relpa, date = time,
               loginId = loginSno, newIp = newIp,
-              result = n2e(text_?), debug = n2e(desc_?))
+              result = n2e(text_?))
           case flag if flag startsWith "Flag" =>
             val reasonStr = flag drop 4 // drop "Flag"
             val reason = FlagReason withName reasonStr
@@ -938,8 +937,8 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
 
       val insertIntoActions = """
           insert into DW1_PAGE_ACTIONS(LOGIN, PAGE, PAID, TIME, TYPE,
-                                    RELPA, TEXT, MARKUP, WHEERE, DESCR)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    RELPA, TEXT, MARKUP, WHEERE)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """
       // Keep in mind that Oracle converts "" to null.
       val commonVals = Nil // p.loginId::pageSno::Nil
@@ -949,32 +948,31 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
           val tyype = if (p.isMeta) "Meta" else "Post"
           db.update(insertIntoActions, commonVals:::List(
             p.loginId, pageSno, p.id, p.date, tyype,
-            p.parent, p.text, markup,
-            p.where.getOrElse(Null(js.Types.NVARCHAR)), ""))
+            p.parent, p.text, markup, e2n(p.where)))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
             r.loginId, pageSno, r.id, r.date, "Rating", r.postId,
-            "", "", "", ""))
+            "", "", ""))
           db.batchUpdate("""
             insert into DW1_PAGE_RATINGS(PAGE, PAID, TAG) values (?, ?, ?)
             """, r.tags.map(t => List(pageSno, r.id, t)))
         case e: Edit =>
           db.update(insertIntoActions, commonVals:::List(
             e.loginId, pageSno, e.id, e.date, "Edit",
-            e.postId, e.text, "", "", e.desc))
+            e.postId, e.text, "", ""))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
             a.loginId, pageSno, a.id, a.date, "EditApp",
-            a.editId, a.result, "", "", ""))
+            a.editId, a.result, "", ""))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
             f.loginId, pageSno, f.id, f.date, "Flag" + f.reason,
-            f.postId, f.details, "", "", ""))
+            f.postId, f.details, "", ""))
         case d: Delete =>
           db.update(insertIntoActions, commonVals:::List(
             d.loginId, pageSno, d.id, d.date,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
-            d.postId, d.reason, "", "", ""))
+            d.postId, d.reason, "", ""))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [debiki_error_38rkRF]")
       }
