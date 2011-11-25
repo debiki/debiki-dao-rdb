@@ -13,27 +13,6 @@ import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
 import scala.collection.{mutable => mut}
 
-object OracleDaoSpi {
-
-  /** Returns a failure or a Full(dao). */
-  def connectAndUpgradeSchema(
-      connUrl: String, user: String, pswd: String): Box[OracleDaoSpi] = {
-    try {
-      Full(connectAndUpgradeSchemaThrow(connUrl, user, pswd))
-    } catch {
-      case ex: Exception => Failure(
-        "Error creating DAO [debiki_error_8skeFQ2]", Full(ex), Empty)
-    }
-  }
-
-  /** Returns a working DAO or throws an error. */
-  def connectAndUpgradeSchemaThrow(
-      connUrl: String, user: String, pswd: String): OracleDaoSpi = {
-    val oradb = new OracleDb(connUrl, user, pswd)  // can throw SQLException
-    new OracleDaoSpi(oradb)
-  }
-}
-
 
 class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
   // COULD serialize access, per page?
@@ -42,7 +21,7 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
 
   def close() { db.close() }
 
-  def checkRepoVersion() = unimplemented
+  def checkRepoVersion() = Full("0.0.2")
 
   def secretSalt(): String = "9KsAyFqw_"
 

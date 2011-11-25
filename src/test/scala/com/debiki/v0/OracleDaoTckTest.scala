@@ -25,8 +25,7 @@ Password (for all users): "auto-dropped"
 */
 
 class OracleTestContext(val daoImpl: OracleDaoSpi) extends tck.TestContext {
-  val schema = daoImpl.schema
-  val db = daoImpl.schema.oradb
+  val db = daoImpl.db
 
   override def createRestorePoint() {
     unimplemented
@@ -40,21 +39,26 @@ class OracleTestContext(val daoImpl: OracleDaoSpi) extends tck.TestContext {
 }
 
 object OracleDaoTckTest {
-  val connStr = "jdbc:oracle:thin:@//192.168.0.102:1521/debiki.ex.com"
-
   def testContextBuilder(what: tck.DaoTckTest.What, version: String) = {
     import tck.DaoTckTest._
+
     // Connect.
+    //val connStr = "jdbc:postgresql://192.168.0.123:5432/debiki"
+    val server = "192.168.0.123"
+    val port = "5432"
+    val database = "debiki"
     val schema = (version, what) match {
       // DO NOT CHANGE schema name. The schema is PURGED before each test!
       case ("0", EmptySchema) => "DEBIKI_TEST_0"
       // DO NOT CHANGE schema name. All tables are EMPTIED before each test!
-      case ("0.0.2", EmptyTables) => "DEBIKI_TEST_0_0_2_EMPTY"
+      case ("0.0.2", EmptyTables) => "debiki_test_0_0_2_empty"
       case ("0.0.2", TablesWithData) => "DEBIKI_TEST_0_0_2_DATA"
       case _ => assErr("Broken test suite")
     }
-    val dao = OracleDaoSpi.connectAndUpgradeSchemaThrow(
-                          connStr, schema, "auto-dropped")
+    val dao =  new OracleDaoSpi(new OracleDb(
+        server = server, port = port, database = database,
+        user = schema, password = "auto-dropped"))
+
     // Prepare schema.
     (version, what) match {
       case ("0", EmptySchema) =>
@@ -79,13 +83,6 @@ object OracleDaoTckTest {
       }
     new OracleTestContext(dao)
   }
-
-  val testContextBuilder2 =
-    (what: tck.DaoTckTest.What, version: String) => {
-      val dao = OracleDaoSpi.connectAndUpgradeSchemaThrow(
-        connStr, "DEBIKI_TEST", "apabanan454")
-      new OracleTestContext(dao)
-    }
 }
 
 import OracleDaoTckTest._

@@ -9,6 +9,8 @@ import _root_.net.liftweb.common.{Logger, Box, Empty, Full, Failure}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js, lang => jl}
+import javax.{sql => jxs}
+import org.{postgresql => pg}
 
 trait OraLogger extends Logger {
   def logAndFailure[T](errorMessage: String, ex: Exception): Box[T] = {
@@ -51,76 +53,94 @@ object OracleDb {
   def ts2d(ts: js.Timestamp) = new ju.Date(ts.getTime)
 }
 
-class OracleDb(val connUrl: String, val user: String, pswd: String)
-extends OraLogger {
+class OracleDb(val server: String,
+               val port: String,
+               val database: String,
+               val user: String,
+               val password: String
+    ) extends OraLogger {
 
   import OracleDb._
 
-  /*
-  val daSo = {
-    // COULD disable deprecations. (You'll notice some warnings, e.g.
-    // "setConnectionCachingEnabled in class OracleDataSource is deprecated"
-    // when you compile.)
-    // From <http://forums.oracle.com/forums/
-    //        thread.jspa?threadID=1028439&tstart=5>:
-    // "The Implicit Connection Cache is still supported in 11.2.
-    // All of the features it provides, and more, are available in the UCP.
-    // We encourage you to use UCP for all new development and transition
-    // existing code to UCP as possible. While we don't intend to desupport
-    // the Implicit Connection Cache for sometime, we will be rewriting it
-    // so that it is just a wrapper around the UCP."
+  jl.Class.forName("org.postgresql.Driver")
 
-    // Related documentation:
-    // Statement caching: <http://download.oracle.com/docs/cd/E11882_01/
-    //                              java.112/e16548/stmtcach.htm#i1072607>
-
-    // Oracle JDBC API docs:
-    // <http://download.oracle.com/docs/cd/E11882_01/appdev.112/
-    //            e13995/index.html?oracle/jdbc/pool/OracleDataSource.html>
-
+  val daSo: jxs.DataSource = {
+    // (Oracle docs: -----------
     // Implicit statement & connection cache examples:
     // <http://download.oracle.com/docs/cd/E11882_01/java.112/e16548/
     //                                                stmtcach.htm#CBHBFBAF>
     // <http://download.oracle.com/docs/cd/E11882_01/java.112/e16548/
     //                                                concache.htm#CDEDAIGA>
-
     // Article: "High-Performance Oracle JDBC Programming"
     // e.g. info on statement caching:
     //  <javacolors.blogspot.com/2010/12/high-performance-oracle-jdbc.html>
-
     // Batch insert example: (ignores prepared statements though)
     //  <http://www.roseindia.net/jdbc/Jdbc-batch-insert.shtml>
+    // -------- end Oracle docs)
 
-    // set cache properties
-    val props = new ju.Properties()
-    props.setProperty("InitialLimit", "1") // create 1 connection at startup
-    props.setProperty("MinLimit", "1")
-    props.setProperty("MaxLimit", "10")
-    props.setProperty("MaxStatementsLimit", "50")
-    val ds = new op.OracleDataSource()
-    ds.setURL(connUrl)  // e.g. "jdbc:oracle:thin@localhost:1521:UORCL"
+    // Related docs:
+    // PostgreSQL datasource:
+    //  http://jdbc.postgresql.org/documentation/head/ds-ds.html
+    //  http://jdbc.postgresql.org/documentation/head/ds-cpds.html
+    // API:
+    //  http://jdbc.postgresql.org/documentation/publicapi/org/
+    //    postgresql/ds/PGPoolingDataSource.html
+
+    // TODO: Read and implement:
+    //   http://postgresql.1045698.n5.nabble.com/
+    //      keeping-Connection-alive-td2172330.html
+    //   http://www.rosam.se/doc/atsdoc/Server%20-%20Messages%20and%20Codes/
+    //      ADC5906BBD514757BAEE546DC6F7A4FA/F183.htm
+    //   http://stackoverflow.com/questions/1988570/
+    //      how-to-catch-a-specific-exceptions-in-jdbc
+    //   http://download.oracle.com/javase/6/docs/api/java/sql/SQLException.html
+
+    // COULD use this nice pool instead:
+    //   http://commons.apache.org/dbcp/configuration.html
+
+    // Opening a datasource with the same name as a closed one fails with
+    // an error that "DataSource has been closed.", in PostgreSQL.
+    // PostgreSQL also doesn't allow one to open > 1 datasource with the
+    // same name: "DataSource with name '<whatever>' already exists!"
+    val ds = new pg.ds.PGPoolingDataSource()
+    ds.setDataSourceName("DebikiPostgreConnCache"+ math.random)
+    ds.setServerName(server)
+    ds.setPortNumber(port.toInt)
+    ds.setDatabaseName(database)
     ds.setUser(user)
-    ds.setPassword(pswd)
-    ds.setImplicitCachingEnabled(true)  // prepared statement caching
-    ds.setConnectionCachingEnabled(true)
-    ds.setConnectionCacheProperties(props)
-    ds.setConnectionCacheName("DebikiConnCache01")
+    ds.setPassword(password)
+    ds.setInitialConnections(2)
+    ds.setMaxConnections(10)
+    ds.setPrepareThreshold(3)
+    //// The PrepareThreshold can also be specified in the connect URL, see:
+    //// See http://jdbc.postgresql.org/documentation/head/server-prepare.html
+    val pthr = ds.getPrepareThreshold
+
+    //ds.setDefaultAutoCommit(false)
+    //ds.setTcpKeepAlive()
+    ////ds.setURL(connUrl)  // e.g. "jdbc:postgre//localhost:1521/database-name"
+    //ds.setImplicitCachingEnabled(true)  // prepared statement caching
+    //ds.setConnectionCachingEnabled(true)
+    //ds.setConnectionCacheProperties(props)
+
     // Test the data source.
     val conn: js.Connection = try {
       ds.getConnection()
     } catch {
       case e: Exception => {
-        error("Error connecting to `"+ connUrl +"' as `"+ user +"'")
+        error("Error connecting to `"+ server +"' port `"+ port +
+            "' database `"+ database +"' as user `"+ user +"'")
         throw e
       }
     }
     conn.close()
     ds
   }
-  */
 
   def close() {
-    unimplemented //daSo.close()
+    // Results in PostgreSQL complaining that "DataSource has been closed",
+    // also when you open another one (!) with a different name.
+    //daSo.asInstanceOf[pg.ds.PGPoolingDataSource].close()
   }
 
   /*
@@ -294,7 +314,7 @@ extends OraLogger {
   }
 
   private def _getConnection(): js.Connection = {
-    val conn: js.Connection = unimplemented // daSo.getConnection()
+    val conn: js.Connection = daSo.getConnection()
     if (conn ne null) conn.setAutoCommit(false)
     conn
   }
