@@ -24,7 +24,7 @@ DEBIKI_TEST_0_0_2_DATA
 Password (for all users): "auto-dropped"
 */
 
-class OracleTestContext(val daoImpl: OracleDaoSpi) extends tck.TestContext {
+class RelDbTestContext(val daoImpl: RelDbDaoSpi) extends tck.TestContext {
   val db = daoImpl.db
 
   override def createRestorePoint() {
@@ -38,7 +38,7 @@ class OracleTestContext(val daoImpl: OracleDaoSpi) extends tck.TestContext {
   def hasRefConstraints = true
 }
 
-object OracleDaoTckTest {
+object ReDbDaoTckTest {
   def testContextBuilder(what: tck.DaoTckTest.What, version: String) = {
     import tck.DaoTckTest._
 
@@ -55,14 +55,14 @@ object OracleDaoTckTest {
       case ("0.0.2", TablesWithData) => "DEBIKI_TEST_0_0_2_DATA"
       case _ => assErr("Broken test suite")
     }
-    val dao =  new OracleDaoSpi(new OracleDb(
+    val dao =  new RelDbDaoSpi(new RelDb(
         server = server, port = port, database = database,
         user = schema, password = "auto-dropped"))
 
     // Prepare schema.
     (version, what) match {
       case ("0", EmptySchema) =>
-        dao.db.updateAtnms(OracleTestSql.PurgeSchema)
+        dao.db.updateAtnms(RelDbTestSql.PurgeSchema)
       case ("0.0.2", EmptyTables) =>
           dao.db.transaction { implicit connection => """
             delete from DW1_PAGE_RATINGS
@@ -81,14 +81,14 @@ object OracleDaoTckTest {
         case ("0.0.2", TablesWithData) =>
         case _ => assErr("Broken test suite")
       }
-    new OracleTestContext(dao)
+    new RelDbTestContext(dao)
   }
 }
 
-import OracleDaoTckTest._
+import RelDbDaoTckTest._
 
 
-class OracleDaoTckTest extends tck.DaoTckTest(testContextBuilder) {
+class RelDbDaoTckTest extends tck.DaoTckTest(testContextBuilder) {
   // Tests defined in parent class DaoTckTest.
 
 /*

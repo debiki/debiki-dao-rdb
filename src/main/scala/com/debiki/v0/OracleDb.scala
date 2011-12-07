@@ -12,7 +12,7 @@ import java.{sql => js, lang => jl}
 import javax.{sql => jxs}
 import org.{postgresql => pg}
 
-trait OraLogger extends Logger {
+trait RelDbLogger extends Logger {
   def logAndFailure[T](errorMessage: String, ex: Exception): Box[T] = {
     warn(errorMessage +": ", ex)
     Failure(errorMessage, Full(ex), Empty)
@@ -21,7 +21,7 @@ trait OraLogger extends Logger {
 
 // Could: UpdateThrow / UpdateBox / UpdateBoxErrOk / UpdateThrowErrOk
 
-object OracleDb {
+object RelDb {
   case class Null(sqlType: Int)
 
   /** Converts null to the empty string ("Null To Empty"). */
@@ -53,14 +53,14 @@ object OracleDb {
   def ts2d(ts: js.Timestamp) = new ju.Date(ts.getTime)
 }
 
-class OracleDb(val server: String,
+class RelDb(val server: String,
                val port: String,
                val database: String,
                val user: String,
                val password: String
-    ) extends OraLogger {
+    ) extends RelDbLogger {
 
-  import OracleDb._
+  import RelDb._
 
   jl.Class.forName("org.postgresql.Driver")
 

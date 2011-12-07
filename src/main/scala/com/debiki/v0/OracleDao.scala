@@ -14,10 +14,10 @@ import java.{sql => js}
 import scala.collection.{mutable => mut}
 
 
-class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
+class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   // COULD serialize access, per page?
 
-  import OracleDb._
+  import RelDb._
 
   def close() { db.close() }
 
