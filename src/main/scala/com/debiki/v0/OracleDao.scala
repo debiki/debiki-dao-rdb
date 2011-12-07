@@ -406,8 +406,9 @@ class OracleDaoSpi(val db: OracleDb) extends DaoSpi with Loggable {
             u.COUNTRY U_COUNTRY,
             u.WEBSITE U_WEBSITE,
             u.SUPERADMIN U_SUPERADMIN
-        from identities i left join DW1_USERS u on u.SNO = i.I_USR
-        where (u.TENANT is null or u.TENANT = ?)
+        from identities i left join DW1_USERS u on
+              u.SNO = i.I_USR and
+              u.TENANT = ?
         """, args ::: List(tenantId), rs => {
       var usersById = mut.HashMap[String, User]()
       var identities = List[Identity]()
