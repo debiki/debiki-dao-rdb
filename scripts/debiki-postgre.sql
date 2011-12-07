@@ -17,12 +17,18 @@ corrupt any existing data.
   --- and if you don't need to upgrade, then keep the DW0_TABLE tables.
   (and let any new DW<X>_TABLE refer to DW0_TABLE).
 
--- Schema: debiki_dev_0_0_2
--- DROP SCHEMA debiki_dev_0_0_2;
-CREATE SCHEMA debiki_dev_0_0_2
-  AUTHORIZATION debiki_dev_0_0_2;
+Create a Debiki schema like so:
+$ psql
+=> create user debiki_test password 'apabanan454';
+=> alter user debiki_test set search_path to '$user';
+=> create database debiki_test owner debiki_test encoding 'UTF8';
+$ psql --dbname debiki_test;
+=> drop schema public;
+=> create schema authorization debiki_test;
+
 */
 
+/*
 ----- Reset schema
 
 drop table DW0_VERSION;
@@ -41,6 +47,8 @@ drop sequence DW1_USERS_SNO;
 drop sequence DW1_LOGINS_SNO;
 drop sequence DW1_IDS_SNO;
 drop sequence DW1_PAGES_SNO;
+
+*/
 
 ----- Version
 
