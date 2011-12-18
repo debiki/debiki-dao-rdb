@@ -270,6 +270,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         case (Some(old: IdentityOpenId), newNoId: IdentityOpenId) =>
           val nev = newNoId.copy(id = old.id, userId = user.id)
           if (nev != old) {
+            // COULD aovid overwriting email with nothing?
             db.update("""
                 update DW1_IDS_OPENID set
                     USR = ?, OID_OP_LOCAL_ID = ?, OID_REALM = ?,

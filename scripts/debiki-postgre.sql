@@ -52,6 +52,13 @@ drop sequence DW1_PAGES_SNO;
 
 */
 
+/* COULD rename abbreviations:
+(so they would match those I use in Scala and CSS)
+
+  PACTIONS --> PGAS
+
+*/
+
 ----- Version
 
 create table DW0_VERSION(
@@ -59,6 +66,8 @@ create table DW0_VERSION(
 );
 
 ----- Tenants
+
+-- Abbreviated: TNTS
 
 create table DW1_TENANTS(
   ID varchar(32) not null,  -- COULD rename to GUID?
@@ -107,7 +116,7 @@ insert into DW1_TENANT_HOSTS(TENANT, HOST, CANONICAL, HTTPS)
   values (1, 'localhost2:8080', 'T', 'No');
 insert into DW1_TENANT_HOSTS(TENANT, HOST, CANONICAL, HTTPS)
   values (1, '127.0.0.1:8080', 'F', 'No');
-commit;
+-- commit; -- needs a `begin transaction'? or something?
 
 
 ----- Users
@@ -136,7 +145,7 @@ commit;
 -- then the id for that real world person would change, perhaps bad? So
 -- reserve and use a user id right away, on identity creation.)
 --
-create table DW1_USERS(
+create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
   TENANT varchar(32)          not null,
   SNO varchar(32)             not null,  -- COULD rename to GUID
   DISPLAY_NAME varchar(100),  -- currently empty, always (2011-09-17)
@@ -199,7 +208,7 @@ create sequence DW1_IDS_SNO start with 10;
 -- Simple login identities (no password needed).
 -- When loaded from database, a dummy User is created, with its id
 -- set to -SNO (i.e. "-" + SNO). Users with ids starting with "-"
--- are thus unauthenticadet users (and don't exist in DW1_USERS).
+-- are thus unauthenticated users (and don't exist in DW1_USERS).
 create table DW1_IDS_SIMPLE(
   SNO varchar(32)         not null,  -- COULD rename to GUID
   NAME varchar(100)       not null,
@@ -211,7 +220,7 @@ create table DW1_IDS_SIMPLE(
   constraint DW1_IDSSIMPLE_SNO_NOT_0__C check (SNO <> '0')
 );
 
--- (Uses sequence nunmber from DW1_IDS_SNO.)
+-- (Uses sequence number from DW1_IDS_SNO.)
 
 -- OpenID identities.
 --
@@ -271,6 +280,7 @@ create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 
 -- (How do we know who created the page? The user who created
 -- the root post, its page-action-id is always "1".)
+-- COULD remove? select ... from DW1_PAGE_ACTIONS where PAID = '1' instead
 create table DW1_PAGES(
   SNO varchar(32)       not null,   -- COULD remove, use only GUID
   TENANT varchar(32)    not null,
@@ -290,7 +300,7 @@ create sequence DW1_PAGES_SNO start with 10;
 
 -- Contains all posts, edits, ratings etc, everything that's needed to
 -- render a discussion.
-create table DW1_PAGE_ACTIONS(
+create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   PAGE varchar(32)     not null,
   PAID varchar(32)     not null,  -- page action id
   LOGIN varchar(32)    not null,
