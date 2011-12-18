@@ -62,7 +62,7 @@ object ReDbDaoTckTest {
     // Prepare schema.
     (version, what) match {
       case ("0", EmptySchema) =>
-        dao.db.updateAtnms(RelDbTestSql.PurgeSchema)
+        unimplemented // dao.db.updateAtnms(RelDbTestSql.PurgeSchema)
       case ("0.0.2", EmptyTables) =>
           dao.db.transaction { implicit connection => """
             delete from DW1_ROLE_INBOX
@@ -87,10 +87,8 @@ object ReDbDaoTckTest {
   }
 }
 
-import RelDbDaoTckTest._
-
-
-class RelDbDaoTckTest extends tck.DaoTckTest(testContextBuilder) {
+class RelDbDaoTckTest extends tck.DaoTckTest(
+              ReDbDaoTckTest.testContextBuilder) {
   // Tests defined in parent class DaoTckTest.
 }
 
