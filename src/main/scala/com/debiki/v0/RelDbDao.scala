@@ -787,6 +787,73 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       ))
   }
 
+  def saveInboxSeeds(tenantId: String, seeds: Seq[InboxSeed]) {
+    db.transaction { implicit connection =>
+      val valss: List[List[AnyRef]] = (for (seed <- seeds.toList) yield {
+        List(tenantId, seed.roleId, seed.pageId, seed.pageActionId,
+          seed.sourceActionId, seed.ctime)
+      }).toList
+      val valss2: List[List[AnyRef]] = for (seed <- seeds.toList) yield {
+        List(tenantId, seed.roleId,
+            tenantId, seed.pageId,
+            seed.pageActionId, seed.sourceActionId, seed.ctime)
+      }
+      db.batchUpdate("""
+          insert into DW1_ROLE_INBOX(
+              TENANT, ROLE,
+              PAGE,
+              TARGET_PAID, SOURCE_PAID, CTIME)
+            values (?, ?,
+              (select SNO from DW1_PAGES where TENANT = ? and GUID = ?),
+              ?, ?, ?)
+          """,
+          valss2)
+      Empty  // my stupid API, should rewrite
+    }
+  }
+
+  def loadInboxItems(tenantId: String, roleId: String): List[InboxItem] = {
+    // COULD load inbox items for all granted roles too.
+    var items = List[InboxItem]()
+    db.queryAtnms("""
+        select a.TYPE, a.TEXT, p.GUID PAGE, a.PAID, b.CTIME, b.SOURCE_PAID
+        from DW1_ROLE_INBOX b inner join DW1_PAGE_ACTIONS a
+          on b.PAGE = a.PAGE and b.TARGET_PAID = a.PAID
+          inner join DW1_PAGES p
+          on b.PAGE = p.SNO
+        where b.TENANT = ? and b.ROLE = ?
+        order by b.CTIME desc
+        limit 50
+        """,
+        List(tenantId, roleId),
+        rs => {
+      while (rs.next) {
+        val tyype = rs.getString("TYPE")
+        val text = rs.getString("TEXT")
+        val pageId = rs.getString("PAGE")
+        val pageActionId = rs.getString("PAID")
+        val ctime = ts2d(rs.getTimestamp("CTIME"))
+        val sourceActionId = rs.getString("SOURCE_PAID")
+        val item = tyype match {
+          case "Post" => InboxItem(
+            tyype = Do.Reply,
+            title = "?",  // COULD extract title somehow somewhere?
+            summary = text.take(100),
+            pageId = pageId,
+            pageActionId = pageActionId,
+            sourceActionId = sourceActionId,
+            ctime = ctime)
+          case x =>
+            unimplemented("Loading inbox item of type "+ safed(x))
+        }
+        items ::= item
+      }
+      Empty // dummy
+    })
+
+    items
+  }
+
   // Looks up the correct PagePath for a possibly incorrect PagePath.
   private def _findCorrectPagePath(pagePathIn: PagePath): Box[PagePath] = {
     var query = """

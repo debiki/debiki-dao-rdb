@@ -32,6 +32,8 @@ $ psql --dbname debiki_test;
 ----- Reset schema
 
 drop table DW0_VERSION;
+drop table DW1_ROLE_INBOX;
+drop table DW1_EMAILS_OUT;
 drop table DW1_PAGE_RATINGS;
 drop table DW1_PAGE_ACTIONS;
 drop table DW1_PATHS;
@@ -341,6 +343,84 @@ create table DW1_PAGE_RATINGS(
       foreign key (PAGE, PAID)
       references DW1_PAGE_ACTIONS(PAGE, PAID) deferrable
 );
+
+
+----- Emails and Inbox
+
+create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
+  TENANT varchar(32) not null,
+  GUID varchar(32) not null,
+  SENT_TO varchar(100) not null,  -- only one recipient, for now
+  SENT_ON timestamp not null,
+  SUBJECT varchar(200) not null,
+  HTML varchar(2000) not null,
+  -- E.g. Amazon SES assigns their own guid to each email. Their API returns
+  -- the guid when the email is sent (it's not available until then).
+  -- If an email bounces, you then look up the provider's email guid
+  -- to find out which email bounced, and which addresses.
+  PROVIDER_EMAIL_GUID varchar(100), -- no default
+  -- B/R/C/O: bounce, rejection, complaint, other.
+  FAILURE_TYPE varchar(1) default null,
+  -- E.g. a bounce or rejection message.
+  FAILURE_TEXT varchar(2000) default null,
+  FAILURE_TIME timestamp default null,
+  constraint DW1_EMLOT__R__TNTS
+      foreign key (TENANT)
+      references DW1_TENANTS (ID),
+  constraint DW1_EMLOT__P primary key (TENANT, GUID),
+  constraint DW1_EMLOT_FAILTYPE__C check (
+      FAILURE_TYPE in ('B', 'R', 'C', 'O')),
+  constraint DW1_EMLOT_FAILTEXT__C check (
+      FAILURE_TYPE is null = FAILURE_TYPE is null),
+  constraint DW1_EMLOT_FAILTIME check (
+      FAILURE_TIME is null = FAILURE_TYPE is null)
+);
+
+create table DW1_ROLE_INBOX(   -- abbreviated RLIBX
+  TENANT varchar(32) not null,
+  ROLE varchar(32) not null,
+  PAGE varchar(32) not null,
+  -- The source page action id is the action that generated this inbox item.
+  -- The target page action id is the action of interest to the user.
+  -- For example, if someone replies to your comment,
+  -- and the reply is published instantly,
+  -- then, if the reply has id X, SOURCE_PAID = TARGET_PAID = X.
+  -- If however the reply is not published until after it's been reviewed,
+  -- then, the reply has id X and the review action id has id Y,
+  -- SOURCE_PAID = Y (i.e. the review) and TARGET_PAID = X (i.e. the reply).
+  TARGET_PAID varchar(32) not null,
+  SOURCE_PAID varchar(32) not null,
+  CTIME timestamp not null,
+  -- Email notifications
+  EMAIL_SENT varchar(32) default null, -- DW1_EMAILS_OUT.GUID
+  EMAIL_LINK_CLICKED timestamp default null,
+  -- WEB_LINK_SHOWN timestamp,
+  -- WEB_LINK_CLICKED timestamp,
+  -- Note that (TENANT, ROLE, PAGE, TARGET_PAID) need not be unique,
+  -- for example, the same post might be edited many times, resulting
+  -- in many events with that post being the target.
+  constraint DW1_RLIBX__P primary key (TENANT, ROLE, PAGE, SOURCE_PAID),
+  constraint DW1_RLIBX_SRCPGA__R__PGAS
+      foreign key (PAGE, SOURCE_PAID) -- no index: no deletes/upds in prnt tbl
+      references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
+  constraint DW1_RLIBX_TGTPGA__R__PGAS
+      foreign key (PAGE, TARGET_PAID) -- no index: no deletes/upds in prnt tbl
+      references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
+  constraint DW1_RLIBX__R__RLS
+      foreign key (TENANT, ROLE)
+      references DW1_USERS (TENANT, SNO) deferrable,
+  constraint DW1_RLIBX__R__EMLOT
+      foreign key (TENANT, EMAIL_SENT)
+      references DW1_EMAILS_OUT (TENANT, GUID),
+  constraint  DW1_RLIBX_EMAILCLKD__C check (
+      case
+        when (EMAIL_LINK_CLICKED is null) then true
+        else EMAIL_SENT is not null
+      end)
+);
+
+create index DW1_RLIBX_TIME on DW1_ROLE_INBOX (ROLE, CTIME);
+
 
 ----- Paths (move to Pages section above?)
 
