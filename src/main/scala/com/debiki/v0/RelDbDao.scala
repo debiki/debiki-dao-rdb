@@ -508,7 +508,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         val loginId = rs.getLong("LOGIN_SNO").toString
         val prevLogin = Option(rs.getLong("PREV_LOGIN")).map(_.toString)
         val ip = rs.getString("LOGIN_IP")
-        val date = rs.getDate("LOGIN_TIME")
+        val date = ts2d(rs.getTimestamp("LOGIN_TIME"))
         // ID_TYPE need not be remembered, since each ID_SNO value
         // is unique over all DW1_LOGIN_OPENID/SIMPLE/... tables.
         // (So you'd find the appropriate IdentitySimple/OpenId by doing
