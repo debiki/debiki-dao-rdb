@@ -289,6 +289,22 @@ class RelDb(val server: String,
         committed = true
       }
       result.reverse
+    } catch {
+      // A batch update seems to generate chained exceptions. Replace them
+      // with one single exception that includes info on all errors
+      // (not just the first one).
+      case terseEx: java.sql.SQLException =>
+        val sb = new StringBuilder()
+        var nextEx = terseEx
+        do {
+          if (terseEx ne nextEx) sb ++= "\nCalled getNextException:\n"
+          sb ++= nextEx.toString()
+          nextEx = nextEx.getNextException()
+        } while (nextEx ne null)
+        val verboseEx = new js.SQLException(sb.toString,
+              terseEx.getSQLState(), terseEx.getErrorCode())
+        verboseEx.setStackTrace(terseEx.getStackTrace)
+        throw verboseEx
     } finally {
       if (pstmt ne null) pstmt.close()
       if (isAutonomous) _closeEtc(conn2, committed = committed)
