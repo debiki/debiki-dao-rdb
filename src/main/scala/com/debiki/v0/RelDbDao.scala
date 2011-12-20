@@ -330,35 +330,46 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
   }
 
-  private def _loadRequesterInfo(reqInfo: RequestInfo): RequesterInfo = {
-    val (identity: Option[Identity], user: Option[User]
-        ) = reqInfo.loginId map { id =>
-      def loginInfo = "login id "+ safed(id) +
-          ", tenant "+ safed(reqInfo.pagePath.tenantId)
-      _loadUsers(withLoginId = id, tenantId = reqInfo.tenantId
-      ) match {
-        case (List(i: Identity), List(u: User)) => (Some(i), Some(u))
-        case (List(i: Identity), Nil) => assErr(
-          "Found no user for "+ loginInfo +
-              ", with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
-        case (Nil, Nil) =>
-          // The webapp should never try to load non existing identities?
-          // (The login id was once fetched from the database.
-          // It is sent to the client in a signed cookie so it cannot be
-          // tampered with.) Identities cannot be deleted!
-          error("Found no identity for "+ loginInfo +" [debiki_error_743xdk15]")
-        case (is, us) =>
-          // There should be exactly one identity per login, and at most
-          // one user per identity.
-          assErr("Found "+ is.length +" identities and "+ us.length +
-              " users for "+ loginInfo +" [debiki_error_42RxkW1]")
+  private def _loadRequesterInfo(reqInfo: RequestInfo
+                                    ): RequesterInfo = reqInfo.loginId match {
+    case None =>
+      RequesterInfo(ip = reqInfo.ip, login = None,
+            identity = None, user = None, memships = Nil)
+    case Some(id) =>
+      loadUser(withLoginId = id, tenantId = reqInfo.tenantId) match {
+        case None =>
+          error("Found no identity for identity "+ safed(id) +
+              ", tenant "+ reqInfo.tenantId +" [debiki_error_0921kxa13]")
+        case Some((i: Identity, u: User)) =>
+          val info = RequesterInfo(ip = reqInfo.ip, login = None, // not loaded
+                identity = Some(i), user = Some(u), memships = Nil)
+          val memships_ = _loadMemships(reqInfo.tenantId, info)
+          info.copy(memships = memships_)
       }
-    } getOrElse (None, None)
+  }
 
-    var r = RequesterInfo(ip = reqInfo.ip, login = None, // not loaded
-        identity = identity, user = user, memships = Nil)
-    r = r.copy(memships = _loadMemships(reqInfo.tenantId, r))
-    r
+  def loadUser(withLoginId: String, tenantId: String
+                  ): Option[(Identity, User)] = {
+    def loginInfo = "login id "+ safed(withLoginId) +
+          ", tenant "+ safed(tenantId)
+
+    _loadUsers(withLoginId = withLoginId, tenantId = tenantId) match {
+      case (List(i: Identity), List(u: User)) => Some(i, u)
+      case (List(i: Identity), Nil) => assErr(
+        "Found no user for "+ loginInfo +
+            ", with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
+      case (Nil, Nil) =>
+        // The webapp should never try to load non existing identities?
+        // (The login id was once fetched from the database.
+        // It is sent to the client in a signed cookie so it cannot be
+        // tampered with.) Identities cannot be deleted!
+        error("Found no identity for "+ loginInfo +" [debiki_error_0921kxa13]")
+      case (is, us) =>
+        // There should be exactly one identity per login, and at most
+        // one user per identity.
+        assErr("Found "+ is.length +" identities and "+ us.length +
+            " users for "+ loginInfo +" [debiki_error_42RxkW1]")
+    }
   }
 
   private def _loadUsers(onPageWithSno: String = null,
