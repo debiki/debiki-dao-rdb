@@ -71,6 +71,7 @@ object ReDbDaoTckTest {
             delete from DW1_PAGE_ACTIONS
             delete from DW1_PATHS
             delete from DW1_PAGES
+            delete from DW1_IDS_SIMPLE_EMAIL
             delete from DW1_LOGINS
             delete from DW1_IDS_SIMPLE
             delete from DW1_IDS_OPENID

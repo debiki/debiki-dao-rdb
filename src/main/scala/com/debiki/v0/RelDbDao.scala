@@ -6,6 +6,7 @@ package com.debiki.v0
 
 import com.debiki.v0.PagePath._
 import com.debiki.v0.Dao._
+import com.debiki.v0.EmailNotfPrefs.EmailNotfPrefs
 import _root_.net.liftweb.common.{Loggable, Box, Empty, Full, Failure}
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
@@ -89,19 +90,26 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       case s: IdentitySimple =>
         val simpleLogin = db.transaction { implicit connection =>
           // Find or create _SIMPLE row.
-          var identitySno: Option[Long] = None
-          for (i <- 1 to 2 if identitySno.isEmpty) {
+          var idtyId = ""
+          var emailNotfsStr = ""
+          for (i <- 1 to 2 if idtyId.isEmpty) {
             db.query("""
-                select SNO from DW1_IDS_SIMPLE
-                where NAME = ? and EMAIL = ? and LOCATION = ? and
-                      WEBSITE = ?""",
+                select i.SNO, e.EMAIL_NOTFS from DW1_IDS_SIMPLE i
+                  left join DW1_IDS_SIMPLE_EMAIL e
+                  on i.EMAIL = e.EMAIL and e.VERSION = 'C'
+                where i.NAME = ? and i.EMAIL = ? and i.LOCATION = ? and
+                      i.WEBSITE = ?
+                """,
                 List(e2d(s.name), e2d(s.email), e2d(s.location),
                     e2d(s.website)),
                 rs => {
-              if (rs.next) identitySno = Some(rs.getLong("SNO"))
+              if (rs.next) {
+                idtyId = rs.getString("SNO")
+                emailNotfsStr = rs.getString("EMAIL_NOTFS")
+              }
               Empty // dummy
             })
-            if (identitySno isEmpty) {
+            if (idtyId isEmpty) {
               // Create simple user info.
               // There is a unique constraint on NAME, EMAIL, LOCATION,
               // WEBSITE, so this insert might fail (if another thread does
@@ -117,11 +125,23 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               // Loop one more lap to read SNO.
             }
           }
-          assErrIf(identitySno.isEmpty, "[debiki_error_93kRhk20")
-          val identityId = identitySno.get.toString
-          val user = _dummyUserFor(identity = s,
-                                  id = _dummyUserIdFor(identityId))
-          val identityWithId = s.copy(id = identityId, userId = user.id)
+          assErrIf(idtyId.isEmpty, "[debiki_error_93kRhk20")
+          val notfPrefs: EmailNotfPrefs = emailNotfsStr match {
+            case null =>
+              // Don't send email unless the user has actively choosen to
+              // receive emails (the user has made no choice in this case).
+              EmailNotfPrefs.DontReceive
+            case "R" => EmailNotfPrefs.Receive
+            case "N" => EmailNotfPrefs.DontReceive
+            case "F" => EmailNotfPrefs.ForbiddenForever
+            case x =>
+              warnDbgDie("Bad EMAIL_NOTFS value: "+ safed(x) +
+                    " [debiki_error_03k2114]")
+              EmailNotfPrefs.DontReceive
+          }
+          val user = _dummyUserFor(identity = s, emailNotfPrefs = notfPrefs,
+                                  id = _dummyUserIdFor(idtyId))
+          val identityWithId = s.copy(id = idtyId, userId = user.id)
           val loginWithId = _saveLogin(loginReq.login, identityWithId)
           Full(LoginGrant(loginWithId, identityWithId, user))
         }.open_!
@@ -184,6 +204,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               id = rs.getLong("USER_SNO").toString,
               displayName = n2e(rs.getString("DISPLAY_NAME")),
               email = n2e(rs.getString("EMAIL")),
+              emailNotfPrefs = EmailNotfPrefs.DontReceive, // for now
               country = n2e(rs.getString("COUNTRY")),
               website = n2e(rs.getString("WEBSITE")),
               isSuperAdmin = rs.getString("SUPERADMIN") == "T")
@@ -222,6 +243,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           // identity provider).
           val userSno = db.nextSeqNo("DW1_USERS_SNO")
           val u =  User(id = userSno.toString, displayName = "", email = "",
+                        emailNotfPrefs = EmailNotfPrefs.DontReceive, //for now
                         country = "", website = "", isSuperAdmin = false)
           db.update("""
               insert into DW1_USERS(
@@ -385,13 +407,17 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             -- Simple identities
             select ID_TYPE, s.SNO I_ID, '' I_USR,
                    s.NAME I_NAME, s.EMAIL I_EMAIL,
+                   e.EMAIL_NOTFS I_EMAIL_NOTFS,
                    s.LOCATION I_WHERE, s.WEBSITE I_WEBSITE
-            from DW1_IDS_SIMPLE s, logins
+            from logins, DW1_IDS_SIMPLE s
+              left join DW1_IDS_SIMPLE_EMAIL e
+              on s.EMAIL = e.EMAIL and e.VERSION = 'C'
             where s.SNO = logins.ID_SNO and logins.ID_TYPE = 'Simple'
             union
             -- OpenID
             select ID_TYPE, oi.SNO I_ID, oi.USR,
                    oi.FIRST_NAME I_NAME, oi.EMAIL I_EMAIL,
+                   null as I_EMAIL_NOTFS,
                    oi.COUNTRY I_WHERE, cast('' as varchar(100)) I_WEBSITE
             from DW1_IDS_OPENID oi, logins
             where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID'
@@ -400,7 +426,11 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             -- Facebook tables
             )
         select i.ID_TYPE, i.I_ID,
-            i.I_NAME, i.I_EMAIL, i.I_WHERE, i.I_WEBSITE,
+            i.I_NAME, i.I_EMAIL,
+            -- COULD add u.EMAIL_NOTFS field and use instead, if null.
+            case when i.I_EMAIL_NOTFS is null then 'N' else i.I_EMAIL_NOTFS end
+                EMAIL_NOTFS,
+            i.I_WHERE, i.I_WEBSITE,
             u.SNO U_ID,
             u.DISPLAY_NAME U_DISP_NAME,
             u.EMAIL U_EMAIL,
@@ -418,6 +448,15 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         var userId = rs.getLong("U_ID").toString  // 0 if null
         var user: Option[User] = None
         assErrIf(idId isEmpty, "[debiki_error_392Qvc89]")
+        val emailPrefs = rs.getString("EMAIL_NOTFS") match {
+          case "R" => EmailNotfPrefs.Receive
+          case "N" => EmailNotfPrefs.DontReceive
+          case "F" => EmailNotfPrefs.ForbiddenForever
+          case x =>
+            warnDbgDie("Bad EMAIL_NOTFS: "+ safed(x) +
+                  " [debiki_error_6ie53k011]")
+            EmailNotfPrefs.DontReceive
+        }
 
         identities ::= (rs.getString("ID_TYPE") match {
           case "Simple" =>
@@ -429,7 +468,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                 email = d2e(rs.getString("I_EMAIL")),
                 location = d2e(rs.getString("I_WHERE")),
                 website = d2e(rs.getString("I_WEBSITE")))
-            user = Some(_dummyUserFor(i))
+            user = Some(_dummyUserFor(i, emailNotfPrefs = emailPrefs))
             i
           case "OpenID" =>
             assErrIf(userId isEmpty, "[debiki_error_9V86krR3]")
@@ -452,6 +491,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             id = userId,
             displayName = n2e(rs.getString("U_DISP_NAME")),
             email = n2e(rs.getString("U_EMAIL")),
+            emailNotfPrefs = emailPrefs,
             country = n2e(rs.getString("U_COUNTRY")),
             website = n2e(rs.getString("U_WEBSITE")),
             isSuperAdmin = rs.getString("U_SUPERADMIN") == "T"))
@@ -855,6 +895,39 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     items
   }
 
+  def configIdtySimple(tenantId: String, loginId: String, ctime: ju.Date,
+                       emailAddr: String, emailNotfPrefs: EmailNotfPrefs) {
+    db.transaction { implicit connection =>
+      // Mark the current row as 'O' (old) -- unless EMAIL_NOTFS is 'F'
+      // (Forbidden Forever). Then leave it as is, and let the insert
+      // below fail.
+      // COULD check # rows updated? No, there might be no rows to update.
+      db.update("""
+          update DW1_IDS_SIMPLE_EMAIL
+          set VERSION = 'O' -- old
+          where TENANT = ? and EMAIL = ? and VERSION = 'C'
+            and EMAIL_NOTFS != 'F'
+          """,
+          List(tenantId, emailAddr))
+
+      // Create a new row with the desired email notification setting.
+      // Or, for now, fail and throw some SQLException if EMAIL_NOTFS is 'F'
+      // for this `emailAddr' -- since there'll be a primary key violation,
+      // see the update statement above.
+      val notfPrefStr = emailNotfPrefs match {
+        case EmailNotfPrefs.Receive => "R"
+        case EmailNotfPrefs.DontReceive => "N"
+        case EmailNotfPrefs.ForbiddenForever => "F"
+      }
+      db.update("""
+          insert into DW1_IDS_SIMPLE_EMAIL (
+              TENANT, LOGIN, CTIME, VERSION, EMAIL, EMAIL_NOTFS)
+          values (?, ?, ?, 'C', ?, ?)
+          """,
+          List(tenantId, loginId, d2ts(ctime), emailAddr, notfPrefStr))
+    }
+  }
+
   // Looks up the correct PagePath for a possibly incorrect PagePath.
   private def _findCorrectPagePath(pagePathIn: PagePath): Box[PagePath] = {
     var query = """
@@ -1029,9 +1102,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
   def _dummyUserIdFor(identityId: String) = "-"+ identityId
 
-  def _dummyUserFor(identity: IdentitySimple, id: String = null): User = {
+  def _dummyUserFor(identity: IdentitySimple, emailNotfPrefs: EmailNotfPrefs,
+                    id: String = null): User = {
     User(id = (if (id ne null) id else identity.userId),
-      displayName = identity.name, email = identity.email, country = "",
+      displayName = identity.name, email = identity.email,
+      emailNotfPrefs = emailNotfPrefs,
+      country = "",
       website = identity.website, isSuperAdmin = false)
   }
 

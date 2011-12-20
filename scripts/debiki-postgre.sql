@@ -212,6 +212,7 @@ create sequence DW1_IDS_SNO start with 10;
 create table DW1_IDS_SIMPLE(
   SNO varchar(32)         not null,  -- COULD rename to GUID
   NAME varchar(100)       not null,
+  -- COULD require like '%@%.%' and update all existing data ... hmm.
   EMAIL varchar(100)      not null,
   LOCATION varchar(100)   not null,
   WEBSITE varchar(100)    not null,
@@ -221,6 +222,37 @@ create table DW1_IDS_SIMPLE(
 );
 
 -- (Uses sequence number from DW1_IDS_SNO.)
+
+create table DW1_IDS_SIMPLE_EMAIL(  -- abbreviated IDSMPLEML
+  TENANT varchar(32) not null,
+  -- The user (session) that added this row.
+  LOGIN varchar(32),
+  CTIME timestamp not null,
+  -- C = current,  O = old, kept for auditing purposes.
+  VERSION char(1) not null,
+  -- We might actually attempt to send an email to this address,
+  -- if EMAIL_NOTFS is set to 'R'eceive.
+  EMAIL varchar(100) not null,
+  -- Email notifications: R = receive, N = do Not receive, F = forbid forever
+  EMAIL_NOTFS varchar(1) not null,
+  -- Is this PK unnecessary?
+  constraint DW1_IDSMPLEML__P primary key (TENANT, EMAIL, CTIME),
+  constraint DW1_IDSMPLEML__R__LOGINS
+      foreign key (LOGIN)  -- SHOULD include TENANT?
+      references DW1_LOGINS(SNO),
+  constraint DW1_IDSMPLEML_EMAIL__C check (EMAIL like '%@%.%'),
+  constraint DW1_IDSMPLEML_VERSION__C check (VERSION in ('C', 'O')),
+  constraint DW1_IDSMPLEML_NOTFS__C check (EMAIL_NOTFS in ('R', 'N', 'F'))
+);
+
+-- For each email, there's only one current setting.
+create unique index DW1_IDSMPLEML_VERSION__U
+  on DW1_IDS_SIMPLE_EMAIL (TENANT, EMAIL, VERSION)
+  where VERSION = 'C';
+
+-- Could: create table DW1_IDS_SIMPLE_NAME, to rewrite inappropriate names,
+-- e.g. rewrite to "F_ck" or "_ssh_l_".
+
 
 -- OpenID identities.
 --
