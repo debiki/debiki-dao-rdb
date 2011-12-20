@@ -10,6 +10,19 @@ occurrances of "time".
 
 *****************
 
+Naming standard:
+ "DW1_...__C" for check constraints,
+ "DW1_...__U" for unique constraints and unique indexes
+ "DW1_...__R__..." for referential constraints
+where "..." is "<abbreviated-table-name>_<abbreviated>_<column>_<names>".
+E.g.:
+  DW1_IDSMPLEML__R__LOGINS  -- a foreign key from IDS_SIMPLE_EMAIL to LOGINS
+                            (column names excluded, Oracle allows 30 chars max)
+  DW1_IDSMPLEML_EMAIL__C -- a check constraint on the EMAIL column
+  DW1_IDSMPLEML_VERSION__U -- a unique constraint, which includes the VERSION
+                              column (and it is the "interesting" column).
+  DW1_USERS_TNT_NAME_EMAIL -- an index on USERS (TENANT, DISPLAY_NAME, EMAIL).
+
 "DW0_TABLE" means a Debiki ("DW_") version 0 ("0") table named "TABLE",
 When upgrading, one can copy data to new tables, i.e. DW<X>_TABLE instead of
 modifying data in the current tables. Then it's almost impossible to
@@ -184,7 +197,7 @@ create table DW1_LOGINS(  -- logins and logouts
   LOGIN_TIME timestamp       not null,
   LOGOUT_IP varchar(39),
   LOGOUT_TIME timestamp,
-  constraint DW1_LOGINS_SNO__P primary key (SNO),
+  constraint DW1_LOGINS_SNO__P primary key (SNO), -- SHOULD incl TENANT?
   constraint DW1_LOGINS_TNT__R__TENANTS
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
