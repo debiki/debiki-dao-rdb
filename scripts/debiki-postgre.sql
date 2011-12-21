@@ -476,6 +476,10 @@ create table DW1_ROLE_INBOX(   -- abbreviated RLIBX
   TARGET_PAID varchar(32) not null,
   SOURCE_PAID varchar(32) not null,
   CTIME timestamp not null,
+  -- New or Old. New means: Attempt to notify the user, perhaps send email.
+  -- Old means: The user has been notified. Okay to delete, or keep for
+  -- auditing purposes.
+  STATUS varchar(1) default 'N' not null,
   -- Email notifications
   EMAIL_SENT varchar(32) default null, -- DW1_EMAILS_OUT.GUID
   EMAIL_LINK_CLICKED timestamp default null,
@@ -494,6 +498,7 @@ create table DW1_ROLE_INBOX(   -- abbreviated RLIBX
   constraint DW1_RLIBX__R__RLS
       foreign key (TENANT, ROLE)
       references DW1_USERS (TENANT, SNO) deferrable,
+  constraint DW1_RLIBX_STATUS__C check (STATUS in ('N', 'O')),
   constraint DW1_RLIBX__R__EMLOT
       foreign key (TENANT, EMAIL_SENT)
       references DW1_EMAILS_OUT (TENANT, GUID),
@@ -504,7 +509,8 @@ create table DW1_ROLE_INBOX(   -- abbreviated RLIBX
       end)
 );
 
-create index DW1_RLIBX_TIME on DW1_ROLE_INBOX (ROLE, CTIME);
+create index DW1_RLIBX_ROLE_CTIME on DW1_ROLE_INBOX (TENANT, ROLE, CTIME);
+create index DW1_RLIBX_STATUS_CTIME on DW1_ROLE_INBOX (TENANT, STATUS, CTIME);
 
 
 ----- Paths (move to Pages section above?)
