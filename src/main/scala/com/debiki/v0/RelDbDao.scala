@@ -240,7 +240,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                   TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
               values (?, ?, ?, ?, ?)""",
               List(tenantId, userSno.asInstanceOf[AnyRef],
-                  u.displayName, u.email, u.country))
+                  e2n(u.displayName), e2n(u.email), e2n(u.country)))
           u
       }
 

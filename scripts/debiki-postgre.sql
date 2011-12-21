@@ -184,6 +184,20 @@ alter table DW1_USERS add column EMAIL_NOTFS varchar(1);
 alter table DW1_USERS add constraint DW1_USERS_EMLNTF__C
     check (EMAIL_NOTFS in ('R', 'N', 'F'));
 
+-- Add missing constraints
+update DW1_USERS set DISPLAY_NAME = null where DISPLAY_NAME = '';
+update DW1_USERS set EMAIL = null where EMAIL = '';
+update DW1_USERS set COUNTRY = null where COUNTRY = '';
+update DW1_USERS set WEBSITE = null where WEBSITE = '';
+alter table DW1_USERS add constraint DW1_USERS_DNAME__C
+    check (DISPLAY_NAME <> '');
+alter table DW1_USERS add constraint DW1_USERS_EMAIL__C
+    check (EMAIL like '%@%.%');
+alter table DW1_USERS add constraint DW1_USERS_COUNTRY__C
+    check (COUNTRY <> '');
+alter table DW1_USERS add constraint DW1_USERS_WEBSITE__C
+    check (WEBSITE <> '');
+
 -- create index DW1_USERS_TNT_NAME_EMAIL
 --  on DW1_USERS(TENANT, DISPLAY_NAME, EMAIL);
 
