@@ -126,19 +126,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             }
           }
           assErrIf(idtyId.isEmpty, "[debiki_error_93kRhk20")
-          val notfPrefs: EmailNotfPrefs = emailNotfsStr match {
-            case null =>
-              // Don't send email unless the user has actively choosen to
-              // receive emails (the user has made no choice in this case).
-              EmailNotfPrefs.DontReceive
-            case "R" => EmailNotfPrefs.Receive
-            case "N" => EmailNotfPrefs.DontReceive
-            case "F" => EmailNotfPrefs.ForbiddenForever
-            case x =>
-              warnDbgDie("Bad EMAIL_NOTFS value: "+ safed(x) +
-                    " [debiki_error_03k2114]")
-              EmailNotfPrefs.DontReceive
-          }
+          val notfPrefs: EmailNotfPrefs = _fromFlagEmailNotfs(emailNotfsStr)
           val user = _dummyUserFor(identity = s, emailNotfPrefs = notfPrefs,
                                   id = _dummyUserIdFor(idtyId))
           val identityWithId = s.copy(id = idtyId, userId = user.id)
@@ -159,6 +147,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             u.SNO USER_SNO,
             u.DISPLAY_NAME,
             u.EMAIL,
+            u.EMAIL_NOTFS,
             u.COUNTRY,
             u.WEBSITE,
             u.SUPERADMIN,
@@ -204,7 +193,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               id = rs.getLong("USER_SNO").toString,
               displayName = n2e(rs.getString("DISPLAY_NAME")),
               email = n2e(rs.getString("EMAIL")),
-              emailNotfPrefs = EmailNotfPrefs.DontReceive, // for now
+              emailNotfPrefs = _fromFlagEmailNotfs(
+                                  rs.getString("EMAIL_NOTFS")),
               country = n2e(rs.getString("COUNTRY")),
               website = n2e(rs.getString("WEBSITE")),
               isSuperAdmin = rs.getString("SUPERADMIN") == "T")
@@ -243,7 +233,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           // identity provider).
           val userSno = db.nextSeqNo("DW1_USERS_SNO")
           val u =  User(id = userSno.toString, displayName = "", email = "",
-                        emailNotfPrefs = EmailNotfPrefs.DontReceive, //for now
+                        emailNotfPrefs = EmailNotfPrefs.DontReceive,
                         country = "", website = "", isSuperAdmin = false)
           db.update("""
               insert into DW1_USERS(
@@ -438,9 +428,11 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             )
         select i.ID_TYPE, i.I_ID,
             i.I_NAME, i.I_EMAIL,
-            -- COULD add u.EMAIL_NOTFS field and use instead, if null.
-            case when i.I_EMAIL_NOTFS is null then 'N' else i.I_EMAIL_NOTFS end
-                EMAIL_NOTFS,
+            case
+              -- Can only be non-null for IdentitySimple.
+              when i.I_EMAIL_NOTFS is not null then i.I_EMAIL_NOTFS
+              else u.EMAIL_NOTFS end  -- might be null
+              EMAIL_NOTFS,
             i.I_WHERE, i.I_WEBSITE,
             u.SNO U_ID,
             u.DISPLAY_NAME U_DISP_NAME,
@@ -459,15 +451,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         var userId = rs.getLong("U_ID").toString  // 0 if null
         var user: Option[User] = None
         assErrIf(idId isEmpty, "[debiki_error_392Qvc89]")
-        val emailPrefs = rs.getString("EMAIL_NOTFS") match {
-          case "R" => EmailNotfPrefs.Receive
-          case "N" => EmailNotfPrefs.DontReceive
-          case "F" => EmailNotfPrefs.ForbiddenForever
-          case x =>
-            warnDbgDie("Bad EMAIL_NOTFS: "+ safed(x) +
-                  " [debiki_error_6ie53k011]")
-            EmailNotfPrefs.DontReceive
-        }
+        val emailPrefs = _fromFlagEmailNotfs(rs.getString("EMAIL_NOTFS"))
 
         identities ::= (rs.getString("ID_TYPE") match {
           case "Simple" =>
@@ -906,6 +890,21 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     items
   }
 
+  def configRole(tenantId: String, loginId: String, ctime: ju.Date,
+                 roleId: String, emailNotfPrefs: EmailNotfPrefs) {
+    // Currently auditing not implemented for the roles/users table,
+    // so loginId and ctime aren't used.
+    db.transaction { implicit connection =>
+      db.update("""
+          update DW1_USERS
+          set EMAIL_NOTFS = ?
+          where TENANT = ? and SNO = ? and
+              (EMAIL_NOTFS is null or EMAIL_NOTFS <> 'F')
+          """,
+          List(_toFlag(emailNotfPrefs), tenantId, roleId))
+    }
+  }
+
   def configIdtySimple(tenantId: String, loginId: String, ctime: ju.Date,
                        emailAddr: String, emailNotfPrefs: EmailNotfPrefs) {
     db.transaction { implicit connection =>
@@ -925,17 +924,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       // Or, for now, fail and throw some SQLException if EMAIL_NOTFS is 'F'
       // for this `emailAddr' -- since there'll be a primary key violation,
       // see the update statement above.
-      val notfPrefStr = emailNotfPrefs match {
-        case EmailNotfPrefs.Receive => "R"
-        case EmailNotfPrefs.DontReceive => "N"
-        case EmailNotfPrefs.ForbiddenForever => "F"
-      }
       db.update("""
           insert into DW1_IDS_SIMPLE_EMAIL (
               TENANT, LOGIN, CTIME, VERSION, EMAIL, EMAIL_NOTFS)
           values (?, ?, ?, 'C', ?, ?)
           """,
-          List(tenantId, loginId, d2ts(ctime), emailAddr, notfPrefStr))
+          List(tenantId, loginId, d2ts(ctime), emailAddr,
+              _toFlag(emailNotfPrefs)))
     }
   }
 
@@ -1122,6 +1117,28 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       website = identity.website, isSuperAdmin = false)
   }
 
+  def _toFlag(prefs: EmailNotfPrefs): String = prefs match {
+    case EmailNotfPrefs.Receive => "R"
+    case EmailNotfPrefs.DontReceive => "N"
+    case EmailNotfPrefs.ForbiddenForever => "F"
+    case x =>
+      warnDbgDie("Bad EmailNotfPrefs value: "+ safed(x) +
+          " [debiki_error_0EH43k8]")
+      "N"  // fallback to no email
+  }
+
+  def _fromFlagEmailNotfs(flag: String): EmailNotfPrefs = flag match {
+    case null =>
+      // Don't send email unless the user has actively choosen to
+      // receive emails (the user has made no choice in this case).
+      EmailNotfPrefs.DontReceive
+    case "R" => EmailNotfPrefs.Receive
+    case "N" => EmailNotfPrefs.DontReceive
+    case "F" => EmailNotfPrefs.ForbiddenForever
+    case x =>
+      warnDbgDie("Bad EMAIL_NOTFS: "+ safed(x) +" [debiki_error_6ie53k011]")
+      EmailNotfPrefs.DontReceive
+  }
 
   /** Adds a can be Empty Prefix.
    *

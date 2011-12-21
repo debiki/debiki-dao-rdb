@@ -179,6 +179,11 @@ create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
 
 create sequence DW1_USERS_SNO start with 10;
 
+-- Email notifications: R = receive, N = do Not receive, F = forbid forever
+alter table DW1_USERS add column EMAIL_NOTFS varchar(1);
+alter table DW1_USERS add constraint DW1_USERS_EMLNTF__C
+    check (EMAIL_NOTFS in ('R', 'N', 'F'));
+
 -- create index DW1_USERS_TNT_NAME_EMAIL
 --  on DW1_USERS(TENANT, DISPLAY_NAME, EMAIL);
 
