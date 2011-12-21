@@ -203,6 +203,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               IdentityOpenId(
                 id = rs.getLong("IDENTITY_SNO").toString,
                 userId = userInDb.id,
+                // COULD use d2e here, or n2e if I store Null instead of '-'.
                 oidEndpoint = rs.getString("OID_ENDPOINT"),
                 oidVersion = rs.getString("OID_VERSION"),
                 oidRealm = rs.getString("OID_REALM"),

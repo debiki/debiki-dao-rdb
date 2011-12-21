@@ -142,7 +142,8 @@ insert into DW1_TENANT_HOSTS(TENANT, HOST, CANONICAL, HTTPS)
 -- Many _CLAIMED_ID might point to the same _USERS row, because users can
 -- (not implemented) merge different OpenID accounts to one single account.
 --
--- The name/email/etc columns are currently always empty! The name/email from
+-- Currently only EMAIL_NOTFS is used.
+-- The name/email columns are currently always null! The name/email from
 -- the relevant identity (e.g. DW1_IDS_OPENID.FIRST_NAME) is used instead.
 -- However, if the user manually fills in (not implemented) her user data,
 -- then those values will take precedence (over the one from the
@@ -158,10 +159,15 @@ insert into DW1_TENANT_HOSTS(TENANT, HOST, CANONICAL, HTTPS)
 -- then the id for that real world person would change, perhaps bad? So
 -- reserve and use a user id right away, on identity creation.)
 --
+-- Versioning: In the future, I'll add CTIME + LOGIN columns,
+-- and the current version of a user will then be either the most recent row,
+-- or all rows merged together in chronological order, where Null has no
+-- effect.
+
 create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
   TENANT varchar(32)          not null,
   SNO varchar(32)             not null,  -- COULD rename to GUID
-  DISPLAY_NAME varchar(100),  -- currently empty, always (2011-09-17)
+  DISPLAY_NAME varchar(100),  -- currently null, always (2011-09-17)
   EMAIL varchar(100),
   COUNTRY varchar(100),
   WEBSITE varchar(100),
@@ -241,6 +247,9 @@ create sequence DW1_IDS_SNO start with 10;
 -- When loaded from database, a dummy User is created, with its id
 -- set to -SNO (i.e. "-" + SNO). Users with ids starting with "-"
 -- are thus unauthenticated users (and don't exist in DW1_USERS).
+-- If value absent, '-' is inserted -- but not '', since Oracle converts
+-- '' to null, but I think it's easier to write SQL queries if I don't
+-- have to take all possible combinations of null values into account.
 create table DW1_IDS_SIMPLE(
   SNO varchar(32)         not null,  -- COULD rename to GUID
   NAME varchar(100)       not null,
@@ -302,6 +311,8 @@ create unique index DW1_IDSMPLEML_VERSION__U
 -- tenant+claimed_id and all most recent attribute values, and one table
 -- with the attribute values as of the point in time of the OpenID login.
 --
+-- COULD save Null instead of '-' if data absent, and add not = '' constraints.
+
 create table DW1_IDS_OPENID(
   SNO varchar(32)                not null,  -- COULD rename to GUID
   TENANT varchar(32)             not null,
