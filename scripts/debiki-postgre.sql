@@ -10,7 +10,8 @@ occurrances of "time".
 
 *****************
 
-Naming standard:
+Naming standard
+------------------
  "DW1_...__C" for check constraints,
  "DW1_...__U" for unique constraints and unique indexes
  "DW1_...__R__..." for referential constraints
@@ -30,7 +31,19 @@ corrupt any existing data.
   --- and if you don't need to upgrade, then keep the DW0_TABLE tables.
   (and let any new DW<X>_TABLE refer to DW0_TABLE).
 
+Foreign key indexes
+------------------
+When you add a foreign constraint, write the name of the corresponding
+index in a comment to the right:
+  constraint DW1_RLIBX__R__EMLOT  -- ix DW1_RLIBX_EMAILSENT
+    foreign key ...
+
+If there is no index, clarify why, e.g.:
+  constraint DW1_RLIBX_TGTPGA__R__PGAS
+      foreign key ...  -- no index: no deletes/upds in prnt tbl
+
 Create a Debiki schema like so:
+------------------
 $ psql
 => create user debiki_test password 'apabanan454';
 => alter user debiki_test set search_path to '$user';
@@ -111,7 +124,7 @@ create table DW1_TENANT_HOSTS(
   HTTPS varchar(10),
   CTIME timestamp default now() not null,
   MTIME timestamp default now() not null,
-  constraint DW1_TNTHSTS__R__TENANTS
+  constraint DW1_TNTHSTS__R__TENANTS  -- COULD create an FK index
       foreign key (TENANT)
       references DW1_TENANTS(ID),
   constraint DW1_TNTHSTS_HOST__U unique (HOST),
@@ -174,7 +187,7 @@ create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
   SUPERADMIN varchar(1),
   constraint DW1_USERS_TNT_SNO__P primary key (TENANT, SNO),
   constraint DW1_USERS_SUPERADM__C check (SUPERADMIN in ('T')),
-  constraint DW1_USERS__R__TENANT
+  constraint DW1_USERS__R__TENANT  -- ix DW1_USERS_TNT_SNO__P
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
   -- No unique constraint on (TENANT, DISPLAY_NAME, EMAIL, SUPERADMIN).
@@ -223,10 +236,10 @@ create table DW1_LOGINS(  -- logins and logouts
   LOGOUT_IP varchar(39),
   LOGOUT_TIME timestamp,
   constraint DW1_LOGINS_SNO__P primary key (SNO), -- SHOULD incl TENANT?
-  constraint DW1_LOGINS_TNT__R__TENANTS
+  constraint DW1_LOGINS_TNT__R__TENANTS  -- ix DW1_LOGINS_TNT
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
-  constraint DW1_LOGINS__R__LOGINS
+  constraint DW1_LOGINS__R__LOGINS  -- ix DW1_LOGINS_PREVL
       foreign key (PREV_LOGIN)
       references DW1_LOGINS(SNO) deferrable,
   constraint DW1_LOGINS_IDTYPE__C
@@ -278,7 +291,7 @@ create table DW1_IDS_SIMPLE_EMAIL(  -- abbreviated IDSMPLEML
   EMAIL_NOTFS varchar(1) not null,
   -- Is this PK unnecessary?
   constraint DW1_IDSMPLEML__P primary key (TENANT, EMAIL, CTIME),
-  constraint DW1_IDSMPLEML__R__LOGINS
+  constraint DW1_IDSMPLEML__R__LOGINS  -- ix DW1_IDSMPLEML_LOGIN
       foreign key (LOGIN)  -- SHOULD include TENANT?
       references DW1_LOGINS(SNO),
   constraint DW1_IDSMPLEML_EMAIL__C check (EMAIL like '%@%.%'),
@@ -290,6 +303,10 @@ create table DW1_IDS_SIMPLE_EMAIL(  -- abbreviated IDSMPLEML
 create unique index DW1_IDSMPLEML_VERSION__U
   on DW1_IDS_SIMPLE_EMAIL (TENANT, EMAIL, VERSION)
   where VERSION = 'C';
+
+-- Foregin key index.
+create index DW1_IDSMPLEML_LOGIN on DW1_IDS_SIMPLE_EMAIL (LOGIN);
+
 
 -- Could: create table DW1_IDS_SIMPLE_NAME, to rewrite inappropriate names,
 -- e.g. rewrite to "F_ck" or "_ssh_l_".
@@ -336,7 +353,7 @@ create table DW1_IDS_OPENID(
   constraint DW1_IDSOID_SNO__P primary key (SNO),
   constraint DW1_IDSOID_TNT_OID__U
       unique (TENANT, OID_CLAIMED_ID),
-  constraint DW1_IDSOID_USR_TNT__R__USERS
+  constraint DW1_IDSOID_USR_TNT__R__USERS  -- ix DW1_IDSOID_TNT_USR
       foreign key (TENANT, USR)
       references DW1_USERS(TENANT, SNO) deferrable,
   constraint DW1_IDSOID_SNO_NOT_0__C check (SNO <> '0')
@@ -362,7 +379,7 @@ create table DW1_PAGES(
   GUID varchar(32)      not null,
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
-  constraint DW1_PAGES__R__TENANT
+  constraint DW1_PAGES__R__TENANT  -- ix: primary key, well it SHOULD incl TNT
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
   constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0')
@@ -388,10 +405,10 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   WHEERE varchar(150),
   NEW_IP varchar(39), -- null, unless differs from DW1_LOGINS.START_IP
   constraint DW1_PACTIONS_PAGE_PAID__P primary key (PAGE, PAID),
-  constraint DW1_PACTIONS__R__LOGINS
+  constraint DW1_PACTIONS__R__LOGINS  -- ix DW1_PACTIONS_LOGIN
       foreign key (LOGIN)
       references DW1_LOGINS (SNO) deferrable,
-  constraint DW1_PACTIONS__R__PAGES
+  constraint DW1_PACTIONS__R__PAGES  -- ix DW1_PACTIONS_PAGE_PAID__P
       foreign key (PAGE)
       references DW1_PAGES (SNO) deferrable,
   constraint DW1_PACTIONS__R__PACTIONS
@@ -424,7 +441,7 @@ create table DW1_PAGE_RATINGS(
   PAID varchar(32) not null, -- page action id
   TAG varchar(30) not null,
   constraint DW1_PRATINGS__P primary key (PAGE, PAID, TAG),
-  constraint DW1_PRATINGS__R__PACTIONS
+  constraint DW1_PRATINGS__R__PACTIONS  -- ix DW1_PRATINGS__P
       foreign key (PAGE, PAID)
       references DW1_PAGE_ACTIONS(PAGE, PAID) deferrable
 );
@@ -449,7 +466,7 @@ create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
   -- E.g. a bounce or rejection message.
   FAILURE_TEXT varchar(2000) default null,
   FAILURE_TIME timestamp default null,
-  constraint DW1_EMLOT__R__TNTS
+  constraint DW1_EMLOT__R__TNTS  -- ix DW1_EMLOT__P
       foreign key (TENANT)
       references DW1_TENANTS (ID),
   constraint DW1_EMLOT__P primary key (TENANT, GUID),
@@ -495,11 +512,11 @@ create table DW1_ROLE_INBOX(   -- abbreviated RLIBX
   constraint DW1_RLIBX_TGTPGA__R__PGAS
       foreign key (PAGE, TARGET_PAID) -- no index: no deletes/upds in prnt tbl
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  constraint DW1_RLIBX__R__RLS
+  constraint DW1_RLIBX__R__RLS  -- ix DW1_RLIBX_ROLE_CTIME
       foreign key (TENANT, ROLE)
       references DW1_USERS (TENANT, SNO) deferrable,
   constraint DW1_RLIBX_STATUS__C check (STATUS in ('N', 'O')),
-  constraint DW1_RLIBX__R__EMLOT
+  constraint DW1_RLIBX__R__EMLOT  -- ix DW1_RLIBX_EMAILSENT
       foreign key (TENANT, EMAIL_SENT)
       references DW1_EMAILS_OUT (TENANT, GUID),
   constraint  DW1_RLIBX_EMAILCLKD__C check (
@@ -511,6 +528,7 @@ create table DW1_ROLE_INBOX(   -- abbreviated RLIBX
 
 create index DW1_RLIBX_ROLE_CTIME on DW1_ROLE_INBOX (TENANT, ROLE, CTIME);
 create index DW1_RLIBX_STATUS_CTIME on DW1_ROLE_INBOX (TENANT, STATUS, CTIME);
+create index DW1_RLIBX_EMAILSENT on DW1_ROLE_INBOX (TENANT, EMAIL_SENT);
 
 
 ----- Paths (move to Pages section above?)
@@ -522,8 +540,8 @@ create table DW1_PATHS(
   PAGE_NAME varchar(100) not null,
   GUID_IN_PATH varchar(1) not null,
   constraint DW1_PATHS_TNT_PAGE__P primary key (TENANT, PAGE_GUID),
-  constraint DW1_PATHS_TNT_PAGE__R__PAGES
-      foreign key (TENANT, PAGE_GUID) -- indexed because of pk
+  constraint DW1_PATHS_TNT_PAGE__R__PAGES  -- ix DW1_PATHS_TNT_PAGE__P
+      foreign key (TENANT, PAGE_GUID)
       references DW1_PAGES (TENANT, GUID) deferrable,
   constraint DW1_PATHS_FOLDER__C
       check (FOLDER not like '%/-%'), -- '-' means guid follows
