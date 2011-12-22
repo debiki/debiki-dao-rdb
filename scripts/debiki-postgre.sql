@@ -257,6 +257,9 @@ create table DW1_LOGINS(  -- logins and logouts
   -- tables. That would have avoided a few bugs! and more future bugs too!?
   ID_TYPE varchar(10)        not null,
   ID_SNO varchar(32)         not null,
+  -- COULD add a USR --> DW1_USERS/ROLES column? so there'd be no need to
+  -- join w/ all DW1_IDS_<whatever> tables when looking up the user for
+  -- a certain login.
   LOGIN_IP varchar(39)       not null,
   LOGIN_TIME timestamp       not null,
   LOGOUT_IP varchar(39),
@@ -283,6 +286,8 @@ create sequence DW1_LOGINS_SNO start with 10;
 create sequence DW1_IDS_SNO start with 10;
 
 -- Simple login identities (no password needed).
+-- (Could rename to DW1_USERS_UNAU? (unauthenticated users)
+-- Would that make sense? since a "dummy" user is created anyway (read on).)
 -- When loaded from database, a dummy User is created, with its id
 -- set to -SNO (i.e. "-" + SNO). Users with ids starting with "-"
 -- are thus unauthenticated users (and don't exist in DW1_USERS).
@@ -303,6 +308,7 @@ create table DW1_IDS_SIMPLE(
 
 -- (Uses sequence number from DW1_IDS_SNO.)
 
+-- (Could rename to DW1_USERS_UNAU_EMAIL?)
 create table DW1_IDS_SIMPLE_EMAIL(  -- abbreviated IDSMPLEML
   TENANT varchar(32) not null,
   -- The user (session) that added this row.
@@ -355,6 +361,7 @@ create index DW1_IDSMPLEML_LOGIN on DW1_IDS_SIMPLE_EMAIL (LOGIN);
 -- with the attribute values as of the point in time of the OpenID login.
 --
 -- COULD save Null instead of '-' if data absent, and add not = '' constraints.
+-- (Would DW1_AU_OPENID (AUthentication via OpenID) be a better name?)
 
 create table DW1_IDS_OPENID(
   SNO varchar(32)                not null,  -- COULD rename to GUID
