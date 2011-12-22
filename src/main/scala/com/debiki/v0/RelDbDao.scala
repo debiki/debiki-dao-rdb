@@ -354,7 +354,16 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         // (The login id was once fetched from the database.
         // It is sent to the client in a signed cookie so it cannot be
         // tampered with.) Identities cannot be deleted!
-        error("Found no identity for "+ loginInfo +" [debiki_error_0921kxa13]")
+        // This might happen however, if a server is restarted and switches
+        // over to another database, where the login id does not exist, and
+        // the server continues using the same signed cookie salt.
+        // -- The server could do that if a failover happens to a standby
+        // database, and a few transactions were lost when the master died?!
+        // COULD throw an exception and let the HTTP module delete the
+        // dwCoSid cookie.
+        error("Found no identity for "+ loginInfo +". Has the server" +
+            " connected to a standby database? Please delete your " +
+            " session cookie, \"dwCoSid\". [debiki_error_0921kxa13]")
       case (is, us) =>
         // There should be exactly one identity per login, and at most
         // one user per identity.
