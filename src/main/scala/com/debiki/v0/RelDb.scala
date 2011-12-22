@@ -23,6 +23,7 @@ trait RelDbLogger extends Logger {
 
 object RelDb {
   case class Null(sqlType: Int)
+  val NullVarchar = Null(js.Types.VARCHAR)
 
   /** Converts null to the empty string ("Null To Empty"). */
   def n2e(s: String) = if (s eq null) "" else s

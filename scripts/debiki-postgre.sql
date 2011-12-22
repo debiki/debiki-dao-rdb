@@ -504,20 +504,23 @@ create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
       FAILURE_TIME is null = FAILURE_TYPE is null)
 );
 
-create table DW1_ROLE_INBOX(   -- abbreviated RLIBX
+-- Page action notifications for a role (then ROLE is non-null),
+-- or an unauthenticated user (then ID_SIMPLE is non-null).
+create table DW1_INBOX_PAGE_ACTIONS(   -- abbreviated IBXPGA
   TENANT varchar(32) not null,
-  ROLE varchar(32) not null,
+  ID_SIMPLE varchar(32),
+  ROLE varchar(32),
   PAGE varchar(32) not null,
   -- The source page action id is the action that generated this inbox item.
   -- The target page action id is the action of interest to the user.
   -- For example, if someone replies to your comment,
   -- and the reply is published instantly,
-  -- then, if the reply has id X, SOURCE_PAID = TARGET_PAID = X.
+  -- then, if the reply has id X, SOURCE_PGA = TARGET_PGA = X.
   -- If however the reply is not published until after it's been reviewed,
   -- then, the reply has id X and the review action id has id Y,
-  -- SOURCE_PAID = Y (i.e. the review) and TARGET_PAID = X (i.e. the reply).
-  TARGET_PAID varchar(32) not null,
-  SOURCE_PAID varchar(32) not null,
+  -- SOURCE_PGA = Y (i.e. the review) and TARGET_PGA = X (i.e. the reply).
+  TARGET_PGA varchar(32) not null,
+  SOURCE_PGA varchar(32) not null,
   CTIME timestamp not null,
   -- New or Old. New means: Attempt to notify the user, perhaps send email.
   -- Old means: The user has been notified. Okay to delete, or keep for
@@ -528,33 +531,52 @@ create table DW1_ROLE_INBOX(   -- abbreviated RLIBX
   EMAIL_LINK_CLICKED timestamp default null,
   -- WEB_LINK_SHOWN timestamp,
   -- WEB_LINK_CLICKED timestamp,
-  -- Note that (TENANT, ROLE, PAGE, TARGET_PAID) need not be unique,
-  -- for example, the same post might be edited many times, resulting
-  -- in many events with that post being the target.
-  constraint DW1_RLIBX__P primary key (TENANT, ROLE, PAGE, SOURCE_PAID),
-  constraint DW1_RLIBX_SRCPGA__R__PGAS
-      foreign key (PAGE, SOURCE_PAID) -- no index: no deletes/upds in prnt tbl
+  -- (There's no primary key -- there're 2 unique indexes instead and a
+  -- check constraint, DW1_IBXPGA_IDSMPL_ROLE__C, that ensures one of those
+  -- unique indexes is active.)
+  constraint DW1_IBXPGA_SRCPGA__R__PGAS
+      foreign key (PAGE, SOURCE_PGA) -- no index: no deletes/upds in prnt tbl
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  constraint DW1_RLIBX_TGTPGA__R__PGAS
-      foreign key (PAGE, TARGET_PAID) -- no index: no deletes/upds in prnt tbl
+  constraint DW1_IBXPGA_TGTPGA__R__PGAS
+      foreign key (PAGE, TARGET_PGA) -- no index: no deletes/upds in prnt tbl
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  constraint DW1_RLIBX__R__RLS  -- ix DW1_RLIBX_ROLE_CTIME
+  constraint DW1_IBXPGA__R__RLS  -- ix DW1_IBXPGA_ROLE_CTIME
       foreign key (TENANT, ROLE)
       references DW1_USERS (TENANT, SNO) deferrable,
-  constraint DW1_RLIBX_STATUS__C check (STATUS in ('N', 'O')),
-  constraint DW1_RLIBX__R__EMLOT  -- ix DW1_RLIBX_EMAILSENT
+  -- Ensure exactly one of ROLE and ID_SIMPLE is specified.
+  constraint DW1_IBXPGA_IDSMPL_ROLE__C check (
+      (ROLE is null) <> (ID_SIMPLE is null)),
+  constraint DW1_IBXPGA_STATUS__C check (STATUS in ('N', 'O')),
+  constraint DW1_IBXPGA__R__EMLOT  -- ix DW1_IBXPGA_EMAILSENT
       foreign key (TENANT, EMAIL_SENT)
       references DW1_EMAILS_OUT (TENANT, GUID),
-  constraint  DW1_RLIBX_EMAILCLKD__C check (
+  constraint  DW1_IBXPGA_EMAILCLKD__C check (
       case
         when (EMAIL_LINK_CLICKED is null) then true
         else EMAIL_SENT is not null
       end)
 );
 
-create index DW1_RLIBX_ROLE_CTIME on DW1_ROLE_INBOX (TENANT, ROLE, CTIME);
-create index DW1_RLIBX_STATUS_CTIME on DW1_ROLE_INBOX (TENANT, STATUS, CTIME);
-create index DW1_RLIBX_EMAILSENT on DW1_ROLE_INBOX (TENANT, EMAIL_SENT);
+-- Add two unique indexes that ensure each SOURCE_PGA results in only
+-- one notification to each user.
+-- Note that (TENANT, ROLE/ID_SIMPLE, PAGE, TARGET_PGA) need not be unique,
+-- for example, the same post might be edited many times, resulting
+-- in events with that post being the target (but with different SOURCE_PGA).
+create unique index DW1_IBXPGA_TNT_RL_PG_SRC__U
+    on DW1_INBOX_PAGE_ACTIONS (TENANT, ROLE, PAGE, SOURCE_PGA)
+    where ROLE is not null;
+create unique index DW1_IBXPGA_T_IDSMPL_PG_SRC__U
+    on DW1_INBOX_PAGE_ACTIONS (TENANT, ID_SIMPLE, PAGE, SOURCE_PGA)
+    where ID_SIMPLE is not null;
+
+create index DW1_IBXPGA_TNT_ROLE_CTIME
+    on DW1_INBOX_PAGE_ACTIONS (TENANT, ROLE, CTIME);
+create index DW1_IBXPGA_TNT_IDSMPL_CTIME
+    on DW1_INBOX_PAGE_ACTIONS (TENANT, ID_SIMPLE, CTIME);
+create index DW1_IBXPGA_TNT_STATUS_CTIME
+    on DW1_INBOX_PAGE_ACTIONS (TENANT, STATUS, CTIME);
+create index DW1_IBXPGA_TNT_EMAILSENT
+    on DW1_INBOX_PAGE_ACTIONS (TENANT, EMAIL_SENT);
 
 
 ----- Paths (move to Pages section above?)

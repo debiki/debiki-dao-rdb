@@ -65,7 +65,7 @@ object ReDbDaoTckTest {
         unimplemented // dao.db.updateAtnms(RelDbTestSql.PurgeSchema)
       case ("0.0.2", EmptyTables) =>
           dao.db.transaction { implicit connection => """
-            delete from DW1_ROLE_INBOX
+            delete from DW1_INBOX_PAGE_ACTIONS
             delete from DW1_EMAILS_OUT
             delete from DW1_PAGE_RATINGS
             delete from DW1_PAGE_ACTIONS
