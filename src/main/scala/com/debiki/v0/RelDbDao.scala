@@ -701,11 +701,16 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
   def addTenantHost(tenantId: String, host: TenantHost) = {
     db.transaction { implicit connection =>
-      val cncl = if (host.isCanonical) "T" else "F"
+      val cncl = host.role match {
+        case TenantHost.RoleCanonical => "C"
+        case TenantHost.RoleRedirect => "R"
+        case TenantHost.RoleLink => "L"
+        case TenantHost.RoleDuplicate => "D"
+      }
       val https = host.https match {
-        case TenantHost.HttpsRequired => "Required"
-        case TenantHost.HttpsAllowed => "Allowed"
-        case TenantHost.HttpsNone => "No"
+        case TenantHost.HttpsRequired => "R"
+        case TenantHost.HttpsAllowed => "A"
+        case TenantHost.HttpsNone => "N"
       }
       db.update("""
           insert into DW1_TENANT_HOSTS (TENANT, HOST, CANONICAL, HTTPS)
@@ -716,38 +721,64 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   }
 
   def lookupTenant(scheme: String, host: String): TenantLookup = {
+    val RoleCanonical = "C"
+    val RoleLink = "L"
+    val RoleRedirect = "R"
+    val RoleDuplicate = "D"
+    val HttpsRequired = "R"
+    val HttpsAllowed = "A"
+    val HttpsNo = "N"
     db.queryAtnms("""
         select t.TENANT TID,
             t.CANONICAL THIS_CANONICAL, t.HTTPS THIS_HTTPS,
             c.HOST CANONICAL_HOST, c.HTTPS CANONICAL_HTTPS
-        from DW1_TENANT_HOSTS t, -- this host, the one connected to
-            DW1_TENANT_HOSTS c  -- the cannonical host
+        from DW1_TENANT_HOSTS t -- this host, the one connected to
+            left join DW1_TENANT_HOSTS c  -- the cannonical host
+            on c.TENANT = t.TENANT and c.CANONICAL = 'C'
         where t.HOST = ?
-          and c.TENANT = t.TENANT
-          and c.CANONICAL = 'T'
         """, List(host), rs => {
       if (!rs.next) return FoundNothing
       val tenantId = rs.getString("TID")
-      val thisIsChost = rs.getString("THIS_CANONICAL") == "T"
       val thisHttps = rs.getString("THIS_HTTPS")
-      val chost = rs.getString("CANONICAL_HOST")
-      val chostHttps = rs.getString("CANONICAL_HTTPS")
+      val (thisRole, chost, chostHttps) = {
+        var thisRole = rs.getString("THIS_CANONICAL")
+        var chost_? = rs.getString("CANONICAL_HOST")
+        var chostHttps_? = rs.getString("CANONICAL_HTTPS")
+        if (thisRole == RoleDuplicate) {
+          // Pretend this is the chost.
+          thisRole = RoleCanonical
+          chost_? = host
+          chostHttps_? = thisHttps
+        }
+        if (chost_? eq null) {
+          // This is not a duplicate, and there's no canonical host
+          // to link or redirect to.
+          return FoundNothing
+        }
+        (thisRole, chost_?, chostHttps_?)
+      }
+
       def chostUrl =  // the canonical host URL, e.g. http://www.example.com
-          (if (chostHttps == "Required") "https://" else "http://") + chost
-      assErrIf(thisIsChost != (host == chost), "[debiki_error_98h2kwi1215]")
+          (if (chostHttps == HttpsRequired) "https://" else "http://") + chost
+
+      assErrIf((thisRole == RoleCanonical) != (host == chost),
+                                                "[debiki_error_98h2kwi1215]")
 
       def useThisHostAndScheme = FoundChost(tenantId)
       def redirect = FoundAlias(tenantId, canonicalHostUrl = chostUrl,
-                              shouldRedirect = true)
-      def useLinkRelCanonical = redirect.copy(shouldRedirect = false)
+                              role = TenantHost.RoleRedirect)
+      def useLinkRelCanonical = redirect.copy(role = TenantHost.RoleLink)
 
-      Full((thisIsChost, scheme, thisHttps) match {
-        case (true, "http" , "Required") => redirect
-        case (true, "http" , _         ) => useThisHostAndScheme
-        case (true, "https", "Required") => useThisHostAndScheme
-        case (true, "https", "Allowed" ) => useLinkRelCanonical
-        case (true, "https", "No"      ) => redirect
-        case (false, _     , _         ) => redirect
+      Full((thisRole, scheme, thisHttps) match {
+        case (RoleCanonical, "http" , HttpsRequired) => redirect
+        case (RoleCanonical, "http" , _            ) => useThisHostAndScheme
+        case (RoleCanonical, "https", HttpsRequired) => useThisHostAndScheme
+        case (RoleCanonical, "https", HttpsAllowed ) => useLinkRelCanonical
+        case (RoleCanonical, "https", HttpsNo      ) => redirect
+        case (RoleRedirect , _      , _            ) => redirect
+        case (RoleLink     , _      , _            ) => useLinkRelCanonical
+        case (RoleDuplicate, _      , _            ) => assErr(
+                                                        "[debiki_error_09KL0]")
       })
     }).open_!
   }

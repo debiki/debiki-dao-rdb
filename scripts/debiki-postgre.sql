@@ -117,24 +117,50 @@ create sequence DW1_TENANTS_ID start with 10;
 create table DW1_TENANT_HOSTS(
   TENANT varchar(32) not null,
   HOST varchar(50) not null,
-  CANONICAL varchar(10),
-  -- HTTPS values: `Required': http redirects to https, `Allowed': https
-  -- won't redirect to http, but includes a <link rel=canonical>.
-  -- `No': https times out or redirects to http.
-  HTTPS varchar(10),
+  -- 'C'anonical: this host is the canonical host,
+  -- 'R'edirect: this host redirects to the canonical host,
+  -- 'L'ink: this host links to the canonical host via a <link rel=canonical>
+  -- 'D'uplicate: this host duplicates the contents of the canonical host;
+  --    it neither links nor redirects to the canonical host. Use for
+  --    testing purposes only.
+  CANONICAL varchar(1) not null,
+  -- 'R'equired: http redirects to https
+  -- 'A'llowed: https won't redirect to http, but includes a
+  --    <link rel=canonical>.
+  -- 'N'o: https times out or redirects to http.
+  HTTPS varchar(1) default 'N' not null,
   CTIME timestamp default now() not null,
   MTIME timestamp default now() not null,
   constraint DW1_TNTHSTS__R__TENANTS  -- COULD create an FK index
       foreign key (TENANT)
       references DW1_TENANTS(ID),
   constraint DW1_TNTHSTS_HOST__U unique (HOST),
-  constraint DW1_TNTHSTS_CNCL__C check (CANONICAL in ('T', 'F')),
-  constraint DW1_TNTHSTS_HTTPS__C check (HTTPS in ('Required', 'Allowed', 'No'))
+  constraint DW1_TNTHSTS_CNCL__C check (CANONICAL in ('C', 'R', 'L', 'D')),
+  constraint DW1_TNTHSTS_HTTPS__C check (HTTPS in ('R', 'A', 'N'))
 );
 
+/* I made these changes later:
+alter table DW1_TENANT_HOSTS alter CANONICAL set not null;
+alter table DW1_TENANT_HOSTS alter CANONICAL type varchar(1);
+alter table DW1_TENANT_HOSTS drop constraint DW1_TNTHSTS_CNCL__C;
+update DW1_TENANT_HOSTS set CANONICAL = 'C' where CANONICAL = 'T';
+update DW1_TENANT_HOSTS set CANONICAL = 'R' where CANONICAL = 'F';
+alter table DW1_TENANT_HOSTS add
+  constraint DW1_TNTHSTS_CNCL__C check (CANONICAL in ('C', 'R', 'L', 'D'));
+
+alter table DW1_TENANT_HOSTS alter HTTPS set default 'N';
+alter table DW1_TENANT_HOSTS alter HTTPS set not null;
+alter table DW1_TENANT_HOSTS alter HTTPS type varchar(1);
+alter table DW1_TENANT_HOSTS drop constraint DW1_TNTHSTS_HTTPS__C;
+update DW1_TENANT_HOSTS set HTTPS = 'N';
+alter table DW1_TENANT_HOSTS add constraint DW1_TNTHSTS_HTTPS__C check (
+    HTTPS in ('R', 'A', 'N'));
+
+drop index DW1_TNTHSTS_TENANT_CNCL__U;
 -- Make sure there's only one canonical host per tenant.
-create unique index DW1_TNTHSTS_TENANT_CNCL__U on DW1_TENANT_HOSTS(TENANT)
-where CANONICAL = 'T';
+create unique index DW1_TNTHSTS_TNT_CNCL__U on DW1_TENANT_HOSTS(TENANT)
+where CANONICAL = 'C';
+*/
 
 -- Create a Local tenant that redirects 127.0.0.1 to `localhost'.
 insert into DW1_TENANTS(ID, NAME) values ('1', 'Local');
