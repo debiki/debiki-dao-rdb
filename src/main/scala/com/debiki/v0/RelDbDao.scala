@@ -321,24 +321,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
   }
 
-  private def _loadRequesterInfo(reqInfo: RequestInfo
-                                    ): RequesterInfo = reqInfo.loginId match {
-    case None =>
-      RequesterInfo(ip = reqInfo.ip, login = None,
-            identity = None, user = None, memships = Nil)
-    case Some(id) =>
-      loadUser(withLoginId = id, tenantId = reqInfo.tenantId) match {
-        case None =>
-          error("Found no identity for identity "+ safed(id) +
-              ", tenant "+ reqInfo.tenantId +" [debiki_error_0921kxa13]")
-        case Some((i: Identity, u: User)) =>
-          val info = RequesterInfo(ip = reqInfo.ip, login = None, // not loaded
-                identity = Some(i), user = Some(u), memships = Nil)
-          val memships_ = _loadMemships(reqInfo.tenantId, info)
-          info.copy(memships = memships_)
-      }
-  }
-
   def loadUser(withLoginId: String, tenantId: String
                   ): Option[(Identity, User)] = {
     def loginInfo = "login id "+ safed(withLoginId) +
@@ -508,8 +490,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }).open_! // silly box
   }
 
-  private def _loadMemships(tenantId: String, r: RequesterInfo
-                               ): List[String] = {
+  private def _loadMemships(r: RequestInfo): List[String] = {
     Nil
   }
 
@@ -796,7 +777,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     _findCorrectPagePath(pathToCheck)
   }
 
-  def loadPermsOnPage(reqInfo: RequestInfo): (RequesterInfo, PermsOnPage) = {
+  def loadPermsOnPage(reqInfo: RequestInfo): PermsOnPage = {
     // Currently all permissions are actually hardcoded in this function.
     // (There's no permissions db table.)
 
@@ -813,21 +794,18 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       and so on with the parent's parent ...
     */
 
-    val requester = _loadRequesterInfo(reqInfo)
-    def user = requester.user
-
     // ?? Replace admin test with:
     // if (requeuster.memships.contains(AdminGroupId)) return PermsOnPage.All
 
     // Allow superadmins to do anything, e.g. create pages anywhere.
     // (Currently users can edit their own pages only.)
-    if (user.map(_.isSuperAdmin) == Some(true))
-      return (requester, PermsOnPage.All)
+    if (reqInfo.user.map(_.isSuperAdmin) == Some(true))
+      return PermsOnPage.All
 
     // For now, hide .js and .css and .tmpl files for everyone but superadmins.
     // (If people can *edit* them, they could conduct xss attacks.)
     if (reqInfo.pagePath.name.contains('.'))
-      return (requester, PermsOnPage.None)
+      return PermsOnPage.None
 
     // Non-admins can only create pages whose names are prefixed
     // with their guid, like so: /folder/-guid-pagename.
@@ -838,7 +816,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       case (Do.Create, true) => () // a page wil be created in this folder
       case (Do.Create, false) =>
         // A page name was specified, not a folder. Deny.
-        return (requester, PermsOnPage.None)
+        return PermsOnPage.None
       case _ => ()
     }
 
@@ -854,14 +832,15 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
     val isWiki = reqInfo.pagePath.folder == "/wiki/"
 
-    (requester, PermsOnPage.Wiki.copy(
+    PermsOnPage.Wiki.copy(
       createPage = mayCreatePage,
       editPage = isWiki,
       // Authenticated users can edit others' comments.
       // (In the future, the reputation system (not implemented) will make
       // them lose this ability should they misuse it.)
-      editAnyReply = isWiki || user.map(_.isAuthenticated) == Some(true)
-      ))
+      editAnyReply =
+            isWiki || reqInfo.user.map(_.isAuthenticated) == Some(true)
+    )
   }
 
   def saveInboxSeeds(tenantId: String, seeds: Seq[InboxSeed]) {
