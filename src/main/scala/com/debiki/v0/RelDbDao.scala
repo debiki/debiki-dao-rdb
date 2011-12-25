@@ -689,6 +689,25 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }.open_!
   }
 
+  def loadTenants(tenantIds: Seq[String]): Seq[Tenant] = {
+    // For now, load only tenant names, and only 1 tenant.
+    require(tenantIds.length == 1)
+
+    var tenants = List[Tenant]()
+    db.queryAtnms("""
+        select ID, NAME from DW1_TENANTS where ID = ?
+        """,
+        List(tenantIds.head),
+        rs => {
+      while (rs.next) {
+        tenants ::= Tenant(
+          id = rs.getString("ID"), name = rs.getString("NAME"), hosts = Nil)
+      }
+      Empty // my stupid API, rewrite some day?
+    })
+    tenants
+  }
+
   def addTenantHost(tenantId: String, host: TenantHost) = {
     db.transaction { implicit connection =>
       val cncl = host.role match {
@@ -775,6 +794,35 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
   def checkPagePath(pathToCheck: PagePath): Box[PagePath] = {
     _findCorrectPagePath(pathToCheck)
+  }
+
+  def listPagePaths(withFolderPrefix: String, tenantId: String,
+        sortBy: PageSortOrder, limit: Int, offset: Int): Seq[PagePath] = {
+
+    // Could join w PAGE_ACTIONS and order by page creation time?
+    // MUST include only PUBLISHED pages or people might find all my
+    // silly test pages or pages that I won't ever (intend to) publish!
+    // TODO add & use some PublishPost Page case class?
+    var items = List[PagePath]()
+    db.queryAtnms("""
+        select FOLDER, PAGE_GUID, PAGE_NAME, GUID_IN_PATH
+        from DW1_PATHS
+        where TENANT = ? and FOLDER like ?
+        """,
+        List(tenantId, withFolderPrefix +"%"),
+        rs => {
+      while (rs.next) {
+        items ::= PagePath(
+          tenantId = tenantId,
+          folder = rs.getString("FOLDER"),
+          guid = Some(rs.getString("PAGE_GUID")),
+          guidInPath = rs.getString("GUID_IN_PATH") == "T",
+          name = s2e(rs.getString("PAGE_NAME"))
+        )
+      }
+      Empty // dummy
+    })
+    items
   }
 
   def loadPermsOnPage(reqInfo: RequestInfo): PermsOnPage = {
