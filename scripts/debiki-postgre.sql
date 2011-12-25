@@ -448,9 +448,13 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       foreign key (PAGE, RELPA) -- no index: no deletes/upds in parent table
                          -- and no joins (loading whole page at once instead)
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  constraint DW1_PACTIONS_TYPE__C
-      check (TYPE in (
-        'Post', 'Meta', 'Edit', 'EditApp', 'Rating',
+  constraint DW1_PGAS_TYPE__C check (TYPE in (
+        'Post', 'Title', 'Publ', 'Meta', 'Edit',
+        'EditApp', -- SHOULD replace w Publd?
+        'Rating',
+        -- 'Reason' -- no, only "needed" for Edit - but can use Title instead.
+        -- (Other post types can have their reason inlined, TEXT isn't used
+        -- for those other types.)
         'DelPost', 'DelTree',
         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther')),
   -- There must be no action with id 0; let 0 mean nothing.
@@ -469,7 +473,19 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
 -- updated at the end of the session.
 create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
-create table DW1_PAGE_RATINGS(
+-- todo prod:  (done dev, test)
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_TYPE__C;
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C check (TYPE in (
+        'Post', 'Title', 'Publ', 'Meta', 'Edit',
+        'EditApp', -- SHOULD replace w Publd?
+        'Rating',
+        -- 'Reason' -- no, only "needed" for Edit - but can use Title instead.
+        -- (Other post types can have their reason inlined, TEXT isn't used
+        -- for those other types.)
+        'DelPost', 'DelTree',
+        'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
+
+create table DW1_PAGE_RATINGS(  -- abbreviated PGRTNGS? PGRS? PRATINGS deprctd.
   PAGE varchar(32) not null,
   PAID varchar(32) not null, -- page action id
   TAG varchar(30) not null,

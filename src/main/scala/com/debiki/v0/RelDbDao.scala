@@ -601,12 +601,16 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         val where_? = rs.getString("WHEERE")
         val newIp = Option(rs.getString("NEW_IP"))
 
+        // (This whole match-case will go away when I unify all types
+        // into Post?)  ...
         val action = typee match {
-          case post if post == "Post" || post == "Meta" =>
+                     // ... then this ugly if ..||..||.. won't be an issue.
+          case typeStr if typeStr == "Post" || typeStr == "Title" ||
+                typeStr == "Publ" || typeStr == "Meta" =>
             // How repr empty root post parent? ' ' or '-' or '_' or '0'?
             new Post(id = id, parent = relpa, date = time,
               loginId = loginSno, newIp = newIp, text = n2e(text_?),
-              markup = n2e(markup_?), isMeta = post == "Meta",
+              markup = n2e(markup_?), tyype = _toPostType(typeStr),
               where = Option(where_?))
           case "Rating" =>
             val tags = ratingTags(id)
@@ -1142,9 +1146,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       x match {
         case p: Post =>
           val markup = "" // TODO
-          val tyype = if (p.isMeta) "Meta" else "Post"
           db.update(insertIntoActions, commonVals:::List(
-            p.loginId, pageSno, p.id, p.date, tyype,
+            p.loginId, pageSno, p.id, p.date, _toFlag(p.tyype),
             p.parent, p.text, markup, e2n(p.where)))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
@@ -1186,6 +1189,25 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       emailNotfPrefs = emailNotfPrefs,
       country = "",
       website = identity.website, isSuperAdmin = false)
+  }
+
+  def _toFlag(postType: PostType): String = postType match {
+    case PostType.Text => "Post"
+    case PostType.Title => "Title"
+    case PostType.Publ => "Publ"
+    case PostType.Meta => "Meta"
+  }
+
+  def _toPostType(flag: String): PostType = flag match {
+    case "Post" => PostType.Text
+    case "Title" => PostType.Title
+    case "Publ" => PostType.Publ
+    case "Meta" => PostType.Meta
+    case x =>
+      warnDbgDie("Bad PostType value: "+ safed(x) +
+          " [debiki_error_0xcke215]")
+      PostType.Text  // fallback to something with no side effects
+                      // (except perhaps for a weird post appearing)
   }
 
   def _toFlag(prefs: EmailNotfPrefs): String = prefs match {
