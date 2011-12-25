@@ -126,7 +126,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             }
           }
           assErrIf(idtyId.isEmpty, "[debiki_error_93kRhk20")
-          val notfPrefs: EmailNotfPrefs = _fromFlagEmailNotfs(emailNotfsStr)
+          val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
           val user = _dummyUserFor(identity = s, emailNotfPrefs = notfPrefs,
                                   id = _dummyUserIdFor(idtyId))
           val identityWithId = s.copy(id = idtyId, userId = user.id)
@@ -193,7 +193,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               id = rs.getLong("USER_SNO").toString,
               displayName = n2e(rs.getString("DISPLAY_NAME")),
               email = n2e(rs.getString("EMAIL")),
-              emailNotfPrefs = _fromFlagEmailNotfs(
+              emailNotfPrefs = _toEmailNotfs(
                                   rs.getString("EMAIL_NOTFS")),
               country = n2e(rs.getString("COUNTRY")),
               website = n2e(rs.getString("WEBSITE")),
@@ -443,7 +443,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         var userId = rs.getLong("U_ID").toString  // 0 if null
         var user: Option[User] = None
         assErrIf(idId isEmpty, "[debiki_error_392Qvc89]")
-        val emailPrefs = _fromFlagEmailNotfs(rs.getString("EMAIL_NOTFS"))
+        val emailPrefs = _toEmailNotfs(rs.getString("EMAIL_NOTFS"))
 
         identities ::= (rs.getString("ID_TYPE") match {
           case "Simple" =>
@@ -1220,7 +1220,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       "N"  // fallback to no email
   }
 
-  def _fromFlagEmailNotfs(flag: String): EmailNotfPrefs = flag match {
+  def _toEmailNotfs(flag: String): EmailNotfPrefs = flag match {
     case null =>
       // Don't send email unless the user has actively choosen to
       // receive emails (the user has made no choice in this case).
