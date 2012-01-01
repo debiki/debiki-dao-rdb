@@ -800,29 +800,64 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     _findCorrectPagePath(pathToCheck)
   }
 
-  def listPagePaths(withFolderPrefix: String, tenantId: String,
-        sortBy: PageSortOrder, limit: Int, offset: Int): Seq[PagePath] = {
+  def listPagePaths(
+    withFolderPrefix: String,
+    tenantId: String,
+    includeStatuses: List[PageStatus],
+    sortBy: PageSortOrder,
+    limit: Int,
+    offset: Int
+  ): Seq[(PagePath, PageDetails)] = {
 
-    // Could join w PAGE_ACTIONS and order by page creation time?
-    // MUST include only PUBLISHED pages or people might find all my
-    // silly test pages or pages that I won't ever (intend to) publish!
-    // TODO add & use some PublishPost Page case class?
-    var items = List[PagePath]()
+    require(limit == Int.MaxValue) // for now
+    require(offset == 0)  // for now
+
+    val statusesToInclStr =
+      includeStatuses.map(_toFlag).mkString("'", "','", "'")
+    if (statusesToInclStr isEmpty)
+      return Nil
+
+    val orderByStr = sortBy match {
+      case PageSortOrder.ByPath =>
+        " order by PARENT_FOLDER, SHOW_ID, PAGE_SLUG"
+      case PageSortOrder.ByPublTime =>
+        " order by CACHED_PUBL_TIME desc"
+    }
+
+    var items = List[(PagePath, PageDetails)]()
     db.queryAtnms("""
-        select FOLDER, PAGE_GUID, PAGE_NAME, GUID_IN_PATH
-        from DW1_PATHS
-        where TENANT = ? and FOLDER like ?
-        """,
+        select PARENT_FOLDER,
+            PAGE_ID,
+            SHOW_ID,
+            PAGE_SLUG,
+            PAGE_STATUS,
+            CACHED_TITLE,
+            CACHED_PUBL_TIME,
+            CACHED_SGFNT_MTIME
+        from DW1_PAGE_PATHS
+        where TENANT = ? and PARENT_FOLDER like ?
+        and PAGE_STATUS in ("""+ statusesToInclStr +""")
+        """+ orderByStr,
         List(tenantId, withFolderPrefix +"%"),
         rs => {
       while (rs.next) {
-        items ::= PagePath(
+        val pagePath = PagePath(
           tenantId = tenantId,
-          folder = rs.getString("FOLDER"),
-          guid = Some(rs.getString("PAGE_GUID")),
-          guidInPath = rs.getString("GUID_IN_PATH") == "T",
-          name = s2e(rs.getString("PAGE_NAME"))
+          folder = rs.getString("PARENT_FOLDER"),
+          guid = Some(rs.getString("PAGE_ID")),
+          guidInPath = rs.getString("SHOW_ID") == "T",
+          name = d2e(rs.getString("PAGE_SLUG"))
         )
+        val pageDetails = PageDetails(
+          status = _toPageStatus(rs.getString("PAGE_STATUS")),
+          cachedTitle =
+              Option(rs.getString(("CACHED_TITLE"))),
+          cachedPublTime =
+              Option(rs.getTimestamp("CACHED_PUBL_TIME")).map(ts2d _),
+          cachedSgfntMtime =
+              Option(rs.getTimestamp("CACHED_SGFNT_MTIME")).map(ts2d _)
+        )
+        items ::= pagePath -> pageDetails
       }
       Empty // dummy
     })
@@ -1012,18 +1047,18 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   // Looks up the correct PagePath for a possibly incorrect PagePath.
   private def _findCorrectPagePath(pagePathIn: PagePath): Box[PagePath] = {
     var query = """
-        select FOLDER, PAGE_GUID, PAGE_NAME, GUID_IN_PATH
-        from DW1_PATHS
+        select PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG
+        from DW1_PAGE_PATHS
         where TENANT = ?
         """
     var binds = List(pagePathIn.tenantId)
     var maxRowsFound = 1  // there's a unique key
     pagePathIn.guid match {
       case Some(guid) =>
-        query += " and PAGE_GUID = ?"
+        query += " and PAGE_ID = ?"
         binds ::= guid
       case None =>
-        // GUID_IN_PATH = 'F' means that the page guid must not be part
+        // SHOW_ID = 'F' means that the page guid must not be part
         // of the page url. ((So you cannot look up [a page that has its guid
         // as part of its url] by searching for its url without including
         // the guid. Had that been possible, many pages could have been found
@@ -1031,12 +1066,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         // Hmm, could search for all pages, as if the guid hadn't been
         // part of their name, and list all pages with matching names?))
         query += """
-            and GUID_IN_PATH = 'F'
+            and SHOW_ID = 'F'
             and (
-              (FOLDER = ? and PAGE_NAME = ?)
+              (PARENT_FOLDER = ? and PAGE_SLUG = ?)
             """
         binds ::= pagePathIn.folder
-        binds ::= e2s(pagePathIn.name)
+        binds ::= e2d(pagePathIn.name)
         // Try to correct bad URL links.
         // COULD skip (some of) the two if tests below, if action is ?newpage.
         // (Otherwise you won't be able to create a page in
@@ -1046,9 +1081,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           // Try that path too. Choose sort orter so /folder/page appears
           // first, and skip /folder/page/ if /folder/page is found.
           query += """
-              or (FOLDER = ? and PAGE_NAME = ' ')
+              or (PARENT_FOLDER = ? and PAGE_SLUG = '-')
               )
-            order by length(FOLDER) asc
+            order by length(PARENT_FOLDER) asc
             """
           binds ::= pagePathIn.folder + pagePathIn.name +"/"
           maxRowsFound = 2
@@ -1057,9 +1092,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           // Perhaps the correct path is /folder/page not /folder/page/.
           // But prefer /folder/page/ if both pages are found.
           query += """
-              or (FOLDER = ? and PAGE_NAME = ?)
+              or (PARENT_FOLDER = ? and PAGE_SLUG = ?)
               )
-            order by length(FOLDER) desc
+            order by length(PARENT_FOLDER) desc
             """
           val perhapsPath = pagePathIn.folder.dropRight(1)  // drop `/'
           val lastSlash = perhapsPath.lastIndexOf("/")
@@ -1076,12 +1111,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       var correctPath: Box[PagePath] = Empty
       if (rs.next) {
         correctPath = Full(pagePathIn.copy(  // keep pagePathIn.tenantId
-            folder = rs.getString("FOLDER"),
-            guid = Some(rs.getString("PAGE_GUID")),
-            guidInPath = rs.getString("GUID_IN_PATH") == "T",
+            folder = rs.getString("PARENT_FOLDER"),
+            guid = Some(rs.getString("PAGE_ID")),
+            guidInPath = rs.getString("SHOW_ID") == "T",
             // If there is a root page ("serveraddr/") with no name,
             // it is stored as a single space; s2e removes such a space:
-            name = s2e(rs.getString("PAGE_NAME"))))
+            name = d2e(rs.getString("PAGE_SLUG"))))
       }
       assert(maxRowsFound == 2 || !rs.next)
       correctPath
@@ -1103,13 +1138,15 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     //    /folder/pagename
     val guidInPath = if (where.isFolderPath) "T" else "F"
 
+    // Create a draft, always a draft ('D') -- the user needs to
+    // write something before it makes sense to publish the page.
     db.update("""
-        insert into DW1_PATHS (TENANT, FOLDER, PAGE_GUID,
-                                   PAGE_NAME, GUID_IN_PATH)
-        values (?, ?, ?, ?, ?)
+        insert into DW1_PAGE_PATHS (
+          TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, PAGE_STATUS)
+        values (?, ?, ?, ?, ?, 'D')
         """,
-        List(where.tenantId, where.folder, debate.guid, e2s(where.name),
-            guidInPath))
+        List(where.tenantId, where.folder, debate.guid, guidInPath,
+            e2d(where.name)))
   }
 
   private def _insert[T](
@@ -1208,6 +1245,24 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           " [debiki_error_0xcke215]")
       PostType.Text  // fallback to something with no side effects
                       // (except perhaps for a weird post appearing)
+  }
+
+  def _toPageStatus(pageStatusStr: String): PageStatus = pageStatusStr match {
+    case "D" => PageStatus.Draft
+    case "P" => PageStatus.Published
+    case "X" => PageStatus.Deleted
+    case x =>
+      warnDbgDie("Bad page status: "+ safed(x) +" [debiki_error_0395k7]")
+      PageStatus.Draft  // make it visible to admins only
+  }
+
+  def _toFlag(pageStatus: PageStatus): String = pageStatus match {
+    case PageStatus.Draft => "D"
+    case PageStatus.Published => "P"
+    case PageStatus.Deleted => "X"
+    case x =>
+      warnDbgDie("Bad PageStatus: "+ safed(x) +" [debiki_error_5k2eI5]")
+      "D"  // make it visible to admins only
   }
 
   def _toFlag(prefs: EmailNotfPrefs): String = prefs match {

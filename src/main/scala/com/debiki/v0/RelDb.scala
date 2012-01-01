@@ -35,12 +35,6 @@ object RelDb {
   /** Converts empty to SQL NULL. */
   def e2n(s: String) = if (s != "") s else Null(js.Types.VARCHAR)
 
-  /** Converts space to the empty string ("Space To Empty"). */
-  def s2e(s: String) = if (s == " ") "" else s
-
-  /** Converts the empty string to space ("Empty To Space"). */
-  def e2s(s: String) = if (s isEmpty) " " else s
-
   /** Converts a dash to the empty string ("Dash To Empty"). */
   def d2e(s: String) = if (s == "-") "" else s
 

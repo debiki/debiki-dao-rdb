@@ -13,6 +13,9 @@ occurrances of "time".
 Naming standard
 ------------------
  "DW1_...__C" for check constraints,
+        "__C_NE" check non empty
+        "__C_N0" check not 0
+        "__C_IN" check in (list of allowed values)
  "DW1_...__U" for unique constraints and unique indexes
  "DW1_...__R__..." for referential constraints
 where "..." is "<abbreviated-table-name>_<abbreviated>_<column>_<names>".
@@ -406,6 +409,7 @@ create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 -- (How do we know who created the page? The user who created
 -- the root post, its page-action-id is always "1".)
 -- COULD remove? select ... from DW1_PAGE_ACTIONS where PAID = '1' instead
+-- COULD really remove, use PAGE_PATHS instead and rename it to PAGES?
 create table DW1_PAGES(
   SNO varchar(32)       not null,   -- COULD remove, use only GUID
   TENANT varchar(32)    not null,
@@ -604,31 +608,65 @@ create index DW1_IBXPGA_TNT_EMAILSENT
 
 ----- Paths (move to Pages section above?)
 
-create table DW1_PATHS(
+-- TODO create in prod (dev, test done) and copy values from DW1_PATHS.
+create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   TENANT varchar(32) not null,
-  FOLDER varchar(100) not null,
-  PAGE_GUID varchar(32) not null,
-  PAGE_NAME varchar(100) not null,
-  GUID_IN_PATH varchar(1) not null,
-  constraint DW1_PATHS_TNT_PAGE__P primary key (TENANT, PAGE_GUID),
-  constraint DW1_PATHS_TNT_PAGE__R__PAGES  -- ix DW1_PATHS_TNT_PAGE__P
-      foreign key (TENANT, PAGE_GUID)
+  PARENT_FOLDER varchar(100) not null,
+  PAGE_ID varchar(32) not null,
+  SHOW_ID varchar(1) not null,
+  PAGE_SLUG varchar(100) not null,
+  -- The page status, see Debiki for Developers #9vG5I.
+  -- 'D'raft, 'P'ublished, 'X' deleted, 'E'rased.
+  PAGE_STATUS varchar(1) not null,
+  -- Should be updated whenever the page is renamed.
+  CACHED_TITLE varchar(100) default null,
+  -- When the page body was published (draft versions don't count).
+  CACHED_PUBL_TIME timestamp default null,
+  -- When the page was last modified in a significant way. Of interest
+  -- to e.g. Atom feeds.
+  CACHED_SGFNT_MTIME timestamp default null,
+  constraint DW1_PGPTHS_TNT_PGID__P primary key (TENANT, PAGE_ID),
+  constraint DW1_PGPTHS_TNT_PGID__R__PAGES  -- ix DW1_PGPTHS_TNT_PAGE__P
+      foreign key (TENANT, PAGE_ID)
       references DW1_PAGES (TENANT, GUID) deferrable,
-  constraint DW1_PATHS_FOLDER__C
-      check (FOLDER not like '%/-%'), -- '-' means guid follows
-  constraint DW1_PATHS_GUIDINPATH__C
-      check (GUID_IN_PATH in ('T', 'F'))
+  -- Ensure the folder path contains no page ID mark; '-' means an id follows.
+  constraint DW1_PGPTHS_FOLDER__C_DASH check (PARENT_FOLDER not like '%/-%'),
+  constraint DW1_PGPTHS_FOLDER__C_START check (PARENT_FOLDER like '/%'),
+  constraint DW1_PGPTHS_SHOWID__C_IN check (SHOW_ID in ('T', 'F')),
+  constraint DW1_PGPTHS_SLUG__C_NE check (trim(PAGE_SLUG) <> ''),
+  constraint DW1_PGPTHS_PGSTS__C_IN check (PAGE_STATUS in('D', 'P', 'X', 'E')),
+  constraint DW1_PGPTHS_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
+  constraint DW1_PGPTHS_MTIME_PUBLTIME__C check (
+      CACHED_SGFNT_MTIME >= CACHED_PUBL_TIME)
 );
 
 -- TODO: Test case: no 2 pages with same path
--- Create an index that ensures (tenant, folder, pagename) is unique,
+-- Create an index that ensures (tenant, folder, page-slug) is unique,
 -- if the page guid is not included in the path to the page.
--- That is, if the path is like:  /some/folder/pagename  (no guid in path)
--- rather than:  /some/folder/-<guid>-pagename  (guid included in path)
-create unique index DW1_PATHS__U on DW1_PATHS(TENANT, FOLDER, PAGE_NAME, PAGE_GUID)
-where GUID_IN_PATH = 'T';
+-- That is, if the path is like:  /some/folder/page-slug  (*no* guid in path)
+-- rather than:  /some/folder/-<guid>-page-slug  (guid included in path)
+-- then ensure there's no other page with the same /some/folder/page-slug.
+create unique index DW1_PGPTHS__U
+on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG)
+where SHOW_ID = 'F';
 
+-- Also create an index that covers *all* pages (even those without the ID
+-- shown before the page slug).
+create index DW1_PGPTHS_ALL
+on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, PAGE_ID);
 
--- Also create an index that covers *all* pages (even those without GUID in path).
-create index DW1_PATHS_ALL on DW1_PATHS(TENANT, FOLDER, PAGE_NAME, PAGE_GUID);
+/* TODO: prod (dev, test: done)
+insert into DW1_PAGE_PATHS (
+  TENANT, PARENT_FOLDER, PAGE_ID,
+  PAGE_SLUG,
+  SHOW_ID,
+  PAGE_STATUS, CACHED_TITLE, CACHED_PUBL_TIME, CACHED_SGFNT_MTIME)
+select
+  TENANT, FOLDER, PAGE_GUID,
+  case PAGE_NAME when ' ' then '-' else PAGE_NAME end,
+  GUID_IN_PATH,
+  'D', null, null, null
+from DW1_PATHS;
+*/
+
 
