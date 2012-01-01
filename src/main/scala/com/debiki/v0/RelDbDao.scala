@@ -662,7 +662,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     perhapsTmpls map { tmplPath =>
       assert(tmplPath.tenantId == tenantId)
       _findCorrectPagePath(tmplPath) match {
-        case Full(pagePath) => guids ::= pagePath.guid.get
+        case Full(pagePath) => guids ::= pagePath.pageId.get
         case Empty => // fine, template does not exist
         case f: Failure => error(
           "Error loading template guid [debiki_error_309sU32]:\n"+ f)
@@ -844,9 +844,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         val pagePath = PagePath(
           tenantId = tenantId,
           folder = rs.getString("PARENT_FOLDER"),
-          guid = Some(rs.getString("PAGE_ID")),
-          guidInPath = rs.getString("SHOW_ID") == "T",
-          name = d2e(rs.getString("PAGE_SLUG"))
+          pageId = Some(rs.getString("PAGE_ID")),
+          showId = rs.getString("SHOW_ID") == "T",
+          pageSlug = d2e(rs.getString("PAGE_SLUG"))
         )
         val pageDetails = PageDetails(
           status = _toPageStatus(rs.getString("PAGE_STATUS")),
@@ -891,7 +891,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
     // For now, hide .js and .css and .tmpl files for everyone but superadmins.
     // (If people can *edit* them, they could conduct xss attacks.)
-    if (reqInfo.pagePath.name.contains('.'))
+    if (reqInfo.pagePath.pageSlug.contains('.'))
       return PermsOnPage.None
 
     // Non-admins can only create pages whose names are prefixed
@@ -1053,10 +1053,10 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         """
     var binds = List(pagePathIn.tenantId)
     var maxRowsFound = 1  // there's a unique key
-    pagePathIn.guid match {
-      case Some(guid) =>
+    pagePathIn.pageId match {
+      case Some(id) =>
         query += " and PAGE_ID = ?"
-        binds ::= guid
+        binds ::= id
       case None =>
         // SHOW_ID = 'F' means that the page guid must not be part
         // of the page url. ((So you cannot look up [a page that has its guid
@@ -1071,12 +1071,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               (PARENT_FOLDER = ? and PAGE_SLUG = ?)
             """
         binds ::= pagePathIn.folder
-        binds ::= e2d(pagePathIn.name)
+        binds ::= e2d(pagePathIn.pageSlug)
         // Try to correct bad URL links.
         // COULD skip (some of) the two if tests below, if action is ?newpage.
         // (Otherwise you won't be able to create a page in
         // /some/path/ if /some/path already exists.)
-        if (pagePathIn.name nonEmpty) {
+        if (pagePathIn.pageSlug nonEmpty) {
           // Perhaps the correct path is /folder/page/ not /folder/page.
           // Try that path too. Choose sort orter so /folder/page appears
           // first, and skip /folder/page/ if /folder/page is found.
@@ -1085,7 +1085,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               )
             order by length(PARENT_FOLDER) asc
             """
-          binds ::= pagePathIn.folder + pagePathIn.name +"/"
+          binds ::= pagePathIn.folder + pagePathIn.pageSlug +"/"
           maxRowsFound = 2
         }
         else if (pagePathIn.folder.count(_ == '/') >= 2) {
@@ -1112,11 +1112,11 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       if (rs.next) {
         correctPath = Full(pagePathIn.copy(  // keep pagePathIn.tenantId
             folder = rs.getString("PARENT_FOLDER"),
-            guid = Some(rs.getString("PAGE_ID")),
-            guidInPath = rs.getString("SHOW_ID") == "T",
+            pageId = Some(rs.getString("PAGE_ID")),
+            showId = rs.getString("SHOW_ID") == "T",
             // If there is a root page ("serveraddr/") with no name,
             // it is stored as a single space; s2e removes such a space:
-            name = d2e(rs.getString("PAGE_SLUG"))))
+            pageSlug = d2e(rs.getString("PAGE_SLUG"))))
       }
       assert(maxRowsFound == 2 || !rs.next)
       correctPath
@@ -1136,7 +1136,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     // but /folder/pagename?createpage results in the guid being hidden,
     // and this'll be the path to the page:
     //    /folder/pagename
-    val guidInPath = if (where.isFolderPath) "T" else "F"
+    val showPageId = if (where.isFolderPath) "T" else "F"
 
     // Create a draft, always a draft ('D') -- the user needs to
     // write something before it makes sense to publish the page.
@@ -1145,8 +1145,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, PAGE_STATUS)
         values (?, ?, ?, ?, ?, 'D')
         """,
-        List(where.tenantId, where.folder, debate.guid, guidInPath,
-            e2d(where.name)))
+        List(where.tenantId, where.folder, debate.guid, showPageId,
+            e2d(where.pageSlug)))
   }
 
   private def _insert[T](
