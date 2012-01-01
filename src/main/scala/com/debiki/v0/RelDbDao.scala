@@ -1230,15 +1230,15 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
   def _toFlag(postType: PostType): String = postType match {
     case PostType.Text => "Post"
-    case PostType.Title => "Title"
-    case PostType.Publ => "Publ"
+    //case PostType.Title => "Title"
+    //case PostType.Publ => "Publ"
     case PostType.Meta => "Meta"
   }
 
   def _toPostType(flag: String): PostType = flag match {
     case "Post" => PostType.Text
-    case "Title" => PostType.Title
-    case "Publ" => PostType.Publ
+    //case "Title" => PostType.Title
+    //case "Publ" => PostType.Publ
     case "Meta" => PostType.Meta
     case x =>
       warnDbgDie("Bad PostType value: "+ safed(x) +
