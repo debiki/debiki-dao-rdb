@@ -608,26 +608,26 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           case typeStr if typeStr == "Post" || typeStr == "Title" ||
                 typeStr == "Publ" || typeStr == "Meta" =>
             // How repr empty root post parent? ' ' or '-' or '_' or '0'?
-            new Post(id = id, parent = relpa, date = time,
+            new Post(id = id, parent = relpa, ctime = time,
               loginId = loginSno, newIp = newIp, text = n2e(text_?),
               markup = n2e(markup_?), tyype = _toPostType(typeStr),
               where = Option(where_?))
           case "Rating" =>
             val tags = ratingTags(id)
-            new Rating(id = id, postId = relpa, date = time,
+            new Rating(id = id, postId = relpa, ctime = time,
               loginId = loginSno, newIp = newIp, tags = tags)
           case "Edit" =>
-            new Edit(id = id, postId = relpa, date = time,
+            new Edit(id = id, postId = relpa, ctime = time,
               loginId = loginSno, newIp = newIp, text = n2e(text_?))
           case "EditApp" =>
-            new EditApp(id = id, editId = relpa, date = time,
+            new EditApp(id = id, editId = relpa, ctime = time,
               loginId = loginSno, newIp = newIp,
               result = n2e(text_?))
           case flag if flag startsWith "Flag" =>
             val reasonStr = flag drop 4 // drop "Flag"
             val reason = FlagReason withName reasonStr
             Flag(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
-                date = time, reason = reason, details = n2e(text_?))
+                ctime = time, reason = reason, details = n2e(text_?))
           case delete if delete startsWith "Del" =>
             val wholeTree = delete match {
               case "DelTree" => true
@@ -635,7 +635,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               case x => assErr("[debiki_error_0912k22]")
             }
             Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
-                date = time, wholeTree = wholeTree, reason = n2e(text_?))
+                ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
           case x => return Failure(
               "Bad DW1_ACTIONS.TYPE: "+ safed(typee) +" [debiki_error_Y8k3B]")
         }
@@ -1184,30 +1184,30 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         case p: Post =>
           val markup = "" // TODO
           db.update(insertIntoActions, commonVals:::List(
-            p.loginId, pageSno, p.id, p.date, _toFlag(p.tyype),
+            p.loginId, pageSno, p.id, p.ctime, _toFlag(p.tyype),
             p.parent, p.text, markup, e2n(p.where)))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
-            r.loginId, pageSno, r.id, r.date, "Rating", r.postId,
+            r.loginId, pageSno, r.id, r.ctime, "Rating", r.postId,
             "", "", ""))
           db.batchUpdate("""
             insert into DW1_PAGE_RATINGS(PAGE, PAID, TAG) values (?, ?, ?)
             """, r.tags.map(t => List(pageSno, r.id, t)))
         case e: Edit =>
           db.update(insertIntoActions, commonVals:::List(
-            e.loginId, pageSno, e.id, e.date, "Edit",
+            e.loginId, pageSno, e.id, e.ctime, "Edit",
             e.postId, e.text, "", ""))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
-            a.loginId, pageSno, a.id, a.date, "EditApp",
+            a.loginId, pageSno, a.id, a.ctime, "EditApp",
             a.editId, a.result, "", ""))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
-            f.loginId, pageSno, f.id, f.date, "Flag" + f.reason,
+            f.loginId, pageSno, f.id, f.ctime, "Flag" + f.reason,
             f.postId, f.details, "", ""))
         case d: Delete =>
           db.update(insertIntoActions, commonVals:::List(
-            d.loginId, pageSno, d.id, d.date,
+            d.loginId, pageSno, d.id, d.ctime,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
             d.postId, d.reason, "", ""))
         case x => unimplemented(
