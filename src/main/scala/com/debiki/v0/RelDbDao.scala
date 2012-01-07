@@ -618,7 +618,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               loginId = loginSno, newIp = newIp, tags = tags)
           case "Edit" =>
             new Edit(id = id, postId = relpa, ctime = time,
-              loginId = loginSno, newIp = newIp, text = n2e(text_?))
+              loginId = loginSno, newIp = newIp, text = n2e(text_?),
+              newMarkup = Option(markup_?))
           case "EditApp" =>
             new EditApp(id = id, editId = relpa, ctime = time,
               loginId = loginSno, newIp = newIp,
@@ -1182,34 +1183,33 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       val commonVals = Nil // p.loginId::pageSno::Nil
       x match {
         case p: Post =>
-          val markup = "" // TODO
           db.update(insertIntoActions, commonVals:::List(
             p.loginId, pageSno, p.id, p.ctime, _toFlag(p.tyype),
-            p.parent, p.text, markup, e2n(p.where)))
+            p.parent, p.text, e2n(p.markup), e2n(p.where)))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
             r.loginId, pageSno, r.id, r.ctime, "Rating", r.postId,
-            "", "", ""))
+            NullVarchar, NullVarchar, NullVarchar))
           db.batchUpdate("""
             insert into DW1_PAGE_RATINGS(PAGE, PAID, TAG) values (?, ?, ?)
             """, r.tags.map(t => List(pageSno, r.id, t)))
         case e: Edit =>
           db.update(insertIntoActions, commonVals:::List(
             e.loginId, pageSno, e.id, e.ctime, "Edit",
-            e.postId, e.text, "", ""))
+            e.postId, e2n(e.text), e2n(e.newMarkup), NullVarchar))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
             a.loginId, pageSno, a.id, a.ctime, "EditApp",
-            a.editId, a.result, "", ""))
+            a.editId, a.result, NullVarchar, NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
             f.loginId, pageSno, f.id, f.ctime, "Flag" + f.reason,
-            f.postId, f.details, "", ""))
+            f.postId, f.details, NullVarchar, NullVarchar))
         case d: Delete =>
           db.update(insertIntoActions, commonVals:::List(
             d.loginId, pageSno, d.id, d.ctime,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
-            d.postId, d.reason, "", ""))
+            d.postId, d.reason, NullVarchar, NullVarchar))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [debiki_error_38rkRF]")
       }
