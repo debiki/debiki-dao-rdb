@@ -473,6 +473,32 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
 );
   -- Cannot create an index organized table -- not available in Postgre SQL.
 
+-- todo prod: (done dev & test) --------
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_PAID__C_NE
+  check (trim(PAID) <> '');
+update DW1_PAGE_ACTIONS set MARKUP = null where TYPE <> 'Post';
+update DW1_PAGE_ACTIONS set MARKUP = 'dmd0' where TYPE = 'Post';
+update DW1_PAGE_ACTIONS set TEXT = null where TEXT = '';
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TEXT__C_NE
+  check (trim(TEXT) <> '');
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_MARKUP__C_NE
+  check (trim(MARKUP) <> '');
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_POST_MARKUP__C_NN
+  check (
+    case TYPE
+      when 'Post' then (MARKUP is not null)
+      else true
+    end
+  );
+update DW1_PAGE_ACTIONS set WHEERE = null where WHEERE = '';
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_WHERE__C_NE
+  check (trim(WHEERE) <> '');
+update DW1_PAGE_ACTIONS set NEW_IP = null where NEW_IP = '';
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_NEWIP__C_NE
+  check (trim(NEW_IP) <> '');
+-- todo prod END ---------------------------
+
+
 -- Needs an index on LOGIN: it's an FK to DW1_LOINGS, whose END_IP/TIME is
 -- updated at the end of the session.
 create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
