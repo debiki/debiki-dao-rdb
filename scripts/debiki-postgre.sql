@@ -8,12 +8,19 @@ column name, by searching for the capitalized name, e.g. the "TIME" column.
 If you, however, use lowercase names, then you will find lots of irrelevant
 occurrances of "time".
 
+Do not store the empty string. Store NULL instead.
+((Reason: Oracle converts '' to NULL, so it's not possible to store
+the empty string if you use Oracle. And Debiki is supposed to
+support both PostgreSQL and Oracle.
+Add constraints that check for the empty string -- name them
+"...__C_NE" (see below).  ))
+
 *****************
 
 Naming standard
 ------------------
  "DW1_...__C" for check constraints,
-        "__C_NE" check non empty
+        "__C_NE" check non empty (e.g.:  check (trim(COL) <> ''))
         "__C_N0" check not 0
         "__C_IN" check in (list of allowed values)
  "DW1_...__U" for unique constraints and unique indexes
