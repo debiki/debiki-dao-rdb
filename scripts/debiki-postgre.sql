@@ -111,7 +111,13 @@ create table DW1_TENANTS(
   CTIME timestamp default now() not null,
   constraint DW1_TENANTS_ID__P primary key (ID),
   constraint DW1_TENANTS_NAME__U unique (NAME),
-  constraint DW1_TENANTS_ID_NOT_0__C check (ID <> '0')
+  -- todo:  prod, dev, done: test -------
+  -- alter table DW1_TENANTS drop constraint DW1_TENANTS_ID_NOT_0__C
+  -- alter table DW1_TENANTS add
+  constraint DW1_TNT_ID__C_NE check (trim(ID) <> ''),
+  constraint DW1_TNT_ID__C_N0 check (ID <> '0'),
+  constraint DW1_TNT_NAME__C_NE check (trim(NAME) <> '')
+  ---- todo END ------------------
 );
 
 -- The tenant id is a varchar2, although it's currently assigned to from
