@@ -465,8 +465,11 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       foreign key (PAGE, RELPA) -- no index: no deletes/upds in parent table
                          -- and no joins (loading whole page at once instead)
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  constraint DW1_PGAS_TYPE__C check (TYPE in (
-        'Post', 'Title', 'Publ', 'Meta', 'Edit',
+  -- todo test, prod: add 'Tmpl':  (done in dev)
+  -- alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C;
+  -- alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
+        'Post', 'Title', 'Publ', 'Meta', 'Edit', 'Tmpl',
         'EditApp', -- SHOULD replace w Publd?
         'Rating',
         -- 'Reason' -- no, only "needed" for Edit - but can use Title instead.
