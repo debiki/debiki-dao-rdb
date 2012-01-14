@@ -648,39 +648,33 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     })
   }
 
-  def loadTemplates(perhapsTmpls: List[PagePath]): List[Debate] = {
-    // TODO: TRANSACTION_SERIALIZABLE, or someone might delete
-    // a template after its guid has been looked up.
-    if (perhapsTmpls isEmpty) return Nil
-    val tenantId = perhapsTmpls.head.tenantId
-    // For now, do 1 lookup per location.
+  def loadTemplate(templPath: PagePath): Option[TemplateSrcHtml] = {
     // Minor bug: if template /some-page.tmpl does not exist, but there's
     // an odd page /some-page.tmpl/, then that *page* is found and
     // returned although it's probably not a template.  ? Solution:
     // TODO disallow '.' in directory names? but allow e.g. style.css,
     // scripts.js, template.tpl.
-    var guids = List[String]()
-    perhapsTmpls map { tmplPath =>
-      assert(tmplPath.tenantId == tenantId)
-      _findCorrectPagePath(tmplPath) match {
-        case Full(pagePath) => guids ::= pagePath.pageId.get
-        case Empty => // fine, template does not exist
-        case f: Failure => error(
-          "Error loading template guid [debiki_error_309sU32]:\n"+ f)
+
+    val templ = _findCorrectPagePath(templPath) match {
+      // If the template does not exist:
+      case Empty => None
+      // If there's a database error when looking up the path:
+      case f: Failure =>
+        error("Error loading template guid [debiki_error_309sU32]:\n"+ f)
+      case Full(path) =>
+        loadPage(path.tenantId, path.pageId.get) match {
+          case Full(page) => page.body map (TemplateSrcHtml(_))
+          // If someone deleted the template moments ago, after its
+          // guid was found:
+          case Empty => None
+          // If there's some database error or problem with the template?:
+          case f: Failure =>
+            val err = "Error loading template [debiki_error_983keCK31]"
+            logger.error(err +":"+ f.toString) //COULD fix consistent err reprt
+            error(err)
       }
     }
-    val pages: List[Debate] = guids.reverse map { guid =>
-      loadPage(tenantId, guid) match {
-        case Full(d: Debate) => d
-        case x =>
-          // Database inaccessible? If I fixed TRANSACTION_SERIALIZABLE
-          // (see above) the template would have been found for sure.
-          val err = "Error loading template [debiki_error_983keCK31]"
-          logger.error(err +":"+ x.toString) // COULD fix consistent err reprt
-          error(err)
-      }
-    }
-    pages
+    templ
   }
 
   def createTenant(name: String): Tenant = {
