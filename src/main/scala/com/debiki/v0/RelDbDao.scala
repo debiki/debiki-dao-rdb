@@ -895,8 +895,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     // This is done by invoking /folder/?createpage.
     // Admins can do this: /folder/page-name?createpage
     (reqInfo.doo, reqInfo.pagePath.isFolderPath) match {
-      case (Do.Create, true) => () // a page wil be created in this folder
-      case (Do.Create, false) =>
+      case (Do.CreatePage, true) => () // a page will be created in this folder
+      case (Do.CreatePage, false) =>
         // A page name was specified, not a folder. Deny.
         return PermsOnPage.None
       case _ => ()
