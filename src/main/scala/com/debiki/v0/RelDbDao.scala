@@ -970,7 +970,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         rs => {
       while (rs.next) {
         val tyype = rs.getString("TYPE")
-        val text = rs.getString("TEXT")
+        val text = n2e(rs.getString("TEXT"))
         val pageId = rs.getString("PAGE")
         val pageActionId = rs.getString("PAID")
         val ctime = ts2d(rs.getTimestamp("CTIME"))
@@ -1181,7 +1181,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         case p: Post =>
           db.update(insertIntoActions, commonVals:::List(
             p.loginId, pageSno, p.id, p.ctime, _toFlag(p.tyype),
-            p.parent, p.text, e2n(p.markup), e2n(p.where)))
+            p.parent, e2n(p.text), e2n(p.markup), e2n(p.where)))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
             r.loginId, pageSno, r.id, r.ctime, "Rating", r.postId,
@@ -1196,16 +1196,16 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
             a.loginId, pageSno, a.id, a.ctime, "EditApp",
-            a.editId, a.result, NullVarchar, NullVarchar))
+            a.editId, e2n(a.result), NullVarchar, NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
             f.loginId, pageSno, f.id, f.ctime, "Flag" + f.reason,
-            f.postId, f.details, NullVarchar, NullVarchar))
+            f.postId, e2n(f.details), NullVarchar, NullVarchar))
         case d: Delete =>
           db.update(insertIntoActions, commonVals:::List(
             d.loginId, pageSno, d.id, d.ctime,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
-            d.postId, d.reason, NullVarchar, NullVarchar))
+            d.postId, e2n(d.reason), NullVarchar, NullVarchar))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [debiki_error_38rkRF]")
       }
