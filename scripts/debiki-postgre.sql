@@ -23,6 +23,7 @@ Naming standard
         "__C_NE" check non empty (e.g.:  check (trim(COL) <> ''))
         "__C_N0" check not 0
         "__C_IN" check in (list of allowed values)
+        "__C_EQ" checks that things are equal
  "DW1_...__U" for unique constraints and unique indexes
  "DW1_...__R__..." for referential constraints
 where "..." is "<abbreviated-table-name>_<abbreviated>_<column>_<names>".
@@ -465,11 +466,27 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       foreign key (PAGE, RELPA) -- no index: no deletes/upds in parent table
                          -- and no joins (loading whole page at once instead)
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  -- todo test, prod: add 'Tmpl':  (done in dev)
+  -- TODO prod,  done dev, test: -------- (rename from C_LEN -> C_EQ test dev)
+  -- The body and title and template etc. have ids 1, 2, 3 etc, i.e. one
+  -- char only, and are their own parents.
+  -- No other actions may have 1 char ids.
+  -- alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_PAID_RELPA__C_EQ
+      check ((length(PAID) = 1) = (RELPA = PAID)),
+  -- The body, titles and templates are always of type 'Post'.
+  constraint DW1_PGAS_TYPE__C_IS_POST
+      check (case length(PAID)
+        when 1 then (TYPE = 'Post')
+        else true
+      end),
+  ---------------------- end todo --
+  -- todo prod: rename/upd(?) TYPE constraint:  (done in dev, test)
   -- alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C;
+  /* update DW1_PAGE_ACTIONS set TYPE = 'Post', MARKUP = 'dmd0'
+        where TYPE in ('Title', 'Tmpl');  */
   -- alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
-        'Post', 'Title', 'Publ', 'Meta', 'Edit', 'Tmpl',
+        'Post', 'Publ', 'Meta', 'Edit',
         'EditApp', -- SHOULD replace w Publd?
         'Rating',
         -- 'Reason' -- no, only "needed" for Edit - but can use Title instead.

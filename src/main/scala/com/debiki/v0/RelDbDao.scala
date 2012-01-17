@@ -605,8 +605,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         // into Post?)  ...
         val action = typee match {
                      // ... then this ugly if ..||..||.. won't be an issue.
-          case typeStr if typeStr == "Post" || typeStr == "Title" ||
-                typeStr == "Publ" || typeStr == "Tmpl" || typeStr == "Meta" =>
+          case typeStr if typeStr == "Post" ||
+                typeStr == "Publ" || typeStr == "Meta" =>
             // How repr empty root post parent? ' ' or '-' or '_' or '0'?
             new Post(id = id, parent = relpa, ctime = time,
               loginId = loginSno, newIp = newIp, text = n2e(text_?),
@@ -983,13 +983,11 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             pageId = pageId,
             pageActionId = pageActionId,
             sourceActionId = sourceActionId,
-            ctime = ctime)::Nil
-          case "Tmpl" =>
-            Nil
+            ctime = ctime)
           case x =>
             unimplemented("Loading inbox item of type "+ safed(x))
         }
-        items :::= item
+        items ::= item
       }
       Empty // dummy
     })
@@ -1226,17 +1224,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
   def _toFlag(postType: PostType): String = postType match {
     case PostType.Text => "Post"
-    case PostType.Title => "Title"
     case PostType.Publish => "Publ"
-    case PostType.Template => "Tmpl"
     case PostType.Meta => "Meta"
   }
 
   def _toPostType(flag: String): PostType = flag match {
     case "Post" => PostType.Text
-    case "Title" => PostType.Title
     case "Publ" => PostType.Publish
-    case "Tmpl" => PostType.Template
     case "Meta" => PostType.Meta
     case x =>
       warnDbgDie("Bad PostType value: "+ safed(x) +
