@@ -494,7 +494,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     Nil
   }
 
-  override def savePageActions[T](tenantId: String, pageGuid: String,
+  override def savePageActions[T <: Action](tenantId: String, pageGuid: String,
                                   xs: List[T]): Box[List[T]] = {
     db.transaction { implicit connection =>
       _insert(tenantId, pageGuid, xs)
@@ -1144,11 +1144,10 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             e2d(where.pageSlug)))
   }
 
-  private def _insert[T](
+  private def _insert[T <: Action](
         tenantId: String, pageGuid: String, xs: List[T])
         (implicit conn: js.Connection): Box[List[T]] = {
-    var xsWithIds = Debate.assignIdsTo(
-                      xs.asInstanceOf[List[AnyRef]]).asInstanceOf[List[T]]
+    var xsWithIds = Debate.assignIdsTo(xs)
     var bindPos = 0
     for (x <- xsWithIds) {
       // Could optimize:  (but really *not* important!)
