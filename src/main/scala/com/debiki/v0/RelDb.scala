@@ -164,8 +164,8 @@ class RelDb(val server: String,
       committed = true
     } catch {
       case e: Exception =>
-        //box = logAndFailure("Error updating database [debiki_error_83ImQF]", e)
-        warn("Error updating database [debiki_error_83ImQF]: "+
+        //box = logAndFailure("Error updating database [error DwE83ImQF]", e)
+        warn("Error updating database [error DwE83ImQF]: "+
             classNameOf(e) +": "+ e.getMessage.trim)
         throw e
     } finally {
@@ -242,7 +242,7 @@ class RelDb(val server: String,
       result
     } catch {
       case ex: js.SQLException =>
-        warn("Database error [debiki_error_83ikrK9]: "+ ex.getMessage.trim)
+        warn("Database error [error DwE83ikrK9]: "+ ex.getMessage.trim)
         //warn("{}: {}", errmsg, ex.printStackTrace)
         //Failure(errmsg, Full(ex), Empty)
        throw ex
@@ -314,8 +314,8 @@ class RelDb(val server: String,
         case i: jl.Integer => pstmt.setInt(bindPos, i.intValue)
         case l: jl.Long => pstmt.setLong(bindPos, l.longValue)
         case s: String => pstmt.setString(bindPos, s)
-        case d: js.Date => assErr("Use Timestamp not Date")
-        case t: js.Time => assErr("Use Timestamp not Time")
+        case d: js.Date => assErr3("DwE0kiesE4", "Use Timestamp not Date")
+        case t: js.Time => assErr3("DwE96SK3X8", "Use Timestamp not Time")
         case t: js.Timestamp => pstmt.setTimestamp(bindPos, t)
         case d: ju.Date => pstmt.setTimestamp(bindPos, d2ts(d))
         case Null(sqlType) => pstmt.setNull(bindPos, sqlType)

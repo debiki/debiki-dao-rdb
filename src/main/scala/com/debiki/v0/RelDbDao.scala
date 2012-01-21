@@ -60,7 +60,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       val identityType = identityWithId match {
         case _: IdentitySimple => "Simple"
         case _: IdentityOpenId => "OpenID"
-        case _ => assErr("[debiki_error_03k2r21K5]")
+        case _ => assErr3("DwE3k2r21K5")
       }
       db.update("""
           insert into DW1_LOGINS(
@@ -125,7 +125,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               // Loop one more lap to read SNO.
             }
           }
-          assErrIf(idtyId.isEmpty, "[debiki_error_93kRhk20")
+          assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
           val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
           val user = _dummyUserFor(identity = s, emailNotfPrefs = notfPrefs,
                                   id = _dummyUserIdFor(idtyId))
@@ -180,8 +180,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         )
       // case fid: IdentityTwitter => (SQL for Twitter identity table)
       // case fid: IdentityFacebook => (...)
-      case _: IdentitySimple => assErr("[debiki_error_98239k2a2]")
-      case IdentityUnknown => assErr("[debiki_error_92k2rI06]")
+      case _: IdentitySimple => assErr3("DwE98239k2a2")
+      case IdentityUnknown => assErr3("DwE92k2rI06")
     }
 
     db.transaction { implicit connection =>
@@ -214,8 +214,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                 country = rs.getString("COUNTRY"))
             // case _: IdentityTwitter =>
             // case _: IdentityFacebook =>
-            case sid: IdentitySimple => assErr("[debiki_error_8451kx350]")
-            case IdentityUnknown => assErr("[debiki_error_091563wkr21]")
+            case sid: IdentitySimple => assErr3("DwE8451kx35")
+            case IdentityUnknown => assErr3("DwE091563wkr2")
           }
           Full(Some(identityInDb) -> Some(userInDb))
         } else {
@@ -299,8 +299,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           nev
         // case (..., IdentityTwitter) => ...
         // case (..., IdentityFacebook) => ...
-        case (_, _: IdentitySimple) => assErr("[debiki_error_83209qk12kt0]")
-        case (_, IdentityUnknown) => assErr("[debiki_error_32ks30016")
+        case (_, _: IdentitySimple) => assErr3("DwE83209qk12")
+        case (_, IdentityUnknown) => assErr3("DwE32ks30016")
       }
 
       val login = _saveLogin(loginReq.login, identity)
@@ -315,7 +315,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           update DW1_LOGINS set LOGOUT_IP = ?, LOGOUT_TIME = ?
           where SNO = ?""", List(logoutIp, new ju.Date, loginId)) match {
         case Full(1) => Empty  // ok
-        case Full(x) => assErr("Updated "+ x +" rows [debiki_error_03k21rx1]")
+        case Full(x) => assErr3("DwE0kSRIE3", "Updated "+ x +" rows")
         case badBox => unimplemented // remove boxes
       }
     }
@@ -328,9 +328,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
     _loadUsers(withLoginId = withLoginId, tenantId = tenantId) match {
       case (List(i: Identity), List(u: User)) => Some(i, u)
-      case (List(i: Identity), Nil) => assErr(
-        "Found no user for "+ loginInfo +
-            ", with identity "+ safed(i.id) +" [debiki_error_6349krq20]")
+      case (List(i: Identity), Nil) => assErr3(
+        "DwE6349krq20", "Found no user for "+ loginInfo +
+            ", with identity "+ safed(i.id))
       case (Nil, Nil) =>
         // The webapp should never try to load non existing identities?
         // (The login id was once fetched from the database.
@@ -345,12 +345,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         // dwCoSid cookie.
         error("Found no identity for "+ loginInfo +". Has the server" +
             " connected to a standby database? Please delete your " +
-            " session cookie, \"dwCoSid\". [debiki_error_0921kxa13]")
+            " session cookie, \"dwCoSid\". [error DwE0921kxa13]")
       case (is, us) =>
         // There should be exactly one identity per login, and at most
         // one user per identity.
-        assErr("Found "+ is.length +" identities and "+ us.length +
-            " users for "+ loginInfo +" [debiki_error_42RxkW1]")
+        assErr3("DwE42RxkW1", "Found "+ is.length +" identities and "+
+              us.length +" users for "+ loginInfo)
     }
   }
 
@@ -376,8 +376,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               from DW1_PAGE_ACTIONS a, DW1_LOGINS l
               where a.PAGE = ? and a.LOGIN = l.SNO and l.TENANT = ?
           """, List(pageSno.asInstanceOf[AnyRef], tenantId))
-      case (a, b) =>
-          illegalArg("onPageWithSno: "+ safed(a) +", withLoginId: "+ safed(b))
+      case (a, b) => illArgErr3(
+          "DwE0kEF3", "onPageWithSno: "+ safed(a) +", withLoginId: "+ safed(b))
     }
 
     // Load identities and users. Details: First find identities of all types
@@ -442,7 +442,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         val idId = rs.getString("I_ID")
         var userId = rs.getLong("U_ID").toString  // 0 if null
         var user: Option[User] = None
-        assErrIf(idId isEmpty, "[debiki_error_392Qvc89]")
+        assErrIf3(idId isEmpty, "DwE392Qvc89")
         val emailPrefs = _toEmailNotfs(rs.getString("EMAIL_NOTFS"))
 
         identities ::= (rs.getString("ID_TYPE") match {
@@ -458,7 +458,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             user = Some(_dummyUserFor(i, emailNotfPrefs = emailPrefs))
             i
           case "OpenID" =>
-            assErrIf(userId isEmpty, "[debiki_error_9V86krR3]")
+            assErrIf3(userId isEmpty, "DwE9V86kr8")
             IdentityOpenId(
                 id = idId,
                 userId = userId,
@@ -633,12 +633,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             val wholeTree = delete match {
               case "DelTree" => true
               case "DelPost" => false
-              case x => assErr("[debiki_error_0912k22]")
+              case x => assErr3("DwE0912k22")
             }
             Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
                 ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
           case x => return Failure(
-              "Bad DW1_ACTIONS.TYPE: "+ safed(typee) +" [debiki_error_Y8k3B]")
+              "Bad DW1_ACTIONS.TYPE: "+ safed(typee) +" [error DwEY8k3B]")
         }
         actions ::= action  // this reverses above `order by TIME desc'
       }
@@ -660,7 +660,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       case Empty => None
       // If there's a database error when looking up the path:
       case f: Failure =>
-        error("Error loading template guid [debiki_error_309sU32]:\n"+ f)
+        runErr3("DwE309sU32", "Error loading template guid:\n"+ f)
       case Full(path) =>
         loadPage(path.tenantId, path.pageId.get) match {
           case Full(page) => page.body map (TemplateSrcHtml(_))
@@ -669,9 +669,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           case Empty => None
           // If there's some database error or problem with the template?:
           case f: Failure =>
-            val err = "Error loading template [debiki_error_983keCK31]"
+            val err = "Error loading template [error DwE983keCK31]"
             logger.error(err +":"+ f.toString) //COULD fix consistent err reprt
-            error(err)
+            runErr3("DwE983keCK31", err)
       }
     }
     templ
@@ -769,8 +769,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       def chostUrl =  // the canonical host URL, e.g. http://www.example.com
           (if (chostHttps == HttpsRequired) "https://" else "http://") + chost
 
-      assErrIf((thisRole == RoleCanonical) != (host == chost),
-                                                "[debiki_error_98h2kwi1215]")
+      assErrIf3((thisRole == RoleCanonical) != (host == chost), "DwE98h1215]")
 
       def useThisHostAndScheme = FoundChost(tenantId)
       def redirect = FoundAlias(tenantId, canonicalHostUrl = chostUrl,
@@ -785,8 +784,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         case (RoleCanonical, "https", HttpsNo      ) => redirect
         case (RoleRedirect , _      , _            ) => redirect
         case (RoleLink     , _      , _            ) => useLinkRelCanonical
-        case (RoleDuplicate, _      , _            ) => assErr(
-                                                        "[debiki_error_09KL0]")
+        case (RoleDuplicate, _      , _            ) => assErr3("DwE09KL04")
       })
     }).open_!
   }
@@ -1204,7 +1202,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
             d.postId, e2n(d.reason), NullVarchar, NullVarchar))
         case x => unimplemented(
-          "Saving this: "+ classNameOf(x) +" [debiki_error_38rkRF]")
+          "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
       }
     }
     Full(xsWithIds)
@@ -1233,7 +1231,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     case "Meta" => PostType.Meta
     case x =>
       warnDbgDie("Bad PostType value: "+ safed(x) +
-          " [debiki_error_0xcke215]")
+          " [error DwE0xcke215]")
       PostType.Text  // fallback to something with no side effects
                       // (except perhaps for a weird post appearing)
   }
@@ -1243,7 +1241,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     case "P" => PageStatus.Published
     case "X" => PageStatus.Deleted
     case x =>
-      warnDbgDie("Bad page status: "+ safed(x) +" [debiki_error_0395k7]")
+      warnDbgDie("Bad page status: "+ safed(x) +" [error DwE0395k7]")
       PageStatus.Draft  // make it visible to admins only
   }
 
@@ -1252,7 +1250,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     case PageStatus.Published => "P"
     case PageStatus.Deleted => "X"
     case x =>
-      warnDbgDie("Bad PageStatus: "+ safed(x) +" [debiki_error_5k2eI5]")
+      warnDbgDie("Bad PageStatus: "+ safed(x) +" [error DwE5k2eI5]")
       "D"  // make it visible to admins only
   }
 
@@ -1262,7 +1260,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     case EmailNotfPrefs.ForbiddenForever => "F"
     case x =>
       warnDbgDie("Bad EmailNotfPrefs value: "+ safed(x) +
-          " [debiki_error_0EH43k8]")
+          " [error DwE0EH43k8]")
       "N"  // fallback to no email
   }
 
@@ -1275,7 +1273,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     case "N" => EmailNotfPrefs.DontReceive
     case "F" => EmailNotfPrefs.ForbiddenForever
     case x =>
-      warnDbgDie("Bad EMAIL_NOTFS: "+ safed(x) +" [debiki_error_6ie53k011]")
+      warnDbgDie("Bad EMAIL_NOTFS: "+ safed(x) +" [error DwE6ie53k011]")
       EmailNotfPrefs.DontReceive
   }
 
