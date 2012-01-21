@@ -60,7 +60,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       val identityType = identityWithId match {
         case _: IdentitySimple => "Simple"
         case _: IdentityOpenId => "OpenID"
-        case _ => assErr3("DwE3k2r21K5")
+        case _ => assErr("DwE3k2r21K5")
       }
       db.update("""
           insert into DW1_LOGINS(
@@ -180,8 +180,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         )
       // case fid: IdentityTwitter => (SQL for Twitter identity table)
       // case fid: IdentityFacebook => (...)
-      case _: IdentitySimple => assErr3("DwE98239k2a2")
-      case IdentityUnknown => assErr3("DwE92k2rI06")
+      case _: IdentitySimple => assErr("DwE98239k2a2")
+      case IdentityUnknown => assErr("DwE92k2rI06")
     }
 
     db.transaction { implicit connection =>
@@ -214,8 +214,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                 country = rs.getString("COUNTRY"))
             // case _: IdentityTwitter =>
             // case _: IdentityFacebook =>
-            case sid: IdentitySimple => assErr3("DwE8451kx35")
-            case IdentityUnknown => assErr3("DwE091563wkr2")
+            case sid: IdentitySimple => assErr("DwE8451kx35")
+            case IdentityUnknown => assErr("DwE091563wkr2")
           }
           Full(Some(identityInDb) -> Some(userInDb))
         } else {
@@ -299,8 +299,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           nev
         // case (..., IdentityTwitter) => ...
         // case (..., IdentityFacebook) => ...
-        case (_, _: IdentitySimple) => assErr3("DwE83209qk12")
-        case (_, IdentityUnknown) => assErr3("DwE32ks30016")
+        case (_, _: IdentitySimple) => assErr("DwE83209qk12")
+        case (_, IdentityUnknown) => assErr("DwE32ks30016")
       }
 
       val login = _saveLogin(loginReq.login, identity)
@@ -315,7 +315,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           update DW1_LOGINS set LOGOUT_IP = ?, LOGOUT_TIME = ?
           where SNO = ?""", List(logoutIp, new ju.Date, loginId)) match {
         case Full(1) => Empty  // ok
-        case Full(x) => assErr3("DwE0kSRIE3", "Updated "+ x +" rows")
+        case Full(x) => assErr("DwE0kSRIE3", "Updated "+ x +" rows")
         case badBox => unimplemented // remove boxes
       }
     }
@@ -328,7 +328,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
     _loadUsers(withLoginId = withLoginId, tenantId = tenantId) match {
       case (List(i: Identity), List(u: User)) => Some(i, u)
-      case (List(i: Identity), Nil) => assErr3(
+      case (List(i: Identity), Nil) => assErr(
         "DwE6349krq20", "Found no user for "+ loginInfo +
             ", with identity "+ safed(i.id))
       case (Nil, Nil) =>
@@ -349,7 +349,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       case (is, us) =>
         // There should be exactly one identity per login, and at most
         // one user per identity.
-        assErr3("DwE42RxkW1", "Found "+ is.length +" identities and "+
+        assErr("DwE42RxkW1", "Found "+ is.length +" identities and "+
               us.length +" users for "+ loginInfo)
     }
   }
@@ -376,7 +376,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               from DW1_PAGE_ACTIONS a, DW1_LOGINS l
               where a.PAGE = ? and a.LOGIN = l.SNO and l.TENANT = ?
           """, List(pageSno.asInstanceOf[AnyRef], tenantId))
-      case (a, b) => illArgErr3(
+      case (a, b) => illArgErr(
           "DwE0kEF3", "onPageWithSno: "+ safed(a) +", withLoginId: "+ safed(b))
     }
 
@@ -633,7 +633,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             val wholeTree = delete match {
               case "DelTree" => true
               case "DelPost" => false
-              case x => assErr3("DwE0912k22")
+              case x => assErr("DwE0912k22")
             }
             Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
                 ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
@@ -660,7 +660,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       case Empty => None
       // If there's a database error when looking up the path:
       case f: Failure =>
-        runErr3("DwE309sU32", "Error loading template guid:\n"+ f)
+        runErr("DwE309sU32", "Error loading template guid:\n"+ f)
       case Full(path) =>
         loadPage(path.tenantId, path.pageId.get) match {
           case Full(page) => page.body map (TemplateSrcHtml(_))
@@ -671,7 +671,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           case f: Failure =>
             val err = "Error loading template [error DwE983keCK31]"
             logger.error(err +":"+ f.toString) //COULD fix consistent err reprt
-            runErr3("DwE983keCK31", err)
+            runErr("DwE983keCK31", err)
       }
     }
     templ
@@ -784,7 +784,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         case (RoleCanonical, "https", HttpsNo      ) => redirect
         case (RoleRedirect , _      , _            ) => redirect
         case (RoleLink     , _      , _            ) => useLinkRelCanonical
-        case (RoleDuplicate, _      , _            ) => assErr3("DwE09KL04")
+        case (RoleDuplicate, _      , _            ) => assErr("DwE09KL04")
       })
     }).open_!
   }
