@@ -882,10 +882,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     if (reqInfo.user.map(_.isSuperAdmin) == Some(true))
       return PermsOnPage.All
 
-    // For now, hide .js and .css and .tmpl files for everyone but superadmins.
-    // (If people can *edit* them, they could conduct xss attacks.)
-    if (reqInfo.pagePath.pageSlug.contains('.'))
+    // Files whose name starts with '.' are hidden, only admins have access.
+    if (reqInfo.pagePath.isHiddenPage)
       return PermsOnPage.None
+
+    // People may view and use Javascript and CSS, but of course not edit it.
+    if (reqInfo.pagePath.isCodePage)
+      return PermsOnPage.None.copy(accessPage = true)
 
     // Non-admins can only create pages whose names are prefixed
     // with their guid, like so: /folder/-guid-pagename.
