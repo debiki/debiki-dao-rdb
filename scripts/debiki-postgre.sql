@@ -112,13 +112,9 @@ create table DW1_TENANTS(
   CTIME timestamp default now() not null,
   constraint DW1_TENANTS_ID__P primary key (ID),
   constraint DW1_TENANTS_NAME__U unique (NAME),
-  -- todo:  prod, dev, done: test -------
-  -- alter table DW1_TENANTS drop constraint DW1_TENANTS_ID_NOT_0__C
-  -- alter table DW1_TENANTS add
   constraint DW1_TNT_ID__C_NE check (trim(ID) <> ''),
   constraint DW1_TNT_ID__C_N0 check (ID <> '0'),
   constraint DW1_TNT_NAME__C_NE check (trim(NAME) <> '')
-  ---- todo END ------------------
 );
 
 -- The tenant id is a varchar2, although it's currently assigned to from
@@ -466,7 +462,6 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       foreign key (PAGE, RELPA) -- no index: no deletes/upds in parent table
                          -- and no joins (loading whole page at once instead)
       references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  -- TODO prod,  done dev, test: -------- (rename from C_LEN -> C_EQ test dev)
   -- The body and title and template etc. have ids 1, 2, 3 etc, i.e. one
   -- char only, and are their own parents.
   -- No other actions may have 1 char ids.
@@ -479,12 +474,6 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
         when 1 then (TYPE = 'Post')
         else true
       end),
-  ---------------------- end todo --
-  -- todo prod: rename/upd(?) TYPE constraint:  (done in dev, test)
-  -- alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C;
-  /* update DW1_PAGE_ACTIONS set TYPE = 'Post', MARKUP = 'dmd0'
-        where TYPE in ('Title', 'Tmpl');  */
-  -- alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Publ', 'Meta', 'Edit',
         'EditApp', -- SHOULD replace w Publd?
@@ -506,7 +495,7 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
 );
   -- Cannot create an index organized table -- not available in Postgre SQL.
 
--- todo prod: (done dev & test) --------
+-- Did later:
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_PAID__C_NE
   check (trim(PAID) <> '');
 update DW1_PAGE_ACTIONS set MARKUP = null where TYPE <> 'Post';
@@ -529,24 +518,12 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_WHERE__C_NE
 update DW1_PAGE_ACTIONS set NEW_IP = null where NEW_IP = '';
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_NEWIP__C_NE
   check (trim(NEW_IP) <> '');
--- todo prod END ---------------------------
 
 
 -- Needs an index on LOGIN: it's an FK to DW1_LOINGS, whose END_IP/TIME is
 -- updated at the end of the session.
 create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
--- todo prod:  (done dev, test)
-alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_TYPE__C;
-alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C check (TYPE in (
-        'Post', 'Title', 'Publ', 'Meta', 'Edit',
-        'EditApp', -- SHOULD replace w Publd?
-        'Rating',
-        -- 'Reason' -- no, only "needed" for Edit - but can use Title instead.
-        -- (Other post types can have their reason inlined, TEXT isn't used
-        -- for those other types.)
-        'DelPost', 'DelTree',
-        'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
 
 create table DW1_PAGE_RATINGS(  -- abbreviated PGRTNGS? PGRS? PRATINGS deprctd.
   PAGE varchar(32) not null,
@@ -667,7 +644,6 @@ create index DW1_IBXPGA_TNT_EMAILSENT
 
 ----- Paths (move to Pages section above?)
 
--- TODO create in prod (dev, test done) and copy values from DW1_PATHS.
 create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   TENANT varchar(32) not null,
   PARENT_FOLDER varchar(100) not null,
@@ -699,7 +675,7 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
       CACHED_SGFNT_MTIME >= CACHED_PUBL_TIME)
 );
 
--- TODO: Test case: no 2 pages with same path
+-- TODO: Test case: no 2 pages with same path, for the index below.
 -- Create an index that ensures (tenant, folder, page-slug) is unique,
 -- if the page guid is not included in the path to the page.
 -- That is, if the path is like:  /some/folder/page-slug  (*no* guid in path)
@@ -714,7 +690,7 @@ where SHOW_ID = 'F';
 create index DW1_PGPTHS_ALL
 on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, PAGE_ID);
 
-/* TODO: prod (dev, test: done)
+/* (done: prod, dev, test)
 insert into DW1_PAGE_PATHS (
   TENANT, PARENT_FOLDER, PAGE_ID,
   PAGE_SLUG,
