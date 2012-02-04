@@ -63,6 +63,21 @@ $ psql --dbname debiki_test;
 => drop schema public;
 => create schema authorization debiki_test;
 
+DW2_* todo:
+------------------
+
+Add _ID to all references.
+Rename e.g. PAID to only ID?
+DW2_PAGE_PATHS -> DW2_PAGES, remove DW1_PAGES.
+DW2_PAGE_ACTIONS -> DW2_PAGE_POSTS?  PAGE_LOG?  Simply POSTS? :-)
+ with PARENT_ID and TARGET_ID
+
+Use PAGE.ID not SNO.
+
+INBOX_PAGE_ACTIONS -> INBOX_POSTS
+USERS -> ROLES
+
+TENANT.ID >= 3 chars?
 */
 
 /*
@@ -443,10 +458,28 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   PAGE varchar(32)     not null,
   PAID varchar(32)     not null,  -- page action id
   LOGIN varchar(32)    not null,
-  TIME timestamp       not null,
+  TIME timestamp       not null,  -- COULD rename to CTIME
   TYPE varchar(20)     not null,
+  -- COULD split into TARGET (for edits) and PARENT (for posts)
+  -- (both would be useful if moving a post to somewhere else on the page).
   RELPA varchar(32)    not null,  -- related page action
-  -- STATUS char(1)    not null,  -- check in 'S', 'A' -- suggestion/applied
+  -------
+  -- (consider this carefully before doing anything!)
+  -- The most recent action applied to RELPA,
+  -- before this action. A unique key on -version ensures all actions
+  -- are aware of everything that happened before them. This prevents
+  -- a user from overwriting someone elses edits without noticing them,
+  -- if two users edit the same post at the same time.
+  -- Must be null for 'Post':s and ['Edit's of type 'D'raft] since it's okay
+  -- with many replies (Post:s) and edit-drafts
+  -- to one post. (Or use one target-version for the whole page? That
+  -- seems rather restrictive.)
+  -- **do NOT add this column now** -- perhap's I'll implement some kind
+  -- of branching/tagging also/instead, a la Git?
+  -- PARENT_VERSION / TARGET_VERSION varchar(32),
+  -- ACTION_PATH_1 varchar(20) not null, -- see debiki-for-developers.txt
+  -- STATUS char(1)    not null, -- check in 'D', 'S', 'P', 'E'
+  -------
   TEXT text,
   MARKUP varchar(30),
   WHEERE varchar(150),
@@ -519,6 +552,28 @@ update DW1_PAGE_ACTIONS set NEW_IP = null where NEW_IP = '';
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_NEWIP__C_NE
   check (trim(NEW_IP) <> '');
 
+
+
+
+/* Later: (consider this carefully before doing anything!)
+-- ! Don't forget to add constraint to the actual table definition (above).
+
+-- How am I supposed to update all old action target versions?!
+alter table DW1_PAGE_ACTIONS add column TARGET_VERSION varchar(32);
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TGTVER__U
+    unique (PAGE, RELPA, TARGET_VERSION);
+
+-- Currently there's only the root post and its replies,
+-- and the root post has id 1. So when ACTION_PATH is introduced,
+-- all paths start with '1' (the root post).
+--  But! Really, it should be named POST_PATH, because only posts
+--  builds up the path (but not edits and flags etcetera?).
+alter table DW1_PAGE_ACTIONS add column ACTION_PATH not null default '1';
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_ACTIONPATH__C
+      check (ACTION_PATH like '1%' or  -- page body id is '1'
+             ACTION_PATH like '2%' or  -- page title id is '2'
+             ACTION_PATH like '3%');   -- page template id will be '3'?
+*/
 
 -- Needs an index on LOGIN: it's an FK to DW1_LOINGS, whose END_IP/TIME is
 -- updated at the end of the session.
