@@ -12,6 +12,7 @@ import java.{sql => js, lang => jl}
 import javax.{sql => jxs}
 import org.{postgresql => pg}
 
+
 trait RelDbLogger extends Logger {
   def logAndFailure[T](errorMessage: String, ex: Exception): Box[T] = {
     warn(errorMessage +": ", ex)
@@ -56,6 +57,12 @@ class RelDb(val server: String,
     ) extends RelDbLogger {
 
   import RelDb._
+
+  info("Connecting to PostgreSQL,"+
+     "\n  server: "+ server +
+     "\n  port:"+ port +
+     "\n  database: "+ database +
+     "\n  user: "+ user)
 
   jl.Class.forName("org.postgresql.Driver")
 
