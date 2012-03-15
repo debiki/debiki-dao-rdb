@@ -67,7 +67,7 @@ DW2_* todo:
 ------------------
 
 Add _ID to all references.
-Rename e.g. PAID to only ID?
+Rename all GUID/whateverID/e.g. PAID to only "ID"?
 DW2_PAGE_PATHS -> DW2_PAGES, remove DW1_PAGES.
 DW2_PAGE_ACTIONS -> DW2_PAGE_POSTS?  PAGE_LOG?  Simply POSTS? :-)
  with PARENT_ID and TARGET_ID
@@ -122,7 +122,7 @@ create table DW0_VERSION(
 -- Abbreviated: TNTS
 
 create table DW1_TENANTS(
-  ID varchar(32) not null,  -- COULD rename to GUID?
+  ID varchar(32) not null,
   NAME varchar(100) not null,
   CTIME timestamp default now() not null,
   constraint DW1_TENANTS_ID__P primary key (ID),
@@ -233,7 +233,7 @@ insert into DW1_TENANT_HOSTS(TENANT, HOST, CANONICAL, HTTPS)
 
 create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
   TENANT varchar(32)          not null,
-  SNO varchar(32)             not null,  -- COULD rename to GUID
+  SNO varchar(32)             not null,  -- COULD rename to ID
   DISPLAY_NAME varchar(100),  -- currently null, always (2011-09-17)
   EMAIL varchar(100),
   COUNTRY varchar(100),
@@ -277,7 +277,7 @@ alter table DW1_USERS add constraint DW1_USERS_WEBSITE__C
 -- DW1_LOGINS isn't named _SESSIONS because I'm not sure a login and logout
 -- defines a session? Cannot a session start before you login?
 create table DW1_LOGINS(  -- logins and logouts
-  SNO varchar(32)            not null,  -- COULD rename to GUID
+  SNO varchar(32)            not null,  -- COULD rename to ID
   TENANT varchar(32)         not null,
   PREV_LOGIN varchar(32),
   -- COULD replace ID_TYPE/_SNO with: ID_SIMPLE, ID_OPENID, ID_TWITTER, etc,
@@ -322,8 +322,8 @@ create sequence DW1_IDS_SNO start with 10;
 -- If value absent, '-' is inserted -- but not '', since Oracle converts
 -- '' to null, but I think it's easier to write SQL queries if I don't
 -- have to take all possible combinations of null values into account.
-create table DW1_IDS_SIMPLE(
-  SNO varchar(32)         not null,  -- COULD rename to GUID
+create table DW1_IDS_SIMPLE(  -- abbreviated IDSMPL
+  SNO varchar(32)         not null,  -- COULD rename to ID
   NAME varchar(100)       not null,
   -- COULD require like '%@%.%' and update all existing data ... hmm.
   EMAIL varchar(100)      not null,
@@ -392,7 +392,7 @@ create index DW1_IDSMPLEML_LOGIN on DW1_IDS_SIMPLE_EMAIL (LOGIN);
 -- (Would DW1_AU_OPENID (AUthentication via OpenID) be a better name?)
 
 create table DW1_IDS_OPENID(
-  SNO varchar(32)                not null,  -- COULD rename to GUID
+  SNO varchar(32)                not null,  -- COULD rename to ID
   TENANT varchar(32)             not null,
   -- When an OpenID identity is created, a User is usually created too.
   -- It is stored in USR_ORIG. However, to allow many OpenID identities to
@@ -438,7 +438,7 @@ create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 create table DW1_PAGES(
   SNO varchar(32)       not null,   -- COULD remove, use only GUID
   TENANT varchar(32)    not null,
-  GUID varchar(32)      not null,
+  GUID varchar(32)      not null,   -- COULD rename to ID
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
   constraint DW1_PAGES__R__TENANT  -- ix: primary key, well it SHOULD incl TNT
@@ -455,12 +455,22 @@ create sequence DW1_PAGES_SNO start with 10;
 -- Contains all posts, edits, ratings etc, everything that's needed to
 -- render a discussion.
 create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
-  PAGE varchar(32)     not null,
-  PAID varchar(32)     not null,  -- page action id
+  PAGE varchar(32)     not null, -- should remove..
+  ----- Should do: test,dev,prod: alter table DW1_PAGE_ACTIONS add (
+  -- TENANT varchar(32)  not null,  -- ..use instead...
+  -- PAGE_ID varchar(32)  not null )  -- ... of PAGE
+  -- update DW1_PAGE_ACTIONS a set PAGE_ID =
+  --   select ID from DW1_PAGES where SNO = a.PAGE
+  ----- and later:
+  -- add constraint DW1_PGAS__R__PAGES  -- NO INDEX RIGHT NOW!
+  --  foreign key (PAGE_ID)
+  --  references DW1_PAGES (ID) deferrable,
+  -------
+  PAID varchar(32)     not null,  -- page action id  COULD rename to ID
   LOGIN varchar(32)    not null,
   TIME timestamp       not null,  -- COULD rename to CTIME
   TYPE varchar(20)     not null,
-  -- COULD split into TARGET (for edits) and PARENT (for posts)
+  -- COULD split into TARGET_PGA (for edits) and PARENT_PGA (for posts)
   -- (both would be useful if moving a post to somewhere else on the page).
   RELPA varchar(32)    not null,  -- related page action
   -------
