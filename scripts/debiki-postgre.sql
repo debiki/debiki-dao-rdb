@@ -84,7 +84,7 @@ TENANT.ID >= 3 chars?
 ----- Reset schema
 
 drop table DW0_VERSION;
-drop table DW1_ROLE_INBOX;
+drop table DW1_NOTFS_PAGE_ACTIONS;
 drop table DW1_EMAILS_OUT;
 drop table DW1_PAGE_RATINGS;
 drop table DW1_PAGE_ACTIONS;
@@ -582,7 +582,7 @@ create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
 create table DW1_PAGE_RATINGS(  -- abbreviated PGRTNGS? PGRS? PRATINGS deprctd.
   PAGE varchar(32) not null,
-  PAID varchar(32) not null, -- page action id
+  PAID varchar(32) not null, -- page action id COULD rename to ACTION_ID
   TAG varchar(30) not null,
   constraint DW1_PRATINGS__P primary key (PAGE, PAID, TAG),
   constraint DW1_PRATINGS__R__PACTIONS  -- ix DW1_PRATINGS__P
@@ -593,108 +593,147 @@ create table DW1_PAGE_RATINGS(  -- abbreviated PGRTNGS? PGRS? PRATINGS deprctd.
 
 ----- Emails and Inbox
 
+-- Old table names and formats:
+drop table DW1_INBOX_PAGE_ACTIONS;
+drop table DW1_ROLE_INBOX;
+drop table DW1_EMAILS_OUT;
+
+
 create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
   TENANT varchar(32) not null,
-  GUID varchar(32) not null,
+  ID varchar(32) not null,
   SENT_TO varchar(100) not null,  -- only one recipient, for now
   SENT_ON timestamp not null,
   SUBJECT varchar(200) not null,
-  HTML varchar(2000) not null,
+  BODY_HTML varchar(2000) not null,
   -- E.g. Amazon SES assigns their own guid to each email. Their API returns
   -- the guid when the email is sent (it's not available until then).
-  -- If an email bounces, you then look up the provider's email guid
-  -- to find out which email bounced, and which addresses.
-  PROVIDER_EMAIL_GUID varchar(100), -- no default
+  -- If an email bounces, you look up the provider's email guid
+  -- to find out which email bounced.
+  PROVIDER_EMAIL_ID varchar(100) not null,
   -- B/R/C/O: bounce, rejection, complaint, other.
   FAILURE_TYPE varchar(1) default null,
   -- E.g. a bounce or rejection message.
   FAILURE_TEXT varchar(2000) default null,
   FAILURE_TIME timestamp default null,
+  constraint DW1_EMLOT_TNT_ID__P primary key (TENANT, ID),
   constraint DW1_EMLOT__R__TNTS  -- ix DW1_EMLOT__P
       foreign key (TENANT)
       references DW1_TENANTS (ID),
-  constraint DW1_EMLOT__P primary key (TENANT, GUID),
   constraint DW1_EMLOT_FAILTYPE__C check (
       FAILURE_TYPE in ('B', 'R', 'C', 'O')),
-  constraint DW1_EMLOT_FAILTEXT__C check (
-      FAILURE_TYPE is null = FAILURE_TYPE is null),
-  constraint DW1_EMLOT_FAILTIME check (
+  constraint DW1_EMLOT_FAILTEXT_TYPE__C check (
+      FAILURE_TEXT is null = FAILURE_TYPE is null),
+  constraint DW1_EMLOT_FAILTIME_TYPE__C check (
       FAILURE_TIME is null = FAILURE_TYPE is null)
 );
 
--- Page action notifications for a role (then ROLE is non-null),
--- or an unauthenticated user (then ID_SIMPLE is non-null).
-create table DW1_INBOX_PAGE_ACTIONS(   -- abbreviated IBXPGA
+
+create sequence DW1_EMAILS_OUT_ID start with 10;
+
+
+-- Notifications of page actions, to a role -- then RCPT_ROLE_ID is non-null --
+-- or to an unauthenticated user -- then RCPT_ID_SIMPLE is non-null.
+-- The table is somewhat de-normalized, for simper SQL, and performance.
+create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
+  ----- Where, when?
   TENANT varchar(32) not null,
-  ID_SIMPLE varchar(32),
-  ROLE varchar(32),
-  PAGE varchar(32) not null,
-  -- The source page action id is the action that generated this inbox item.
-  -- The target page action id is the action of interest to the user.
-  -- For example, if someone replies to your comment,
-  -- and the reply is published instantly,
-  -- then, if the reply has id X, SOURCE_PGA = TARGET_PGA = X.
-  -- If however the reply is not published until after it's been reviewed,
-  -- then, the reply has id X and the review action id has id Y,
-  -- SOURCE_PGA = Y (i.e. the review) and TARGET_PGA = X (i.e. the reply).
-  TARGET_PGA varchar(32) not null,
-  SOURCE_PGA varchar(32) not null,
   CTIME timestamp not null,
-  -- New or Old. New means: Attempt to notify the user, perhaps send email.
-  -- Old means: The user has been notified. Okay to delete, or keep for
+  PAGE_ID varchar(32) not null,
+  PAGE_TITLE varchar(32) not null,
+  ----- To whom? To either an unauthenticated user, or a role.
+  RCPT_ID_SIMPLE varchar(32),
+  RCPT_ROLE_ID varchar(32),
+  ----- What, why?
+  -- The event page action id is the action that generated this inbox item.
+  -- The target page action id is an optional action that the
+  -- event-action acted upon.
+  -- For example, if an admin publishes an edit of a comment of yours,
+  -- then the publication would be the event, the edit would be the
+  -- event target, and your comment is the recipient's page action.
+  -- Another example: Someone replies to a comment of yours. Then
+  -- that reply is the event, and TARGET_PGA would be null.
+  -- (Perhaps TARGET_PGA can be derived from EVENT_PGA, but doing that
+  -- would require > 1 query, or 1 query with rather complicated joins,
+  -- when loading notifications.)
+  EVENT_TYPE varchar(20) not null,
+  EVENT_PGA varchar(32) not null,
+  TARGET_PGA varchar(32),
+  -- The page action that is the reason that the recipient is to be notified.
+  -- For example, if a user has written a comment, with id X,
+  -- then RCPT_PGA could be = X, and EVENT_PGA could be the id of a reply
+  -- to X.
+  RCPT_PGA varchar(32) not null,
+  ----- Related user names
+  RCPT_USER_DISP_NAME varchar(100) not null,
+  EVENT_USER_DISP_NAME varchar(100) not null,
+  TARGET_USER_DISP_NAME varchar(100),
+  ----- State
+  -- 'N' New, means: Attempt to notify the user, perhaps send email.
+  -- 'O' Old means: The user has been notified. Okay to delete, or keep for
   -- auditing purposes.
   STATUS varchar(1) default 'N' not null,
   -- Email notifications
-  EMAIL_SENT varchar(32) default null, -- DW1_EMAILS_OUT.GUID
+  EMAIL_SENT varchar(32) default null, -- references DW1_EMAILS_OUT.ID
   EMAIL_LINK_CLICKED timestamp default null,
   -- WEB_LINK_SHOWN timestamp,
   -- WEB_LINK_CLICKED timestamp,
-  -- (There's no primary key -- there're 2 unique indexes instead and a
-  -- check constraint, DW1_IBXPGA_IDSMPL_ROLE__C, that ensures one of those
+  --
+  ----- Constraints
+  -- (There's no primary key -- there're 2 unique indexes instead, and a
+  -- check constraint, DW1_NTFPGA_IDSMPL_ROLE__C, that ensures one of those
   -- unique indexes is active.)
-  constraint DW1_IBXPGA_SRCPGA__R__PGAS
-      foreign key (PAGE, SOURCE_PGA) -- no index: no deletes/upds in prnt tbl
-      references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  constraint DW1_IBXPGA_TGTPGA__R__PGAS
-      foreign key (PAGE, TARGET_PGA) -- no index: no deletes/upds in prnt tbl
-      references DW1_PAGE_ACTIONS (PAGE, PAID) deferrable,
-  constraint DW1_IBXPGA__R__RLS  -- ix DW1_IBXPGA_ROLE_CTIME
-      foreign key (TENANT, ROLE)
+  --
+  -- These 2 FKs don't exist yet, because DW1_PAGE_ACTIONS.PAGE_ID
+  -- does not yet exist.
+  --constraint DW1_NTFPGA_EVTPGA__R__PGAS
+  --    foreign key (PAGE_ID, EVENT_PGA) -- no index: no dels/upds in prnt tbl
+  --    references DW1_PAGE_ACTIONS (PAGE_ID, PAID) deferrable,
+  --constraint DW1_NTFPGA_TGTPGA__R__PGAS
+  --    foreign key (PAGE_ID, TARGET_PGA) -- no index: no dels/upds in prnt tbl
+  --    references DW1_PAGE_ACTIONS (PAGE_ID, PAID) deferrable,
+  --
+  constraint DW1_NTFPGA__R__RLS  -- e.g. ix DW1_NTFPGA_TNT_ROLE_CTIME
+      foreign key (TENANT, RCPT_ROLE_ID)
       references DW1_USERS (TENANT, SNO) deferrable,
+  -- Not possible, because DW1_IDS_SIMPLE has no TENANT column, should I add one?
+  -- constraint DW1_NTFPGA__R__IDSSMPL  -- e.g. ix DW1_NTFPGA_TNT_IDSMPL_CTIME
+  --    foreign key (TENANT, RCPT_ID_SIMPLE)
+  --    references DW1_IDS_SIMPLE (TENANT, SNO) deferrable,
+  --
   -- Ensure exactly one of ROLE and ID_SIMPLE is specified.
-  constraint DW1_IBXPGA_IDSMPL_ROLE__C check (
-      (ROLE is null) <> (ID_SIMPLE is null)),
-  constraint DW1_IBXPGA_STATUS__C check (STATUS in ('N', 'O')),
-  constraint DW1_IBXPGA__R__EMLOT  -- ix DW1_IBXPGA_EMAILSENT
+  constraint DW1_NTFPGA_IDSMPL_ROLE__C check (
+      (RCPT_ROLE_ID is null) <> (RCPT_ID_SIMPLE is null)),
+  constraint DW1_NTFPGA_STATUS__C check (STATUS in ('N', 'O')),
+  constraint DW1_NTFPGA__R__EMLOT  -- ix DW1_NTFPGA_TNT_EMAILSENT
       foreign key (TENANT, EMAIL_SENT)
-      references DW1_EMAILS_OUT (TENANT, GUID),
-  constraint  DW1_IBXPGA_EMAILCLKD__C check (
+      references DW1_EMAILS_OUT (TENANT, ID),
+  constraint  DW1_NTFPGA_EMAILCLKD__C check (
       case
         when (EMAIL_LINK_CLICKED is null) then true
-        else EMAIL_SENT is not null
+        else (EMAIL_SENT is not null)
       end)
 );
 
--- Add two unique indexes that ensure each SOURCE_PGA results in only
--- one notification to each user.
--- Note that (TENANT, ROLE/ID_SIMPLE, PAGE, TARGET_PGA) need not be unique,
--- for example, the same post might be edited many times, resulting
--- in events with that post being the target (but with different SOURCE_PGA).
-create unique index DW1_IBXPGA_TNT_RL_PG_SRC__U
-    on DW1_INBOX_PAGE_ACTIONS (TENANT, ROLE, PAGE, SOURCE_PGA)
-    where ROLE is not null;
-create unique index DW1_IBXPGA_T_IDSMPL_PG_SRC__U
-    on DW1_INBOX_PAGE_ACTIONS (TENANT, ID_SIMPLE, PAGE, SOURCE_PGA)
-    where ID_SIMPLE is not null;
 
-create index DW1_IBXPGA_TNT_ROLE_CTIME
-    on DW1_INBOX_PAGE_ACTIONS (TENANT, ROLE, CTIME);
-create index DW1_IBXPGA_TNT_IDSMPL_CTIME
-    on DW1_INBOX_PAGE_ACTIONS (TENANT, ID_SIMPLE, CTIME);
-create index DW1_IBXPGA_TNT_STATUS_CTIME
-    on DW1_INBOX_PAGE_ACTIONS (TENANT, STATUS, CTIME);
-create index DW1_IBXPGA_TNT_EMAILSENT
-    on DW1_INBOX_PAGE_ACTIONS (TENANT, EMAIL_SENT);
+-- Add two unique indexes that ensure each EVENT_PGA results in at most
+-- one notification to each user.
+create unique index DW1_NTFPGA_TNT_RL_PG_EVT__U
+    on DW1_NOTFS_PAGE_ACTIONS (TENANT, RCPT_ROLE_ID, PAGE_ID, EVENT_PGA)
+    where RCPT_ROLE_ID is not null;
+create unique index DW1_NTFPGA_T_IDSMPL_PG_EVT__U
+    on DW1_NOTFS_PAGE_ACTIONS (TENANT, RCPT_ID_SIMPLE, PAGE_ID, EVENT_PGA)
+    where RCPT_ID_SIMPLE is not null;
+
+create index DW1_NTFPGA_TNT_ROLE_CTIME
+    on DW1_NOTFS_PAGE_ACTIONS (TENANT, RCPT_ROLE_ID, CTIME);
+create index DW1_NTFPGA_TNT_IDSMPL_CTIME
+    on DW1_NOTFS_PAGE_ACTIONS (TENANT, RCPT_ID_SIMPLE, CTIME);
+create index DW1_NTFPGA_TNT_STATUS_CTIME
+    on DW1_NOTFS_PAGE_ACTIONS (TENANT, STATUS, CTIME);
+create index DW1_NTFPGA_TNT_EMAILSENT
+    on DW1_NOTFS_PAGE_ACTIONS (TENANT, EMAIL_SENT);
+
 
 
 ----- Paths (move to Pages section above?)

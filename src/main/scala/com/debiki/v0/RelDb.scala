@@ -26,6 +26,17 @@ object RelDb {
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
 
+  /**
+   * Pimps `Option[String]` with `orNullVarchar`, which means
+   * `getOrElse(Null(java.sql.Types.VARCHAR))`.
+   * (There is already an `Option.orNull`.)
+   */
+  class StringOptionPimpedWithNullVarchar(opt: Option[String]) {
+    def orNullVarchar = opt.getOrElse(NullVarchar)
+  }
+  implicit def pimpOptionWithNullVarchar(opt: Option[String]) =
+    new StringOptionPimpedWithNullVarchar(opt)
+
   /** Converts null to the empty string ("Null To Empty"). */
   def n2e(s: String) = if (s eq null) "" else s
 
@@ -41,6 +52,9 @@ object RelDb {
 
   /** Converts the empty string to a dash ("Empty To Dash"). */
   def e2d(s: String) = if (s isEmpty) "-" else s
+
+  /** Converts dash and null to the empty string ("Dash or Null To Empty"). */
+  def dn2e(s: String) = if ((s eq null) || s == "-") "" else s
 
   /** Converts java.util.Date to java.sql.Timestamp. */
   def d2ts(d: ju.Date) = new js.Timestamp(d.getTime)

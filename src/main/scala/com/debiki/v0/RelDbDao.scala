@@ -13,6 +13,8 @@ import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
 import scala.collection.{mutable => mut}
+import RelDb.pimpOptionWithNullVarchar
+import collection.mutable.StringBuilder
 
 
 class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
@@ -140,8 +142,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     // Load the User, if any, and the OpenID/Twitter/Facebook identity id:
     // Construct a query that joins the relevant DW1_IDS_<id-type> table
     // with DW1_USERS.
-    // COULD move this user loading code to _loadUsers. This code
-    // loads a user and also its *identity* though.
+    // COULD move this user loading code to _loadIdtysAndUsers?
     var sqlSelectList = """
         select
             u.SNO USER_SNO,
@@ -326,7 +327,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     def loginInfo = "login id "+ safed(withLoginId) +
           ", tenant "+ safed(tenantId)
 
-    _loadUsers(withLoginId = withLoginId, tenantId = tenantId) match {
+    _loadIdtysAndUsers(withLoginId = withLoginId, tenantId = tenantId) match {
       case (List(i: Identity), List(u: User)) => Some(i, u)
       case (List(i: Identity), Nil) => assErr(
         "DwE6349krq20", "Found no user for "+ loginInfo +
@@ -354,7 +355,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
   }
 
-  private def _loadUsers(onPageWithSno: String = null,
+
+  private def _loadIdtysAndUsers(onPageWithSno: String = null,
                          withLoginId: String = null,
                          tenantId: String
                             ): Pair[List[Identity], List[User]] = {
@@ -490,6 +492,105 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }).open_! // silly box
   }
 
+
+  private def _loadUsers(userIdsByTenant: Map[String, List[String]])
+        : Map[(String, String), User] = {
+
+    var idCount = 0
+    var longestInList = 0
+
+    def incIdCount(ids: List[String]) {
+      val len = ids.length
+      idCount += len
+      if (len > longestInList) longestInList = len
+    }
+
+    def mkQueryUnau(tenantId: String, idsUnau: List[String])
+          : (String, List[String]) = {
+      incIdCount(idsUnau)
+      val inList = idsUnau.map(_ => "?").mkString(",")
+      val q = """
+         select
+            e.TENANT, '-'||s.SNO user_id, s.NAME DISPLAY_NAME,
+            s.EMAIL, e.EMAIL_NOTFS, s.LOCATION COUNTRY,
+            s.WEBSITE, 'F' SUPERADMIN
+         from
+           DW1_IDS_SIMPLE s left join DW1_IDS_SIMPLE_EMAIL e
+           on s.EMAIL = e.EMAIL and e.TENANT = ?
+         where
+           s.SNO in (""" + inList +")"
+      // An unauthenticated user id starts with '-', drop it.
+      val vals = tenantId :: idsUnau.map(_.drop(1))
+      (q, vals)
+    }
+
+    def mkQueryAu(tenantId: String, idsAu: List[String])
+          : (String, List[String]) = {
+      incIdCount(idsAu)
+      val inList = idsAu.map(_ => "?").mkString(",")
+      val q = """
+         select TENANT, SNO user_id, DISPLAY_NAME,
+            EMAIL, EMAIL_NOTFS, COUNTRY,
+            WEBSITE, SUPERADMIN
+         from DW1_USERS
+         where TENANT = ?
+         and SNO in (""" + inList +")"
+      (q, tenantId :: idsAu)
+    }
+
+    val totalQuery = StringBuilder.newBuilder
+    var allValsReversed = List[String]()
+
+    def growQuery(moreQueryAndVals: (String, List[String])) {
+      if (totalQuery.nonEmpty)
+        totalQuery ++= " union "
+      totalQuery ++= moreQueryAndVals._1
+      allValsReversed = moreQueryAndVals._2.reverse ::: allValsReversed
+    }
+
+    // Build query.
+    for ((tenantId, userIds) <- userIdsByTenant.toList) {
+      // Split user ids into distinct authenticated and unauthenticated ids.
+      // Unauthenticated id starts with "-".
+      val (idsUnau, idsAu) = userIds.distinct.partition(_ startsWith "-")
+
+      if (idsUnau nonEmpty) growQuery(mkQueryUnau(tenantId, idsUnau))
+      if (idsAu nonEmpty) growQuery(mkQueryAu(tenantId, idsAu))
+    }
+
+    if (idCount == 0)
+      return Map.empty
+
+    // Could log warning if longestInList > 1000, would break in Oracle
+    // (max in list size is 1000).
+
+    var usersByTenantAndId = Map[(String, String), User]()
+
+    db.queryAtnms(totalQuery.toString, allValsReversed.reverse, rs => {
+      while (rs.next) {
+        val tenantId = rs.getString("TENANT")
+        // Sometimes convert both "-" and null to "", because unauthenticated
+        // users use "-" as placeholder for "nothing specified" -- so those
+        // values are indexed (since sql null isn't).
+        // Authenticated users, however, currently use sql null for nothing.
+        val user = User(
+           id = rs.getString("user_id"),
+           displayName = dn2e(rs.getString("DISPLAY_NAME")),
+           email = dn2e(rs.getString("EMAIL")),
+           emailNotfPrefs = _toEmailNotfs(rs.getString("EMAIL_NOTFS")),
+           country = dn2e(rs.getString("COUNTRY")),
+           website = dn2e(rs.getString("WEBSITE")),
+           isSuperAdmin = rs.getString("SUPERADMIN") == "T")
+
+        usersByTenantAndId = usersByTenantAndId + ((tenantId, user.id) -> user)
+      }
+      Empty // dummy
+    })
+
+    usersByTenantAndId
+  }
+
+
   private def _loadMemships(r: RequestInfo): List[String] = {
     Nil
   }
@@ -547,7 +648,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     })
 
     val (identities, users) =
-        _loadUsers(onPageWithSno = pageSno, tenantId = tenantId)
+        _loadIdtysAndUsers(onPageWithSno = pageSno, tenantId = tenantId)
 
     // Load rating tags.
     val ratingTags: mut.HashMap[String, List[String]] = db.queryAtnms("""
@@ -926,75 +1027,142 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     )
   }
 
-  def saveInboxSeeds(tenantId: String, seeds: Seq[InboxSeed]) {
+
+  def saveNotfs(tenantId: String, notfs: Seq[NotfOfPageAction]) {
     db.transaction { implicit connection =>
-      val valss: List[List[AnyRef]] = for (seed <- seeds.toList) yield {
-        List(tenantId, seed.idtySmplId.getOrElse(NullVarchar),
-            seed.roleId.getOrElse(NullVarchar),
-            tenantId, seed.pageId,
-            seed.pageActionId, seed.sourceActionId, seed.ctime)
-      }
+      val valss: List[List[AnyRef]] = for (notf <- notfs.toList) yield List(
+        tenantId, notf.ctime, notf.pageId, notf.pageTitle,
+        notf.recipientIdtySmplId.orNullVarchar,
+        notf.recipientRoleId.orNullVarchar,
+        notf.eventType.toString, notf.eventActionId,
+        notf.targetActionId.orNullVarchar,
+        notf.recipientActionId,
+        notf.recipientUserDispName, notf.eventUserDispName,
+        notf.targetUserDispName.orNullVarchar)
+
       db.batchUpdate("""
-          insert into DW1_INBOX_PAGE_ACTIONS(
-              TENANT, ID_SIMPLE, ROLE,
-              PAGE,
-              TARGET_PGA, SOURCE_PGA, CTIME)
-            values (?, ?, ?,
-              (select SNO from DW1_PAGES where TENANT = ? and GUID = ?),
-              ?, ?, ?)
-          """,
-          valss)
+        insert into DW1_NOTFS_PAGE_ACTIONS(
+            TENANT, CTIME, PAGE_ID, PAGE_TITLE,
+            RCPT_ID_SIMPLE, RCPT_ROLE_ID,
+            EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
+            RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME)
+          values (
+            ?, ?, ?, ?,
+            ?, ?,
+            ?, ?, ?, ?,
+            ?, ?,
+            ?)
+        """, valss)
       Empty  // my stupid API, should rewrite
     }
   }
 
-  // COULD rename roleId param to userId.
-  // Or COULD start using UserId (see user.scala).
-  def loadInboxItems(tenantId: String, roleId: String): List[InboxItem] = {
-    // COULD load inbox items for all granted roles too.
-    var items = List[InboxItem]()
-    db.queryAtnms("""
-        select a.TYPE, a.TEXT, p.GUID PAGE, a.PAID, b.CTIME, b.SOURCE_PGA
-        from DW1_INBOX_PAGE_ACTIONS b inner join DW1_PAGE_ACTIONS a
-          on b.PAGE = a.PAGE and b.TARGET_PGA = a.PAID
-          inner join DW1_PAGES p
-          on b.PAGE = p.SNO
-        where b.TENANT = ? and """+
-          (if (roleId startsWith "-") "b.ID_SIMPLE = ?"
-            else "b.ROLE = ?") +"""
-        order by b.CTIME desc
-        limit 50
-        """,
-        List(tenantId,
-            // IdentitySimple user ids start with '-'.
-            roleId.dropWhile(_ == '-')),
-        rs => {
+
+  def loadNotfsForRole(tenantId: String, userId: String)
+        : Seq[NotfOfPageAction] = {
+    val numToLoad = 50 // for now
+    val notfsToMail = _loadNotfsImpl(numToLoad, Some(tenantId),
+       delayMins = None, userId = Some(userId))
+    // All loaded notifications are to userId only.
+    notfsToMail.notfsByTenant(tenantId)
+  }
+
+
+  def loadNotfsToMailOut(delayInMinutes: Int, numToLoad: Int): NotfsToMail =
+    _loadNotfsImpl(numToLoad, None, delayMins = Some(delayInMinutes),
+       userId = None)
+
+
+  def _loadNotfsImpl(numToLoad: Int, tenantId: Option[String],
+        delayMins: Option[Int], userId: Option[String])
+        : NotfsToMail = {
+
+    assert(delayMins.isDefined != userId.isDefined)
+    assert(delayMins.isDefined != tenantId.isDefined)
+    assert(numToLoad > 0)
+    // When loading email addrs, an SQL in list is used, but
+    // Oracle limits the max in list size to 1000. As a stupid workaround,
+    // don't load more than 1000 notifications at a time.
+    assert(numToLoad < 1000)
+
+    val baseQuery = """
+       select
+         TENANT, CTIME, PAGE_ID, PAGE_TITLE,
+         RCPT_ID_SIMPLE, RCPT_ROLE_ID,
+         EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
+         RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME,
+         STATUS, EMAIL_SENT, EMAIL_LINK_CLICKED
+       from DW1_NOTFS_PAGE_ACTIONS
+       where """
+
+    val (whereOrderBy, vals) = userId match {
+      case Some(uid) =>
+        var whereOrderBy =
+           "TENANT = ? and "+ (
+           if (uid startsWith "-") "RCPT_ID_SIMPLE = ?"
+           else "RCPT_ROLE_ID = ?"
+           ) +" order by CTIME desc"
+        // IdentitySimple user ids start with '-'.
+        val uidNoDash = uid.dropWhile(_ == '-')
+        val vals = List(tenantId.get, uidNoDash)
+        (whereOrderBy, vals)
+      case None =>
+        // (For all tenants.)
+        val whereOrderBy = "CTIME <= ? order by CTIME asc"
+        val nowInMillis = (new ju.Date).getTime
+        val someMinsAgo = new ju.Date(nowInMillis - delayMins.get * 60 * 1000)
+        val vals = someMinsAgo::Nil
+        (whereOrderBy, vals)
+    }
+
+    val query = baseQuery + whereOrderBy +" limit "+ numToLoad
+    var notfsByTenant =
+       Map[String, List[NotfOfPageAction]]().withDefaultValue(Nil)
+
+    db.queryAtnms(query, vals, rs => {
       while (rs.next) {
-        val tyype = rs.getString("TYPE")
-        val text = n2e(rs.getString("TEXT"))
-        val pageId = rs.getString("PAGE")
-        val pageActionId = rs.getString("PAID")
-        val ctime = ts2d(rs.getTimestamp("CTIME"))
-        val sourceActionId = rs.getString("SOURCE_PGA")
-        val item = tyype match {
-          case "Post" => InboxItem(
-            tyype = Do.Reply,
-            title = "?",  // COULD extract title somehow somewhere?
-            summary = text.take(100),
-            pageId = pageId,
-            pageActionId = pageActionId,
-            sourceActionId = sourceActionId,
-            ctime = ctime)
-          case x =>
-            unimplemented("Loading inbox item of type "+ safed(x))
-        }
-        items ::= item
+        val tenantId = rs.getString("TENANT")
+        val eventTypeStr = rs.getString("EVENT_TYPE")
+        val rcptIdSimple = rs.getString("RCPT_ID_SIMPLE")
+        val rcptRoleId = rs.getString("RCPT_ROLE_ID")
+        val rcptUserId =
+          if (rcptRoleId ne null) rcptRoleId
+          else "-"+ rcptIdSimple
+        val notf = NotfOfPageAction(
+          ctime = ts2d(rs.getTimestamp("CTIME")),
+          recipientUserId = rcptUserId,
+          pageTitle = rs.getString("PAGE_TITLE"),
+          pageId = rs.getString("PAGE_ID"),
+          eventType = NotfOfPageAction.Type.PersonalReply,  // for now
+          eventActionId = rs.getString("EVENT_PGA"),
+          targetActionId = Option(rs.getString("TARGET_PGA")),
+          recipientActionId = rs.getString("RCPT_PGA"),
+          recipientUserDispName = rs.getString("RCPT_USER_DISP_NAME"),
+          eventUserDispName = rs.getString("EVENT_USER_DISP_NAME"),
+          targetUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")))
+
+        // Add notf to the list of all notifications for tenantId.
+        val notfsForTenant: List[NotfOfPageAction] = notfsByTenant(tenantId)
+        notfsByTenant = notfsByTenant + (tenantId -> (notf::notfsForTenant))
       }
-      Empty // dummy
+      Empty // my bad API
     })
 
-    items
+    val userIdsByTenant: Map[String, List[String]] =
+       notfsByTenant.mapValues(_.map(_.recipientUserId))
+
+    val usersByTenantAndId: Map[(String, String), User] =
+      _loadUsers(userIdsByTenant)
+
+    NotfsToMail(notfsByTenant, usersByTenantAndId)
   }
+
+
+  def markNotfsAsMailed(
+        notfEmailsByTenant: Map[String, Seq[(NotfOfPageAction, EmailSent)]]) {
+
+  }
+
 
   def configRole(tenantId: String, loginId: String, ctime: ju.Date,
                  roleId: String, emailNotfPrefs: EmailNotfPrefs) {
