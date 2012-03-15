@@ -26,6 +26,9 @@ object DebikiDaoOracle extends Build {
   //  "Directory " + projectBase + " is not contained in build root"
   lazy val submTckDao = RootProject(file("../debiki-tck-dao"))
   */
+
+  scalacOptions in ThisBuild ++= Seq("-deprecation")
+
 }
 
 // vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
