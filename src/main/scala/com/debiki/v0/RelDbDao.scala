@@ -89,7 +89,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     // are granted to IdentitySimple users, which don't even need to
     // specify any password to "login"!
     loginReq.identity match {
-      case s: IdentitySimple =>
+      case idtySmpl: IdentitySimple =>
         val simpleLogin = db.transaction { implicit connection =>
           // Find or create _SIMPLE row.
           var idtyId = ""
@@ -102,8 +102,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                 where i.NAME = ? and i.EMAIL = ? and i.LOCATION = ? and
                       i.WEBSITE = ?
                 """,
-                List(e2d(s.name), e2d(s.email), e2d(s.location),
-                    e2d(s.website)),
+                List(e2d(idtySmpl.name), e2d(idtySmpl.email),
+                   e2d(idtySmpl.location), e2d(idtySmpl.website)),
                 rs => {
               if (rs.next) {
                 idtyId = rs.getString("SNO")
@@ -122,20 +122,23 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                   insert into DW1_IDS_SIMPLE(
                       SNO, NAME, EMAIL, LOCATION, WEBSITE)
                   values (nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
-                  List(s.name, e2d(s.email), e2d(s.location), e2d(s.website)))
+                  List(idtySmpl.name, e2d(idtySmpl.email),
+                     e2d(idtySmpl.location), e2d(idtySmpl.website)))
                   // COULD fix: returning SNO into ?""", saves 1 roundtrip.
               // Loop one more lap to read SNO.
             }
           }
           assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
           val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
-          val user = _dummyUserFor(identity = s, emailNotfPrefs = notfPrefs,
-                                  id = _dummyUserIdFor(idtyId))
-          val identityWithId = s.copy(id = idtyId, userId = user.id)
+          val user = _dummyUserFor(identity = idtySmpl,
+             emailNotfPrefs = notfPrefs, id = _dummyUserIdFor(idtyId))
+          val identityWithId = idtySmpl.copy(id = idtyId, userId = user.id)
           val loginWithId = _saveLogin(loginReq.login, identityWithId)
           Full(LoginGrant(loginWithId, identityWithId, user))
         }.open_!
+
         return simpleLogin
+
       case _ => ()
     }
 
