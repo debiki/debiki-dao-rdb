@@ -25,6 +25,7 @@ trait RelDbLogger extends Logger {
 object RelDb {
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
+  val NullTimestamp = Null(js.Types.TIMESTAMP)
 
   /**
    * Pimps `Option[String]` with `orNullVarchar`, which means
@@ -60,7 +61,8 @@ object RelDb {
   def d2ts(d: ju.Date) = new js.Timestamp(d.getTime)
 
   /** Converts java.sql.Timestamp to java.util.Date. */
-  def ts2d(ts: js.Timestamp) = new ju.Date(ts.getTime)
+  def ts2d(ts: js.Timestamp) =
+     (ts eq null) ? (null: ju.Date) | (new ju.Date(ts.getTime))
 }
 
 class RelDb(val server: String,
