@@ -650,6 +650,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       Empty
     })
 
+    // Load identities and users.
     val (identities, users) =
         _loadIdtysAndUsers(onPageWithSno = pageSno, tenantId = tenantId)
 
@@ -683,6 +684,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         Full(map)
       }).open_!  // COULD throw exceptions, don't use boxes?
 
+    // Load page actions.
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
     db.queryAtnms("""

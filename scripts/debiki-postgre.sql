@@ -603,20 +603,20 @@ create table DW1_PAGE_RATINGS(  -- abbreviated PGRTNGS? PGRS? PRATINGS deprctd.
 
 ----- Emails and Inbox
 
--- Old table names and formats:
-drop table DW1_INBOX_PAGE_ACTIONS;
-drop table DW1_ROLE_INBOX;
-drop table DW1_EMAILS_OUT;
-
 
 create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
   TENANT varchar(32) not null,
+  -- A random string, perhaps 5 or 10 chars? So it cannot be guessed
+  -- or very easily brute forced - it's included in the unsubscribe link.
   ID varchar(32) not null,
   SENT_TO varchar(100) not null,  -- only one recipient, for now
 -- todo prod,dev: (done test)
 -- alter table DW1_EMAILS_OUT alter SENT_ON drop not null;
   SENT_ON timestamp,
   SUBJECT varchar(200) not null,
+  -- (Could move to separate table, if short of storage space, so the body
+  -- can be deleted, but other email info kept, without this causing table
+  -- fragmentation.)
   BODY_HTML varchar(2000) not null,
   -- E.g. Amazon SES assigns their own guid to each email. Their API returns
   -- the guid when the email is sent (it's not available until then).
@@ -693,7 +693,12 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   -- WEB_LINK_CLICKED timestamp,
   --
   ----- Constraints
-  -- (There's no primary key -- there're 2 unique indexes instead, and a
+  -- --- COULD do, prod, dev, test: -----
+  -- alter table DW1_NOTFS_PAGE_ACTIONS add
+  -- constraint DW1_NTFPGA_TNT_ID__P
+  --    primary key (TENANT, PAGE_ID, EVENT_PGA, RCPT_PGA)
+  -- ------------------------------------
+  -- (There're 2 unique indexes, and a
   -- check constraint, DW1_NTFPGA_IDSMPL_ROLE__C, that ensures one of those
   -- unique indexes is active.)
   --
