@@ -50,6 +50,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   override def saveLogin(tenantId: String, loginReq: LoginRequest
                             ): LoginGrant = {
 
+    // The user id cannot be known until you have logged in.
+    require(loginReq.identity.userId startsWith "?")
+
     // Assigns an id to `loginNoId', saves it and returns it (with id).
     def _saveLogin(loginNoId: Login, identityWithId: Identity)
                   (implicit connection: js.Connection): Login = {
@@ -78,6 +81,32 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               login.identityId.toLong.asInstanceOf[AnyRef],
               login.ip, login.date))
       login
+    }
+
+    def _loginWithEmailId(emailId: String): LoginGrant = {
+      UNTESTED // !!
+      val (email: EmailSent, notf: NotfOfPageAction) = (
+         loadEmailById(tenantId, emailId = emailId),
+         loadNotfByEmailId(tenantId, emailId = emailId)
+         ) match {
+        case (Some(email), Some(notf)) => (email, notf)
+        case (None, _) =>
+          illArgErr("DwE09IJ3", "No such email id: "+ emailId)
+        case (_, None) =>
+          runErr("DwE87XIE3", "Notification missing for email id: "+ emailId)
+      }
+      val user = _loadUser(tenantId, notf.recipientUserId) match {
+        case Some(user) => user
+        case None =>
+          runErr("DwE2XKw5", "User `"+ notf.recipientUserId +"' not found"+
+             " when logging in with email id `"+ emailId +"'.")
+      }
+      val idtyWithId = IdentityEmailId(id = emailId, userId = user.id,
+        emailSent = Some(email), notf = Some(notf))
+      val loginWithId = db.transaction { implicit connection =>
+        Full(_saveLogin(loginReq.login, idtyWithId))
+      }.open_!  // stupid API
+      LoginGrant(loginWithId, idtyWithId, user)
     }
 
     // Special case for IdentitySimple, because they map to no User.
@@ -139,6 +168,10 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
         return simpleLogin
 
+      case idty: IdentityEmailId =>
+        val loginGrant = _loginWithEmailId(idty.id)
+        return loginGrant
+
       case _ => ()
     }
 
@@ -185,6 +218,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       // case fid: IdentityTwitter => (SQL for Twitter identity table)
       // case fid: IdentityFacebook => (...)
       case _: IdentitySimple => assErr("DwE98239k2a2")
+      case _: IdentityEmailId => assErr("DwE8k932322")
       case IdentityUnknown => assErr("DwE92k2rI06")
     }
 
@@ -220,6 +254,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             // case _: IdentityFacebook =>
             case sid: IdentitySimple => assErr("DwE8451kx35")
             case IdentityUnknown => assErr("DwE091563wkr2")
+            case _: IdentityEmailId => assErr("DwE8Ik3f57")
           }
           Full(Some(identityInDb) -> Some(userInDb))
         } else {
@@ -325,12 +360,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
   }
 
-  def loadUser(withLoginId: String, tenantId: String
+  def loadIdtyAndUser(forLoginId: String, tenantId: String
                   ): Option[(Identity, User)] = {
-    def loginInfo = "login id "+ safed(withLoginId) +
+    def loginInfo = "login id "+ safed(forLoginId) +
           ", tenant "+ safed(tenantId)
 
-    _loadIdtysAndUsers(withLoginId = withLoginId, tenantId = tenantId) match {
+    _loadIdtysAndUsers(forLoginId = forLoginId, tenantId = tenantId) match {
       case (List(i: Identity), List(u: User)) => Some(i, u)
       case (List(i: Identity), Nil) => assErr(
         "DwE6349krq20", "Found no user for "+ loginInfo +
@@ -360,14 +395,14 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
 
   private def _loadIdtysAndUsers(onPageWithSno: String = null,
-                         withLoginId: String = null,
+                         forLoginId: String = null,
                          tenantId: String
                             ): Pair[List[Identity], List[User]] = {
     // Load users. First find all relevant identities, by joining
     // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
     // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
 
-    val (selectLoginIds, args) = (onPageWithSno, withLoginId) match {
+    val (selectLoginIds, args) = (onPageWithSno, forLoginId) match {
       // (Need to specify tenant id here, and when selecting from DW1_USERS,
       // because there's no foreign key from DW1_LOGINS to DW1_IDS_<type>.)
       case (null, loginId) => ("""
@@ -382,7 +417,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               where a.PAGE = ? and a.LOGIN = l.SNO and l.TENANT = ?
           """, List(pageSno.asInstanceOf[AnyRef], tenantId))
       case (a, b) => illArgErr(
-          "DwE0kEF3", "onPageWithSno: "+ safed(a) +", withLoginId: "+ safed(b))
+          "DwE0kEF3", "onPageWithSno: "+ safed(a) +", forLoginId: "+ safed(b))
     }
 
     // Load identities and users. Details: First find identities of all types
@@ -422,6 +457,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             -- union
             -- Twitter tables
             -- Facebook tables
+            -- Email identities (skip for now, only used when unsubscribing)
             )
         select i.ID_TYPE, i.I_ID,
             i.I_NAME, i.I_EMAIL,
@@ -493,6 +529,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       Full((identities,
           usersById.values.toList))  // silly to throw away hash map
     }).open_! // silly box
+  }
+
+
+  private def _loadUser(tenantId: String, userId: String): Option[User] = {
+    val usersByTenantAndId = _loadUsers(Map(tenantId -> (userId::Nil)))
+    usersByTenantAndId.get((tenantId, userId))
   }
 
 
