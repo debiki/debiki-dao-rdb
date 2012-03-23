@@ -1063,32 +1063,71 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   }
 
 
+  private def _markNotfsAsMailed(tenantId: String, emailId: String,
+        notfs: Seq[NotfOfPageAction])(implicit connection: js.Connection) {
+
+    val valss: List[List[AnyRef]] =
+      for (notf <- notfs.toList) yield List(
+         emailId,
+         tenantId, notf.pageId, notf.eventActionId, notf.recipientActionId)
+
+    db.batchUpdate("""
+      update DW1_NOTFS_PAGE_ACTIONS
+      set EMAIL_SENT = ?
+      where
+        TENANT = ? and PAGE_ID = ? and EVENT_PGA = ? and RCPT_PGA = ?
+      """, valss)
+  }
+
+  
   def loadNotfsForRole(tenantId: String, userId: String)
         : Seq[NotfOfPageAction] = {
     val numToLoad = 50 // for now
-    val notfsToMail = _loadNotfsImpl(numToLoad, Some(tenantId),
-       delayMins = None, userId = Some(userId))
+    val notfsToMail =
+       _loadNotfsImpl(numToLoad, Some(tenantId), userIdOpt = Some(userId))
     // All loaded notifications are to userId only.
     notfsToMail.notfsByTenant(tenantId)
   }
 
 
   def loadNotfsToMailOut(delayInMinutes: Int, numToLoad: Int): NotfsToMail =
-    _loadNotfsImpl(numToLoad, None, delayMins = Some(delayInMinutes),
-       userId = None)
+    _loadNotfsImpl(numToLoad, None, delayMinsOpt = Some(delayInMinutes))
 
 
-  def _loadNotfsImpl(numToLoad: Int, tenantId: Option[String],
-        delayMins: Option[Int], userId: Option[String])
+  def loadNotfByEmailId(tenantId: String, emailId: String)
+        : Option[NotfOfPageAction] = {
+    val notfsToMail =
+       _loadNotfsImpl(1, Some(tenantId), emailIdOpt = Some(emailId))
+    val notfs = notfsToMail.notfsByTenant(tenantId)
+    assert(notfs.length <= 1)
+    notfs.headOption
+  }
+
+
+  /**
+   * Specify:
+   * numToLoad + delayMinsOpt --> loads notfs to mail out, for all tenants
+   * tenantIdOpt + userIdOpt --> loads that user's notfs
+   * tenantIdOpt + emailIdOpt --> loads a single email and notf
+   * @return
+   */
+  private def _loadNotfsImpl(numToLoad: Int, tenantIdOpt: Option[String] = None,
+        delayMinsOpt: Option[Int] = None, userIdOpt: Option[String] = None,
+        emailIdOpt: Option[String] = None)
         : NotfsToMail = {
 
-    assert(delayMins.isDefined != userId.isDefined)
-    assert(delayMins.isDefined != tenantId.isDefined)
-    assert(numToLoad > 0)
+    require(delayMinsOpt.isEmpty || userIdOpt.isEmpty)
+    require(delayMinsOpt.isEmpty || emailIdOpt.isEmpty)
+    require(userIdOpt.isEmpty || emailIdOpt.isEmpty)
+    require(delayMinsOpt.isDefined != tenantIdOpt.isDefined)
+    require(!userIdOpt.isDefined || tenantIdOpt.isDefined)
+    require(!emailIdOpt.isDefined || tenantIdOpt.isDefined)
+    require(numToLoad > 0)
+    require(emailIdOpt.isEmpty || numToLoad == 1)
     // When loading email addrs, an SQL in list is used, but
     // Oracle limits the max in list size to 1000. As a stupid workaround,
     // don't load more than 1000 notifications at a time.
-    assert(numToLoad < 1000)
+    illArgErrIf3(numToLoad >= 1000, "DwE903kI23", "Too long SQL in-list")
 
     val baseQuery = """
        select
@@ -1100,8 +1139,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
        from DW1_NOTFS_PAGE_ACTIONS
        where """
 
-    val (whereOrderBy, vals) = userId match {
-      case Some(uid) =>
+    val (whereOrderBy, vals) = (userIdOpt, emailIdOpt) match {
+      case (Some(uid), None) =>
         var whereOrderBy =
            "TENANT = ? and "+ (
            if (uid startsWith "-") "RCPT_ID_SIMPLE = ?"
@@ -1109,15 +1148,22 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
            ) +" order by CTIME desc"
         // IdentitySimple user ids start with '-'.
         val uidNoDash = uid.dropWhile(_ == '-')
-        val vals = List(tenantId.get, uidNoDash)
+        val vals = List(tenantIdOpt.get, uidNoDash)
         (whereOrderBy, vals)
-      case None =>
+      case (None, Some(emailId)) =>
+        val whereOrderBy = "TENANT = ? and EMAIL_SENT = ?"
+        val vals = tenantIdOpt.get::emailId::Nil
+        (whereOrderBy, vals)
+      case (None, None) =>
         // (For all tenants.)
         val whereOrderBy = "CTIME <= ? order by CTIME asc"
         val nowInMillis = (new ju.Date).getTime
-        val someMinsAgo = new ju.Date(nowInMillis - delayMins.get * 60 * 1000)
+        val someMinsAgo =
+           new ju.Date(nowInMillis - delayMinsOpt.get * 60 * 1000)
         val vals = someMinsAgo::Nil
         (whereOrderBy, vals)
+      case _ =>
+        assErr("DwE093RI3")
     }
 
     val query = baseQuery + whereOrderBy +" limit "+ numToLoad
@@ -1144,7 +1190,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           recipientActionId = rs.getString("RCPT_PGA"),
           recipientUserDispName = rs.getString("RCPT_USER_DISP_NAME"),
           eventUserDispName = rs.getString("EVENT_USER_DISP_NAME"),
-          targetUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")))
+          targetUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")),
+          emailId = Option(rs.getString("EMAIL_SENT")))
 
         // Add notf to the list of all notifications for tenantId.
         val notfsForTenant: List[NotfOfPageAction] = notfsByTenant(tenantId)
@@ -1163,9 +1210,86 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   }
 
 
-  def markNotfsAsMailed(
-        notfEmailsByTenant: Map[String, Seq[(NotfOfPageAction, EmailSent)]]) {
+  def saveUnsentEmailConnectToNotfs(tenantId: String, email: EmailSent,
+        notfs: Seq[NotfOfPageAction]) {
+    db.transaction { implicit connection =>
+      _saveUnsentEmail(tenantId, email)
+      _markNotfsAsMailed(tenantId, email.id, notfs)
+      Empty  // my stupid API, should rewrite
+    }
+  }
 
+
+  def _saveUnsentEmail(tenantId: String, email: EmailSent)
+        (implicit connection: js.Connection) {
+
+    require(email.failureText isEmpty)
+    require(email.providerEmailId isEmpty)
+    require(email.sentOn isEmpty)
+
+    val vals = List(
+      tenantId, email.id, email.sentTo, email.subject, email.bodyHtmlText)
+
+    db.update("""
+      insert into DW1_EMAILS_OUT(
+        TENANT, ID, SENT_TO, SUBJECT, BODY_HTML)
+      values (
+        ?, ?, ?, ?, ?)
+      """, vals)
+  }
+
+
+  def updateSentEmail(tenantId: String, email: EmailSent) {
+    db.transaction { implicit connection =>
+
+      val sentOn = email.sentOn.map(d2ts(_)) getOrElse NullTimestamp
+      // 'O' means Other, use for now.
+      val failureType = email.failureText.isDefined ?
+         ("O": AnyRef) | (NullVarchar: AnyRef)
+      val failureTime = email.failureText.isDefined ?
+         (sentOn: AnyRef) | (NullTimestamp: AnyRef)
+
+      val vals = List(
+        sentOn, email.providerEmailId.orNullVarchar,
+        failureType, email.failureText.orNullVarchar, failureTime,
+        tenantId, email.id)
+
+      db.update("""
+        update DW1_EMAILS_OUT
+        set SENT_ON = ?, PROVIDER_EMAIL_ID = ?,
+            FAILURE_TYPE = ?, FAILURE_TEXT = ?, FAILURE_TIME = ?
+        where TENANT = ? and ID = ?
+        """, vals)
+
+      Empty  // my stupid API, should rewrite
+    }
+  }
+
+
+  def loadEmailById(tenantId: String, emailId: String): Option[EmailSent] = {
+    val query = """
+      select SENT_TO, SENT_ON, SUBJECT,
+        BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
+      from DW1_EMAILS_OUT
+      where TENANT = ? and ID = ?
+      """
+    val Full(emailOpt) = db.queryAtnms(query, List(tenantId, emailId), rs => {
+      var allEmails = List[EmailSent]()
+      while (rs.next) {
+        val email = EmailSent(
+           id = emailId,
+           sentTo = rs.getString("SENT_TO"),
+           sentOn = Option(ts2d(rs.getTimestamp("SENT_ON"))),
+           subject = rs.getString("SUBJECT"),
+           bodyHtmlText = rs.getString("BODY_HTML"),
+           providerEmailId = Option(rs.getString("PROVIDER_EMAIL_ID")),
+           failureText = Option(rs.getString("FAILURE_TEXT")))
+        allEmails = email::allEmails
+      }
+      assert(allEmails.length <= 1) // loaded by PK
+      Full(allEmails.headOption)
+    })
+    emailOpt
   }
 
 
