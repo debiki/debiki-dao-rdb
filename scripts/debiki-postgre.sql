@@ -613,14 +613,18 @@ create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
   TENANT varchar(32) not null,
   ID varchar(32) not null,
   SENT_TO varchar(100) not null,  -- only one recipient, for now
-  SENT_ON timestamp not null,
+-- todo prod,dev: (done test)
+-- alter table DW1_EMAILS_OUT alter SENT_ON drop not null;
+  SENT_ON timestamp,
   SUBJECT varchar(200) not null,
   BODY_HTML varchar(2000) not null,
   -- E.g. Amazon SES assigns their own guid to each email. Their API returns
   -- the guid when the email is sent (it's not available until then).
   -- If an email bounces, you look up the provider's email guid
   -- to find out which email bounced.
-  PROVIDER_EMAIL_ID varchar(100) not null,
+-- todo prod,dev: (done test)
+-- alter table DW1_EMAILS_OUT alter PROVIDER_EMAIL_ID drop not null;
+  PROVIDER_EMAIL_ID varchar(100),
   -- B/R/C/O: bounce, rejection, complaint, other.
   FAILURE_TYPE varchar(1) default null,
   -- E.g. a bounce or rejection message.
@@ -639,8 +643,7 @@ create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
 );
 
 
-create sequence DW1_EMAILS_OUT_ID start with 10;
-
+-- todo prod,dev,test:  drop sequence DW1_EMAILS_OUT_ID
 
 -- Notifications of page actions, to a role -- then RCPT_ROLE_ID is non-null --
 -- or to an unauthenticated user -- then RCPT_ID_SIMPLE is non-null.
