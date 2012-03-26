@@ -691,16 +691,22 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   -- auditing purposes.
   STATUS varchar(1) default 'N' not null,
   -- Email notifications
+  -- todo prod, done test,dev:  alter table DW1_NOTFS_PAGE_ACTIONS add column
+  EMAIL_STATUS varchar(1),  -- 'P'ending or Null, index on 'P'
+  -- COULD rename to EMAIL_ID, because the email might actually not have
+  -- been sent.
   EMAIL_SENT varchar(32) default null, -- references DW1_EMAILS_OUT.ID
   EMAIL_LINK_CLICKED timestamp default null,
   -- WEB_LINK_SHOWN timestamp,
   -- WEB_LINK_CLICKED timestamp,
   --
   ----- Constraints
-  -- --- COULD do, prod, dev, test: -----
+  -- For each action of yours, you can receive at most one notification
+  -- per action by other users.
+  -- --- TODO, prod, done test, dev: -----
   -- alter table DW1_NOTFS_PAGE_ACTIONS add
-  -- constraint DW1_NTFPGA_TNT_ID__P
-  --    primary key (TENANT, PAGE_ID, EVENT_PGA, RCPT_PGA)
+  constraint DW1_NTFPGA_T_PG_EVT_RCPT__P
+      primary key (TENANT, PAGE_ID, EVENT_PGA, RCPT_PGA),
   -- ------------------------------------
   -- (There're 2 unique indexes, and a
   -- check constraint, DW1_NTFPGA_IDSMPL_ROLE__C, that ensures one of those
@@ -727,6 +733,8 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   constraint DW1_NTFPGA_IDSMPL_ROLE__C check (
       (RCPT_ROLE_ID is null) <> (RCPT_ID_SIMPLE is null)),
   constraint DW1_NTFPGA_STATUS__C check (STATUS in ('N', 'O')),
+  -- todo prod, done test,dev: alter table DW1_NOTFS_PAGE_ACTIONS add
+  constraint DW1_NTFPGA_EMLST__C_IN check (EMAIL_STATUS = 'P'),
   constraint DW1_NTFPGA__R__EMLOT  -- ix DW1_NTFPGA_TNT_EMAILSENT
       foreign key (TENANT, EMAIL_SENT)
       references DW1_EMAILS_OUT (TENANT, ID),
@@ -753,6 +761,10 @@ create index DW1_NTFPGA_TNT_IDSMPL_CTIME
     on DW1_NOTFS_PAGE_ACTIONS (TENANT, RCPT_ID_SIMPLE, CTIME);
 create index DW1_NTFPGA_TNT_STATUS_CTIME
     on DW1_NOTFS_PAGE_ACTIONS (TENANT, STATUS, CTIME);
+-- todo prod, done test,dev:
+create index DW1_NTFPGA_EMLPNDNG_CTIME
+    on DW1_NOTFS_PAGE_ACTIONS (EMAIL_STATUS, CTIME)
+    where EMAIL_STATUS = 'P';
 create index DW1_NTFPGA_TNT_EMAILSENT
     on DW1_NOTFS_PAGE_ACTIONS (TENANT, EMAIL_SENT);
 

@@ -1082,19 +1082,21 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         notf.targetActionId.orNullVarchar,
         notf.recipientActionId,
         notf.recipientUserDispName, notf.eventUserDispName,
-        notf.targetUserDispName.orNullVarchar)
+        notf.targetUserDispName.orNullVarchar,
+        if (notf.emailPending) "P" else NullVarchar)
 
       db.batchUpdate("""
         insert into DW1_NOTFS_PAGE_ACTIONS(
             TENANT, CTIME, PAGE_ID, PAGE_TITLE,
             RCPT_ID_SIMPLE, RCPT_ROLE_ID,
             EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
-            RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME)
+            RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME,
+            EMAIL_STATUS)
           values (
             ?, ?, ?, ?,
             ?, ?,
             ?, ?, ?, ?,
-            ?, ?,
+            ?, ?, ?,
             ?)
         """, valss)
       Empty  // my stupid API, should rewrite
@@ -1102,8 +1104,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   }
 
 
-  private def _markNotfsAsMailed(tenantId: String, emailId: String,
-        notfs: Seq[NotfOfPageAction])(implicit connection: js.Connection) {
+  private def _connectNotfsToEmail(tenantId: String,
+        notfs: Seq[NotfOfPageAction], emailId: String)
+        (implicit connection: js.Connection) {
 
     val valss: List[List[AnyRef]] =
       for (notf <- notfs.toList) yield List(
@@ -1112,13 +1115,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
     db.batchUpdate("""
       update DW1_NOTFS_PAGE_ACTIONS
-      set EMAIL_SENT = ?
+      set EMAIL_STATUS = null, EMAIL_SENT = ?
       where
         TENANT = ? and PAGE_ID = ? and EVENT_PGA = ? and RCPT_PGA = ?
       """, valss)
   }
 
-  
+
   def loadNotfsForRole(tenantId: String, userId: String)
         : Seq[NotfOfPageAction] = {
     val numToLoad = 50 // for now
@@ -1174,7 +1177,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
          RCPT_ID_SIMPLE, RCPT_ROLE_ID,
          EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
          RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME,
-         STATUS, EMAIL_SENT, EMAIL_LINK_CLICKED
+         STATUS, EMAIL_STATUS, EMAIL_SENT, EMAIL_LINK_CLICKED
        from DW1_NOTFS_PAGE_ACTIONS
        where """
 
@@ -1194,8 +1197,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         val vals = tenantIdOpt.get::emailId::Nil
         (whereOrderBy, vals)
       case (None, None) =>
-        // (For all tenants.)
-        val whereOrderBy = "CTIME <= ? order by CTIME asc"
+        // Load notfs with emails pending, for all tenants.
+        val whereOrderBy =
+           "EMAIL_STATUS = 'P' and CTIME <= ? order by CTIME asc"
         val nowInMillis = (new ju.Date).getTime
         val someMinsAgo =
            new ju.Date(nowInMillis - delayMinsOpt.get * 60 * 1000)
@@ -1230,6 +1234,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           recipientUserDispName = rs.getString("RCPT_USER_DISP_NAME"),
           eventUserDispName = rs.getString("EVENT_USER_DISP_NAME"),
           targetUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")),
+          emailPending = rs.getString("EMAIL_STATUS") == "P",
           emailId = Option(rs.getString("EMAIL_SENT")))
 
         // Add notf to the list of all notifications for tenantId.
@@ -1253,7 +1258,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         notfs: Seq[NotfOfPageAction]) {
     db.transaction { implicit connection =>
       _saveUnsentEmail(tenantId, email)
-      _markNotfsAsMailed(tenantId, email.id, notfs)
+      _connectNotfsToEmail(tenantId, notfs, email.id)
       Empty  // my stupid API, should rewrite
     }
   }
