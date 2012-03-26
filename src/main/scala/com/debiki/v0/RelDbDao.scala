@@ -47,24 +47,21 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
   }
 
+
   override def saveLogin(tenantId: String, loginReq: LoginRequest
                             ): LoginGrant = {
-
-    // The user id cannot be known until you have logged in.
-    require(loginReq.identity.userId startsWith "?")
 
     // Assigns an id to `loginNoId', saves it and returns it (with id).
     def _saveLogin(loginNoId: Login, identityWithId: Identity)
                   (implicit connection: js.Connection): Login = {
       // Create a new _LOGINS row, pointing to identityWithId.
-      require(loginNoId.id startsWith "?")
-      require(loginNoId.identityId startsWith "?")
       val loginSno = db.nextSeqNo("DW1_LOGINS_SNO")
       val login = loginNoId.copy(id = loginSno.toString,
                                 identityId = identityWithId.id)
       val identityType = identityWithId match {
         case _: IdentitySimple => "Simple"
         case _: IdentityOpenId => "OpenID"
+        case _: IdentityEmailId => "EmailID"
         case _ => assErr("DwE3k2r21K5")
       }
       db.update("""
@@ -84,7 +81,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
 
     def _loginWithEmailId(emailId: String): LoginGrant = {
-      UNTESTED // !!
       val (email: EmailSent, notf: NotfOfPageAction) = (
          loadEmailById(tenantId, emailId = emailId),
          loadNotfByEmailId(tenantId, emailId = emailId)
@@ -339,6 +335,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         // case (..., IdentityTwitter) => ...
         // case (..., IdentityFacebook) => ...
         case (_, _: IdentitySimple) => assErr("DwE83209qk12")
+        case (_, _: IdentityEmailId) => assErr("DwE83kIR31")
         case (_, IdentityUnknown) => assErr("DwE32ks30016")
       }
 
@@ -1339,6 +1336,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                  roleId: String, emailNotfPrefs: EmailNotfPrefs) {
     // Currently auditing not implemented for the roles/users table,
     // so loginId and ctime aren't used.
+    require(!roleId.startsWith("-") && !roleId.startsWith("?"))
     db.transaction { implicit connection =>
       db.update("""
           update DW1_USERS

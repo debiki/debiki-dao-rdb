@@ -299,8 +299,12 @@ create table DW1_LOGINS(  -- logins and logouts
   constraint DW1_LOGINS__R__LOGINS  -- ix DW1_LOGINS_PREVL
       foreign key (PREV_LOGIN)
       references DW1_LOGINS(SNO) deferrable,
-  constraint DW1_LOGINS_IDTYPE__C
-      check (ID_TYPE in ('Simple', 'OpenID')),
+  ----- todo prod, done test,dev:
+  -- alter table DW1_LOGINS drop constraint DW1_LOGINS_IDTYPE__C
+  -- alter table DW1_LOGINS add
+  constraint DW1_LOGINS_IDTYPE__C -- should rename Simple --> Unau(thenticated)
+      check (ID_TYPE in ('Simple', 'Unau', 'OpenID', 'EmailID')),
+  -----
   constraint DW1_LOGINS_SNO_NOT_0__C check (SNO <> '0')
 );
 
