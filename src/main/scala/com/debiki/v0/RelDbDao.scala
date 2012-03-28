@@ -1106,17 +1106,18 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
 
   private def _connectNotfsToEmail(tenantId: String,
-        notfs: Seq[NotfOfPageAction], emailId: String)
+        notfs: Seq[NotfOfPageAction], emailId: Option[String],
+        debug: Option[String])
         (implicit connection: js.Connection) {
 
     val valss: List[List[AnyRef]] =
       for (notf <- notfs.toList) yield List(
-         emailId,
+         emailId.orNullVarchar, debug.orNullVarchar,
          tenantId, notf.pageId, notf.eventActionId, notf.recipientActionId)
 
     db.batchUpdate("""
       update DW1_NOTFS_PAGE_ACTIONS
-      set EMAIL_STATUS = null, EMAIL_SENT = ?
+      set MTIME = now(), EMAIL_STATUS = null, EMAIL_SENT = ?, DEBUG = ?
       where
         TENANT = ? and PAGE_ID = ? and EVENT_PGA = ? and RCPT_PGA = ?
       """, valss)
@@ -1256,11 +1257,20 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   }
 
 
+  def skipEmailForNotfs(tenantId: String, notfs: Seq[NotfOfPageAction],
+        debug: String) {
+    db.transaction { implicit connection =>
+      _connectNotfsToEmail(tenantId, notfs, emailId = None, debug = Some(debug))
+      Empty  // my stupid API, should rewrite
+    }
+  }
+
+
   def saveUnsentEmailConnectToNotfs(tenantId: String, email: EmailSent,
         notfs: Seq[NotfOfPageAction]) {
     db.transaction { implicit connection =>
       _saveUnsentEmail(tenantId, email)
-      _connectNotfsToEmail(tenantId, notfs, email.id)
+      _connectNotfsToEmail(tenantId, notfs, Some(email.id), debug = None)
       Empty  // my stupid API, should rewrite
     }
   }
