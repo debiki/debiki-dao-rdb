@@ -1083,7 +1083,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         notf.recipientActionId,
         notf.recipientUserDispName, notf.eventUserDispName,
         notf.targetUserDispName.orNullVarchar,
-        if (notf.emailPending) "P" else NullVarchar)
+        if (notf.emailPending) "P" else NullVarchar,
+        notf.debug.orNullVarchar)
 
       db.batchUpdate("""
         insert into DW1_NOTFS_PAGE_ACTIONS(
@@ -1091,13 +1092,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             RCPT_ID_SIMPLE, RCPT_ROLE_ID,
             EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
             RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME,
-            EMAIL_STATUS)
+            EMAIL_STATUS, DEBUG)
           values (
             ?, ?, ?, ?,
             ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?,
-            ?)
+            ?, ?)
         """, valss)
       Empty  // my stupid API, should rewrite
     }
@@ -1177,7 +1178,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
          RCPT_ID_SIMPLE, RCPT_ROLE_ID,
          EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
          RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME,
-         STATUS, EMAIL_STATUS, EMAIL_SENT, EMAIL_LINK_CLICKED
+         STATUS, EMAIL_STATUS, EMAIL_SENT, EMAIL_LINK_CLICKED, DEBUG
        from DW1_NOTFS_PAGE_ACTIONS
        where """
 
@@ -1235,7 +1236,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           eventUserDispName = rs.getString("EVENT_USER_DISP_NAME"),
           targetUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")),
           emailPending = rs.getString("EMAIL_STATUS") == "P",
-          emailId = Option(rs.getString("EMAIL_SENT")))
+          emailId = Option(rs.getString("EMAIL_SENT")),
+          debug = Option(rs.getString("DEBUG")))
 
         // Add notf to the list of all notifications for tenantId.
         val notfsForTenant: List[NotfOfPageAction] = notfsByTenant(tenantId)

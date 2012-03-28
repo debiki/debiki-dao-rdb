@@ -656,6 +656,8 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   ----- Where, when?
   TENANT varchar(32) not null,
   CTIME timestamp not null,
+  -- todo prod done dev,test: alter table DW1_NOTFS_PAGE_ACTIONS add column
+  MTIME timestamp default null,
   PAGE_ID varchar(32) not null,
   -- todo prod, done test,dev:
   -- alter table DW1_NOTFS_PAGE_ACTIONS
@@ -702,6 +704,8 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   EMAIL_LINK_CLICKED timestamp default null,
   -- WEB_LINK_SHOWN timestamp,
   -- WEB_LINK_CLICKED timestamp,
+  -- todo prod, done test,dev: alter table DW1_NOTFS_PAGE_ACTIONS add column
+  DEBUG varchar(200) default null,
   --
   ----- Constraints
   -- For each action of yours, you can receive at most one notification
