@@ -1075,7 +1075,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   def saveNotfs(tenantId: String, notfs: Seq[NotfOfPageAction]) {
     db.transaction { implicit connection =>
       val valss: List[List[AnyRef]] = for (notf <- notfs.toList) yield List(
-        tenantId, notf.ctime, notf.pageId, notf.pageTitle,
+        tenantId, notf.ctime, notf.pageId, notf.pageTitle take 80,
         notf.recipientIdtySmplId.orNullVarchar,
         notf.recipientRoleId.orNullVarchar,
         notf.eventType.toString, notf.eventActionId,
