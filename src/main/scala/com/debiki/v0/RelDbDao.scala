@@ -820,6 +820,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     templ
   }
 
+
   def createTenant(name: String): Tenant = {
     db.transaction { implicit connection =>
       val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
@@ -831,9 +832,29 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }.open_!
   }
 
+
   def loadTenants(tenantIds: Seq[String]): Seq[Tenant] = {
-    // For now, load only tenant names, and only 1 tenant.
+    // For now, load only 1 tenant.
     require(tenantIds.length == 1)
+
+    var hostsByTenantId = Map[String, List[TenantHost]]().withDefaultValue(Nil)
+    db.queryAtnms("""
+        select TENANT, HOST, CANONICAL, HTTPS from DW1_TENANT_HOSTS
+        where TENANT = ?  -- in the future: where TENANT in (...)
+        """,
+      List(tenantIds.head),
+      rs => {
+        while (rs.next) {
+          val tenantId = rs.getString("TENANT")
+          var hosts = hostsByTenantId(tenantId)
+          hosts ::= TenantHost(
+             address = rs.getString("HOST"),
+             role = _toTenantHostRole(rs.getString("CANONICAL")),
+             https = _toTenantHostHttps(rs.getString("HTTPS")))
+          hostsByTenantId = hostsByTenantId.updated(tenantId, hosts)
+        }
+        Empty // my stupid API, rewrite some day?
+      })
 
     var tenants = List[Tenant]()
     db.queryAtnms("""
@@ -842,13 +863,15 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         List(tenantIds.head),
         rs => {
       while (rs.next) {
-        tenants ::= Tenant(
-          id = rs.getString("ID"), name = rs.getString("NAME"), hosts = Nil)
+        val tenantId = rs.getString("ID")
+        val hosts = hostsByTenantId(tenantId)
+        tenants ::= Tenant(tenantId, name = rs.getString("NAME"), hosts = hosts)
       }
       Empty // my stupid API, rewrite some day?
     })
     tenants
   }
+
 
   def addTenantHost(tenantId: String, host: TenantHost) = {
     db.transaction { implicit connection =>
@@ -1563,6 +1586,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     Full(xsWithIds)
   }
 
+
   def _dummyUserIdFor(identityId: String) = "-"+ identityId
 
   def _dummyUserFor(identity: IdentitySimple, emailNotfPrefs: EmailNotfPrefs,
@@ -1574,11 +1598,28 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       website = identity.website, isSuperAdmin = false)
   }
 
-  def _toFlag(postType: PostType): String = postType match {
+
+  private def _toTenantHostRole(roleStr: String) = roleStr match {
+    case "C" => TenantHost.RoleCanonical
+    case "R" => TenantHost.RoleRedirect
+    case "L" => TenantHost.RoleLink
+    case "D" => TenantHost.RoleDuplicate
+  }
+
+
+  private def _toTenantHostHttps(httpsStr: String) = httpsStr match {
+    case "R" => TenantHost.HttpsRequired
+    case "A" => TenantHost.HttpsAllowed
+    case "N" => TenantHost.HttpsNone
+  }
+
+
+  private def _toFlag(postType: PostType): String = postType match {
     case PostType.Text => "Post"
     case PostType.Publish => "Publ"
     case PostType.Meta => "Meta"
   }
+
 
   def _toPostType(flag: String): PostType = flag match {
     case "Post" => PostType.Text
