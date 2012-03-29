@@ -75,8 +75,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               identityType +"', ?, ?, ?)",
           List(loginSno.asInstanceOf[AnyRef], tenantId,
               e2n(login.prevLoginId),  // UNTESTED unless empty
-              login.identityId.toLong.asInstanceOf[AnyRef],
-              login.ip, login.date))
+              login.identityId, login.ip, login.date))
       login
     }
 
@@ -329,7 +328,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                 List(nev.userId,  e2d(nev.oidOpLocalId), e2d(nev.oidRealm),
                   e2d(nev.oidEndpoint), e2d(nev.oidVersion),
                   e2d(nev.firstName), e2d(nev.email), e2d(nev.country),
-                  nev.id, tenantId))//.toLong.asInstanceOf[AnyRef], tenantId))
+                  nev.id, tenantId))
           }
           nev
         // case (..., IdentityTwitter) => ...
@@ -406,8 +405,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           select ID_SNO, ID_TYPE
               from DW1_LOGINS
               where SNO = ? and TENANT = ?
-          """, List(loginId, // why not needed: .toLong.asInstanceOf[AnyRef]?
-                     tenantId))
+          """, List(loginId, tenantId))
       case (pageSno, null) => ("""
           select distinct l.ID_SNO, l.ID_TYPE
               from DW1_PAGE_ACTIONS a, DW1_LOGINS l
