@@ -86,7 +86,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
          ) match {
         case (Some(email), Some(notf)) => (email, notf)
         case (None, _) =>
-          illArgErr("DwE09IJ3", "No such email id: "+ emailId)
+          throw EmailNotFoundException(emailId)
         case (_, None) =>
           runErr("DwE87XIE3", "Notification missing for email id: "+ emailId)
       }
