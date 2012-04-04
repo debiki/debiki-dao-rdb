@@ -48,6 +48,16 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   }
 
 
+  def moveRenamePage(tenantId: String, pageId: String,
+        newFolder: Option[String], showId: Option[Boolean],
+        newSlug: Option[String]): PagePath = {
+    db.transaction2 { implicit connection =>
+      _updatePage(tenantId, pageId, newFolder = newFolder, showId = showId,
+         newSlug = newSlug)
+    }
+  }
+
+
   override def saveLogin(tenantId: String, loginReq: LoginRequest
                             ): LoginGrant = {
 
@@ -1415,8 +1425,27 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
   }
 
+
+  def lookupPagePathByPageId(tenantId: String, pageId: String) =
+    _lookupPagePathByPageId(tenantId, pageId)(null)
+
+
+  private def _lookupPagePathByPageId(tenantId: String, pageId: String)
+        (implicit connection: js.Connection)
+        : Option[PagePath] = {
+    // _findCorrectPagePath does a page id lookup, if Some(pageId)
+    // is available.
+    val idPath = PagePath(
+      tenantId = tenantId, pageId = Some(pageId),
+      folder = "/", showId = false, pageSlug = "?")
+    _findCorrectPagePath(idPath).toOption
+  }
+
+
   // Looks up the correct PagePath for a possibly incorrect PagePath.
-  private def _findCorrectPagePath(pagePathIn: PagePath): Box[PagePath] = {
+  private def _findCorrectPagePath(pagePathIn: PagePath)
+      (implicit connection: js.Connection = null): Box[PagePath] = {
+
     var query = """
         select PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG
         from DW1_PAGE_PATHS
@@ -1478,7 +1507,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           query += ")"
         }
     }
-    db.queryAtnms(query, binds.reverse, rs => {
+
+    db.query(query, binds.reverse, rs => {
       var correctPath: Box[PagePath] = Empty
       if (rs.next) {
         correctPath = Full(pagePathIn.copy(  // keep pagePathIn.tenantId
@@ -1493,6 +1523,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       correctPath
     })
   }
+
 
   private def _createPage[T](where: PagePath, debate: Debate)
                             (implicit conn: js.Connection): Box[Int] = {
@@ -1519,6 +1550,62 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         List(where.tenantId, where.folder, debate.guid, showPageId,
             e2d(where.pageSlug)))
   }
+
+
+  private def _updatePage(tenantId: String, pageId: String,
+        newFolder: Option[String], showId: Option[Boolean],
+        newSlug: Option[String])
+        (implicit conn: js.Connection): PagePath = {
+
+    PagePath.checkPath(tenantId = tenantId, pageId = Some(pageId),
+      folder = newFolder getOrElse "/", pageSlug = newSlug getOrElse "")
+
+    var updates = new StringBuilder
+    var vals = List[AnyRef]()
+
+    newFolder foreach (folder => {
+      if (!vals.isEmpty) updates append ", "
+      updates.append("PARENT_FOLDER = ?")
+      vals ::= folder
+    })
+
+    showId foreach (showId => {
+      if (!vals.isEmpty) updates append ", "
+      updates.append("SHOW_ID = ?")
+      vals ::= showId ? "T" | "F"
+    })
+
+    newSlug foreach (slug => {
+      if (!vals.isEmpty) updates append ", "
+      updates.append("PAGE_SLUG = ?")
+      vals ::= slug
+    })
+
+    if (vals nonEmpty) {
+      val allVals = (pageId::tenantId::vals).reverse
+      val stmt = """
+         update DW1_PAGE_PATHS
+         set """+ updates +"""
+         where TENANT = ? and PAGE_ID = ?
+         """
+
+      val numRowsChanged = db.update2(stmt, allVals)
+
+      assert(numRowsChanged <= 1)
+      if (numRowsChanged == 0)
+        throw PageNotFoundException(tenantId, pageId)
+    }
+
+    // This shouldn't fail; it's the same transaction as the update.
+    val newPath = _lookupPagePathByPageId(tenantId, pageId) getOrElse {
+      val mess = "Page suddenly gone, id: "+ pageId
+      logger.error(mess)
+      runErr("DwE093KFH3", mess)
+    }
+
+    newPath
+  }
+
 
   private def _insert[T <: Action](
         tenantId: String, pageGuid: String, xs: List[T])
