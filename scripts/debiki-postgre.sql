@@ -590,8 +590,9 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_ACTIONPATH__C
 create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
 
+-- COULD rename to DW1_ACTION_RATINGS.
 create table DW1_PAGE_RATINGS(  -- abbreviated PGRTNGS? PGRS? PRATINGS deprctd.
-  PAGE varchar(32) not null,
+  PAGE varchar(32) not null, -- COULD rename to PAGE_ID
   PAID varchar(32) not null, -- page action id COULD rename to ACTION_ID
   TAG varchar(30) not null,
   constraint DW1_PRATINGS__P primary key (PAGE, PAID, TAG),
@@ -599,6 +600,16 @@ create table DW1_PAGE_RATINGS(  -- abbreviated PGRTNGS? PGRS? PRATINGS deprctd.
       foreign key (PAGE, PAID)
       references DW1_PAGE_ACTIONS(PAGE, PAID) deferrable
 );
+
+
+-- COULD create, so it'd be possible to link a Role from an Action,
+-- e.g. to implement a ChangeAuthor action.
+-- create table DW1_ACTIONS_TO_USERS(
+--   PAGE_ID varchar(32) not null,
+--   ACTION_ID varchar(32) not null,
+--   IDTY_UNAU_ID varchar(32), -- FK to DW1_IDS_UNAU (DW1_IDS_SIMPLE currently)
+--   ROLE_ID varchar(32))  -- FK to DW1_ROLES  (DW1_USERS currently)
+-- and either IDTY_UNAU_ID or ROLE_ID is specified.
 
 
 ----- Emails and Inbox
