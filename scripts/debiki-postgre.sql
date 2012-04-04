@@ -299,12 +299,8 @@ create table DW1_LOGINS(  -- logins and logouts
   constraint DW1_LOGINS__R__LOGINS  -- ix DW1_LOGINS_PREVL
       foreign key (PREV_LOGIN)
       references DW1_LOGINS(SNO) deferrable,
-  ----- todo prod, done test,dev:
-  -- alter table DW1_LOGINS drop constraint DW1_LOGINS_IDTYPE__C
-  -- alter table DW1_LOGINS add
   constraint DW1_LOGINS_IDTYPE__C -- should rename Simple --> Unau(thenticated)
       check (ID_TYPE in ('Simple', 'Unau', 'OpenID', 'EmailID')),
-  -----
   constraint DW1_LOGINS_SNO_NOT_0__C check (SNO <> '0')
 );
 
@@ -318,7 +314,7 @@ create sequence DW1_LOGINS_SNO start with 10;
 create sequence DW1_IDS_SNO start with 10;
 
 -- Simple login identities (no password needed).
--- (Could rename to DW1_USERS_UNAU? (unauthenticated users)
+-- (Could rename to DW1_IDS_UNAU? (unauthenticated identities)
 -- Would that make sense? since a "dummy" user is created anyway (read on).)
 -- When loaded from database, a dummy User is created, with its id
 -- set to -SNO (i.e. "-" + SNO). Users with ids starting with "-"
@@ -614,8 +610,6 @@ create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
   -- or very easily brute forced - it's included in the unsubscribe link.
   ID varchar(32) not null,
   SENT_TO varchar(100) not null,  -- only one recipient, for now
--- todo prod,dev: (done test)
--- alter table DW1_EMAILS_OUT alter SENT_ON drop not null;
   SENT_ON timestamp,
   SUBJECT varchar(200) not null,
   -- (Could move to separate table, if short of storage space, so the body
@@ -626,8 +620,6 @@ create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
   -- the guid when the email is sent (it's not available until then).
   -- If an email bounces, you look up the provider's email guid
   -- to find out which email bounced.
--- todo prod,dev: (done test)
--- alter table DW1_EMAILS_OUT alter PROVIDER_EMAIL_ID drop not null;
   PROVIDER_EMAIL_ID varchar(100),
   -- B/R/C/O: bounce, rejection, complaint, other.
   FAILURE_TYPE varchar(1) default null,
@@ -647,8 +639,6 @@ create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
 );
 
 
--- todo prod,dev,test:  drop sequence DW1_EMAILS_OUT_ID
-
 -- Notifications of page actions, to a role -- then RCPT_ROLE_ID is non-null --
 -- or to an unauthenticated user -- then RCPT_ID_SIMPLE is non-null.
 -- The table is somewhat de-normalized, for simper SQL, and performance.
@@ -656,12 +646,8 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   ----- Where, when?
   TENANT varchar(32) not null,
   CTIME timestamp not null,
-  -- todo prod done dev,test: alter table DW1_NOTFS_PAGE_ACTIONS add column
   MTIME timestamp default null,
   PAGE_ID varchar(32) not null,
-  -- todo prod, done test,dev:
-  -- alter table DW1_NOTFS_PAGE_ACTIONS
-  --    alter column PAGE_TITLE type varchar(100);
   PAGE_TITLE varchar(100) not null,
   ----- To whom? To either an unauthenticated user, or a role.
   RCPT_ID_SIMPLE varchar(32),
@@ -696,7 +682,6 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   -- auditing purposes.
   STATUS varchar(1) default 'N' not null,
   -- Email notifications
-  -- todo prod, done test,dev:  alter table DW1_NOTFS_PAGE_ACTIONS add column
   EMAIL_STATUS varchar(1),  -- 'P'ending or Null, index on 'P'
   -- COULD rename to EMAIL_ID, because the email might actually not have
   -- been sent.
@@ -704,17 +689,13 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   EMAIL_LINK_CLICKED timestamp default null,
   -- WEB_LINK_SHOWN timestamp,
   -- WEB_LINK_CLICKED timestamp,
-  -- todo prod, done test,dev: alter table DW1_NOTFS_PAGE_ACTIONS add column
   DEBUG varchar(200) default null,
   --
   ----- Constraints
   -- For each action of yours, you can receive at most one notification
   -- per action by other users.
-  -- --- TODO, prod, done test, dev: -----
-  -- alter table DW1_NOTFS_PAGE_ACTIONS add
   constraint DW1_NTFPGA_T_PG_EVT_RCPT__P
       primary key (TENANT, PAGE_ID, EVENT_PGA, RCPT_PGA),
-  -- ------------------------------------
   -- (There're 2 unique indexes, and a
   -- check constraint, DW1_NTFPGA_IDSMPL_ROLE__C, that ensures one of those
   -- unique indexes is active.)
@@ -740,7 +721,6 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   constraint DW1_NTFPGA_IDSMPL_ROLE__C check (
       (RCPT_ROLE_ID is null) <> (RCPT_ID_SIMPLE is null)),
   constraint DW1_NTFPGA_STATUS__C check (STATUS in ('N', 'O')),
-  -- todo prod, done test,dev: alter table DW1_NOTFS_PAGE_ACTIONS add
   constraint DW1_NTFPGA_EMLST__C_IN check (EMAIL_STATUS = 'P'),
   constraint DW1_NTFPGA__R__EMLOT  -- ix DW1_NTFPGA_TNT_EMAILSENT
       foreign key (TENANT, EMAIL_SENT)
@@ -768,7 +748,6 @@ create index DW1_NTFPGA_TNT_IDSMPL_CTIME
     on DW1_NOTFS_PAGE_ACTIONS (TENANT, RCPT_ID_SIMPLE, CTIME);
 create index DW1_NTFPGA_TNT_STATUS_CTIME
     on DW1_NOTFS_PAGE_ACTIONS (TENANT, STATUS, CTIME);
--- todo prod, done test,dev:
 create index DW1_NTFPGA_EMLPNDNG_CTIME
     on DW1_NOTFS_PAGE_ACTIONS (EMAIL_STATUS, CTIME)
     where EMAIL_STATUS = 'P';
