@@ -155,27 +155,23 @@ class RelDb(val server: String,
     ds
   }
 
+
   def close() {
     // Results in PostgreSQL complaining that "DataSource has been closed",
     // also when you open another one (!) with a different name.
     //daSo.asInstanceOf[pg.ds.PGPoolingDataSource].close()
   }
 
-  /*
-  def transactionThrow(f: (js.Connection) => Unit) = {
-    val conn: js.Connection = _getConnection()
-    try {
-      f(conn)
-      conn.commit()
-    } catch {
-      case e =>
-        ! use _closeEtc instead
-        if (!committed) conn.rollback()
-        conn.close()
-        throw e
-    }
-  } */
 
+  def transaction2[T](f: (js.Connection) => T): T = {
+    transaction(conn => {
+      val t = f(conn)
+      Full(t)
+    }).open_!
+  }
+
+
+  @deprecated
   def transaction[T](f: (js.Connection) => Box[T]): Box[T] = {
     var conn: js.Connection = null
     var box: Box[T] = Empty
@@ -197,45 +193,74 @@ class RelDb(val server: String,
     box
   }
 
-  //def transactionThrow[T](f: (js.Connection) => Box[T]): Box[T] = {
-  //  var conn: js.Connection = null
-  //  var box: Box[T] = Empty
-  //  try {
-  //    conn = _getConnection()
-  //    box = f(conn)
-  //    conn.commit()
-  //  } finally {
-  //    if (conn ne null) {
-  //      ! use _closeEtc instead
-  //      conn.setAutoCommit(true)  // reset to default mode
-  //      conn.close()
-  //    }
-  //  }
-  //  box
-  //}
 
+  def query2[T](sql: String, binds: List[AnyRef],
+              resultSetHandler: js.ResultSet => T)
+             (implicit conn: js.Connection): T = {
+    query(sql, binds, resultSet => {
+      val t = resultSetHandler(resultSet)
+      Full(t)
+    }).open_!
+  }
+
+
+  @deprecated
   def query[T](sql: String, binds: List[AnyRef],
                resultSetHandler: js.ResultSet => Box[T])
               (implicit conn: js.Connection): Box[T] = {
     execImpl(sql, binds, resultSetHandler, conn).asInstanceOf[Box[T]]
   }
 
+
+  def queryAtnms2[T](sql: String,
+                    binds: List[AnyRef],
+                    resultSetHandler: js.ResultSet => T): T = {
+    queryAtnms(sql, binds, resultSet => {
+      val t = resultSetHandler(resultSet)
+      Full(t)
+    }).open_!
+  }
+
+
+  @deprecated
   def queryAtnms[T](sql: String,
                     binds: List[AnyRef],
                     resultSetHandler: js.ResultSet => Box[T]): Box[T] = {
     execImpl(sql, binds, resultSetHandler, conn = null).asInstanceOf[Box[T]]
   }
 
+
+  /**
+   * Returns the number of lines updated, or throws an exception.
+   */
+  def update2(sql: String, binds: List[AnyRef] = Nil)
+            (implicit conn: js.Connection): Int = {
+    execImpl(sql, binds, null, conn).asInstanceOf[Box[Int]].open_!
+  }
+
+
   /** Returns Full(num-lines-updated) or Failure.
     */
+  @deprecated
   def update(sql: String, binds: List[AnyRef] = Nil)
             (implicit conn: js.Connection): Box[Int] = {
     execImpl(sql, binds, null, conn).asInstanceOf[Box[Int]]
   }
 
+
+  /**
+   * Returns the number of lines updated, or throws an exception.
+   */
+  def updateAtnms2(sql: String, binds: List[AnyRef] = Nil): Int = {
+    execImpl(sql, binds, null, conn = null).asInstanceOf[Box[Int]].open_!
+  }
+
+
+  @deprecated
   def updateAtnms(sql: String, binds: List[AnyRef] = Nil): Box[Int] = {
     execImpl(sql, binds, null, conn = null).asInstanceOf[Box[Int]]
   }
+
 
   private def execImpl(query: String, binds: List[AnyRef],
                 resultSetHandler: js.ResultSet => Box[Any],
@@ -366,34 +391,10 @@ class RelDb(val server: String,
     conn.close()
   }
 
-  /*
-  def execQueryOLD(query: String, binds: List[AnyRef],
-                        resultHandler: (Either[Exception, js.ResultSet])
-                            => Unit) = {
-    val conn: js.Connection = _getConnection()
-    val pstmt: js.PreparedStatement = conn.prepareStatement(query)
-    TODO // handle binds
-    //s.setPoolable(false)  // don't cache infrequently used statements
-    val resultSet = pstmt.executeQuery()
-    resultHandler(Right(resultSet))
-    pstmt.close()
-    conn.close()
-  }
-
-  def execUpdateX(dml: String, binds: List[AnyRef],
-                         resultHandler: (Either[Exception, Int]) => Unit) = {
-    val conn: js.Connection = _getConnection()
-    val pstmt: js.PreparedStatement = conn.prepareStatement(dml)
-    TODO // handle binds
-    val changedRowsCount = pstmt.executeUpdate()
-    resultHandler(Right(changedRowsCount))
-    pstmt.close()
-    conn.close()
-  }
-  */
 
   def nextSeqNoAnyRef(seqName: String)(implicit conn: js.Connection): AnyRef =
     nextSeqNo(seqName).asInstanceOf[AnyRef]
+
 
   def nextSeqNo(seqName: String)(implicit conn: js.Connection): Long = {
     val sno: Long = query("select nextval('"+ seqName +"') N",
