@@ -1532,13 +1532,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         values (nextval('DW1_PAGES_SNO'), ?, ?)
         """, List(where.tenantId, debate.guid))
 
-    // Concerning prefixing the page name with the page guid:
-    // /folder/?createpage results in the guid prefixing the page name, like so:
-    //    /folder/-guid-pagename
-    // but /folder/pagename?createpage results in the guid being hidden,
-    // and this'll be the path to the page:
-    //    /folder/pagename
-    val showPageId = if (where.isFolderPath) "T" else "F"
+    val showPageId = where.showId ? "T" | "F"
 
     // Create a draft, always a draft ('D') -- the user needs to
     // write something before it makes sense to publish the page.
