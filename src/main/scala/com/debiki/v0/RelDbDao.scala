@@ -1425,7 +1425,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     // is available.
     val idPath = PagePath(
       tenantId = tenantId, pageId = Some(pageId),
-      folder = "/", showId = false, pageSlug = "?")
+      folder = "/", showId = false, pageSlug = "")
     _findCorrectPagePath(idPath).toOption
   }
 
