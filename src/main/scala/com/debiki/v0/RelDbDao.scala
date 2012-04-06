@@ -1033,6 +1033,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     items
   }
 
+
   def loadPermsOnPage(reqInfo: RequestInfo): PermsOnPage = {
     // Currently all permissions are actually hardcoded in this function.
     // (There's no permissions db table.)
@@ -1065,19 +1066,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     // People may view and use Javascript and CSS, but of course not edit it.
     if (reqInfo.pagePath.isCodePage)
       return PermsOnPage.None.copy(accessPage = true)
-
-    // Non-admins can only create pages whose names are prefixed
-    // with their guid, like so: /folder/-guid-pagename.
-    // (Currently there are no admin users, only superadmins)
-    // This is done by invoking /folder/?createpage.
-    // Admins can do this: /folder/page-name?createpage
-    (reqInfo.doo, reqInfo.pagePath.isFolderPath) match {
-      case (Do.CreatePage, true) => () // a page will be created in this folder
-      case (Do.CreatePage, false) =>
-        // A page name was specified, not a folder. Deny.
-        return PermsOnPage.None
-      case _ => ()
-    }
 
     // For now, hardcode rules here:
     val mayCreatePage = {
