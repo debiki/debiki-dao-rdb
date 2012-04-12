@@ -1005,13 +1005,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         List(tenantId, withFolderPrefix +"%"),
         rs => {
       while (rs.next) {
-        val pagePath = PagePath(
-          tenantId = tenantId,
-          folder = rs.getString("PARENT_FOLDER"),
-          pageId = Some(rs.getString("PAGE_ID")),
-          showId = rs.getString("SHOW_ID") == "T",
-          pageSlug = d2e(rs.getString("PAGE_SLUG"))
-        )
+        val pagePath = _PagePath(rs)(tenantId)
         val pageDetails = PageDetails(
           status = _toPageStatus(rs.getString("PAGE_STATUS")),
           cachedTitle =
@@ -1026,6 +1020,49 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       Empty // dummy
     })
     items
+  }
+
+
+  def listActions(
+        tenantId: String,
+        folderPrefix: String,
+        includePages: List[PageStatus],
+        limit: Int,
+        offset: Int): Seq[ActionLocator] = {
+
+    require(0 <= limit)
+    require(0 <= offset)
+    // For now only:
+    require(includePages == PageStatus.All)
+    require(offset == 0)
+
+    val query = """
+       select p.PARENT_FOLDER, p.PAGE_ID, p.SHOW_ID, p.PAGE_SLUG,
+          a.TYPE, a.PAID, a.TIME
+       from
+         DW1_PAGE_ACTIONS a inner join DW1_PAGE_PATHS p
+         on a.TENANT = p.TENANT and a.PAGE_ID = p.PAGE_ID
+       where
+         a.TENANT = ? and p.PARENT_FOLDER like ?
+       order by a.TIME desc
+       limit """+ limit
+
+    val vals = List[AnyRef](tenantId, folderPrefix +"%")
+    var actionLocators = List[ActionLocator]()
+
+    db.queryAtnms2(query, vals, rs => {
+      while (rs.next) {
+        val pagePath = _PagePath(rs)(tenantId)
+        val actnLctr = ActionLocator(
+           pagePath = pagePath,
+           actionId = rs.getString("PAID"),
+           actionCtime = rs.getTimestamp("TIME"),
+           actionType = rs.getString("TYPE"))
+        actionLocators ::= actnLctr
+      }
+    })
+
+    actionLocators.reverse
   }
 
 
@@ -1654,6 +1691,15 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       country = "",
       website = identity.website, isSuperAdmin = false)
   }
+
+
+  private def _PagePath(resultSet: js.ResultSet)(implicit tenantId: String) =
+    PagePath(
+      tenantId = tenantId,
+      folder = resultSet.getString("PARENT_FOLDER"),
+      pageId = Some(resultSet.getString("PAGE_ID")),
+      showId = resultSet.getString("SHOW_ID") == "T",
+      pageSlug = d2e(resultSet.getString("PAGE_SLUG")))
 
 
   private def _toTenantHostRole(roleStr: String) = roleStr match {
