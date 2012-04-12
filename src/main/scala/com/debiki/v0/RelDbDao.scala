@@ -400,7 +400,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   }
 
 
-  private def _loadIdtysAndUsers(onPageWithSno: String = null,
+  private def _loadIdtysAndUsers(onPageWithId: String = null,
                          forLoginId: String = null,
                          tenantId: String
                             ): Pair[List[Identity], List[User]] = {
@@ -408,7 +408,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
     // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
 
-    val (selectLoginIds, args) = (onPageWithSno, forLoginId) match {
+    val (selectLoginIds, args) = (onPageWithId, forLoginId) match {
       // (Need to specify tenant id here, and when selecting from DW1_USERS,
       // because there's no foreign key from DW1_LOGINS to DW1_IDS_<type>.)
       case (null, loginId) => ("""
@@ -416,13 +416,14 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
               from DW1_LOGINS
               where SNO = ? and TENANT = ?
           """, List(loginId, tenantId))
-      case (pageSno, null) => ("""
+      case (pageId, null) => ("""
           select distinct l.ID_SNO, l.ID_TYPE
               from DW1_PAGE_ACTIONS a, DW1_LOGINS l
-              where a.PAGE = ? and a.LOGIN = l.SNO and l.TENANT = ?
-          """, List(pageSno.asInstanceOf[AnyRef], tenantId))
+              where a.PAGE_ID = ? and a.TENANT = ?
+                and a.LOGIN = l.SNO and a.TENANT = l.TENANT
+          """, List(pageId, tenantId))
       case (a, b) => illArgErr(
-          "DwE0kEF3", "onPageWithSno: "+ safed(a) +", forLoginId: "+ safed(b))
+          "DwE0kEF3", "onPageWithId: "+ safed(a) +", forLoginId: "+ safed(b))
     }
 
     // Load identities and users. Details: First find identities of all types
@@ -663,25 +664,20 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         Connection.TRANSACTION_SERIALIZABLE)
       */
 
-    var pageSno = ""
+    // Load all logins for pageGuid.
     var logins = List[Login]()
-
-    // Load all logins for pageGuid. Load DW1_PAGES.SNO at the same time
-    // (although it's then included on each row) to avoid db roundtrips.
-    db.queryAtnms("""
-        select p.SNO PAGE_SNO,
+    db.queryAtnms2("""
+        select
             l.SNO LOGIN_SNO, l.PREV_LOGIN,
             l.ID_TYPE, l.ID_SNO,
             l.LOGIN_IP, l.LOGIN_TIME,
             l.LOGOUT_IP, l.LOGOUT_TIME
-        from DW1_TENANTS t, DW1_PAGES p, DW1_PAGE_ACTIONS a, DW1_LOGINS l
-        where t.ID = ?
-          and p.TENANT = t.ID
-          and p.GUID = ?
-          and a.PAGE = p.SNO
-          and a.LOGIN = l.SNO""", List(tenantId, pageGuid), rs => {
+        from DW1_PAGE_ACTIONS a, DW1_LOGINS l
+        where a.TENANT = ?
+          and a.PAGE_ID = ?
+          and l.TENANT = a.TENANT
+          and l.SNO = a.LOGIN""", List(tenantId, pageGuid), rs => {
       while (rs.next) {
-        pageSno = rs.getString("PAGE_SNO")
         val loginId = rs.getLong("LOGIN_SNO").toString
         val prevLogin = Option(rs.getLong("PREV_LOGIN")).map(_.toString)
         val ip = rs.getString("LOGIN_IP")
@@ -694,21 +690,20 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         logins ::= Login(id = loginId, prevLoginId = prevLogin, ip = ip,
                         date = date, identityId = idId)
       }
-      Empty
     })
 
     // Load identities and users.
     val (identities, users) =
-        _loadIdtysAndUsers(onPageWithSno = pageSno, tenantId = tenantId)
+        _loadIdtysAndUsers(onPageWithId = pageGuid, tenantId = tenantId)
 
     // Load rating tags.
     val ratingTags: mut.HashMap[String, List[String]] = db.queryAtnms("""
         select a.PAID, r.TAG from DW1_PAGE_ACTIONS a, DW1_PAGE_RATINGS r
-        where a.TYPE = 'Rating' and a.PAGE = ? and a.PAGE = r.PAGE and
-              a.PAID = r.PAID
+        where a.TYPE = 'Rating' and a.TENANT = ? and a.PAGE_ID = ?
+          and r.TENANT = a.TENANT and r.PAGE_ID = a.PAGE_ID and r.PAID = a.PAID
         order by a.PAID
         """,
-      List(pageSno.toString), rs => {
+      List(tenantId, pageGuid), rs => {
         val map = mut.HashMap[String, List[String]]()
         var tags = List[String]()
         var curPaid = ""  // current page action id
@@ -738,10 +733,10 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         select PAID, LOGIN, TIME, TYPE, RELPA,
               TEXT, MARKUP, WHEERE, NEW_IP
         from DW1_PAGE_ACTIONS
-        where PAGE = ?
+        where TENANT = ? and PAGE_ID = ?
         order by TIME desc
         """,
-        List(pageSno.toString), rs => {
+        List(tenantId, pageGuid), rs => {
       var actions = List[AnyRef]()
       while (rs.next) {
         val id = rs.getString("PAID");
@@ -1593,7 +1588,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         tenantId: String, pageGuid: String, xs: List[T])
         (implicit conn: js.Connection): Box[List[T]] = {
     var xsWithIds = Debate.assignIdsTo(xs)
-    var bindPos = 0
+    val pageId = pageGuid
     for (x <- xsWithIds) {
       // Could optimize:  (but really *not* important!)
       // Use a CallableStatement and `insert into ... returning ...'
@@ -1601,51 +1596,44 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       // Or select many SNO:s in one single query? and then do a batch
       // insert into _ACTIONS (instead of one insert per row), and then
       // batch inserts into other tables e.g. _RATINGS.
-      // Also don't need to select pageSno every time -- but probably better to
-      // save 1 roundtrip: usually only 1 row is inserted at a time (an end
-      // user posts 1 reply at a time).
-      val pageSno = db.query("""
-          select SNO from DW1_PAGES
-            where TENANT = ? and GUID = ?
-          """, List(tenantId, pageGuid), rs => {
-        rs.next
-        Full(rs.getLong("SNO").toString)
-      }).open_!
 
       val insertIntoActions = """
-          insert into DW1_PAGE_ACTIONS(LOGIN, PAGE, PAID, TIME, TYPE,
-                                    RELPA, TEXT, MARKUP, WHEERE)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          insert into DW1_PAGE_ACTIONS(
+            LOGIN, TENANT, PAGE_ID, PAID, TIME,
+            TYPE, RELPA, TEXT, MARKUP, WHEERE)
+          values (?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?)
           """
       // Keep in mind that Oracle converts "" to null.
-      val commonVals = Nil // p.loginId::pageSno::Nil
+      val commonVals = Nil // p.loginId::pageId::Nil
       x match {
         case p: Post =>
           db.update(insertIntoActions, commonVals:::List(
-            p.loginId, pageSno, p.id, p.ctime, _toFlag(p.tyype),
+            p.loginId, tenantId, pageId, p.id, p.ctime, _toFlag(p.tyype),
             p.parent, e2n(p.text), e2n(p.markup), e2n(p.where)))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
-            r.loginId, pageSno, r.id, r.ctime, "Rating", r.postId,
+            r.loginId, tenantId, pageId, r.id, r.ctime, "Rating", r.postId,
             NullVarchar, NullVarchar, NullVarchar))
           db.batchUpdate("""
-            insert into DW1_PAGE_RATINGS(PAGE, PAID, TAG) values (?, ?, ?)
-            """, r.tags.map(t => List(pageSno, r.id, t)))
+            insert into DW1_PAGE_RATINGS(TENANT, PAGE_ID, PAID, TAG)
+            values (?, ?, ?, ?)
+            """, r.tags.map(t => List(tenantId, pageId, r.id, t)))
         case e: Edit =>
           db.update(insertIntoActions, commonVals:::List(
-            e.loginId, pageSno, e.id, e.ctime, "Edit",
+            e.loginId, tenantId, pageId, e.id, e.ctime, "Edit",
             e.postId, e2n(e.text), e2n(e.newMarkup), NullVarchar))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
-            a.loginId, pageSno, a.id, a.ctime, "EditApp",
+            a.loginId, tenantId, pageId, a.id, a.ctime, "EditApp",
             a.editId, e2n(a.result), NullVarchar, NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
-            f.loginId, pageSno, f.id, f.ctime, "Flag" + f.reason,
+            f.loginId, tenantId, pageId, f.id, f.ctime, "Flag" + f.reason,
             f.postId, e2n(f.details), NullVarchar, NullVarchar))
         case d: Delete =>
           db.update(insertIntoActions, commonVals:::List(
-            d.loginId, pageSno, d.id, d.ctime,
+            d.loginId, tenantId, pageId, d.id, d.ctime,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
             d.postId, e2n(d.reason), NullVarchar, NullVarchar))
         case x => unimplemented(

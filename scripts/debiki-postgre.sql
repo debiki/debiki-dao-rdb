@@ -830,3 +830,63 @@ from DW1_PATHS;
 */
 
 
+/*  Splits DW1_PAGE_ACTIONS.PAGE into TENANT and PAGE_ID:
+
+---
+alter table DW1_PAGE_ACTIONS add TENANT varchar(32);
+
+alter table DW1_PAGE_ACTIONS add PAGE_ID varchar(32);
+
+update DW1_PAGE_ACTIONS a set
+  PAGE_ID = (select p.GUID from DW1_PAGES p where p.SNO = a.PAGE),
+  TENANT = (select p.TENANT from DW1_PAGES p where p.SNO = a.PAGE);
+
+alter table DW1_PAGE_ACTIONS alter column TENANT set not null;
+alter table DW1_PAGE_ACTIONS alter column PAGE_ID set not null;
+
+---
+alter table DW1_PAGE_RATINGS add column TENANT varchar(32);
+alter table DW1_PAGE_RATINGS add column PAGE_ID varchar(32);
+--
+
+update DW1_PAGE_RATINGS r set
+   TENANT = (select a.TENANT from DW1_PAGE_ACTIONS a where a.PAGE = r.PAGE and a.PAID = r.PAID),
+   PAGE_ID = (select a.PAGE_ID from DW1_PAGE_ACTIONS a where a.PAGE = r.PAGE and a.PAID = r.PAID);
+
+select * from DW1_PAGE_RATINGS;
+
+alter table DW1_PAGE_RATINGS drop constraint DW1_PRATINGS__P;
+alter table DW1_PAGE_RATINGS drop constraint DW1_PRATINGS__R__PACTIONS;
+alter table DW1_PAGE_RATINGS add constraint DW1_ARTS__P primary key (TENANT, PAGE_ID, PAID, TAG);
+
+---
+ alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS__R__PACTIONS;
+ alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_PAGE_PAID__P;
+ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID_ID__P
+   primary key (TENANT, PAGE_ID, PAID);
+ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS__R__PGAS
+    foreign key (TENANT, PAGE_ID, RELPA) -- no ix: no dels/upds in prnt tbl
+                       -- and no joins (loading whole page at once instead)
+    references DW1_PAGE_ACTIONS (TENANT, PAGE_ID, PAID) deferrable;
+ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID__R__PGPTHS
+  foreign key (TENANT, PAGE_ID)
+  references DW1_PAGE_PATHS (TENANT, PAGE_ID) deferrable;
+
+---
+alter table DW1_PAGE_RATINGS add
+  constraint DW1_ARTS__R__PGAS  -- ix primary key
+      foreign key (TENANT, PAGE_ID, PAID)
+      references DW1_PAGE_ACTIONS(TENANT, PAGE_ID, PAID) deferrable;
+
+alter table DW1_PAGE_RATINGS alter column TENANT set not null;
+alter table DW1_PAGE_RATINGS alter column PAGE_ID set not null;
+
+---
+alter table DW1_PAGE_ACTIONS alter column PAGE drop not null;
+alter table DW1_PAGE_RATINGS alter column PAGE drop not null;
+
+----------- done above, @dev & @test
+
+
+*/
+
