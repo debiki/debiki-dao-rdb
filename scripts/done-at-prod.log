@@ -1,5 +1,46 @@
 -- vim: fdm=marker et ts=2 sw=2 list
 
+{{{1 Changed author of ...kajs-sida  @ www.debiki.se
+
+But shouldn't be done in this manner!!! Should add a new PageAction.
+
+select * from dw1_page_actions where paid = 'q98404j8dr';
+kaj   login  544
+
+Kajs sida:
+select * from dw1_pages where guid = '14pg60hulm';
+ sno | tenant |    guid    
+-----+--------+------------
+ 198 | 2      | 14pg60hulm
+
+
+> select * from dw1_page_actions where paid = '1' and page = '198';
+ page | paid | login |          time          | type | relpa |                             text                              | markup | wheere | new_ip 
+------+------+-------+------------------------+------+-------+---------------------------------------------------------------+--------+--------+--------
+ 198  | 1    | 536   | 2012-03-11 09:19:54.43 | Post | 1     | Title                                                        +| dmd0   |        | 
+      |      |       |                        |      |       | ============                                                 +|        |        | 
+      |      |       |                        |      |       |                                                              +|        |        | 
+ ...
+(1 row)
+
+
+> select * from dw1_logins where sno = '544';
+ sno | tenant | prev_login | id_type | id_sno | login_ip |       login_time        | logout_ip | logout_time 
+-----+--------+------------+---------+--------+----------+-------------------------+-----------+-------------
+ 544 | 2      |            | Simple  | 297    | ?.?.?.?  | 2012-03-19 16:40:55.003 |           | 
+
+> select * from dw1_ids_simple where sno = '297';
+ sno |     name     |         email          | location | website 
+-----+--------------+------------------------+----------+---------
+ 297 | Kaj Lindberg | kaj.lindberg@telia.com | -        | -
+(1 row)
+
+\SET AUTOCOMMIT OFF
+update dw1_page_actions set login = 544 where paid = '1' and page = '198';
+COMMIT
+
+
+}}}1
 -- {{{ 2011-04-16  Splits DW1_PAGE_ACTIONS.PAGE into TENANT and PAGE_ID:
 ------------------------------------------
 
