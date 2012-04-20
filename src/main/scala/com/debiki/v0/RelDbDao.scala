@@ -811,7 +811,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         runErr("DwE309sU32", "Error loading template guid:\n"+ f)
       case Full(path) =>
         loadPage(path.tenantId, path.pageId.get) match {
-          case Full(page) => page.body map (TemplateSrcHtml(_))
+          case Full(page) => page.body map (TemplateSrcHtml(_, templPath.path))
           // If someone deleted the template moments ago, after its
           // guid was found:
           case Empty => None
