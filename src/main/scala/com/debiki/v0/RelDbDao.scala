@@ -271,16 +271,15 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       val user = userInDb match {
         case Some(u) => u
         case None =>
-          // Leave the name/email/etc fields blank --  the name/email from
-          // the relevant identity is used instead. However, if the user
-          // manually fills in (not implemented) her user data,
-          // then those values take precedence (over the one from the
-          // identity provider).
+          // Copy identity name/email/etc fields to the new role.
+          // Data in DW1_USERS has precedence over data in the DW1_IDS_*
+          // tables, see Debiki for Developers #3bkqz5.
           val userSno = db.nextSeqNo("DW1_USERS_SNO")
-          val u =  User(id = userSno.toString, displayName = "", email = "",
-                        emailNotfPrefs = EmailNotfPrefs.Unspecified,
-                        country = "", website = "", isSuperAdmin = false)
-          db.update("""
+          val idty = loginReq.identity
+          val u =  User(id = userSno.toString, displayName = idty.displayName,
+             email = idty.email, emailNotfPrefs = EmailNotfPrefs.Unspecified,
+             country = "", website = "", isSuperAdmin = false)
+          db.update2("""
               insert into DW1_USERS(
                   TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
               values (?, ?, ?, ?, ?)""",

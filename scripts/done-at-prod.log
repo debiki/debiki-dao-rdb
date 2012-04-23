@@ -100,4 +100,50 @@ alter table DW1_PAGE_RATINGS alter column PAGE drop not null;
 -------------------------------------
 ------------ done above, @dev, @test, @prod.
 -- }}}
+{{{1 2011-04-23 Copy email & name to user table
+
+-- done @prod, @dev, skip test:
+
+\set AUTOCOMMIT off
+select * from dw1_users;
+select tenant, sno, usr, first_name, email from dw1_ids_openid ;
+update DW1_USERS u set DISPLAY_NAME = i.FIRST_NAME, EMAIL = i.EMAIL
+  from DW1_IDS_OPENID i
+  where u.TENANT = i.TENANT and u.SNO = i.USR;
+select * from dw1_users;
+select oid_realm, tenant, sno, usr, first_name, email from dw1_ids_openid ;
+commit;
+
+Result: (DW1_USERS email and display_name were all null before)
+
+debiki_prod=> select * from dw1_users;
+ tenant | sno | display_name |         email          | country | website | superadmin | email_notfs 
+--------+-----+--------------+------------------------+---------+---------+------------+-------------
+ 2      | 51  |              |                        |         |         | T          | R
+ 2      | 10  | Magnus       | leomaheo@gmail.com     |         |         | T          | 
+ 2      | 30  | KajMagnus    | kajmagnus79d@gmail.com |         |         | T          | N
+ 2      | 52  | Kaj Magnus   | kajmagnus79@gmail.com  |         |         |            | 
+ 12     | 53  | KajMagnus    | kajmagnus79d@gmail.com |         |         |            | 
+ 12     | 54  | KajMagnus    | kajmagnus79d@gmail.com |         |         | T          | 
+ 3      | 56  | KajMagnus    | kajmagnus79d@gmail.com |         |         |            | 
+ 3      | 55  | KajMagnus    | kajmagnus79d@gmail.com |         |         | T          | N
+(8 rows)
+
+debiki_prod=> select oid_realm, tenant, sno, usr, first_name, email from dw1_ids_openid ;
+         oid_realm          | tenant | sno | usr | first_name |         email          
+----------------------------+--------+-----+-----+------------+------------------------
+ http://*.debiki.se         | 2      | 10  | 10  | Magnus     | leomaheo@gmail.com
+ http://kajmagnus.debiki.se | 12     | 331 | 53  | KajMagnus  | kajmagnus79d@gmail.com
+ http://localhost:8080      | 2      | 289 | 52  | Kaj Magnus | kajmagnus79@gmail.com
+ http://localhost:8080      | 2      | 273 | 30  | KajMagnus  | kajmagnus79d@gmail.com
+ http://*.debiki.se         | 2      | 230 | 30  | KajMagnus  | kajmagnus79d@gmail.com
+ http://*.debiki.se         | 12     | 332 | 54  | KajMagnus  | kajmagnus79d@gmail.com
+ http://localhost:9003      | 3      | 345 | 56  | KajMagnus  | kajmagnus79d@gmail.com
+ http://*.debiki.com        | 3      | 344 | 55  | KajMagnus  | kajmagnus79d@gmail.com
+(8 rows)
+
+debiki_prod=> commit;
+COMMIT
+
+}}}1
 
