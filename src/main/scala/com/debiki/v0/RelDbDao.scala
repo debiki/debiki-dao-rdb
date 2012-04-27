@@ -7,7 +7,6 @@ package com.debiki.v0
 import com.debiki.v0.PagePath._
 import com.debiki.v0.Dao._
 import com.debiki.v0.EmailNotfPrefs.EmailNotfPrefs
-import _root_.net.liftweb.common.Loggable
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
@@ -17,7 +16,7 @@ import RelDb.pimpOptionWithNullVarchar
 import collection.mutable.StringBuilder
 
 
-class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
+class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
   // COULD serialize access, per page?
 
   import RelDb._
@@ -1590,7 +1589,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     // This shouldn't fail; it's the same transaction as the update.
     val newPath = _lookupPagePathByPageId(tenantId, pageId) getOrElse {
       val mess = "Page suddenly gone, id: "+ pageId
-      logger.error(mess)
+      // logger.error(mess)  LOG
       runErr("DwE093KFH3", mess)
     }
 

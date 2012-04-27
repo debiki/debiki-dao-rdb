@@ -5,7 +5,6 @@
 
 package com.debiki.v0
 
-import _root_.net.liftweb.common.{Logger, Box, Empty, Full, Failure}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js, lang => jl}
@@ -13,16 +12,8 @@ import javax.{sql => jxs}
 import org.{postgresql => pg}
 
 
-trait RelDbLogger extends Logger {
-  def logAndFailure[T](errorMessage: String, ex: Exception): Box[T] = {
-    warn(errorMessage +": ", ex)
-    Failure(errorMessage, Full(ex), Empty)
-  }
-}
-
-// Could: UpdateThrow / UpdateBox / UpdateBoxErrOk / UpdateThrowErrOk
-
 object RelDb {
+
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
   val NullTimestamp = Null(js.Types.TIMESTAMP)
@@ -70,15 +61,15 @@ class RelDb(val server: String,
                val database: String,
                val user: String,
                val password: String
-    ) extends RelDbLogger {
+){
 
   import RelDb._
 
-  info("Connecting to PostgreSQL,"+
+  /*info("Connecting to PostgreSQL,"+  LOG
      "\n  server: "+ server +
      "\n  port:"+ port +
      "\n  database: "+ database +
-     "\n  user: "+ user)
+     "\n  user: "+ user)  */
 
   jl.Class.forName("org.postgresql.Driver")
 
@@ -174,9 +165,8 @@ class RelDb(val server: String,
       result
     } catch {
       case e: Exception =>
-        //box = logAndFailure("Error updating database [error DwE83ImQF]", e)
-        warn("Error updating database [error DwE83ImQF]: "+
-            classNameOf(e) +": "+ e.getMessage.trim)
+        //warn("Error updating database [error DwE83ImQF]: "+  LOG
+        //  classNameOf(e) +": "+ e.getMessage.trim)
         throw e
     } finally {
       _closeEtc(conn, committed = committed)
@@ -242,9 +232,8 @@ class RelDb(val server: String,
       result
     } catch {
       case ex: js.SQLException =>
-        warn("Database error [error DwE83ikrK9]: "+ ex.getMessage.trim)
+        //warn("Database error [error DwE83ikrK9]: "+ ex.getMessage.trim) LOG
         //warn("{}: {}", errmsg, ex.printStackTrace)
-        //Failure(errmsg, Full(ex), Empty)
        throw ex
     } finally {
       if (pstmt ne null) pstmt.close()
