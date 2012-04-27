@@ -11,8 +11,6 @@ scalaVersion := "2.9.1"
 //   jdbc-112010-090769.html
 
 libraryDependencies ++= Seq(
-  "net.liftweb" %% "lift-common" % "2.4-M5",
-  "net.liftweb" %% "lift-util" % "2.4-M5",
   "junit" % "junit" % "4.7" % "test",
   // The test suite needs a sl4j implementation or it logs nothing on errors:
   "ch.qos.logback" % "logback-classic" % "0.9.26" % "test",
