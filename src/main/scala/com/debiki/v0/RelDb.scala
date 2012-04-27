@@ -163,24 +163,15 @@ class RelDb(val server: String,
   }
 
 
-  def transaction2[T](f: (js.Connection) => T): T = {
-    transaction(conn => {
-      val t = f(conn)
-      Full(t)
-    }).open_!
-  }
-
-
-  @deprecated
-  def transaction[T](f: (js.Connection) => Box[T]): Box[T] = {
+  def transaction[T](f: (js.Connection) => T): T = {
     var conn: js.Connection = null
-    var box: Box[T] = Empty
     var committed = false
     try {
       conn = _getConnection()
-      box = f(conn)
+      val result = f(conn)
       conn.commit()
       committed = true
+      result
     } catch {
       case e: Exception =>
         //box = logAndFailure("Error updating database [error DwE83ImQF]", e)
@@ -190,81 +181,43 @@ class RelDb(val server: String,
     } finally {
       _closeEtc(conn, committed = committed)
     }
-    box
   }
 
 
-  def query2[T](sql: String, binds: List[AnyRef],
-              resultSetHandler: js.ResultSet => T)
-             (implicit conn: js.Connection): T = {
-    query(sql, binds, resultSet => {
-      val t = resultSetHandler(resultSet)
-      Full(t)
-    }).open_!
-  }
-
-
-  @deprecated
   def query[T](sql: String, binds: List[AnyRef],
-               resultSetHandler: js.ResultSet => Box[T])
-              (implicit conn: js.Connection): Box[T] = {
-    execImpl(sql, binds, resultSetHandler, conn).asInstanceOf[Box[T]]
+               resultSetHandler: js.ResultSet => T)
+              (implicit conn: js.Connection): T = {
+    execImpl(sql, binds, resultSetHandler, conn).asInstanceOf[T]
   }
 
 
-  def queryAtnms2[T](sql: String,
-                    binds: List[AnyRef],
-                    resultSetHandler: js.ResultSet => T): T = {
-    queryAtnms(sql, binds, resultSet => {
-      val t = resultSetHandler(resultSet)
-      Full(t)
-    }).open_!
-  }
-
-
-  @deprecated
   def queryAtnms[T](sql: String,
                     binds: List[AnyRef],
-                    resultSetHandler: js.ResultSet => Box[T]): Box[T] = {
-    execImpl(sql, binds, resultSetHandler, conn = null).asInstanceOf[Box[T]]
+                    resultSetHandler: js.ResultSet => T): T = {
+    execImpl(sql, binds, resultSetHandler, conn = null).asInstanceOf[T]
   }
 
 
   /**
    * Returns the number of lines updated, or throws an exception.
    */
-  def update2(sql: String, binds: List[AnyRef] = Nil)
-            (implicit conn: js.Connection): Int = {
-    execImpl(sql, binds, null, conn).asInstanceOf[Box[Int]].open_!
-  }
-
-
-  /** Returns Full(num-lines-updated) or Failure.
-    */
-  @deprecated
   def update(sql: String, binds: List[AnyRef] = Nil)
-            (implicit conn: js.Connection): Box[Int] = {
-    execImpl(sql, binds, null, conn).asInstanceOf[Box[Int]]
+            (implicit conn: js.Connection): Int = {
+    execImpl(sql, binds, null, conn).asInstanceOf[Int]
   }
 
 
   /**
    * Returns the number of lines updated, or throws an exception.
    */
-  def updateAtnms2(sql: String, binds: List[AnyRef] = Nil): Int = {
-    execImpl(sql, binds, null, conn = null).asInstanceOf[Box[Int]].open_!
-  }
-
-
-  @deprecated
-  def updateAtnms(sql: String, binds: List[AnyRef] = Nil): Box[Int] = {
-    execImpl(sql, binds, null, conn = null).asInstanceOf[Box[Int]]
+  def updateAtnms(sql: String, binds: List[AnyRef] = Nil): Int = {
+    execImpl(sql, binds, null, conn = null).asInstanceOf[Int]
   }
 
 
   private def execImpl(query: String, binds: List[AnyRef],
-                resultSetHandler: js.ResultSet => Box[Any],
-                conn: js.Connection): Box[Any] = {
+                resultSetHandler: js.ResultSet => Any,
+                conn: js.Connection): Any = {
     val isAutonomous = conn eq null
     var conn2: js.Connection = null
     var pstmt: js.PreparedStatement = null
@@ -274,19 +227,18 @@ class RelDb(val server: String,
       pstmt = conn2.prepareStatement(query)
       _bind(binds, pstmt)
       //s.setPoolable(false)  // don't cache infrequently used statements
-      val result = (if (resultSetHandler ne null) {
+      val result: Any = (if (resultSetHandler ne null) {
         val rs = pstmt.executeQuery()
         resultSetHandler(rs)
       } else {
         val updateCount = pstmt.executeUpdate()
-        val result = Box !! updateCount
         if (isAutonomous) {
           conn2.commit()
           committed = true
         }
-        result
+        updateCount
       })
-      TODO // handle errors, return a failure
+      TODO // handle errors, throw exception
       result
     } catch {
       case ex: js.SQLException =>
@@ -400,8 +352,8 @@ class RelDb(val server: String,
     val sno: Long = query("select nextval('"+ seqName +"') N",
           Nil, rs => {
       rs.next
-      Full(rs.getLong("N"))
-    }).open_!
+      rs.getLong("N")
+    })
     sno
   }
 }

@@ -7,7 +7,7 @@ package com.debiki.v0
 import com.debiki.v0.PagePath._
 import com.debiki.v0.Dao._
 import com.debiki.v0.EmailNotfPrefs.EmailNotfPrefs
-import _root_.net.liftweb.common.{Loggable, Box, Empty, Full, Failure}
+import _root_.net.liftweb.common.Loggable
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
@@ -24,11 +24,11 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
   def close() { db.close() }
 
-  def checkRepoVersion() = Full("0.0.2")
+  def checkRepoVersion() = Some("0.0.2")
 
   def secretSalt(): String = "9KsAyFqw_"
 
-  def createPage(where: PagePath, debatePerhapsGuid: Debate): Box[Debate] = {
+  def createPage(where: PagePath, debatePerhapsGuid: Debate): Debate = {
     var debate = if (debatePerhapsGuid.guid != "?") {
       unimplemented
       // Could use debatePerhapsGuid, instead of generatinig a new guid,
@@ -41,9 +41,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
     db.transaction { implicit connection =>
       _createPage(where, debate)
-      val postsWithIds =
-        _insert(where.tenantId, debate.guid, debate.posts).open_!
-      Full(debate.copy(posts = postsWithIds))
+      val postsWithIds = _insert(where.tenantId, debate.guid, debate.posts)
+      debate.copy(posts = postsWithIds)
     }
   }
 
@@ -51,7 +50,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   def moveRenamePage(tenantId: String, pageId: String,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String]): PagePath = {
-    db.transaction2 { implicit connection =>
+    db.transaction { implicit connection =>
       _updatePage(tenantId, pageId, newFolder = newFolder, showId = showId,
          newSlug = newSlug)
     }
@@ -109,8 +108,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       val idtyWithId = IdentityEmailId(id = emailId, userId = user.id,
         emailSent = Some(email), notf = Some(notf))
       val loginWithId = db.transaction { implicit connection =>
-        Full(_saveLogin(loginReq.login, idtyWithId))
-      }.open_!  // stupid API
+        _saveLogin(loginReq.login, idtyWithId)
+      }
       LoginGrant(loginWithId, idtyWithId, user)
     }
 
@@ -143,7 +142,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                 idtyId = rs.getString("SNO")
                 emailNotfsStr = rs.getString("EMAIL_NOTFS")
               }
-              Empty // dummy
             })
             if (idtyId isEmpty) {
               // Create simple user info.
@@ -168,8 +166,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
              emailNotfPrefs = notfPrefs, id = _dummyUserIdFor(idtyId))
           val identityWithId = idtySmpl.copy(id = idtyId, userId = user.id)
           val loginWithId = _saveLogin(loginReq.login, identityWithId)
-          Full(LoginGrant(loginWithId, identityWithId, user))
-        }.open_!
+          LoginGrant(loginWithId, identityWithId, user)
+        }
 
         return simpleLogin
 
@@ -261,11 +259,11 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             case IdentityUnknown => assErr("DwE091563wkr2")
             case _: IdentityEmailId => assErr("DwE8Ik3f57")
           }
-          Full(Some(identityInDb) -> Some(userInDb))
+          Some(identityInDb) -> Some(userInDb)
         } else {
-          Full(None -> None)
+          None -> None
         }
-      }).open_!
+      })
 
       // Create user if absent.
       val user = userInDb match {
@@ -279,7 +277,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           val u =  User(id = userSno.toString, displayName = idty.displayName,
              email = idty.email, emailNotfPrefs = EmailNotfPrefs.Unspecified,
              country = "", website = "", isSuperAdmin = false)
-          db.update2("""
+          db.update("""
               insert into DW1_USERS(
                   TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
               values (?, ?, ?, ?, ?)""",
@@ -349,8 +347,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
       val login = _saveLogin(loginReq.login, identity)
 
-      Full(LoginGrant(login, identity, user))
-    }.open_!  // pointless box
+      LoginGrant(login, identity, user)
+    }
   }
 
   override def saveLogout(loginId: String, logoutIp: String) {
@@ -358,9 +356,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       db.update("""
           update DW1_LOGINS set LOGOUT_IP = ?, LOGOUT_TIME = ?
           where SNO = ?""", List(logoutIp, new ju.Date, loginId)) match {
-        case Full(1) => Empty  // ok
-        case Full(x) => assErr("DwE0kSRIE3", "Updated "+ x +" rows")
-        case badBox => unimplemented // remove boxes
+        case 1 => ()
+        case x => assErr("DwE0kSRIE3", "Updated "+ x +" rows")
       }
     }
   }
@@ -531,9 +528,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
         if (!usersById.contains(userId)) usersById(userId) = user.get
       }
-      Full((identities,
-          usersById.values.toList))  // silly to throw away hash map
-    }).open_! // silly box
+      (identities, usersById.values.toList)  // silly to throw away hash map
+    })
   }
 
 
@@ -634,7 +630,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
         usersByTenantAndId = usersByTenantAndId + ((tenantId, user.id) -> user)
       }
-      Empty // dummy
     })
 
     usersByTenantAndId
@@ -646,13 +641,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
   }
 
   override def savePageActions[T <: Action](tenantId: String, pageGuid: String,
-                                  xs: List[T]): Box[List[T]] = {
+                                  xs: List[T]): List[T] = {
     db.transaction { implicit connection =>
       _insert(tenantId, pageGuid, xs)
     }
   }
 
-  def loadPage(tenantId: String, pageGuid: String): Box[Debate] = {
+  def loadPage(tenantId: String, pageGuid: String): Option[Debate] = {
     /*
     db.transaction { implicit connection =>
       // BUG: There might be a NPE / None.get because of phantom reads.
@@ -665,7 +660,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
     // Load all logins for pageGuid.
     var logins = List[Login]()
-    db.queryAtnms2("""
+    db.queryAtnms("""
         select
             l.SNO LOGIN_SNO, l.PREV_LOGIN,
             l.ID_TYPE, l.ID_SNO,
@@ -722,8 +717,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         if (tags.nonEmpty)
           map(curPaid) = tags
 
-        Full(map)
-      }).open_!  // COULD throw exceptions, don't use boxes?
+        map
+      })
 
     // Load page actions.
     // Order by TIME desc, because when the action list is constructed
@@ -784,13 +779,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             }
             Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
                 ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
-          case x => return Failure(
-              "Bad DW1_ACTIONS.TYPE: "+ safed(typee) +" [error DwEY8k3B]")
+          case x =>
+            assErr("DwEY8k3B", "Bad DW1_ACTIONS.TYPE: "+ safed(typee))
         }
         actions ::= action  // this reverses above `order by TIME desc'
       }
 
-      Full(Debate.fromActions(guid = pageGuid,
+      Some(Debate.fromActions(guid = pageGuid,
           logins, identities, users, actions))
     })
   }
@@ -804,21 +799,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
     val templ = _findCorrectPagePath(templPath) match {
       // If the template does not exist:
-      case Empty => None
-      // If there's a database error when looking up the path:
-      case f: Failure =>
-        runErr("DwE309sU32", "Error loading template guid:\n"+ f)
-      case Full(path) =>
+      case None => None
+      case Some(path) =>
         loadPage(path.tenantId, path.pageId.get) match {
-          case Full(page) => page.body map (TemplateSrcHtml(_, templPath.path))
+          case Some(page) => page.body map (TemplateSrcHtml(_, templPath.path))
           // If someone deleted the template moments ago, after its
           // guid was found:
-          case Empty => None
-          // If there's some database error or problem with the template?:
-          case f: Failure =>
-            val err = "Error loading template [error DwE983keCK31]"
-            logger.error(err +":"+ f.toString) //COULD fix consistent err reprt
-            runErr("DwE983keCK31", err)
+          case None => None
       }
     }
     templ
@@ -832,8 +819,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           insert into DW1_TENANTS (ID, NAME)
           values (?, ?)
           """, List(tenantId, name))
-      Full(Tenant(id = tenantId, name = name, hosts = Nil))
-    }.open_!
+      Tenant(id = tenantId, name = name, hosts = Nil)
+    }
   }
 
 
@@ -857,7 +844,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
              https = _toTenantHostHttps(rs.getString("HTTPS")))
           hostsByTenantId = hostsByTenantId.updated(tenantId, hosts)
         }
-        Empty // my stupid API, rewrite some day?
       })
 
     var tenants = List[Tenant]()
@@ -871,7 +857,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         val hosts = hostsByTenantId(tenantId)
         tenants ::= Tenant(tenantId, name = rs.getString("NAME"), hosts = hosts)
       }
-      Empty // my stupid API, rewrite some day?
     })
     tenants
   }
@@ -946,7 +931,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
                               role = TenantHost.RoleRedirect)
       def useLinkRelCanonical = redirect.copy(role = TenantHost.RoleLink)
 
-      Full((thisRole, scheme, thisHttps) match {
+      (thisRole, scheme, thisHttps) match {
         case (RoleCanonical, "http" , HttpsRequired) => redirect
         case (RoleCanonical, "http" , _            ) => useThisHostAndScheme
         case (RoleCanonical, "https", HttpsRequired) => useThisHostAndScheme
@@ -955,11 +940,11 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         case (RoleRedirect , _      , _            ) => redirect
         case (RoleLink     , _      , _            ) => useLinkRelCanonical
         case (RoleDuplicate, _      , _            ) => assErr("DwE09KL04")
-      })
-    }).open_!
+      }
+    })
   }
 
-  def checkPagePath(pathToCheck: PagePath): Box[PagePath] = {
+  def checkPagePath(pathToCheck: PagePath): Option[PagePath] = {
     _findCorrectPagePath(pathToCheck)
   }
 
@@ -1016,7 +1001,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         )
         items ::= pagePath -> pageDetails
       }
-      Empty // dummy
     })
     items
   }
@@ -1049,7 +1033,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     val vals = List[AnyRef](tenantId, folderPrefix +"%")
     var actionLocators = List[ActionLocator]()
 
-    db.queryAtnms2(query, vals, rs => {
+    db.queryAtnms(query, vals, rs => {
       while (rs.next) {
         val pagePath = _PagePath(rs)(tenantId)
         val actnLctr = ActionLocator(
@@ -1150,7 +1134,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             ?, ?, ?,
             ?, ?)
         """, valss)
-      Empty  // my stupid API, should rewrite
     }
   }
 
@@ -1294,7 +1277,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         val notfsForTenant: List[NotfOfPageAction] = notfsByTenant(tenantId)
         notfsByTenant = notfsByTenant + (tenantId -> (notf::notfsForTenant))
       }
-      Empty // my bad API
     })
 
     val userIdsByTenant: Map[String, List[String]] =
@@ -1311,7 +1293,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         debug: String) {
     db.transaction { implicit connection =>
       _connectNotfsToEmail(tenantId, notfs, emailId = None, debug = Some(debug))
-      Empty  // my stupid API, should rewrite
     }
   }
 
@@ -1321,7 +1302,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     db.transaction { implicit connection =>
       _saveUnsentEmail(tenantId, email)
       _connectNotfsToEmail(tenantId, notfs, Some(email.id), debug = None)
-      Empty  // my stupid API, should rewrite
     }
   }
 
@@ -1366,8 +1346,6 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
             FAILURE_TYPE = ?, FAILURE_TEXT = ?, FAILURE_TIME = ?
         where TENANT = ? and ID = ?
         """, vals)
-
-      Empty  // my stupid API, should rewrite
     }
   }
 
@@ -1379,7 +1357,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
       from DW1_EMAILS_OUT
       where TENANT = ? and ID = ?
       """
-    val Full(emailOpt) = db.queryAtnms(query, List(tenantId, emailId), rs => {
+    val emailOpt = db.queryAtnms(query, List(tenantId, emailId), rs => {
       var allEmails = List[EmailSent]()
       while (rs.next) {
         val email = EmailSent(
@@ -1393,7 +1371,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
         allEmails = email::allEmails
       }
       assert(allEmails.length <= 1) // loaded by PK
-      Full(allEmails.headOption)
+      allEmails.headOption
     })
     emailOpt
   }
@@ -1457,13 +1435,13 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     val idPath = PagePath(
       tenantId = tenantId, pageId = Some(pageId),
       folder = "/", showId = false, pageSlug = "")
-    _findCorrectPagePath(idPath).toOption
+    _findCorrectPagePath(idPath)
   }
 
 
   // Looks up the correct PagePath for a possibly incorrect PagePath.
   private def _findCorrectPagePath(pagePathIn: PagePath)
-      (implicit connection: js.Connection = null): Box[PagePath] = {
+      (implicit connection: js.Connection = null): Option[PagePath] = {
 
     var query = """
         select PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG
@@ -1528,9 +1506,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
     }
 
     db.query(query, binds.reverse, rs => {
-      var correctPath: Box[PagePath] = Empty
+      var correctPath: Option[PagePath] = None
       if (rs.next) {
-        correctPath = Full(pagePathIn.copy(  // keep pagePathIn.tenantId
+        correctPath = Some(pagePathIn.copy(  // keep pagePathIn.tenantId
             folder = rs.getString("PARENT_FOLDER"),
             pageId = Some(rs.getString("PAGE_ID")),
             showId = rs.getString("SHOW_ID") == "T",
@@ -1545,7 +1523,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
 
   private def _createPage[T](where: PagePath, debate: Debate)
-                            (implicit conn: js.Connection): Box[Int] = {
+                            (implicit conn: js.Connection) {
     db.update("""
         insert into DW1_PAGES (SNO, TENANT, GUID)
         values (nextval('DW1_PAGES_SNO'), ?, ?)
@@ -1602,7 +1580,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
          where TENANT = ? and PAGE_ID = ?
          """
 
-      val numRowsChanged = db.update2(stmt, allVals)
+      val numRowsChanged = db.update(stmt, allVals)
 
       assert(numRowsChanged <= 1)
       if (numRowsChanged == 0)
@@ -1622,7 +1600,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
 
   private def _insert[T <: Action](
         tenantId: String, pageGuid: String, xs: List[T])
-        (implicit conn: js.Connection): Box[List[T]] = {
+        (implicit conn: js.Connection): List[T] = {
     var xsWithIds = Debate.assignIdsTo(xs)
     val pageId = pageGuid
     for (x <- xsWithIds) {
@@ -1676,7 +1654,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi with Loggable {
           "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
       }
     }
-    Full(xsWithIds)
+    xsWithIds
   }
 
 

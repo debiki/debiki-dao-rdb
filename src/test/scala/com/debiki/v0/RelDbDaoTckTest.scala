@@ -8,7 +8,6 @@ package com.debiki.v0
 
 import java.io.{File, FileNotFoundException}
 import java.{util => ju}
-import net.liftweb.common._
 import org.specs._
 import org.specs.specification.PendingUntilFixed
 import Prelude._
@@ -80,7 +79,6 @@ object ReDbDaoTckTest {
             delete from DW1_TENANT_HOSTS
             delete from DW1_TENANTS
             """.trim.split("\n") foreach { dao.db.update(_) }
-            Empty // silly box
           }
         case ("0.0.2", TablesWithData) =>
         case _ => assErr("Broken test suite")
