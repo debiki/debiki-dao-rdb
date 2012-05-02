@@ -638,9 +638,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
   }
 
   override def savePageActions[T <: Action](tenantId: String, pageGuid: String,
-                                  xs: List[T]): List[T] = {
+                                  actions: List[T]): List[T] = {
     db.transaction { implicit connection =>
-      _insert(tenantId, pageGuid, xs)
+      _insert(tenantId, pageGuid, actions)
     }
   }
 
@@ -1596,11 +1596,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
 
 
   private def _insert[T <: Action](
-        tenantId: String, pageGuid: String, xs: List[T])
+        tenantId: String, pageGuid: String, actions: List[T])
         (implicit conn: js.Connection): List[T] = {
-    var xsWithIds = Debate.assignIdsTo(xs)
+
+    var actionsWithIds = Debate.assignIdsTo(actions)
     val pageId = pageGuid
-    for (x <- xsWithIds) {
+    for (action <- actionsWithIds) {
       // Could optimize:  (but really *not* important!)
       // Use a CallableStatement and `insert into ... returning ...'
       // to create the _ACTIONS row and read the SNO in one single roundtrip.
@@ -1617,7 +1618,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
           """
       // Keep in mind that Oracle converts "" to null.
       val commonVals = Nil // p.loginId::pageId::Nil
-      x match {
+      action match {
         case p: Post =>
           db.update(insertIntoActions, commonVals:::List(
             p.loginId, tenantId, pageId, p.id, p.ctime, _toFlag(p.tyype),
@@ -1651,7 +1652,8 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
           "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
       }
     }
-    xsWithIds
+
+    actionsWithIds
   }
 
 
