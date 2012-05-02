@@ -112,63 +112,61 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
       LoginGrant(loginWithId, idtyWithId, user)
     }
 
-    // Special case for IdentitySimple, because they map to no User.
-    // Instead we create a "fake" User (that is not present in DW1_USERS)
-    // and assign it id = -IdentitySimple.id (i.e. a leading dash)
-    // and return it.
-    //    I don't want to save IdentitySimple people in DW1_USERS, because
-    // I think that'd make possible future security *bugs*, when privileges
-    // are granted to IdentitySimple users, which don't even need to
-    // specify any password to "login"!
-    loginReq.identity match {
-      case idtySmpl: IdentitySimple =>
-        val simpleLogin = db.transaction { implicit connection =>
-          // Find or create _SIMPLE row.
-          var idtyId = ""
-          var emailNotfsStr = ""
-          for (i <- 1 to 2 if idtyId.isEmpty) {
-            db.query("""
-                select i.SNO, e.EMAIL_NOTFS from DW1_IDS_SIMPLE i
-                  left join DW1_IDS_SIMPLE_EMAIL e
-                  on i.EMAIL = e.EMAIL and e.VERSION = 'C'
-                where i.NAME = ? and i.EMAIL = ? and i.LOCATION = ? and
-                      i.WEBSITE = ?
-                """,
-                List(e2d(idtySmpl.name), e2d(idtySmpl.email),
-                   e2d(idtySmpl.location), e2d(idtySmpl.website)),
-                rs => {
+    def _loginUnauIdty(idtySmpl: IdentitySimple): LoginGrant = {
+      db.transaction { implicit connection =>
+        var idtyId = ""
+        var emailNotfsStr = ""
+        for (i <- 1 to 2 if idtyId.isEmpty) {
+          db.query("""
+            select i.SNO, e.EMAIL_NOTFS from DW1_IDS_SIMPLE i
+              left join DW1_IDS_SIMPLE_EMAIL e
+              on i.EMAIL = e.EMAIL and e.VERSION = 'C'
+            where i.NAME = ? and i.EMAIL = ? and i.LOCATION = ? and
+                  i.WEBSITE = ?
+            """,
+            List(e2d(idtySmpl.name), e2d(idtySmpl.email),
+              e2d(idtySmpl.location), e2d(idtySmpl.website)),
+            rs => {
               if (rs.next) {
                 idtyId = rs.getString("SNO")
                 emailNotfsStr = rs.getString("EMAIL_NOTFS")
               }
             })
-            if (idtyId isEmpty) {
-              // Create simple user info.
-              // There is a unique constraint on NAME, EMAIL, LOCATION,
-              // WEBSITE, so this insert might fail (if another thread does
-              // the insert, just before). Should it fail, the above `select'
-              // is run again and finds the row inserted by the other thread.
-              // Could avoid logging any error though!
-              db.update("""
-                  insert into DW1_IDS_SIMPLE(
-                      SNO, NAME, EMAIL, LOCATION, WEBSITE)
-                  values (nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
-                  List(idtySmpl.name, e2d(idtySmpl.email),
-                     e2d(idtySmpl.location), e2d(idtySmpl.website)))
-                  // COULD fix: returning SNO into ?""", saves 1 roundtrip.
-              // Loop one more lap to read SNO.
-            }
+          if (idtyId isEmpty) {
+            // Create simple user info.
+            // There is a unique constraint on NAME, EMAIL, LOCATION,
+            // WEBSITE, so this insert might fail (if another thread does
+            // the insert, just before). Should it fail, the above `select'
+            // is run again and finds the row inserted by the other thread.
+            // Could avoid logging any error though!
+            db.update("""
+              insert into DW1_IDS_SIMPLE(
+                  SNO, NAME, EMAIL, LOCATION, WEBSITE)
+              values (nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
+              List(idtySmpl.name, e2d(idtySmpl.email),
+                e2d(idtySmpl.location), e2d(idtySmpl.website)))
+            // COULD fix: returning SNO into ?""", saves 1 roundtrip.
+            // Loop one more lap to read SNO.
           }
-          assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
-          val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
-          val user = _dummyUserFor(identity = idtySmpl,
-             emailNotfPrefs = notfPrefs, id = _dummyUserIdFor(idtyId))
-          val identityWithId = idtySmpl.copy(id = idtyId, userId = user.id)
-          val loginWithId = _saveLogin(loginReq.login, identityWithId)
-          LoginGrant(loginWithId, identityWithId, user)
         }
+        assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
+        val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
+        // Derive a temporary user from the identity, see
+        // Debiki for Developers #9xdF21.
+        val user = _dummyUserFor(identity = idtySmpl,
+          emailNotfPrefs = notfPrefs, id = _dummyUserIdFor(idtyId))
+        val identityWithId = idtySmpl.copy(id = idtyId, userId = user.id)
+        // Quota already consumed (in the `for` loop above).
+        val loginWithId = _saveLogin(loginReq.login, identityWithId)
+        LoginGrant(loginWithId, identityWithId, user)
+      }
+    }
 
-        return simpleLogin
+    // Handle guest/unauthenticated login and email login.
+    loginReq.identity match {
+      case idtySmpl: IdentitySimple =>
+        val loginGrant = _loginUnauIdty(idtySmpl)
+        return loginGrant
 
       case idty: IdentityEmailId =>
         val loginGrant = _loginWithEmailId(idty.id)
