@@ -41,25 +41,25 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
                                               // method in all DAO modules!
     }
     db.transaction { implicit connection =>
+      require(where.tenantId == tenantId)
       _createPage(where, debate)
-      val postsWithIds = _insert(where.tenantId, debate.guid, debate.posts)
+      val postsWithIds = _insert(debate.guid, debate.posts)
       debate.copy(posts = postsWithIds)
     }
   }
 
 
-  def moveRenamePage(tenantId: String, pageId: String,
+  def moveRenamePage(pageId: String,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String]): PagePath = {
     db.transaction { implicit connection =>
-      _updatePage(tenantId, pageId, newFolder = newFolder, showId = showId,
+      _updatePage(pageId, newFolder = newFolder, showId = showId,
          newSlug = newSlug)
     }
   }
 
 
-  override def saveLogin(tenantId: String, loginReq: LoginRequest
-                            ): LoginGrant = {
+  override def saveLogin(loginReq: LoginRequest): LoginGrant = {
 
     // Assigns an id to `loginNoId', saves it and returns it (with id).
     def _saveLogin(loginNoId: Login, identityWithId: Identity)
@@ -91,8 +91,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     def _loginWithEmailId(emailId: String): LoginGrant = {
       val (email: EmailSent, notf: NotfOfPageAction) = (
-         loadEmailById(tenantId, emailId = emailId),
-         loadNotfByEmailId(tenantId, emailId = emailId)
+         loadEmailById(emailId = emailId),
+         loadNotfByEmailId(emailId = emailId)
          ) match {
         case (Some(email), Some(notf)) => (email, notf)
         case (None, _) =>
@@ -100,7 +100,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         case (_, None) =>
           runErr("DwE87XIE3", "Notification missing for email id: "+ emailId)
       }
-      val user = _loadUser(tenantId, notf.recipientUserId) match {
+      val user = _loadUser(notf.recipientUserId) match {
         case Some(user) => user
         case None =>
           runErr("DwE2XKw5", "User `"+ notf.recipientUserId +"' not found"+
@@ -361,12 +361,11 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     }
   }
 
-  def loadIdtyAndUser(forLoginId: String, tenantId: String
-                  ): Option[(Identity, User)] = {
+  def loadIdtyAndUser(forLoginId: String): Option[(Identity, User)] = {
     def loginInfo = "login id "+ safed(forLoginId) +
           ", tenant "+ safed(tenantId)
 
-    _loadIdtysAndUsers(forLoginId = forLoginId, tenantId = tenantId) match {
+    _loadIdtysAndUsers(forLoginId = forLoginId) match {
       case (List(i: Identity), List(u: User)) => Some(i, u)
       case (List(i: Identity), Nil) => assErr(
         "DwE6349krq20", "Found no user for "+ loginInfo +
@@ -396,8 +395,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
 
   private def _loadIdtysAndUsers(onPageWithId: String = null,
-                         forLoginId: String = null,
-                         tenantId: String
+                         forLoginId: String = null
                             ): Pair[List[Identity], List[User]] = {
     // Load users. First find all relevant identities, by joining
     // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
@@ -532,21 +530,27 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _loadUser(tenantId: String, userId: String): Option[User] = {
+  private def _loadUser(userId: String): Option[User] = {
     val usersByTenantAndId =  // SHOULD specify consumers
        systemDaoSpi.loadUsers(Map(tenantId -> (userId::Nil)))
     usersByTenantAndId.get((tenantId, userId))
   }
 
 
-  override def savePageActions[T <: Action](tenantId: String, pageGuid: String,
+  override def savePageActions[T <: Action](pageGuid: String,
                                   actions: List[T]): List[T] = {
     db.transaction { implicit connection =>
-      _insert(tenantId, pageGuid, actions)
+      _insert(pageGuid, actions)
     }
   }
 
-  def loadPage(tenantId: String, pageGuid: String): Option[Debate] = {
+
+  override def loadPage(pageGuid: String): Option[Debate] =
+    _loadPageAnyTenant(tenantId = tenantId, pageGuid = pageGuid)
+
+
+  private def _loadPageAnyTenant(tenantId: String, pageGuid: String)
+        : Option[Debate] = {
     /*
     db.transaction { implicit connection =>
       // BUG: There might be a NPE / None.get because of phantom reads.
@@ -586,8 +590,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     })
 
     // Load identities and users.
-    val (identities, users) =
-        _loadIdtysAndUsers(onPageWithId = pageGuid, tenantId = tenantId)
+    val (identities, users) = _loadIdtysAndUsers(onPageWithId = pageGuid)
 
     // Load rating tags.
     val ratingTags: mut.HashMap[String, List[String]] = db.queryAtnms("""
@@ -700,7 +703,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       // If the template does not exist:
       case None => None
       case Some(path) =>
-        loadPage(path.tenantId, path.pageId.get) match {
+        _loadPageAnyTenant(path.tenantId, path.pageId.get) match {
           case Some(page) => page.body map (TemplateSrcHtml(_, templPath.path))
           // If someone deleted the template moments ago, after its
           // guid was found:
@@ -717,7 +720,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def addTenantHost(tenantId: String, host: TenantHost) = {
+  def addTenantHost(host: TenantHost) = {
     db.transaction { implicit connection =>
       val cncl = host.role match {
         case TenantHost.RoleCanonical => "C"
@@ -751,7 +754,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
   def listPagePaths(
     withFolderPrefix: String,
-    tenantId: String,
     includeStatuses: List[PageStatus],
     sortBy: PageSortOrder,
     limit: Int,
@@ -808,7 +810,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
 
   def listActions(
-        tenantId: String,
         folderPrefix: String,
         includePages: List[PageStatus],
         limit: Int,
@@ -907,7 +908,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def saveNotfs(tenantId: String, notfs: Seq[NotfOfPageAction]) {
+  def saveNotfs(notfs: Seq[NotfOfPageAction]) {
     db.transaction { implicit connection =>
       val valss: List[List[AnyRef]] = for (notf <- notfs.toList) yield List(
         tenantId, notf.ctime, notf.pageId, notf.pageTitle take 80,
@@ -939,7 +940,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _connectNotfsToEmail(tenantId: String,
+  private def _connectNotfsToEmail(
         notfs: Seq[NotfOfPageAction], emailId: Option[String],
         debug: Option[String])
         (implicit connection: js.Connection) {
@@ -958,8 +959,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def loadNotfsForRole(tenantId: String, userId: String)
-        : Seq[NotfOfPageAction] = {
+  def loadNotfsForRole(userId: String): Seq[NotfOfPageAction] = {
     val numToLoad = 50 // for now
     val notfsToMail = systemDaoSpi.loadNotfsImpl(   // SHOULD specify consumers
        numToLoad, Some(tenantId), userIdOpt = Some(userId))
@@ -968,8 +968,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def loadNotfByEmailId(tenantId: String, emailId: String)
-        : Option[NotfOfPageAction] = {
+  def loadNotfByEmailId(emailId: String): Option[NotfOfPageAction] = {
     val notfsToMail =   // SHOULD specify consumers
        systemDaoSpi.loadNotfsImpl(1, Some(tenantId), emailIdOpt = Some(emailId))
     val notfs = notfsToMail.notfsByTenant(tenantId)
@@ -978,25 +977,23 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def skipEmailForNotfs(tenantId: String, notfs: Seq[NotfOfPageAction],
-        debug: String) {
+  def skipEmailForNotfs(notfs: Seq[NotfOfPageAction], debug: String) {
     db.transaction { implicit connection =>
-      _connectNotfsToEmail(tenantId, notfs, emailId = None, debug = Some(debug))
+      _connectNotfsToEmail(notfs, emailId = None, debug = Some(debug))
     }
   }
 
 
-  def saveUnsentEmailConnectToNotfs(tenantId: String, email: EmailSent,
+  def saveUnsentEmailConnectToNotfs(email: EmailSent,
         notfs: Seq[NotfOfPageAction]) {
     db.transaction { implicit connection =>
-      _saveUnsentEmail(tenantId, email)
-      _connectNotfsToEmail(tenantId, notfs, Some(email.id), debug = None)
+      _saveUnsentEmail(email)
+      _connectNotfsToEmail(notfs, Some(email.id), debug = None)
     }
   }
 
 
-  def _saveUnsentEmail(tenantId: String, email: EmailSent)
-        (implicit connection: js.Connection) {
+  def _saveUnsentEmail(email: EmailSent)(implicit connection: js.Connection) {
 
     require(email.failureText isEmpty)
     require(email.providerEmailId isEmpty)
@@ -1014,7 +1011,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def updateSentEmail(tenantId: String, email: EmailSent) {
+  def updateSentEmail(email: EmailSent) {
     db.transaction { implicit connection =>
 
       val sentOn = email.sentOn.map(d2ts(_)) getOrElse NullTimestamp
@@ -1039,7 +1036,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def loadEmailById(tenantId: String, emailId: String): Option[EmailSent] = {
+  def loadEmailById(emailId: String): Option[EmailSent] = {
     val query = """
       select SENT_TO, SENT_ON, SUBJECT,
         BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
@@ -1066,7 +1063,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def configRole(tenantId: String, loginId: String, ctime: ju.Date,
+  def configRole(loginId: String, ctime: ju.Date,
                  roleId: String, emailNotfPrefs: EmailNotfPrefs) {
     // Currently auditing not implemented for the roles/users table,
     // so loginId and ctime aren't used.
@@ -1082,7 +1079,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     }
   }
 
-  def configIdtySimple(tenantId: String, loginId: String, ctime: ju.Date,
+  def configIdtySimple(loginId: String, ctime: ju.Date,
                        emailAddr: String, emailNotfPrefs: EmailNotfPrefs) {
     db.transaction { implicit connection =>
       // Mark the current row as 'O' (old) -- unless EMAIL_NOTFS is 'F'
@@ -1112,11 +1109,11 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def lookupPagePathByPageId(tenantId: String, pageId: String) =
-    _lookupPagePathByPageId(tenantId, pageId)(null)
+  def lookupPagePathByPageId(pageId: String) =
+    _lookupPagePathByPageId(pageId)(null)
 
 
-  private def _lookupPagePathByPageId(tenantId: String, pageId: String)
+  private def _lookupPagePathByPageId(pageId: String)
         (implicit connection: js.Connection)
         : Option[PagePath] = {
     // _findCorrectPagePath does a page id lookup, if Some(pageId)
@@ -1137,6 +1134,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         from DW1_PAGE_PATHS
         where TENANT = ?
         """
+    assert(pagePathIn.tenantId == tenantId)
     var binds = List(pagePathIn.tenantId)
     var maxRowsFound = 1  // there's a unique key
     pagePathIn.pageId match {
@@ -1232,7 +1230,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _updatePage(tenantId: String, pageId: String,
+  private def _updatePage(pageId: String,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String])
         (implicit conn: js.Connection): PagePath = {
@@ -1277,7 +1275,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     }
 
     // This shouldn't fail; it's the same transaction as the update.
-    val newPath = _lookupPagePathByPageId(tenantId, pageId) getOrElse {
+    val newPath = _lookupPagePathByPageId(pageId) getOrElse {
       val mess = "Page suddenly gone, id: "+ pageId
       // logger.error(mess)  LOG
       runErr("DwE093KFH3", mess)
@@ -1287,8 +1285,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _insert[T <: Action](
-        tenantId: String, pageGuid: String, actions: List[T])
+  private def _insert[T <: Action](pageGuid: String, actions: List[T])
         (implicit conn: js.Connection): List[T] = {
 
     var actionsWithIds = Debate.assignIdsTo(actions)
