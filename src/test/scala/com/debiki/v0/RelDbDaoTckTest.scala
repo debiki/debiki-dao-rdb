@@ -23,8 +23,9 @@ DEBIKI_TEST_0_0_2_DATA
 Password (for all users): "auto-dropped"
 */
 
-class RelDbTestContext(val daoImpl: RelDbDaoSpi) extends tck.TestContext {
-  val db = daoImpl.db
+
+class RelDbTestContext(override val daoFactory: DaoFactory)
+   extends tck.TestContext {
 
   override def createRestorePoint() {
     unimplemented
@@ -54,16 +55,15 @@ object ReDbDaoTckTest {
       case ("0.0.2", TablesWithData) => "DEBIKI_TEST_0_0_2_DATA"
       case _ => assErr("Broken test suite")
     }
-    val dao =  new RelDbDaoSpi(new RelDb(
-        server = server, port = port, database = database,
-        user = schema, password = "auto-dropped"))
+    val db = new RelDb(server = server, port = port, database = database,
+       user = schema, password = "auto-dropped")
 
     // Prepare schema.
     (version, what) match {
       case ("0", EmptySchema) =>
-        unimplemented // dao.db.updateAtnms(RelDbTestSql.PurgeSchema)
+        unimplemented // db.updateAtnms(RelDbTestSql.PurgeSchema)
       case ("0.0.2", EmptyTables) =>
-          dao.db.transaction { implicit connection => """
+          db.transaction { implicit connection => """
             delete from DW1_NOTFS_PAGE_ACTIONS
             delete from DW1_EMAILS_OUT
             delete from DW1_PAGE_RATINGS
@@ -78,19 +78,23 @@ object ReDbDaoTckTest {
             delete from DW1_USERS
             delete from DW1_TENANT_HOSTS
             delete from DW1_TENANTS
-            """.trim.split("\n") foreach { dao.db.update(_) }
+            """.trim.split("\n") foreach { db.update(_) }
           }
         case ("0.0.2", TablesWithData) =>
         case _ => assErr("Broken test suite")
       }
-    new RelDbTestContext(dao)
+
+    new RelDbTestContext(
+       new DaoFactory(new RelDbDaoSpiFactory(db)))
   }
 }
+
 
 class RelDbDaoTckTest extends tck.DaoTckTest(
               ReDbDaoTckTest.testContextBuilder) {
   // Tests defined in parent class DaoTckTest.
 }
+
 
 object OracleTestSql {
   val PurgeSchema = """

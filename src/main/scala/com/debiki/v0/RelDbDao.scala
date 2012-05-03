@@ -12,20 +12,22 @@ import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
 import scala.collection.{mutable => mut}
-import RelDb.pimpOptionWithNullVarchar
+import RelDb._
+import RelDbUtil._
 import collection.mutable.StringBuilder
 
 
-class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
+class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
+        val systemDaoSpi: RelDbSystemDaoSpi)
+   extends TenantDaoSpi {
   // COULD serialize access, per page?
 
-  import RelDb._
+  require(quotaConsumers.tenantId.isDefined)
 
-  def close() { db.close() }
+  def tenantId = quotaConsumers.tenantId.get
 
-  def checkRepoVersion() = Some("0.0.2")
+  def db = systemDaoSpi.db
 
-  def secretSalt(): String = "9KsAyFqw_"
 
   def createPage(where: PagePath, debatePerhapsGuid: Debate): Debate = {
     var debate = if (debatePerhapsGuid.guid != "?") {
@@ -531,111 +533,11 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
 
 
   private def _loadUser(tenantId: String, userId: String): Option[User] = {
-    val usersByTenantAndId = _loadUsers(Map(tenantId -> (userId::Nil)))
+    val usersByTenantAndId =  // SHOULD specify consumers
+       systemDaoSpi.loadUsers(Map(tenantId -> (userId::Nil)))
     usersByTenantAndId.get((tenantId, userId))
   }
 
-
-  private def _loadUsers(userIdsByTenant: Map[String, List[String]])
-        : Map[(String, String), User] = {
-
-    var idCount = 0
-    var longestInList = 0
-
-    def incIdCount(ids: List[String]) {
-      val len = ids.length
-      idCount += len
-      if (len > longestInList) longestInList = len
-    }
-
-    def mkQueryUnau(tenantId: String, idsUnau: List[String])
-          : (String, List[String]) = {
-      incIdCount(idsUnau)
-      val inList = idsUnau.map(_ => "?").mkString(",")
-      val q = """
-         select
-            e.TENANT, '-'||s.SNO user_id, s.NAME DISPLAY_NAME,
-            s.EMAIL, e.EMAIL_NOTFS, s.LOCATION COUNTRY,
-            s.WEBSITE, 'F' SUPERADMIN
-         from
-           DW1_IDS_SIMPLE s left join DW1_IDS_SIMPLE_EMAIL e
-           on s.EMAIL = e.EMAIL and e.TENANT = ?
-         where
-           s.SNO in (""" + inList +")"
-      // An unauthenticated user id starts with '-', drop it.
-      val vals = tenantId :: idsUnau.map(_.drop(1))
-      (q, vals)
-    }
-
-    def mkQueryAu(tenantId: String, idsAu: List[String])
-          : (String, List[String]) = {
-      incIdCount(idsAu)
-      val inList = idsAu.map(_ => "?").mkString(",")
-      val q = """
-         select TENANT, SNO user_id, DISPLAY_NAME,
-            EMAIL, EMAIL_NOTFS, COUNTRY,
-            WEBSITE, SUPERADMIN
-         from DW1_USERS
-         where TENANT = ?
-         and SNO in (""" + inList +")"
-      (q, tenantId :: idsAu)
-    }
-
-    val totalQuery = StringBuilder.newBuilder
-    var allValsReversed = List[String]()
-
-    def growQuery(moreQueryAndVals: (String, List[String])) {
-      if (totalQuery.nonEmpty)
-        totalQuery ++= " union "
-      totalQuery ++= moreQueryAndVals._1
-      allValsReversed = moreQueryAndVals._2.reverse ::: allValsReversed
-    }
-
-    // Build query.
-    for ((tenantId, userIds) <- userIdsByTenant.toList) {
-      // Split user ids into distinct authenticated and unauthenticated ids.
-      // Unauthenticated id starts with "-".
-      val (idsUnau, idsAu) = userIds.distinct.partition(_ startsWith "-")
-
-      if (idsUnau nonEmpty) growQuery(mkQueryUnau(tenantId, idsUnau))
-      if (idsAu nonEmpty) growQuery(mkQueryAu(tenantId, idsAu))
-    }
-
-    if (idCount == 0)
-      return Map.empty
-
-    // Could log warning if longestInList > 1000, would break in Oracle
-    // (max in list size is 1000).
-
-    var usersByTenantAndId = Map[(String, String), User]()
-
-    db.queryAtnms(totalQuery.toString, allValsReversed.reverse, rs => {
-      while (rs.next) {
-        val tenantId = rs.getString("TENANT")
-        // Sometimes convert both "-" and null to "", because unauthenticated
-        // users use "-" as placeholder for "nothing specified" -- so those
-        // values are indexed (since sql null isn't).
-        // Authenticated users, however, currently use sql null for nothing.
-        val user = User(
-           id = rs.getString("user_id"),
-           displayName = dn2e(rs.getString("DISPLAY_NAME")),
-           email = dn2e(rs.getString("EMAIL")),
-           emailNotfPrefs = _toEmailNotfs(rs.getString("EMAIL_NOTFS")),
-           country = dn2e(rs.getString("COUNTRY")),
-           website = dn2e(rs.getString("WEBSITE")),
-           isSuperAdmin = rs.getString("SUPERADMIN") == "T")
-
-        usersByTenantAndId = usersByTenantAndId + ((tenantId, user.id) -> user)
-      }
-    })
-
-    usersByTenantAndId
-  }
-
-
-  private def _loadMemships(r: RequestInfo): List[String] = {
-    Nil
-  }
 
   override def savePageActions[T <: Action](tenantId: String, pageGuid: String,
                                   actions: List[T]): List[T] = {
@@ -809,53 +711,9 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
   }
 
 
-  def createTenant(name: String): Tenant = {
-    db.transaction { implicit connection =>
-      val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
-      db.update("""
-          insert into DW1_TENANTS (ID, NAME)
-          values (?, ?)
-          """, List(tenantId, name))
-      Tenant(id = tenantId, name = name, hosts = Nil)
-    }
-  }
-
-
-  def loadTenants(tenantIds: Seq[String]): Seq[Tenant] = {
-    // For now, load only 1 tenant.
-    require(tenantIds.length == 1)
-
-    var hostsByTenantId = Map[String, List[TenantHost]]().withDefaultValue(Nil)
-    db.queryAtnms("""
-        select TENANT, HOST, CANONICAL, HTTPS from DW1_TENANT_HOSTS
-        where TENANT = ?  -- in the future: where TENANT in (...)
-        """,
-      List(tenantIds.head),
-      rs => {
-        while (rs.next) {
-          val tenantId = rs.getString("TENANT")
-          var hosts = hostsByTenantId(tenantId)
-          hosts ::= TenantHost(
-             address = rs.getString("HOST"),
-             role = _toTenantHostRole(rs.getString("CANONICAL")),
-             https = _toTenantHostHttps(rs.getString("HTTPS")))
-          hostsByTenantId = hostsByTenantId.updated(tenantId, hosts)
-        }
-      })
-
-    var tenants = List[Tenant]()
-    db.queryAtnms("""
-        select ID, NAME from DW1_TENANTS where ID = ?
-        """,
-        List(tenantIds.head),
-        rs => {
-      while (rs.next) {
-        val tenantId = rs.getString("ID")
-        val hosts = hostsByTenantId(tenantId)
-        tenants ::= Tenant(tenantId, name = rs.getString("NAME"), hosts = hosts)
-      }
-    })
-    tenants
+  def loadTenant(): Tenant = {
+    systemDaoSpi.loadTenants(List(tenantId)).head
+    // Should tax quotaConsumer with 2 db IO requests: tenant + tenant hosts.
   }
 
 
@@ -880,66 +738,12 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
     }
   }
 
-  def lookupTenant(scheme: String, host: String): TenantLookup = {
-    val RoleCanonical = "C"
-    val RoleLink = "L"
-    val RoleRedirect = "R"
-    val RoleDuplicate = "D"
-    val HttpsRequired = "R"
-    val HttpsAllowed = "A"
-    val HttpsNo = "N"
-    db.queryAtnms("""
-        select t.TENANT TID,
-            t.CANONICAL THIS_CANONICAL, t.HTTPS THIS_HTTPS,
-            c.HOST CANONICAL_HOST, c.HTTPS CANONICAL_HTTPS
-        from DW1_TENANT_HOSTS t -- this host, the one connected to
-            left join DW1_TENANT_HOSTS c  -- the cannonical host
-            on c.TENANT = t.TENANT and c.CANONICAL = 'C'
-        where t.HOST = ?
-        """, List(host), rs => {
-      if (!rs.next) return FoundNothing
-      val tenantId = rs.getString("TID")
-      val thisHttps = rs.getString("THIS_HTTPS")
-      val (thisRole, chost, chostHttps) = {
-        var thisRole = rs.getString("THIS_CANONICAL")
-        var chost_? = rs.getString("CANONICAL_HOST")
-        var chostHttps_? = rs.getString("CANONICAL_HTTPS")
-        if (thisRole == RoleDuplicate) {
-          // Pretend this is the chost.
-          thisRole = RoleCanonical
-          chost_? = host
-          chostHttps_? = thisHttps
-        }
-        if (chost_? eq null) {
-          // This is not a duplicate, and there's no canonical host
-          // to link or redirect to.
-          return FoundNothing
-        }
-        (thisRole, chost_?, chostHttps_?)
-      }
 
-      def chostUrl =  // the canonical host URL, e.g. http://www.example.com
-          (if (chostHttps == HttpsRequired) "https://" else "http://") + chost
-
-      assErrIf3((thisRole == RoleCanonical) != (host == chost), "DwE98h1215]")
-
-      def useThisHostAndScheme = FoundChost(tenantId)
-      def redirect = FoundAlias(tenantId, canonicalHostUrl = chostUrl,
-                              role = TenantHost.RoleRedirect)
-      def useLinkRelCanonical = redirect.copy(role = TenantHost.RoleLink)
-
-      (thisRole, scheme, thisHttps) match {
-        case (RoleCanonical, "http" , HttpsRequired) => redirect
-        case (RoleCanonical, "http" , _            ) => useThisHostAndScheme
-        case (RoleCanonical, "https", HttpsRequired) => useThisHostAndScheme
-        case (RoleCanonical, "https", HttpsAllowed ) => useLinkRelCanonical
-        case (RoleCanonical, "https", HttpsNo      ) => redirect
-        case (RoleRedirect , _      , _            ) => redirect
-        case (RoleLink     , _      , _            ) => useLinkRelCanonical
-        case (RoleDuplicate, _      , _            ) => assErr("DwE09KL04")
-      }
-    })
+  def lookupOtherTenant(scheme: String, host: String): TenantLookup = {
+    // TODO consume quota
+    systemDaoSpi.lookupTenant(scheme, host)
   }
+
 
   def checkPagePath(pathToCheck: PagePath): Option[PagePath] = {
     _findCorrectPagePath(pathToCheck)
@@ -986,7 +790,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
         List(tenantId, withFolderPrefix +"%"),
         rs => {
       while (rs.next) {
-        val pagePath = _PagePath(rs)(tenantId)
+        val pagePath = _PagePath(rs, tenantId)
         val pageDetails = PageDetails(
           status = _toPageStatus(rs.getString("PAGE_STATUS")),
           cachedTitle =
@@ -1032,7 +836,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
 
     db.queryAtnms(query, vals, rs => {
       while (rs.next) {
-        val pagePath = _PagePath(rs)(tenantId)
+        val pagePath = _PagePath(rs, tenantId)
         val actnLctr = ActionLocator(
            pagePath = pagePath,
            actionId = rs.getString("PAID"),
@@ -1157,132 +961,20 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
   def loadNotfsForRole(tenantId: String, userId: String)
         : Seq[NotfOfPageAction] = {
     val numToLoad = 50 // for now
-    val notfsToMail =
-       _loadNotfsImpl(numToLoad, Some(tenantId), userIdOpt = Some(userId))
+    val notfsToMail = systemDaoSpi.loadNotfsImpl(   // SHOULD specify consumers
+       numToLoad, Some(tenantId), userIdOpt = Some(userId))
     // All loaded notifications are to userId only.
     notfsToMail.notfsByTenant(tenantId)
   }
 
 
-  def loadNotfsToMailOut(delayInMinutes: Int, numToLoad: Int): NotfsToMail =
-    _loadNotfsImpl(numToLoad, None, delayMinsOpt = Some(delayInMinutes))
-
-
   def loadNotfByEmailId(tenantId: String, emailId: String)
         : Option[NotfOfPageAction] = {
-    val notfsToMail =
-       _loadNotfsImpl(1, Some(tenantId), emailIdOpt = Some(emailId))
+    val notfsToMail =   // SHOULD specify consumers
+       systemDaoSpi.loadNotfsImpl(1, Some(tenantId), emailIdOpt = Some(emailId))
     val notfs = notfsToMail.notfsByTenant(tenantId)
     assert(notfs.length <= 1)
     notfs.headOption
-  }
-
-
-  /**
-   * Specify:
-   * numToLoad + delayMinsOpt --> loads notfs to mail out, for all tenants
-   * tenantIdOpt + userIdOpt --> loads that user's notfs
-   * tenantIdOpt + emailIdOpt --> loads a single email and notf
-   * @return
-   */
-  private def _loadNotfsImpl(numToLoad: Int, tenantIdOpt: Option[String] = None,
-        delayMinsOpt: Option[Int] = None, userIdOpt: Option[String] = None,
-        emailIdOpt: Option[String] = None)
-        : NotfsToMail = {
-
-    require(delayMinsOpt.isEmpty || userIdOpt.isEmpty)
-    require(delayMinsOpt.isEmpty || emailIdOpt.isEmpty)
-    require(userIdOpt.isEmpty || emailIdOpt.isEmpty)
-    require(delayMinsOpt.isDefined != tenantIdOpt.isDefined)
-    require(!userIdOpt.isDefined || tenantIdOpt.isDefined)
-    require(!emailIdOpt.isDefined || tenantIdOpt.isDefined)
-    require(numToLoad > 0)
-    require(emailIdOpt.isEmpty || numToLoad == 1)
-    // When loading email addrs, an SQL in list is used, but
-    // Oracle limits the max in list size to 1000. As a stupid workaround,
-    // don't load more than 1000 notifications at a time.
-    illArgErrIf3(numToLoad >= 1000, "DwE903kI23", "Too long SQL in-list")
-
-    val baseQuery = """
-       select
-         TENANT, CTIME, PAGE_ID, PAGE_TITLE,
-         RCPT_ID_SIMPLE, RCPT_ROLE_ID,
-         EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
-         RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME,
-         STATUS, EMAIL_STATUS, EMAIL_SENT, EMAIL_LINK_CLICKED, DEBUG
-       from DW1_NOTFS_PAGE_ACTIONS
-       where """
-
-    val (whereOrderBy, vals) = (userIdOpt, emailIdOpt) match {
-      case (Some(uid), None) =>
-        var whereOrderBy =
-           "TENANT = ? and "+ (
-           if (uid startsWith "-") "RCPT_ID_SIMPLE = ?"
-           else "RCPT_ROLE_ID = ?"
-           ) +" order by CTIME desc"
-        // IdentitySimple user ids start with '-'.
-        val uidNoDash = uid.dropWhile(_ == '-')
-        val vals = List(tenantIdOpt.get, uidNoDash)
-        (whereOrderBy, vals)
-      case (None, Some(emailId)) =>
-        val whereOrderBy = "TENANT = ? and EMAIL_SENT = ?"
-        val vals = tenantIdOpt.get::emailId::Nil
-        (whereOrderBy, vals)
-      case (None, None) =>
-        // Load notfs with emails pending, for all tenants.
-        val whereOrderBy =
-           "EMAIL_STATUS = 'P' and CTIME <= ? order by CTIME asc"
-        val nowInMillis = (new ju.Date).getTime
-        val someMinsAgo =
-           new ju.Date(nowInMillis - delayMinsOpt.get * 60 * 1000)
-        val vals = someMinsAgo::Nil
-        (whereOrderBy, vals)
-      case _ =>
-        assErr("DwE093RI3")
-    }
-
-    val query = baseQuery + whereOrderBy +" limit "+ numToLoad
-    var notfsByTenant =
-       Map[String, List[NotfOfPageAction]]().withDefaultValue(Nil)
-
-    db.queryAtnms(query, vals, rs => {
-      while (rs.next) {
-        val tenantId = rs.getString("TENANT")
-        val eventTypeStr = rs.getString("EVENT_TYPE")
-        val rcptIdSimple = rs.getString("RCPT_ID_SIMPLE")
-        val rcptRoleId = rs.getString("RCPT_ROLE_ID")
-        val rcptUserId =
-          if (rcptRoleId ne null) rcptRoleId
-          else "-"+ rcptIdSimple
-        val notf = NotfOfPageAction(
-          ctime = ts2d(rs.getTimestamp("CTIME")),
-          recipientUserId = rcptUserId,
-          pageTitle = rs.getString("PAGE_TITLE"),
-          pageId = rs.getString("PAGE_ID"),
-          eventType = NotfOfPageAction.Type.PersonalReply,  // for now
-          eventActionId = rs.getString("EVENT_PGA"),
-          targetActionId = Option(rs.getString("TARGET_PGA")),
-          recipientActionId = rs.getString("RCPT_PGA"),
-          recipientUserDispName = rs.getString("RCPT_USER_DISP_NAME"),
-          eventUserDispName = rs.getString("EVENT_USER_DISP_NAME"),
-          targetUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")),
-          emailPending = rs.getString("EMAIL_STATUS") == "P",
-          emailId = Option(rs.getString("EMAIL_SENT")),
-          debug = Option(rs.getString("DEBUG")))
-
-        // Add notf to the list of all notifications for tenantId.
-        val notfsForTenant: List[NotfOfPageAction] = notfsByTenant(tenantId)
-        notfsByTenant = notfsByTenant + (tenantId -> (notf::notfsForTenant))
-      }
-    })
-
-    val userIdsByTenant: Map[String, List[String]] =
-       notfsByTenant.mapValues(_.map(_.recipientUserId))
-
-    val usersByTenantAndId: Map[(String, String), User] =
-      _loadUsers(userIdsByTenant)
-
-    NotfsToMail(notfsByTenant, usersByTenantAndId)
   }
 
 
@@ -1656,200 +1348,7 @@ class RelDbDaoSpi(val db: RelDb) extends DaoSpi {
     actionsWithIds
   }
 
-
-  def _dummyUserIdFor(identityId: String) = "-"+ identityId
-
-  def _dummyUserFor(identity: IdentitySimple, emailNotfPrefs: EmailNotfPrefs,
-                    id: String = null): User = {
-    User(id = (if (id ne null) id else identity.userId),
-      displayName = identity.name, email = identity.email,
-      emailNotfPrefs = emailNotfPrefs,
-      country = "",
-      website = identity.website, isSuperAdmin = false)
-  }
-
-
-  private def _PagePath(resultSet: js.ResultSet)(implicit tenantId: String) =
-    PagePath(
-      tenantId = tenantId,
-      folder = resultSet.getString("PARENT_FOLDER"),
-      pageId = Some(resultSet.getString("PAGE_ID")),
-      showId = resultSet.getString("SHOW_ID") == "T",
-      pageSlug = d2e(resultSet.getString("PAGE_SLUG")))
-
-
-  private def _toTenantHostRole(roleStr: String) = roleStr match {
-    case "C" => TenantHost.RoleCanonical
-    case "R" => TenantHost.RoleRedirect
-    case "L" => TenantHost.RoleLink
-    case "D" => TenantHost.RoleDuplicate
-  }
-
-
-  private def _toTenantHostHttps(httpsStr: String) = httpsStr match {
-    case "R" => TenantHost.HttpsRequired
-    case "A" => TenantHost.HttpsAllowed
-    case "N" => TenantHost.HttpsNone
-  }
-
-
-  private def _toFlag(postType: PostType): String = postType match {
-    case PostType.Text => "Post"
-    case PostType.Publish => "Publ"
-    case PostType.Meta => "Meta"
-  }
-
-
-  def _toPostType(flag: String): PostType = flag match {
-    case "Post" => PostType.Text
-    case "Publ" => PostType.Publish
-    case "Meta" => PostType.Meta
-    case x =>
-      warnDbgDie("Bad PostType value: "+ safed(x) +
-          " [error DwE0xcke215]")
-      PostType.Text  // fallback to something with no side effects
-                      // (except perhaps for a weird post appearing)
-  }
-
-  def _toPageStatus(pageStatusStr: String): PageStatus = pageStatusStr match {
-    case "D" => PageStatus.Draft
-    case "P" => PageStatus.Published
-    case "X" => PageStatus.Deleted
-    case x =>
-      warnDbgDie("Bad page status: "+ safed(x) +" [error DwE0395k7]")
-      PageStatus.Draft  // make it visible to admins only
-  }
-
-  def _toFlag(pageStatus: PageStatus): String = pageStatus match {
-    case PageStatus.Draft => "D"
-    case PageStatus.Published => "P"
-    case PageStatus.Deleted => "X"
-    case x =>
-      warnDbgDie("Bad PageStatus: "+ safed(x) +" [error DwE5k2eI5]")
-      "D"  // make it visible to admins only
-  }
-
-  def _toFlag(prefs: EmailNotfPrefs): AnyRef = prefs match {
-    case EmailNotfPrefs.Unspecified => NullVarchar
-    case EmailNotfPrefs.Receive => "R"
-    case EmailNotfPrefs.DontReceive => "N"
-    case EmailNotfPrefs.ForbiddenForever => "F"
-    case x =>
-      warnDbgDie("Bad EmailNotfPrefs value: "+ safed(x) +
-          " [error DwE0EH43k8]")
-      NullVarchar // fallback to Unspecified
-  }
-
-  def _toEmailNotfs(flag: String): EmailNotfPrefs = flag match {
-    case null => EmailNotfPrefs.Unspecified
-    case "R" => EmailNotfPrefs.Receive
-    case "N" => EmailNotfPrefs.DontReceive
-    case "F" => EmailNotfPrefs.ForbiddenForever
-    case x =>
-      warnDbgDie("Bad EMAIL_NOTFS: "+ safed(x) +" [error DwE6ie53k011]")
-      EmailNotfPrefs.Unspecified
-  }
-
-  /** Adds a can be Empty Prefix.
-   *
-   * Oracle converts the empty string to NULL, so prefix strings that might
-   * be empty with a magic value, and remove it when reading data from
-   * the db.
-   */
-  //private def _aep(str: String) = "-"+ str
-
-  /** Removes a can be Empty Prefix. */
-  //private def _rep(str: String) = str drop 1
-
-  // TODO:
-  /*
-  From http://www.exampledepot.com/egs/java.sql/GetSqlWarnings.html:
-
-    // Get warnings on Connection object
-    SQLWarning warning = connection.getWarnings();
-    while (warning != null) {
-        // Process connection warning
-        // For information on these values, see Handling a SQL Exception
-        String message = warning.getMessage();
-        String sqlState = warning.getSQLState();
-        int errorCode = warning.getErrorCode();
-        warning = warning.getNextWarning();
-    }
-
-    // After a statement has been used:
-    // Get warnings on Statement object
-    warning = stmt.getWarnings();
-    if (warning != null) {
-        // Process statement warnings...
-    }
-
-  From http://www.exampledepot.com/egs/java.sql/GetSqlException.html:
-
-    try {
-        // Execute SQL statements...
-    } catch (SQLException e) {
-        while (e != null) {
-            // Retrieve a human-readable message identifying the reason
-            // for the exception
-            String message = e.getMessage();
-
-            // This vendor-independent string contains a code that identifies
-            // the reason for the exception.
-            // The code follows the Open Group SQL conventions.
-            String sqlState = e.getSQLState();
-
-            // Retrieve a vendor-specific code identifying the reason for
-            // the  exception.
-            int errorCode = e.getErrorCode();
-
-            // If it is necessary to execute code based on this error code,
-            // you should ensure that the expected driver is being
-            // used before using the error code.
-
-            // Get driver name
-            String driverName = connection.getMetaData().getDriverName();
-            if (driverName.equals("Oracle JDBC Driver") && errorCode == 123) {
-                // Process error...
-            }
-
-            // The exception may have been chained; process the next
-            // chained exception
-            e = e.getNextException();
-        }
-    }
-   */
 }
-
-/*
-class AllStatements(con: js.Connection) {
-  con.setAutoCommit(false)
-  con.setAutoCommit(true)
-  // "It is advisable to disable the auto-commit mode only during th
-  // transaction mode. This way, you avoid holding database locks for
-  // multiple statements, which increases the likelihood of conflicts
-  // with other users."
-  // <http://download.oracle.com/javase/tutorial/jdbc/basics/transactions.html>
-
-
-
-  val loadPage = con.prepareStatement("""
-select 1 from dual
-""")
-  // ResultSet = updateSales.executeUpdate()
-  // <an int value that indicates how many rows of a table were updated>
-  //  = updateSales.executeQuery()
-  // (DDL statements return 0)
-  // // con.commit()
-  // con.setAutoCommit(false)
-
-  val purgePage = con.prepareStatement("""
-select 1 from dual
-""")
-
-  val loadUser = con.prepareStatement("""
-select 1 from dual
-""")
-}
-*/
 
 // vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
+
