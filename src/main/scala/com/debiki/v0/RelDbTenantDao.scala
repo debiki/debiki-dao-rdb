@@ -111,13 +111,15 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       val loginWithId = db.transaction { implicit connection =>
         _saveLogin(loginReq.login, idtyWithId)
       }
-      LoginGrant(loginWithId, idtyWithId, user)
+      LoginGrant(loginWithId, idtyWithId, user, isNewIdentity = false,
+         isNewRole = false)
     }
 
     def _loginUnauIdty(idtySmpl: IdentitySimple): LoginGrant = {
       db.transaction { implicit connection =>
         var idtyId = ""
         var emailNotfsStr = ""
+        var createdNewIdty = false
         for (i <- 1 to 2 if idtyId.isEmpty) {
           db.query("""
             select i.SNO, e.EMAIL_NOTFS from DW1_IDS_SIMPLE i
@@ -141,6 +143,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             // the insert, just before). Should it fail, the above `select'
             // is run again and finds the row inserted by the other thread.
             // Could avoid logging any error though!
+            createdNewIdty = true
             db.update("""
               insert into DW1_IDS_SIMPLE(
                   SNO, NAME, EMAIL, LOCATION, WEBSITE)
@@ -160,7 +163,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         val identityWithId = idtySmpl.copy(id = idtyId, userId = user.id)
         // Quota already consumed (in the `for` loop above).
         val loginWithId = _saveLogin(loginReq.login, identityWithId)
-        LoginGrant(loginWithId, identityWithId, user)
+        LoginGrant(loginWithId, identityWithId, user,
+           isNewIdentity = createdNewIdty, isNewRole = false)
       }
     }
 
@@ -343,7 +347,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
       val login = _saveLogin(loginReq.login, identity)
 
-      LoginGrant(login, identity, user)
+      LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
+         isNewRole = userInDb.isEmpty)
     }
   }
 
