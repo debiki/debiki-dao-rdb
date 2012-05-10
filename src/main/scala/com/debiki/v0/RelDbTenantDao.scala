@@ -221,7 +221,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       // case fid: IdentityFacebook => (...)
       case _: IdentitySimple => assErr("DwE98239k2a2")
       case _: IdentityEmailId => assErr("DwE8k932322")
-      case IdentityUnknown => assErr("DwE92k2rI06")
     }
 
     db.transaction { implicit connection =>
@@ -255,7 +254,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             // case _: IdentityTwitter =>
             // case _: IdentityFacebook =>
             case sid: IdentitySimple => assErr("DwE8451kx35")
-            case IdentityUnknown => assErr("DwE091563wkr2")
             case _: IdentityEmailId => assErr("DwE8Ik3f57")
           }
           Some(identityInDb) -> Some(userInDb)
@@ -341,7 +339,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         // case (..., IdentityFacebook) => ...
         case (_, _: IdentitySimple) => assErr("DwE83209qk12")
         case (_, _: IdentityEmailId) => assErr("DwE83kIR31")
-        case (_, IdentityUnknown) => assErr("DwE32ks30016")
       }
 
       val login = _saveLogin(loginReq.login, identity)
