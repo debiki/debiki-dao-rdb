@@ -241,6 +241,14 @@ class RelDb(val server: String,
     }
   }
 
+
+  def batchUpdateAny(
+        stmt: String, batchValues: List[List[Any]], batchSize: Int = 100)
+        (implicit conn: js.Connection): Seq[Array[Int]] = {
+    batchUpdate(stmt, batchValues.map(_.map(_.asInstanceOf[AnyRef])), batchSize)
+  }
+
+
   def batchUpdate(
          stmt: String, batchValues: List[List[AnyRef]], batchSize: Int = 100)
          (implicit conn: js.Connection): Seq[Array[Int]] = {
