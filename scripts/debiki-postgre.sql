@@ -813,3 +813,189 @@ where SHOW_ID = 'F';
 -- shown before the page slug).
 create index DW1_PGPTHS_ALL
 on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, PAGE_ID);
+
+
+
+----- Quotas
+
+/**
+ * 10 quotas roughly roughly corresponots to 1 USD. However, in this
+ * table, we store microquota, that is, units of 1e-6 quota.
+ *
+ * Storing 1 byte costs roughly roughly 1 microquota:
+ *   1 GB-month costs around $0.1 (at Amazon EC2 and Google's Cloud Storage)
+ *   Assume we store 1 byte for 10 years, at 10 locations
+ *   (including backups and redundancy), then:
+ *   1 * $0.1/1e9 * 12 * 10 * 10 * 1e6 = 1.2 ~= 1
+ * One database IO request also costs roughly
+ * 1 microquota. (Amazon EC2: $0.1 per 1 million I/O requests.)
+ *
+ * Sending an email costs 1 000 microquota.
+ *   ($0.1/1000 emails, Google AppEngine and Amazon EC2.)
+ *
+ * 10 quota per month (i.e. $1) should cover the costs for a popular blog,
+ * (that publishes something every 3rd day, 100 comments per article, 20 000
+ * page views per article, 300 emails per article.)
+ *
+ * Disk quota is considered consumed when you insert new data, but
+ * also when you update existing data (which happens very infrequently,
+ * but I think that counting quota stops certain DoS attacks).
+ */
+create table DW1_QUOTAS(
+
+  ------ The quota consumer
+
+  -- The consumer is one of:
+  --  - An IP number, global, over all tenants
+  --  - An IP number, per tenant
+  --  - A tenant
+  --  - A role (per tenant)
+  --  - (An address, e.g. email addr or Twitter? Not implemented.)
+  -- When quota is consumed, it's taken from the tenant, but
+  -- other involved consumers have their quota updated too: their
+  -- QUOTA_USED_FREELOADED is incremented. By setting a freeload limit,
+  -- it's possible to prevent a single IP number from exhausting
+  -- a tenant's quota. (This prevents certain over quota DoS
+  -- attacks against tenants.)
+  --
+  -- '-' is stored instead of null, so index lookups can be made via a PK.
+  -- I could have opted to use a unique functinal index instead,
+  -- but why? That'd just be slightly more code and no PK?
+  -- Or I could have used 4 unique partial indexes -- that'd be much more code,
+  -- but those indexes would be less skewed than the current PK index.
+  TENANT varchar(32),
+  IP varchar(32),
+  ROLE_ID varchar(32),
+
+  ------- Version and time
+
+  -- 'C'urrent/'O'ld. Old rows are kept for autiding/statistics gathering
+  -- purposes. Constraints are less stringent, for them.
+  VERSION varchar(1) not null,
+
+  -- Creation date, for reporting (not implemented) and debugging.
+  CTIME timestamp not null,
+
+  -- The last change date influences the maximum amount of free quota left.
+  -- QUOTA_DAILY_FREE/FREELOAD only grows for a few days beyond MTIME
+  -- (so you won't have 5 month's worth of quota after 5 month's absence).
+  MTIME timestamp not null,
+
+  ------ Quota used
+
+  -- A non-tenant consumer freeloads as much as possible on tenants' quotas.
+  -- If it runs out of its own allowed freeload quota, or the relevant
+  -- tenant gets over quota, then the consumer spends its free quota,
+  -- rather than its paid quota, because the free quota might be regenerated,
+  -- see QUOTA_DAILY_FREE. As a last resort, it spends its paid quota.
+  -- Tenants usually spend paid quota though. A tenant is given some
+  -- free quota on creation, but thereafter it usually gets no free quota.
+  -- Real users freeload on the tenant, not the other way around.
+
+  -- (Could actually replace QUOTA_USED_PAID and QUOTA_USED_FREE with
+  -- quota-left, but I'm interested in how QUOTA_USED_* changes over time,
+  -- and that info would be hard to derive, or impossible, if
+  -- DW1_QUOTA_COSTS is changed.)
+
+  -- Amount of quota used that the consumer has paid for.
+  QUOTA_USED_PAID bigint not null default 0,
+
+  -- Quota used that the consumer was given for free.
+  QUOTA_USED_FREE bigint not null default 0,
+
+  -- How much a quota consumer has freeloaded on other consumers' paid
+  -- or free quota. E.g. a role or ip that has freeloaded on a tenant.
+  QUOTA_USED_FREELOADED bigint not null default 0,
+
+  ------ Quota limits
+
+  -- Incremented when the consumer pays money, or by superadmins if needed
+  -- for whatever reasons.
+  QUOTA_LIMIT_PAID bigint not null default 0,
+
+  -- Incremented by QUOTA_DAILY_FREE, or by superadmins.
+  QUOTA_LIMIT_FREE bigint not null default 0,
+
+  -- Set this to 0 prevents the consumer from doing anything at all,
+  -- unless it pays or is given free quota.
+  QUOTA_LIMIT_FREELOAD bigint not null default 0,
+
+  ------ Quota grants
+
+  -- For charitable organizations.
+  QUOTA_DAILY_FREE bigint not null default 0,
+
+  -- The consumer is allowed to freeload this much each day (or more,
+  -- if it's allowed to accumulate over e.g. a week before being clamped).
+  QUOTA_DAILY_FREELOAD bigint not null default 0,
+
+  ------ Resource usage statistics
+
+  -- Values are totals, since consumer creation.
+  NUM_LOGINS int not null default 0,
+  NUM_IDS_UNAU int not null default 0,
+  NUM_IDS_AU int not null default 0,
+  NUM_ROLES int not null default 0,
+  NUM_PAGES int not null default 0,
+  NUM_ACTIONS int not null default 0,
+  NUM_ACTION_TEXT_BYTES bigint not null default 0,
+  NUM_NOTFS int not null default 0,
+  NUM_EMAILS_OUT int not null default 0,
+  NUM_DB_REQS_READ bigint not null default 0,
+  NUM_DB_REQS_WRITE bigint not null default 0,
+
+  -- Could add:
+  --  NUM_PAGE_VIEWS
+  --  NUM_REQUESTS
+  --  NUM_BYTES_UPLOADED
+  --  NUM_BYTES_DOWNLOADED
+  --  NUM_CPU_SECONDS
+  -- But if you connect from a new IP, then it's not reasonable
+  -- to create a new row? Perhaps start counting only when the IP
+  -- has written sth to db?
+
+  ------ Constraints
+
+  constraint DW1_QTAS_TNT_IP_ROLE__C check (
+      case
+        when IP <> '-' then (
+          -- This is either quota for this ip, for a certain tenant, or for
+          -- this ip, globally for all tenants (then tenant is unspecified).
+          ROLE_ID = '-')
+        else (
+          -- This is either per tenant quota, then ROLE_ID is null.
+          -- Or this is per role quota, then TENANT must be defined.
+          TENANT <> '-')
+      end),
+  constraint DW1_QTAS_VERSION__C_IN
+      check (VERSION in ('C', 'O')),
+  constraint DW1_QTAS_TIME__C
+      check (MTIME >= CTIME),
+  constraint DW1_QTAS_TNT__R__TENANTS  -- ix DW1_QTAS_TNT__U
+      foreign key (TENANT)
+      references DW1_TENANTS(ID) deferrable,
+  constraint DW1_QTAS_TNT_ROLE__R__ROLES  -- ix DW1_QTAS_ROLE__U
+      foreign key (TENANT, ROLE_ID)
+      references DW1_USERS(TENANT, SNO) deferrable
+);
+
+
+------ Unique constraint
+
+-- (I'm afraid this index will eventually be rather skew? For example all
+-- global IPs start with tenant '-'. But inserts should be fairly infrequent,
+-- and we never delete rows -- we almost only do updates. So I think it
+-- won't be noticeable that the index is skew.)
+create unique index DW1_QTAS_TNT_IP_ROLE__U on DW1_QUOTAS(
+  coalesce(TENANT, '-'), coalesce(IP, '-'), coalesce(ROLE_ID, '-'));
+
+/* I am using '-' instead of Null now, and added a PK, so this not needed:
+create unique index DW1_QTAS_IP__U on DW1_QUOTAS(IP)
+    where TENANT is null and ROLE_ID is null and VERSION = 'C';
+create unique index DW1_QTAS_TNT_IP__U on DW1_QUOTAS(TENANT, IP)
+    where ROLE_ID is null and VERSION = 'C';
+create unique index DW1_QTAS_ROLE__U on DW1_QUOTAS(TENANT, ROLE_ID)
+    where IP is null and VERSION  = 'C';
+create unique index DW1_QTAS_TNT__U on DW1_QUOTAS(TENANT)
+    where IP is null and ROLE_ID is null and VERSION = 'C';
+*/
