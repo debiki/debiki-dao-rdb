@@ -6,15 +6,10 @@
 
 package com.debiki.v0
 
-import java.io.{File, FileNotFoundException}
-import java.{util => ju}
-import org.specs._
-import org.specs.specification.PendingUntilFixed
 import Prelude._
 
 /*
-These test schemas are dropped and recreated (data pump import, impdp)
-before each test:
+All tables in these test schemas are cleared before each test:
 
 DEBIKI_TEST_0
 DEBIKI_TEST_0_0_2_EMPTY
@@ -75,6 +70,7 @@ object ReDbDaoTckTest {
             delete from DW1_LOGINS
             delete from DW1_IDS_SIMPLE
             delete from DW1_IDS_OPENID
+            delete from DW1_QUOTAS
             delete from DW1_USERS
             delete from DW1_TENANT_HOSTS
             delete from DW1_TENANTS
@@ -84,8 +80,16 @@ object ReDbDaoTckTest {
         case _ => assErr("Broken test suite")
       }
 
+    val kindQuotaCharger = new QuotaCharger {
+      override def chargeOrThrow(quotaConsumers: QuotaConsumers,
+            resourceUse: ResourceUse, mayPilfer: Boolean) { }
+      override def throwUnlessEnoughQuota(quotaConsumers: QuotaConsumers,
+            resourceUse: ResourceUse, mayPilfer: Boolean) { }
+    }
+
     new RelDbTestContext(
-       new DaoFactory(new RelDbDaoSpiFactory(db)))
+       new NonCachingDaoFactory(new RelDbDaoSpiFactory(db),
+          kindQuotaCharger))
   }
 }
 
