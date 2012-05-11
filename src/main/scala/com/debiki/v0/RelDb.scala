@@ -54,7 +54,15 @@ object RelDb {
   /** Converts java.sql.Timestamp to java.util.Date. */
   def ts2d(ts: js.Timestamp) =
      (ts eq null) ? (null: ju.Date) | (new ju.Date(ts.getTime))
+
+  def isUniqueConstrViolation(sqlException: js.SQLException): Boolean = {
+    // This status code means "A violation of the constraint imposed
+    // by a unique index or a unique constraint occurred".
+    sqlException.getSQLState == "23505"
+  }
+
 }
+
 
 class RelDb(val server: String,
                val port: String,
@@ -194,6 +202,12 @@ class RelDb(val server: String,
   def update(sql: String, binds: List[AnyRef] = Nil)
             (implicit conn: js.Connection): Int = {
     execImpl(sql, binds, null, conn).asInstanceOf[Int]
+  }
+
+
+  def updateAny(sql: String, binds: List[Any] = Nil)
+            (implicit conn: js.Connection): Int = {
+    update(sql, binds.map(_.asInstanceOf[AnyRef]))(conn)
   }
 
 
