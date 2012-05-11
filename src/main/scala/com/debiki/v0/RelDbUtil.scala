@@ -35,6 +35,56 @@ object RelDbUtil {
       pageSlug = d2e(resultSet.getString("PAGE_SLUG")))
 
 
+  def _QuotaConsumer(rs: js.ResultSet) = {
+    val tenantId = rs.getString("TENANT")
+    val ip = rs.getString("IP")
+    val roleId = rs.getString("ROLE_ID")
+    if (tenantId eq null) {
+      assert(roleId eq null)
+      QuotaConsumer.GlobalIp(ip)
+    }
+    else if (ip ne null) {
+      QuotaConsumer.PerTenantIp(tenantId = tenantId, ip = ip)
+    }
+    else if (roleId eq null) {
+      QuotaConsumer.Tenant(tenantId)
+    }
+    else if (roleId ne null) {
+      QuotaConsumer.Role(tenantId = tenantId, roleId = roleId)
+    }
+    else {
+      assErr("DwE021kJQ2")
+    }
+  }
+
+
+  def _QuotaUse(rs: js.ResultSet) = QuotaUse(
+    paid = rs.getLong("QUOTA_USED_PAID"),
+    free = rs.getLong("QUOTA_USED_FREE"),
+    freeload = rs.getLong("QUOTA_USED_FREELOADED"))
+
+
+  def _QuotaUseLimits(rs: js.ResultSet) = QuotaUse(
+    paid = rs.getLong("QUOTA_LIMIT_PAID"),
+    free = rs.getLong("QUOTA_LIMIT_FREE"),
+    freeload = rs.getLong("QUOTA_LIMIT_FREELOAD"))
+
+
+  def _ResourceUse(rs: js.ResultSet) =
+    ResourceUse(
+      numLogins = rs.getInt("NUM_LOGINS"),
+      numIdsUnau = rs.getInt("NUM_IDS_UNAU"),
+      numIdsAu = rs.getInt("NUM_IDS_AU"),
+      numRoles = rs.getInt("NUM_ROLES"),
+      numPages = rs.getInt("NUM_PAGES"),
+      numActions = rs.getInt("NUM_ACTIONS"),
+      numActionTextBytes = rs.getLong("NUM_ACTION_TEXT_BYTES"),
+      numNotfs = rs.getInt("NUM_NOTFS"),
+      numEmailsOut = rs.getInt("NUM_EMAILS_OUT"),
+      numDbReqsRead = rs.getLong("NUM_DB_REQS_READ"),
+      numDbReqsWrite = rs.getLong("NUM_DB_REQS_WRITE"))
+
+
   def _toTenantHostRole(roleStr: String) = roleStr match {
     case "C" => TenantHost.RoleCanonical
     case "R" => TenantHost.RoleRedirect

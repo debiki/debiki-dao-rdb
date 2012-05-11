@@ -22,9 +22,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
    extends TenantDaoSpi {
   // COULD serialize access, per page?
 
-  require(quotaConsumers.tenantId.isDefined)
-
-  def tenantId = quotaConsumers.tenantId.get
+  def tenantId = quotaConsumers.tenantId
 
   def db = systemDaoSpi.db
 
