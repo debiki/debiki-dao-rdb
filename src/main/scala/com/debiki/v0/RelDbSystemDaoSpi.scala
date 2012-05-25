@@ -423,7 +423,7 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
     for ((consumer, quotaDelta) <- quotaByConsumer) {
       var vals = _quotaConsumerIndexedVals(consumer, insert = true)
       vals ::= "C"
-      vals ::= d2ts(quotaDelta.mtime)
+      vals ::= d2ts(quotaDelta.mtime) // on creation, ctime = mtime
       vals ::= d2ts(quotaDelta.mtime)
       vals ::= quotaDelta.newFreeLimit
       vals ::= quotaDelta.newFreeloadLimit
