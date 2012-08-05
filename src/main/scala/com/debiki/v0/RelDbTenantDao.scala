@@ -200,6 +200,28 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     // SQL for selecting User and Identity. Depends on the Identity type.
     val (sqlFromWhere, bindVals) = loginReq.identity match {
       case oid: IdentityOpenId =>
+
+        // With Google OpenID, the identifier varies by realm. So use email
+        // address instead. (With Google OpenID, the email address can be
+        // trusted — this is not the case, however, in general.
+        // See: http://blog.stackoverflow.com/2010/04/openid-one-year-later/
+        // Quote:
+        //  "If we have an email address from a verified OpenID email
+        //   provider (that is, an OpenID from a large email service we trust,
+        //   like Google or Yahoo), then it’s guaranteed to be a globally
+        //   unique string.")
+        val (claimedIdOrEmailCheck, idOrEmail) = {
+          // SECURITY why can I trust the OpenID provider to specif
+          // the correct endpoint? What if Mallory's provider replies
+          // with Googles endpoint? I guess the Relying Party impl doesn't
+          // allow this but anyway, I'd like to know for sure.
+          if (oid.isGoogleLogin)
+            ("(i.OID_ENDPOINT = '"+ IdentityOpenId.GoogleEndpoint +
+                "') and i.EMAIL = ?", oid.email)
+          else
+            ("i.OID_CLAIMED_ID = ?", oid.oidClaimedId)
+        }
+
         ("""i.OID_OP_LOCAL_ID,
             i.OID_REALM,
             i.OID_ENDPOINT,
@@ -213,11 +235,11 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             -- that the OpenID provider sent, originally (but which the
             -- user might have since changed).
           where i.TENANT = ?
-            and i.OID_CLAIMED_ID = ?
+            and """+ claimedIdOrEmailCheck +"""
             and i.TENANT = u.TENANT -- (not needed, u.SNO is unique)
             and i.USR = u.SNO
             """,
-          List(tenantId, oid.oidClaimedId)
+          List(tenantId, idOrEmail)
         )
       // case fid: IdentityTwitter => (SQL for Twitter identity table)
       // case fid: IdentityFacebook => (...)
@@ -258,6 +280,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             case sid: IdentitySimple => assErr("DwE8451kx35")
             case _: IdentityEmailId => assErr("DwE8Ik3f57")
           }
+
+          assErrIf(rs.next, "DwE53IK24", "More that one matching OpenID "+
+             "identity, when looking up: "+ loginReq.identity)
+
           Some(identityInDb) -> Some(userInDb)
         } else {
           None -> None
@@ -323,15 +349,21 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         case (Some(old: IdentityOpenId), newNoId: IdentityOpenId) =>
           val nev = newNoId.copy(id = old.id, userId = user.id)
           if (nev != old) {
-            // COULD aovid overwriting email with nothing?
+            if (nev.isGoogleLogin)
+              assErrIf(nev.email != old.email || !old.isGoogleLogin, "DwE3Bz6")
+            else
+              assErrIf(nev.oidClaimedId != old.oidClaimedId, "DwE73YQ2")
+
             db.update("""
                 update DW1_IDS_OPENID set
-                    USR = ?, OID_OP_LOCAL_ID = ?, OID_REALM = ?,
+                    USR = ?, OID_CLAIMED_ID = ?,
+                    OID_OP_LOCAL_ID = ?, OID_REALM = ?,
                     OID_ENDPOINT = ?, OID_VERSION = ?,
                     FIRST_NAME = ?, EMAIL = ?, COUNTRY = ?
                 where SNO = ? and TENANT = ?
                 """,
-                List(nev.userId,  e2d(nev.oidOpLocalId), e2d(nev.oidRealm),
+                List(nev.userId, nev.oidClaimedId,
+                  e2d(nev.oidOpLocalId), e2d(nev.oidRealm),
                   e2d(nev.oidEndpoint), e2d(nev.oidVersion),
                   e2d(nev.firstName), e2d(nev.email), e2d(nev.country),
                   nev.id, tenantId))

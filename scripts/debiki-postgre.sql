@@ -423,6 +423,12 @@ create table DW1_IDS_OPENID(
 create index DW1_IDSOID_TNT_USR on DW1_IDS_OPENID(TENANT, USR);
 create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 
+-- TODO prod, test, done dev:
+-- With Gmail, the claimed_id varies by realm, but the email is unique.
+create unique index DW1_IDSOID_TNT_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
+  where OID_ENDPOINT = 'https://www.google.com/accounts/o8/ud';
+
+
 -- (Uses sequence nunmber from DW1_IDS_SNO.)
 
 
