@@ -238,9 +238,15 @@ create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
   EMAIL varchar(100),
   COUNTRY varchar(100),
   WEBSITE varchar(100),
-  SUPERADMIN varchar(1),
+  SUPERADMIN varchar(1),  -- SHOULD rename to IS_ADMIN
+  -- todo prod, test, done dev: alter table DW1_USERS add column
+  IS_OWNER varchar(1),
+  --
   constraint DW1_USERS_TNT_SNO__P primary key (TENANT, SNO),
   constraint DW1_USERS_SUPERADM__C check (SUPERADMIN in ('T')),
+  -- todo prod, test, done dev:  alter table DW1_USERS add
+  constraint DW1_USERS_ISOWNER__C_B check (IS_OWNER in ('T')),
+  --
   constraint DW1_USERS__R__TENANT  -- ix DW1_USERS_TNT_SNO__P
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,

@@ -766,6 +766,34 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  def createWebsite(name: String, address: String, creatorIpAddr: String,
+        ownerIdentity: IdentityOpenId, ownerRole: User): Boolean = {
+
+    // SHOULD set IS_OWNER to 'T' in DW1_USERS!!!!
+    // And add isOwner field to User.
+
+    try {
+      db.transaction { implicit connection =>
+        val newTenant = systemDaoSpi._createTenant(name)
+        val newHost = TenantHost(address, TenantHost.RoleCanonical,
+          TenantHost.HttpsNone)
+        val newHostCount = _insertTenantHost(newTenant.id, newHost)
+        assErrIf(newHostCount != 1, "DwE09KRF3")
+        val ownerRoleAtNewWebsite = _insertUser(newTenant.id,
+          ownerRole.copy(id = "?"))
+        val ownerIdtyAtNewWebsite = _insertIdentity(newTenant.id,
+          ownerIdentity.copy(id = "?", userId = ownerRoleAtNewWebsite.id))
+      }
+    }
+    catch {
+      case ex: js.SQLException =>
+        if (!isUniqueConstrViolation(ex)) throw ex
+        return false
+    }
+    true
+  }
+
+
   def addTenantHost(host: TenantHost) = {
     db.transaction { implicit connection =>
       _insertTenantHost(tenantId, host)
@@ -796,30 +824,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   def lookupOtherTenant(scheme: String, host: String): TenantLookup = {
     // TODO consume quota
     systemDaoSpi.lookupTenant(scheme, host)
-  }
-
-
-  def claimWebsite(): Boolean = {
-    assErrIf(quotaConsumers.roleId.isEmpty, "DwE02kQ5")
-    val roleId = quotaConsumers.roleId.get
-    var updateCount = 0
-
-    db.transaction { implicit connection =>
-      // (I had a look at an exec plan for this stmt, and I think it
-      // won't exec the sub query more than once.)
-      updateCount = db.update("""
-        update DW1_USERS set IS_OWNER = 'T'
-        where TENANT = ? and SNO = ?
-          and 0 = (
-            select count(*) from DW1_USERS
-            where IS_OWNER = 'T'
-              and TENANT = ?)
-        """, List[AnyRef](tenantId, roleId, tenantId))
-
-      assErrIf(updateCount > 1, "DwE03DFW2")
-    }
-
-    return updateCount == 1
   }
 
 
