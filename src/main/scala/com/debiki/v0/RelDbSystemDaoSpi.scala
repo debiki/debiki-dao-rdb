@@ -127,14 +127,18 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
 
 
   def createTenant(name: String): Tenant = {
-    db.transaction { implicit connection =>
-      val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
-      db.update("""
-          insert into DW1_TENANTS (ID, NAME)
-          values (?, ?)
-          """, List(tenantId, name))
-      Tenant(id = tenantId, name = name, hosts = Nil)
-    }
+    db.transaction { _createTenant(name)(_) }
+  }
+
+
+  def _createTenant(name: String)(implicit connection: js.Connection)
+        : Tenant = {
+    val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
+    db.update("""
+        insert into DW1_TENANTS (ID, NAME)
+        values (?, ?)
+        """, List[AnyRef](tenantId, name))
+    Tenant(id = tenantId, name = name, hosts = Nil)
   }
 
 

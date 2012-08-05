@@ -297,18 +297,12 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           // Copy identity name/email/etc fields to the new role.
           // Data in DW1_USERS has precedence over data in the DW1_IDS_*
           // tables, see Debiki for Developers #3bkqz5.
-          val userSno = db.nextSeqNo("DW1_USERS_SNO")
           val idty = loginReq.identity
-          val u =  User(id = userSno.toString, displayName = idty.displayName,
+          val userNoId =  User(id = "?", displayName = idty.displayName,
              email = idty.email, emailNotfPrefs = EmailNotfPrefs.Unspecified,
              country = "", website = "", isSuperAdmin = false)
-          db.update("""
-              insert into DW1_USERS(
-                  TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
-              values (?, ?, ?, ?, ?)""",
-              List(tenantId, userSno.asInstanceOf[AnyRef],
-                  e2n(u.displayName), e2n(u.email), e2n(u.country)))
-          u
+          val userWithId = _insertUser(tenantId, userNoId)
+          userWithId
       }
 
       // Create or update the OpenID/Twitter/etc identity.
@@ -324,28 +318,9 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       // no point in allowing exactly simultaneous logins by one
       // single human.)
 
-      val newIdentitySno: Option[Long] =
-          if (identityInDb.isDefined) None
-          else Some(db.nextSeqNo("DW1_IDS_SNO"))
-
       val identity = (identityInDb, loginReq.identity) match {
         case (None, newNoId: IdentityOpenId) =>
-          // Assign id and create.
-          val nev = newNoId.copy(id = newIdentitySno.get.toString,
-                                 userId = user.id)
-          db.update("""
-              insert into DW1_IDS_OPENID(
-                  SNO, TENANT, USR, USR_ORIG, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
-                  OID_REALM, OID_ENDPOINT, OID_VERSION,
-                  FIRST_NAME, EMAIL, COUNTRY)
-              values (
-                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-              List(newIdentitySno.get.asInstanceOf[AnyRef],
-                  tenantId, nev.userId, nev.userId,
-                  nev.oidClaimedId, e2d(nev.oidOpLocalId), e2d(nev.oidRealm),
-                  e2d(nev.oidEndpoint), e2d(nev.oidVersion),
-                  e2d(nev.firstName), e2d(nev.email), e2d(nev.country)))
-          nev
+          _insertIdentity(tenantId, newNoId.copy(userId = user.id))
         case (Some(old: IdentityOpenId), newNoId: IdentityOpenId) =>
           val nev = newNoId.copy(id = old.id, userId = user.id)
           if (nev != old) {
@@ -381,6 +356,45 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
          isNewRole = userInDb.isEmpty)
     }
   }
+
+
+  private def _insertUser(tenantId: String, userNoId: User)
+        (implicit connection: js.Connection): User = {
+    val userSno = db.nextSeqNo("DW1_USERS_SNO")
+    val user = userNoId.copy(id = userSno.toString)
+    db.update("""
+        insert into DW1_USERS(
+            TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
+        values (?, ?, ?, ?, ?)""",
+        List[AnyRef](tenantId, user.id, e2n(user.displayName),
+           e2n(user.email), e2n(user.country)))
+    user
+  }
+
+
+  private def _insertIdentity(tenantId: String, idtyNoId: Identity)
+        (implicit connection: js.Connection): Identity = {
+    val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
+    idtyNoId match {
+      case oidIdtyNoId: IdentityOpenId =>
+        val idty = oidIdtyNoId.copy(id = newIdentityId)
+        db.update("""
+            insert into DW1_IDS_OPENID(
+                SNO, TENANT, USR, USR_ORIG, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
+                OID_REALM, OID_ENDPOINT, OID_VERSION,
+                FIRST_NAME, EMAIL, COUNTRY)
+            values (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            List[AnyRef](idty.id, tenantId, idty.userId, idty.userId,
+              idty.oidClaimedId, e2d(idty.oidOpLocalId), e2d(idty.oidRealm),
+              e2d(idty.oidEndpoint), e2d(idty.oidVersion),
+              e2d(idty.firstName), e2d(idty.email), e2d(idty.country)))
+        idty
+      case _ =>
+        assErr("DwE03IJL2")
+    }
+  }
+
 
   override def saveLogout(loginId: String, logoutIp: String) {
     db.transaction { implicit connection =>
@@ -754,23 +768,28 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
   def addTenantHost(host: TenantHost) = {
     db.transaction { implicit connection =>
-      val cncl = host.role match {
-        case TenantHost.RoleCanonical => "C"
-        case TenantHost.RoleRedirect => "R"
-        case TenantHost.RoleLink => "L"
-        case TenantHost.RoleDuplicate => "D"
-      }
-      val https = host.https match {
-        case TenantHost.HttpsRequired => "R"
-        case TenantHost.HttpsAllowed => "A"
-        case TenantHost.HttpsNone => "N"
-      }
-      db.update("""
-          insert into DW1_TENANT_HOSTS (TENANT, HOST, CANONICAL, HTTPS)
-          values (?, ?, ?, ?)
-          """,
-          List(tenantId, host.address, cncl, https))
+      _insertTenantHost(tenantId, host)
     }
+  }
+
+
+  private def _insertTenantHost(tenantId: String, host: TenantHost)
+        (implicit connection:  js.Connection) = {
+    val cncl = host.role match {
+      case TenantHost.RoleCanonical => "C"
+      case TenantHost.RoleRedirect => "R"
+      case TenantHost.RoleLink => "L"
+      case TenantHost.RoleDuplicate => "D"
+    }
+    val https = host.https match {
+      case TenantHost.HttpsRequired => "R"
+      case TenantHost.HttpsAllowed => "A"
+      case TenantHost.HttpsNone => "N"
+    }
+    db.update("""
+        insert into DW1_TENANT_HOSTS (TENANT, HOST, CANONICAL, HTTPS)
+        values (?, ?, ?, ?)
+        """, List(tenantId, host.address, cncl, https))
   }
 
 
