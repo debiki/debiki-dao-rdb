@@ -748,6 +748,30 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  def claimWebsite(): Boolean = {
+    assErrIf(quotaConsumers.roleId.isEmpty, "DwE02kQ5")
+    val roleId = quotaConsumers.roleId.get
+    var updateCount = 0
+
+    db.transaction { implicit connection =>
+      // (I had a look at an exec plan for this stmt, and I think it
+      // won't exec the sub query more than once.)
+      updateCount = db.update("""
+        update DW1_USERS set IS_OWNER = 'T'
+        where TENANT = ? and SNO = ?
+          and 0 = (
+            select count(*) from DW1_USERS
+            where IS_OWNER = 'T'
+              and TENANT = ?)
+        """, List[AnyRef](tenantId, roleId, tenantId))
+
+      assErrIf(updateCount > 1, "DwE03DFW2")
+    }
+
+    return updateCount == 1
+  }
+
+
   def checkPagePath(pathToCheck: PagePath): Option[PagePath] = {
     _findCorrectPagePath(pathToCheck)
   }
