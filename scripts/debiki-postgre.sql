@@ -23,6 +23,7 @@ Naming standard
         "__C_NE" check non empty (e.g.:  check (trim(COL) <> ''))
         "__C_N0" check not 0
         "__C_IN" check in (list of allowed values)
+        "__C_B" check in ('T') or check in ('T', 'F')
         "__C_EQ" checks that things are equal
  "DW1_...__U" for unique constraints and unique indexes
  "DW1_...__R__..." for referential constraints
@@ -66,11 +67,23 @@ $ psql --dbname debiki_test;
 DW2_* todo:
 ------------------
 
+Rename TENANTS to WEBSITES.
+Rename TENANT_HOSTS to WEBSITE_ADDRESSES.
+
 Add _ID to all references.
 Rename all GUID/whateverID/e.g. PAID to only "ID"?
-DW2_PAGE_PATHS -> DW2_PAGES, remove DW1_PAGES.
+Rename all EMAIL to EMAIL_ADDR
+DW2_PAGE_PATHS -> DW2_PAGES, remove DW1_PAGES  -- Or don't?? ...(read on)...
+    ... It's actually useful to be able to config how pages are
+    to be looked up? E.g. your.blog/2012/01/02/blog-post-title
+                      or: your.blog/category/music/blog-post-title
 DW2_PAGE_ACTIONS -> DW2_PAGE_POSTS?  PAGE_LOG?  Simply POSTS? :-)
  with PARENT_ID and TARGET_ID
+TENANT -> TENANT_ID
+
+DW1_USERS.SUPERADMIN -> DW1_ROLES.IS_ADMIN
+
+??? TIME --> DATI (date time)?  CDATI, MDATI, PDATI (publ date time)
 
 Use PAGE.ID not SNO.
 
@@ -78,6 +91,9 @@ INBOX_PAGE_ACTIONS -> INBOX_POSTS
 USERS -> ROLES
 
 TENANT.ID >= 3 chars?
+
+Rename constraints to DW1_TENANTS: ... no, DW1_WEBSITES
+    DW1_TNT_ID__C_NE DW1_TNT_ID__C_N0 DW1_TNT_NAME__C_NE
 */
 
 /*
@@ -235,7 +251,7 @@ create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
   TENANT varchar(32)          not null,
   SNO varchar(32)             not null,  -- COULD rename to ID
   DISPLAY_NAME varchar(100),  -- currently null, always (2011-09-17)
-  EMAIL varchar(100),
+  EMAIL varchar(100),   -- COULD rename to EMAIL_ADDR
   COUNTRY varchar(100),
   WEBSITE varchar(100),
   SUPERADMIN varchar(1),  -- SHOULD rename to IS_ADMIN
@@ -286,9 +302,9 @@ create table DW1_LOGINS(  -- logins and logouts
   SNO varchar(32)            not null,  -- COULD rename to ID
   TENANT varchar(32)         not null,
   PREV_LOGIN varchar(32),
-  -- COULD replace ID_TYPE/_SNO with: ID_SIMPLE, ID_OPENID, ID_TWITTER, etc,
-  -- require that exactly one be non-NULL, and create foreign keys to the ID
-  -- tables. That would have avoided a few bugs! and more future bugs too!?
+  -- COULD replace ID_TYPE/_SNO with: ID_UNAU and ID_AU (for OpenID & OAuth),
+  -- require that exactly one be non-NULL, and create foreign keys.
+  -- That would have avoided a few bugs! and more future bugs too!?
   ID_TYPE varchar(10)        not null,
   ID_SNO varchar(32)         not null,
   -- COULD add a USR --> DW1_USERS/ROLES column? so there'd be no need to
@@ -332,7 +348,7 @@ create table DW1_IDS_SIMPLE(  -- abbreviated IDSMPL
   SNO varchar(32)         not null,  -- COULD rename to ID
   NAME varchar(100)       not null,
   -- COULD require like '%@%.%' and update all existing data ... hmm.
-  EMAIL varchar(100)      not null,
+  EMAIL varchar(100)      not null,  -- COULD rename to EMAIL_ADDR
   LOCATION varchar(100)   not null,
   WEBSITE varchar(100)    not null,
   constraint DW1_IDSSIMPLE_SNO__P primary key (SNO),
@@ -352,7 +368,7 @@ create table DW1_IDS_SIMPLE_EMAIL(  -- abbreviated IDSMPLEML
   VERSION char(1) not null,
   -- We might actually attempt to send an email to this address,
   -- if EMAIL_NOTFS is set to 'R'eceive.
-  EMAIL varchar(100) not null,
+  EMAIL varchar(100) not null,  -- COULD rename to EMAIL_ADDR
   -- Email notifications: R = receive, N = do Not receive, F = forbid forever
   EMAIL_NOTFS varchar(1) not null,
   -- Is this PK unnecessary?
@@ -397,7 +413,7 @@ create index DW1_IDSMPLEML_LOGIN on DW1_IDS_SIMPLE_EMAIL (LOGIN);
 -- COULD save Null instead of '-' if data absent, and add not = '' constraints.
 -- (Would DW1_AU_OPENID (AUthentication via OpenID) be a better name?)
 
-create table DW1_IDS_OPENID(
+create table DW1_IDS_OPENID( -- COULD rename to DW1_IDS_AU(thenticated)
   SNO varchar(32)                not null,  -- COULD rename to ID
   TENANT varchar(32)             not null,
   -- When an OpenID identity is created, a User is usually created too.
@@ -406,8 +422,8 @@ create table DW1_IDS_OPENID(
   -- Facebok accounts), each _OPENID row can be remapped to another User.
   -- This is done via the USR row (which is = USR_ORIG if not remapped).
   -- (Not yet implemented though: currently USR = USR_ORIG always.)
-  USR varchar(32)                not null,
-  USR_ORIG varchar(32)           not null,
+  USR varchar(32)                not null, -- COULD rename to USER_ID
+  USR_ORIG varchar(32)           not null, -- COULD rename to USER_ID_ORIG
   OID_CLAIMED_ID varchar(500)    not null, -- Google's ID hashes 200-300 long
   OID_OP_LOCAL_ID varchar(500)   not null,
   OID_REALM varchar(100)         not null,
@@ -415,7 +431,7 @@ create table DW1_IDS_OPENID(
   -- The version is a URL, e.g. "http://specs.openid.net/auth/2.0/server".
   OID_VERSION varchar(100)       not null,
   FIRST_NAME varchar(100)        not null,
-  EMAIL varchar(100)             not null,
+  EMAIL varchar(100)             not null,  -- COULD rename to EMAIL_ADDR
   COUNTRY varchar(100)           not null,
   constraint DW1_IDSOID_SNO__P primary key (SNO),
   constraint DW1_IDSOID_TNT_OID__U
@@ -599,6 +615,7 @@ create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
 
 -- COULD rename to DW1_ACTION_RATINGS.
+-- Include PAGE_ID so all ratings on a single page can be loaded in one query.
 create table DW1_PAGE_RATINGS(  -- abbreviated ARTS? PRATINGS deprctd.
   TENANT varchar(32) not null,
   PAGE_ID varchar(32) not null,
@@ -708,7 +725,7 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   -- COULD rename to EMAIL_ID, because the email might actually not have
   -- been sent.
   EMAIL_SENT varchar(32) default null, -- references DW1_EMAILS_OUT.ID
-  EMAIL_LINK_CLICKED timestamp default null,
+  EMAIL_LINK_CLICKED timestamp default null,  -- COULD rename to ...CLICK_DATI
   -- WEB_LINK_SHOWN timestamp,
   -- WEB_LINK_CLICKED timestamp,
   DEBUG varchar(200) default null,
