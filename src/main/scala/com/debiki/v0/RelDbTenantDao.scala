@@ -303,6 +303,61 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  private def _loadLoginById(loginId: String)
+        (implicit connection: js.Connection): Option[Login] = {
+    val logins = _loadLogins(byLoginId = loginId)
+    assErrIf(logins.length > 1, "DwE47IB6")
+    logins.headOption
+  }
+
+
+  private def _loadLogins(byLoginId: String = null, onPageGuid: String = null)
+        (implicit connection: js.Connection): List[Login] = {
+
+    assert((byLoginId ne null) ^ (onPageGuid ne null))
+
+    var logins = List[Login]()
+    val selectList = """
+        select
+            l.SNO LOGIN_SNO, l.PREV_LOGIN,
+            l.ID_TYPE, l.ID_SNO,
+            l.LOGIN_IP, l.LOGIN_TIME,
+            l.LOGOUT_IP, l.LOGOUT_TIME
+        """
+
+    val (fromWhereClause, pageOrLoginId) =
+      if (onPageGuid ne null)
+        ("""from DW1_PAGE_ACTIONS a, DW1_LOGINS l
+          where a.TENANT = ?
+            and a.PAGE_ID = ?
+            and l.TENANT = a.TENANT
+            and l.SNO = a.LOGIN""", onPageGuid)
+      else
+        ("""from DW1_LOGINS l
+          where l.TENANT = ?
+            and l.SNO = ?""", byLoginId)
+
+    db.queryAtnms(selectList + fromWhereClause,
+        List[AnyRef](tenantId, pageOrLoginId), rs => {
+      while (rs.next) {
+        val loginId = rs.getLong("LOGIN_SNO").toString
+        val prevLogin = Option(rs.getLong("PREV_LOGIN")).map(_.toString)
+        val ip = rs.getString("LOGIN_IP")
+        val date = ts2d(rs.getTimestamp("LOGIN_TIME"))
+        // ID_TYPE need not be remembered, since each ID_SNO value
+        // is unique over all DW1_LOGIN_OPENID/SIMPLE/... tables.
+        // (So you'd find the appropriate IdentitySimple/OpenId by doing
+        // People.identities.find(_.id = x).)
+        val idId = rs.getLong("ID_SNO").toString
+        logins ::= Login(id = loginId, prevLoginId = prevLogin, ip = ip,
+          date = date, identityId = idId)
+      }
+    })
+
+    logins
+  }
+
+
   def loadIdtyDetailsAndUser(forLoginId: String = null,
         forIdentity: Identity = null): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
@@ -638,33 +693,9 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         Connection.TRANSACTION_SERIALIZABLE)
       */
 
-    // Load all logins for pageGuid.
-    var logins = List[Login]()
-    db.queryAtnms("""
-        select
-            l.SNO LOGIN_SNO, l.PREV_LOGIN,
-            l.ID_TYPE, l.ID_SNO,
-            l.LOGIN_IP, l.LOGIN_TIME,
-            l.LOGOUT_IP, l.LOGOUT_TIME
-        from DW1_PAGE_ACTIONS a, DW1_LOGINS l
-        where a.TENANT = ?
-          and a.PAGE_ID = ?
-          and l.TENANT = a.TENANT
-          and l.SNO = a.LOGIN""", List(tenantId, pageGuid), rs => {
-      while (rs.next) {
-        val loginId = rs.getLong("LOGIN_SNO").toString
-        val prevLogin = Option(rs.getLong("PREV_LOGIN")).map(_.toString)
-        val ip = rs.getString("LOGIN_IP")
-        val date = ts2d(rs.getTimestamp("LOGIN_TIME"))
-        // ID_TYPE need not be remembered, since each ID_SNO value
-        // is unique over all DW1_LOGIN_OPENID/SIMPLE/... tables.
-        // (So you'd find the appropriate IdentitySimple/OpenId by doing
-        // People.identities.find(_.id = x).)
-        val idId = rs.getLong("ID_SNO").toString
-        logins ::= Login(id = loginId, prevLoginId = prevLogin, ip = ip,
-                        date = date, identityId = idId)
-      }
-    })
+    // COULD reuse connection throughout function, make it implicit in arg.
+    var logins: List[Login] =
+      db.withConnection { _loadLogins(onPageGuid = pageGuid)(_) }
 
     // Load identities and users.
     val (identities, users) = _loadIdtysAndUsers(onPageWithId = pageGuid)
