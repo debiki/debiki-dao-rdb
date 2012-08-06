@@ -375,32 +375,50 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
   private def _loadIdtyDetailsAndUser(forLoginId: String = null,
         forIdentity: Identity = null)(implicit connection: js.Connection)
         : (Option[Identity], Option[User]) = {
 
-    // Load the User, if any, and the OpenID/Twitter/Facebook identity id:
-    // Construct a query that joins the relevant DW1_IDS_<id-type> table
-    // with DW1_USERS.
+    assert((forIdentity eq null) ^ (forLoginId eq null))
+    assert((forIdentity eq null) || forIdentity.isInstanceOf[IdentityOpenId])
 
-    var sqlSelectList = """
+    val identityOpt = Option(forIdentity)
+    val loginOpt: Option[Login] =
+      if (forLoginId eq null) None
+      else Some(_loadLoginById(forLoginId) getOrElse {
+        return None -> None
+      })
+
+    var sqlSelectFrom = """
         select
-            u.SNO USER_SNO,
-            u.DISPLAY_NAME,
-            u.EMAIL,
-            u.EMAIL_NOTFS,
-            u.COUNTRY,
-            u.WEBSITE,
-            u.SUPERADMIN,
-            i.SNO IDENTITY_SNO,
-            i.USR,
-            i.USR_ORIG,
-                        """
+            u.SNO u_id,
+            u.DISPLAY_NAME u_disp_name,
+            u.EMAIL u_email,
+            u.EMAIL_NOTFS u_email_notfs,
+            u.COUNTRY u_country,
+            u.WEBSITE u_website,
+            u.SUPERADMIN u_superadmin,
+            i.SNO i_id,
+            i.OID_CLAIMED_ID,
+            i.OID_OP_LOCAL_ID,
+            i.OID_REALM,
+            i.OID_ENDPOINT,
+            i.OID_VERSION,
+            i.FIRST_NAME i_first_name,
+            i.EMAIL i_email,
+            i.COUNTRY i_country
+          from DW1_IDS_OPENID i inner join DW1_USERS u
+            on i.TENANT = u.TENANT
+            and i.USR = u.SNO
+          """
 
-    // SQL for selecting User and Identity. Depends on the Identity type.
-    val (sqlFromWhere, bindVals) = forIdentity match {
-      case oid: IdentityOpenId =>
+    val (whereClause, bindVals) = (identityOpt, loginOpt) match {
+      case (None, Some(login: Login)) =>
+        ("""where i.TENANT = ? and i.SNO = ?""",
+           List(tenantId, login.identityId))
 
+      case (Some(oid: IdentityOpenId), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
         // address instead. (With Google OpenID, the email address can be
         // trusted — this is not the case, however, in general.
@@ -416,38 +434,19 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           // with Googles endpoint? I guess the Relying Party impl doesn't
           // allow this but anyway, I'd like to know for sure.
           if (oid.isGoogleLogin)
-            ("(i.OID_ENDPOINT = '"+ IdentityOpenId.GoogleEndpoint +
-               "') and i.EMAIL = ?", oid.email)
+            ("i.OID_ENDPOINT = '"+ IdentityOpenId.GoogleEndpoint +
+               "' and i.EMAIL = ?", oid.email)
           else
             ("i.OID_CLAIMED_ID = ?", oid.oidClaimedId)
         }
-
-        ("""i.OID_OP_LOCAL_ID,
-            i.OID_REALM,
-            i.OID_ENDPOINT,
-            i.OID_VERSION,
-            i.FIRST_NAME,
-            i.EMAIL,
-            i.COUNTRY
-          from DW1_IDS_OPENID i, DW1_USERS u
-            -- in the future: could join with DW1_IDS_OPENID_ATRS,
-            -- which would store the FIRST_NAME, EMAIL, COUNTRY
-            -- that the OpenID provider sent, originally (but which the
-            -- user might have since changed).
-          where i.TENANT = ?
+        ("""where i.TENANT = ?
             and """+ claimedIdOrEmailCheck +"""
-            and i.TENANT = u.TENANT -- (not needed, u.SNO is unique)
-            and i.USR = u.SNO
-          """,
-           List(tenantId, idOrEmail))
+          """, List(tenantId, idOrEmail))
 
-      // case fid: IdentityTwitter => (SQL for Twitter identity table)
-      // case fid: IdentityFacebook => (...)
-      case _: IdentitySimple => assErr("DwE98239k2a2")
-      case _: IdentityEmailId => assErr("DwE8k932322")
+      case _ => assErr("DwE98239k2a2")
     }
 
-    db.query(sqlSelectList + sqlFromWhere, bindVals, rs => {
+    db.query(sqlSelectFrom + whereClause, bindVals, rs => {
       if (!rs.next)
         return None -> None
 
@@ -456,36 +455,30 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       // functions.
 
       val userInDb = User(
-        id = rs.getLong("USER_SNO").toString,
-        displayName = n2e(rs.getString("DISPLAY_NAME")),
-        email = n2e(rs.getString("EMAIL")),
-        emailNotfPrefs = _toEmailNotfs(
-          rs.getString("EMAIL_NOTFS")),
-        country = n2e(rs.getString("COUNTRY")),
-        website = n2e(rs.getString("WEBSITE")),
-        isSuperAdmin = rs.getString("SUPERADMIN") == "T")
-      val identityInDb = forIdentity match {
-        case iod: IdentityOpenId =>
-          IdentityOpenId(
-            id = rs.getLong("IDENTITY_SNO").toString,
+        id = rs.getLong("u_id").toString,
+        displayName = n2e(rs.getString("u_disp_name")),
+        email = n2e(rs.getString("u_email")),
+        emailNotfPrefs = _toEmailNotfs(rs.getString("u_email_notfs")),
+        country = n2e(rs.getString("u_country")),
+        website = n2e(rs.getString("u_website")),
+        isSuperAdmin = rs.getString("u_superadmin") == "T")
+      val identityInDb =
+        IdentityOpenId(
+            id = rs.getLong("i_id").toString,
             userId = userInDb.id,
             // COULD use d2e here, or n2e if I store Null instead of '-'.
             oidEndpoint = rs.getString("OID_ENDPOINT"),
             oidVersion = rs.getString("OID_VERSION"),
             oidRealm = rs.getString("OID_REALM"),
-            oidClaimedId = iod.oidClaimedId,
+            oidClaimedId = rs.getString("OID_CLAIMED_ID"),
             oidOpLocalId = rs.getString("OID_OP_LOCAL_ID"),
-            firstName = rs.getString("FIRST_NAME"),
-            email = rs.getString("EMAIL"),
-            country = rs.getString("COUNTRY"))
-        // case _: IdentityTwitter =>
-        // case _: IdentityFacebook =>
-        case sid: IdentitySimple => assErr("DwE8451kx35")
-        case _: IdentityEmailId => assErr("DwE8Ik3f57")
-      }
+            firstName = rs.getString("i_first_name"),
+            email = rs.getString("i_email"),
+            country = rs.getString("i_country"))
 
       assErrIf(rs.next, "DwE53IK24", "More that one matching OpenID "+
-         "identity, when looking up: "+ forIdentity)
+         "identity, when looking up identity: "+ identityOpt +
+         ", login: "+ loginOpt)
 
       Some(identityInDb) -> Some(userInDb)
     })
