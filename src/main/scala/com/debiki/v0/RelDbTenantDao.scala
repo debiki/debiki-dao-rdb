@@ -195,7 +195,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           val idty = loginReq.identity
           val userNoId =  User(id = "?", displayName = idty.displayName,
              email = idty.email, emailNotfPrefs = EmailNotfPrefs.Unspecified,
-             country = "", website = "", isSuperAdmin = false)
+             country = "", website = "", isSuperAdmin = false, isOwner = false)
           val userWithId = _insertUser(tenantId, userNoId)
           userWithId
       }
@@ -244,10 +244,12 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     val user = userNoId.copy(id = userSno.toString)
     db.update("""
         insert into DW1_USERS(
-            TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY)
-        values (?, ?, ?, ?, ?)""",
+            TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY,
+            SUPERADMIN, IS_OWNER)
+        values (?, ?, ?, ?, ?, ?, ?)""",
         List[AnyRef](tenantId, user.id, e2n(user.displayName),
-           e2n(user.email), e2n(user.country)))
+           e2n(user.email), e2n(user.country),
+           tOrNull(user.isSuperAdmin), tOrNull(user.isOwner)))
     user
   }
 
@@ -809,10 +811,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
   def createWebsite(name: String, address: String, creatorIpAddr: String,
         ownerIdentity: IdentityOpenId, ownerRole: User): Boolean = {
-
-    // SHOULD set IS_OWNER to 'T' in DW1_USERS!!!!
-    // And add isOwner field to User.
-
     try {
       db.transaction { implicit connection =>
         val newTenant = systemDaoSpi._createTenant(name)
@@ -821,7 +819,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         val newHostCount = _insertTenantHost(newTenant.id, newHost)
         assErrIf(newHostCount != 1, "DwE09KRF3")
         val ownerRoleAtNewWebsite = _insertUser(newTenant.id,
-          ownerRole.copy(id = "?"))
+          ownerRole.copy(id = "?",
+            isSuperAdmin = true, isOwner = true))
         val ownerIdtyAtNewWebsite = _insertIdentity(newTenant.id,
           ownerIdentity.copy(id = "?", userId = ownerRoleAtNewWebsite.id))
       }
