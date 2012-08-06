@@ -223,24 +223,9 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
               assErrIf(nev.email != old.email || !old.isGoogleLogin, "DwE3Bz6")
             else
               assErrIf(nev.oidClaimedId != old.oidClaimedId, "DwE73YQ2")
-
-            db.update("""
-                update DW1_IDS_OPENID set
-                    USR = ?, OID_CLAIMED_ID = ?,
-                    OID_OP_LOCAL_ID = ?, OID_REALM = ?,
-                    OID_ENDPOINT = ?, OID_VERSION = ?,
-                    FIRST_NAME = ?, EMAIL = ?, COUNTRY = ?
-                where SNO = ? and TENANT = ?
-                """,
-                List(nev.userId, nev.oidClaimedId,
-                  e2d(nev.oidOpLocalId), e2d(nev.oidRealm),
-                  e2d(nev.oidEndpoint), e2d(nev.oidVersion),
-                  e2d(nev.firstName), e2d(nev.email), e2d(nev.country),
-                  nev.id, tenantId))
+            _updateIdentity(nev)
           }
           nev
-        // case (..., IdentityTwitter) => ...
-        // case (..., IdentityFacebook) => ...
         case (_, _: IdentitySimple) => assErr("DwE83209qk12")
         case (_, _: IdentityEmailId) => assErr("DwE83kIR31")
       }
@@ -288,6 +273,24 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       case _ =>
         assErr("DwE03IJL2")
     }
+  }
+
+
+  private def _updateIdentity(identity: IdentityOpenId)
+        (implicit connection: js.Connection) {
+    db.update("""
+      update DW1_IDS_OPENID set
+          USR = ?, OID_CLAIMED_ID = ?,
+          OID_OP_LOCAL_ID = ?, OID_REALM = ?,
+          OID_ENDPOINT = ?, OID_VERSION = ?,
+          FIRST_NAME = ?, EMAIL = ?, COUNTRY = ?
+      where SNO = ? and TENANT = ?
+      """,
+      List[AnyRef](identity.userId, identity.oidClaimedId,
+        e2d(identity.oidOpLocalId), e2d(identity.oidRealm),
+        e2d(identity.oidEndpoint), e2d(identity.oidVersion),
+        e2d(identity.firstName), e2d(identity.email), e2d(identity.country),
+        identity.id, tenantId))
   }
 
 
