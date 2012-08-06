@@ -319,7 +319,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     assert((byLoginId ne null) ^ (onPageGuid ne null))
 
-    var logins = List[Login]()
     val selectList = """
         select
             l.SNO LOGIN_SNO, l.PREV_LOGIN,
@@ -339,6 +338,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         ("""from DW1_LOGINS l
           where l.TENANT = ?
             and l.SNO = ?""", byLoginId)
+
+    var logins = List[Login]()
 
     db.queryAtnms(selectList + fromWhereClause,
         List[AnyRef](tenantId, pageOrLoginId), rs => {
