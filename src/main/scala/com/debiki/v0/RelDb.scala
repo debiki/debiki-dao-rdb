@@ -163,13 +163,26 @@ class RelDb(val server: String,
 
 
   def transaction[T](f: (js.Connection) => T): T = {
+    _withConnection(f, commit = true)
+  }
+
+
+  def withConnection[T](f: (js.Connection) => T): T = {
+    _withConnection(f, commit = false)
+  }
+
+
+  private def _withConnection[T](f: (js.Connection) => T, commit: Boolean)
+        : T = {
     var conn: js.Connection = null
     var committed = false
     try {
       conn = _getConnection()
       val result = f(conn)
-      conn.commit()
-      committed = true
+      if (commit) {
+        conn.commit()
+        committed = true
+      }
       result
     } catch {
       case e: Exception =>
@@ -177,7 +190,7 @@ class RelDb(val server: String,
         //  classNameOf(e) +": "+ e.getMessage.trim)
         throw e
     } finally {
-      _closeEtc(conn, committed = committed)
+      _closeEtc(conn, rollback = commit && !committed)
     }
   }
 
@@ -251,7 +264,7 @@ class RelDb(val server: String,
        throw ex
     } finally {
       if (pstmt ne null) pstmt.close()
-      if (isAutonomous) _closeEtc(conn2, committed = committed)
+      if (isAutonomous) _closeEtc(conn2, rollback = !committed)
     }
   }
 
@@ -313,7 +326,7 @@ class RelDb(val server: String,
         throw verboseEx
     } finally {
       if (pstmt ne null) pstmt.close()
-      if (isAutonomous) _closeEtc(conn2, committed = committed)
+      if (isAutonomous) _closeEtc(conn2, rollback = !committed)
     }
   }
 
@@ -341,7 +354,7 @@ class RelDb(val server: String,
     conn
   }
 
-  private def _closeEtc(conn: js.Connection, committed: Boolean) {
+  private def _closeEtc(conn: js.Connection, rollback: Boolean) {
     // Need to rollback before closing? Read:
     // http://download.oracle.com/javase/6/docs/api/java/sql/Connection.html:
     // "It is strongly recommended that an application explicitly commits
@@ -349,7 +362,7 @@ class RelDb(val server: String,
     // If the close method is called and there is an active transaction,
     // the results are implementation-defined."
     if (conn eq null) return
-    if (!committed) conn.rollback()
+    if (rollback) conn.rollback()
     conn.setAutoCommit(true)  // reset to default mode
     conn.close()
   }
