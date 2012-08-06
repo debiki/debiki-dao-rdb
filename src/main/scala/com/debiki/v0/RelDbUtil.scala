@@ -22,8 +22,35 @@ object RelDbUtil {
       displayName = identity.name, email = identity.email,
       emailNotfPrefs = emailNotfPrefs,
       country = "",
-      website = identity.website, isSuperAdmin = false)
+      website = identity.website, isSuperAdmin = false, isOwner = false)
   }
+
+
+  val _UserSelectListItems =
+    // (These u_* item names are relied on e.g. by RelDbSystemDaoSpi.loadUsers.)
+    """u.SNO u_id,
+      |u.DISPLAY_NAME u_disp_name,
+      |u.EMAIL u_email,
+      |u.EMAIL_NOTFS u_email_notfs,
+      |u.COUNTRY u_country,
+      |u.WEBSITE u_website,
+      |u.SUPERADMIN u_superadmin,
+      |u.IS_OWNER u_is_owner""".stripMargin
+
+
+  def _User(rs: js.ResultSet) =
+    User(
+      // Use dn2e not n2e. ((So works if joined w/ DW1_IDS_SIMPLE, which
+      // uses '-' instead of null to indicate absence of email address etc.
+      // See usage of this function in RelDbSystemDaoSpi.loadUsers(). ))
+      id = rs.getString("u_id"),
+      displayName = dn2e(rs.getString("u_disp_name")),
+      email = dn2e(rs.getString("u_email")),
+      emailNotfPrefs = _toEmailNotfs(rs.getString("u_email_notfs")),
+      country = dn2e(rs.getString("u_country")),
+      website = dn2e(rs.getString("u_website")),
+      isSuperAdmin = rs.getString("u_superadmin") == "T",
+      isOwner = rs.getString("u_is_owner") == "T")
 
 
   def _PagePath(resultSet: js.ResultSet, tenantId: String) =

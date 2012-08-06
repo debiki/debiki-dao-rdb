@@ -393,13 +393,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     var sqlSelectFrom = """
         select
-            u.SNO u_id,
-            u.DISPLAY_NAME u_disp_name,
-            u.EMAIL u_email,
-            u.EMAIL_NOTFS u_email_notfs,
-            u.COUNTRY u_country,
-            u.WEBSITE u_website,
-            u.SUPERADMIN u_superadmin,
+            """+ _UserSelectListItems +""",
             i.SNO i_id,
             i.OID_CLAIMED_ID,
             i.OID_OP_LOCAL_ID,
@@ -452,17 +446,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         return None -> None
 
       // Warning: Some dupl code in _loadIdtysAndUsers:
-      // COULD break out construction of User & Identity to reusable
+      // COULD break out construction of Identity to reusable
       // functions.
 
-      val userInDb = User(
-        id = rs.getLong("u_id").toString,
-        displayName = n2e(rs.getString("u_disp_name")),
-        email = n2e(rs.getString("u_email")),
-        emailNotfPrefs = _toEmailNotfs(rs.getString("u_email_notfs")),
-        country = n2e(rs.getString("u_country")),
-        website = n2e(rs.getString("u_website")),
-        isSuperAdmin = rs.getString("u_superadmin") == "T")
+      val userInDb = _User(rs)
       val identityInDb =
         IdentityOpenId(
             id = rs.getLong("i_id").toString,
@@ -589,14 +576,15 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
               -- Can only be non-null for IdentitySimple.
               when i.I_EMAIL_NOTFS is not null then i.I_EMAIL_NOTFS
               else u.EMAIL_NOTFS end  -- might be null
-              EMAIL_NOTFS,
+              u_email_notfs,
             i.I_WHERE, i.I_WEBSITE,
-            u.SNO U_ID,
-            u.DISPLAY_NAME U_DISP_NAME,
-            u.EMAIL U_EMAIL,
-            u.COUNTRY U_COUNTRY,
-            u.WEBSITE U_WEBSITE,
-            u.SUPERADMIN U_SUPERADMIN
+            u.SNO u_id,
+            u.DISPLAY_NAME u_disp_name,
+            u.EMAIL u_email,
+            u.COUNTRY u_country,
+            u.WEBSITE u_website,
+            u.SUPERADMIN u_superadmin,
+            u.IS_OWNER u_is_owner
         from identities i left join DW1_USERS u on
               u.SNO = i.I_USR and
               u.TENANT = ?
@@ -605,18 +593,18 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       var identities = List[Identity]()
       while (rs.next) {
         val idId = rs.getString("I_ID")
-        var userId = rs.getLong("U_ID").toString  // 0 if null
+        var userId = rs.getLong("u_id").toString  // 0 if null
         var user: Option[User] = None
         assErrIf3(idId isEmpty, "DwE392Qvc89")
-        val emailPrefs = _toEmailNotfs(rs.getString("EMAIL_NOTFS"))
 
         // Warning: Some dupl code in _loadIdtyDetailsAndUser:
-        // COULD break out construction of User & Identity to reusable
+        // COULD break out construction of Identity to reusable
         // functions.
 
         identities ::= (rs.getString("ID_TYPE") match {
           case "Simple" =>
             userId = _dummyUserIdFor(idId)
+            val emailPrefs = _toEmailNotfs(rs.getString("u_email_notfs"))
             val i = IdentitySimple(
                 id = idId,
                 userId = userId,
@@ -643,14 +631,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
                 country = n2e(rs.getString("I_WHERE")))
         })
 
-        if (user isEmpty) user = Some(User(
-            id = userId,
-            displayName = n2e(rs.getString("U_DISP_NAME")),
-            email = n2e(rs.getString("U_EMAIL")),
-            emailNotfPrefs = emailPrefs,
-            country = n2e(rs.getString("U_COUNTRY")),
-            website = n2e(rs.getString("U_WEBSITE")),
-            isSuperAdmin = rs.getString("U_SUPERADMIN") == "T"))
+        if (user isEmpty)
+          user = Some(_User(rs))
 
         if (!usersById.contains(userId)) usersById(userId) = user.get
       }

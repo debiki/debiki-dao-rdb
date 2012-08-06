@@ -55,6 +55,8 @@ object RelDb {
   def ts2d(ts: js.Timestamp) =
      (ts eq null) ? (null: ju.Date) | (new ju.Date(ts.getTime))
 
+  def tOrNull(bool: Boolean) = if (bool) "T" else NullVarchar
+
   def isUniqueConstrViolation(sqlException: js.SQLException): Boolean = {
     // This status code means "A violation of the constraint imposed
     // by a unique index or a unique constraint occurred".

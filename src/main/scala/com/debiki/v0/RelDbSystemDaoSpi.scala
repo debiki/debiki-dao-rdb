@@ -45,11 +45,12 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
           : (String, List[String]) = {
       incIdCount(idsUnau)
       val inList = idsUnau.map(_ => "?").mkString(",")
+      // Use "u_*" select list item names, so works with _User(result-set).
       val q = """
          select
-            e.TENANT, '-'||s.SNO user_id, s.NAME DISPLAY_NAME,
-            s.EMAIL, e.EMAIL_NOTFS, s.LOCATION COUNTRY,
-            s.WEBSITE, 'F' SUPERADMIN
+            e.TENANT, '-'||s.SNO u_id, s.NAME u_disp_name,
+            s.EMAIL u_email, e.EMAIL_NOTFS u_email_notfs, s.LOCATION u_country,
+            s.WEBSITE u_website, 'F' u_superadmin, 'F' u_is_owner
          from
            DW1_IDS_SIMPLE s left join DW1_IDS_SIMPLE_EMAIL e
            on s.EMAIL = e.EMAIL and e.TENANT = ?
@@ -65,12 +66,10 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
       incIdCount(idsAu)
       val inList = idsAu.map(_ => "?").mkString(",")
       val q = """
-         select TENANT, SNO user_id, DISPLAY_NAME,
-            EMAIL, EMAIL_NOTFS, COUNTRY,
-            WEBSITE, SUPERADMIN
-         from DW1_USERS
-         where TENANT = ?
-         and SNO in (""" + inList +")"
+         select u.TENANT, """+ _UserSelectListItems +"""
+         from DW1_USERS u
+         where u.TENANT = ?
+         and u.SNO in (""" + inList +")"
       (q, tenantId :: idsAu)
     }
 
@@ -109,15 +108,7 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
         // users use "-" as placeholder for "nothing specified" -- so those
         // values are indexed (since sql null isn't).
         // Authenticated users, however, currently use sql null for nothing.
-        val user = User(
-           id = rs.getString("user_id"),
-           displayName = dn2e(rs.getString("DISPLAY_NAME")),
-           email = dn2e(rs.getString("EMAIL")),
-           emailNotfPrefs = _toEmailNotfs(rs.getString("EMAIL_NOTFS")),
-           country = dn2e(rs.getString("COUNTRY")),
-           website = dn2e(rs.getString("WEBSITE")),
-           isSuperAdmin = rs.getString("SUPERADMIN") == "T")
-
+        val user = _User(rs)
         usersByTenantAndId = usersByTenantAndId + ((tenantId, user.id) -> user)
       }
     })
