@@ -141,12 +141,35 @@ create table DW1_TENANTS(
   ID varchar(32) not null,
   NAME varchar(100) not null,
   CTIME timestamp default now() not null,
+  -- TODO prod, done test, dev: alter table DW1_TENANTS add column
+  CREATOR_IP varchar(39),
+  CREATOR_TENANT_ID varchar(32),
+  CREATOR_LOGIN_ID varchar(32),
+  CREATOR_ROLE_ID varchar(32),
+  ----
   constraint DW1_TENANTS_ID__P primary key (ID),
   constraint DW1_TENANTS_NAME__U unique (NAME),
+  -- TODO prod, done dev, test: alter table DW1_TENANTS add
+  constraint DW1_TENANTS_CREATOR__R__TNTS -- ix DW1_TENANTS_CREATORROLE
+      foreign key (CREATOR_TENANT_ID)
+      references DW1_TENANTS(ID) deferrable,
+  ----
+  -- Foreign keys for login and role ids are added later, when referree
+  -- tables have been created (DW1_USERS/ROLES and DW1_LOGINS).
   constraint DW1_TNT_ID__C_NE check (trim(ID) <> ''),
   constraint DW1_TNT_ID__C_N0 check (ID <> '0'),
   constraint DW1_TNT_NAME__C_NE check (trim(NAME) <> '')
 );
+
+-- TODO prod, done test, dev:
+create index DW1_TENANTS_CREATORIP on DW1_TENANTS(CREATOR_IP);
+-- Used by FK DW1_TENANTS_CREATOR__R__LOGINS (couldn't create it though)
+create index DW1_TENANTS_CREATORLOGIN
+    on DW1_TENANTS(CREATOR_TENANT_ID, CREATOR_LOGIN_ID);
+-- Used by two FKs: to DW1_USERS, and from DW1_TENANTS to itself.
+create index DW1_TENANTS_CREATORROLE
+    on DW1_TENANTS(CREATOR_TENANT_ID, CREATOR_ROLE_ID);
+-----
 
 -- The tenant id is a varchar2, although it's currently assigned to from
 -- this number sequence.
@@ -293,6 +316,15 @@ alter table DW1_USERS add constraint DW1_USERS_COUNTRY__C
 alter table DW1_USERS add constraint DW1_USERS_WEBSITE__C
     check (WEBSITE <> '');
 
+-- Foreign key from DW1_TENANTS to DW1_USERS / DW1_ROLES.
+-- TODO prod, done test, dev:
+alter table DW1_TENANTS
+  add constraint DW1_TENANTS_CREATOR__R__ROLES -- ix DW1_TENANTS_CREATORROLE
+    foreign key (CREATOR_TENANT_ID, CREATOR_ROLE_ID)
+    references DW1_USERS(TENANT, SNO) deferrable;
+----
+
+
 -- create index DW1_USERS_TNT_NAME_EMAIL
 --  on DW1_USERS(TENANT, DISPLAY_NAME, EMAIL);
 
@@ -330,6 +362,13 @@ create index DW1_LOGINS_TNT on DW1_LOGINS(TENANT);
 create index DW1_LOGINS_PREVL on DW1_LOGINS(PREV_LOGIN);
 
 create sequence DW1_LOGINS_SNO start with 10;
+
+-- Not currently possible since DW1_LOGINS' PK doesn't include TENANT_ID.
+--alter table DW1_TENANTS
+--  add constraint DW1_TENANTS_CREATOR__R__LOGINS -- ix DW1_TENANTS_CREATORLOGIN
+--  foreign key (CREATOR_TENANT_ID, CREATOR_LOGIN_ID)
+--  references DW1_LOGINS(TENANT, SNO) deferrable;
+
 
 -- For usage by both _IDS_SIMPLE and _OPENID, so a given identity-SNO
 -- is found in only one of _SIMPLE and _OPENID.
