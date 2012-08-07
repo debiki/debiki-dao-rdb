@@ -1,0 +1,30 @@
+
+
+I'll probably *NOT* do as described below.
+--------
+create table DW1_TENANT_OWNERS(
+  OWNED_TENANT_ID varchar(32) not null,
+  OWNER_LOGIN_TENANT_ID varchar(32) not null,
+  OWNER_LOGIN_ROLE_ID varchar(32) not null,
+  CTIME timestamp default now() not null,
+);
+
+-- Perhaps in the future, make it possible with superadmins for a restricted
+-- group of websites:
+--   A superadmin with LOGIN_TENANT_ID = X can manage all tenants owned by
+--   owners with DW1_TENANT_OWNERS.LOGIN_TENANT_ID = X, but no
+--   other tenants. So, for example, if you are a www.example.com superadmin,
+--   you may manage all tenants created from www.ex.com. But not
+--   tenants created from ex2.com (unless ex2.com was created via www.ex.com
+--   "recursively").
+-- But for now: Everything will be created via www.debiki.com, so superadmins
+-- will have access to exactly everything.
+/*
+create table DW1_SUPERADMINS(
+  LOGIN_TENANT_ID varchar(32) not null,
+  LOGIN_ROLE_ID varchar(32) not null,
+  CTIME timestamp default now() not null,
+);
+*/
+--------
+
