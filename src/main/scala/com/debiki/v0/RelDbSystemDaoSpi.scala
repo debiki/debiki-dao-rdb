@@ -118,18 +118,16 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
 
 
   def createTenant(name: String): Tenant = {
-    db.transaction { _createTenant(name)(_) }
-  }
-
-
-  def _createTenant(name: String)(implicit connection: js.Connection)
-        : Tenant = {
-    val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
-    db.update("""
+    db.transaction { implicit connection =>
+      val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
+      db.update("""
         insert into DW1_TENANTS (ID, NAME)
         values (?, ?)
         """, List[AnyRef](tenantId, name))
-    Tenant(id = tenantId, name = name, hosts = Nil)
+      Tenant(id = tenantId, name = name, creatorIp = "",
+         creatorTenantId = "", creatorLoginId = "",
+         creatorRoleId = "", hosts = Nil)
+    }
   }
 
 
@@ -157,14 +155,23 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
 
     var tenants = List[Tenant]()
     db.queryAtnms("""
-        select ID, NAME from DW1_TENANTS where ID = ?
+        select ID, NAME, CREATOR_IP, CREATOR_TENANT_ID,
+            CREATOR_LOGIN_ID, CREATOR_ROLE_ID
+        from DW1_TENANTS where ID = ?
         """,
         List(tenantIds.head),
         rs => {
       while (rs.next) {
         val tenantId = rs.getString("ID")
         val hosts = hostsByTenantId(tenantId)
-        tenants ::= Tenant(tenantId, name = rs.getString("NAME"), hosts = hosts)
+        tenants ::= Tenant(
+          id = tenantId,
+          name = rs.getString("NAME"),
+          creatorIp = rs.getString("CREATOR_IP"),
+          creatorTenantId = rs.getString("CREATOR_TENANT_ID"),
+          creatorLoginId = rs.getString("CREATOR_LOGIN_ID"),
+          creatorRoleId = rs.getString("CREATOR_ROLE_ID"),
+          hosts = hosts)
       }
     })
     tenants

@@ -809,11 +809,16 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def createWebsite(name: String, address: String, creatorIpAddr: String,
-        ownerIdentity: IdentityOpenId, ownerRole: User): Boolean = {
+  def createWebsite(name: String, address: String, ownerIp: String,
+        ownerLoginId: String, ownerIdentity: IdentityOpenId, ownerRole: User)
+        : Option[Tenant] = {
     try {
       db.transaction { implicit connection =>
-        val newTenant = systemDaoSpi._createTenant(name)
+        val newTenantNoId = Tenant(id = "?", name = name,
+           creatorIp = ownerIp, creatorTenantId = tenantId,
+           creatorLoginId = ownerLoginId, creatorRoleId = ownerRole.id,
+           hosts = Nil)
+        val newTenant = _createTenant(newTenantNoId)
         val newHost = TenantHost(address, TenantHost.RoleCanonical,
           TenantHost.HttpsNone)
         val newHostCount = _insertTenantHost(newTenant.id, newHost)
@@ -823,14 +828,31 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             isSuperAdmin = true, isOwner = true))
         val ownerIdtyAtNewWebsite = _insertIdentity(newTenant.id,
           ownerIdentity.copy(id = "?", userId = ownerRoleAtNewWebsite.id))
+        Some(newTenant.copy(hosts = List(newHost)))
       }
     }
     catch {
       case ex: js.SQLException =>
         if (!isUniqueConstrViolation(ex)) throw ex
-        return false
+        None
     }
-    true
+  }
+
+
+  private def _createTenant(tenantNoId: Tenant)
+        (implicit connection: js.Connection): Tenant = {
+    assErrIf(tenantNoId.id != "?", "DwE91KB2")
+    val tenant = tenantNoId.copy(
+      id = db.nextSeqNo("DW1_TENANTS_ID").toString)
+    db.update("""
+        insert into DW1_TENANTS (
+          ID, NAME, CREATOR_IP,
+          CREATOR_TENANT_ID, CREATOR_LOGIN_ID, CREATOR_ROLE_ID)
+        values (?, ?, ?, ?, ?, ?)
+              """,
+      List[AnyRef](tenant.id, tenant.name, tenant.creatorIp,
+        tenant.creatorTenantId, tenant.creatorLoginId, tenant.creatorRoleId))
+    tenant
   }
 
 
