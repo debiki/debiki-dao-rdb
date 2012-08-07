@@ -58,7 +58,13 @@ object ReDbDaoTckTest {
       case ("0", EmptySchema) =>
         unimplemented // db.updateAtnms(RelDbTestSql.PurgeSchema)
       case ("0.0.2", EmptyTables) =>
-          db.transaction { implicit connection => """
+          db.transaction { implicit connection =>
+
+            // There are foreign keys from DW1_TENANTS to other tables, and
+            // back.
+            db.update("SET CONSTRAINTS ALL DEFERRED");
+
+            """
             delete from DW1_NOTFS_PAGE_ACTIONS
             delete from DW1_EMAILS_OUT
             delete from DW1_PAGE_RATINGS
@@ -75,6 +81,8 @@ object ReDbDaoTckTest {
             delete from DW1_TENANT_HOSTS
             delete from DW1_TENANTS
             """.trim.split("\n") foreach { db.update(_) }
+
+            db.update("SET CONSTRAINTS ALL IMMEDIATE")
           }
         case ("0.0.2", TablesWithData) =>
         case _ => assErr("Broken test suite")
