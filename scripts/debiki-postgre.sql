@@ -92,8 +92,13 @@ USERS -> ROLES
 
 TENANT.ID >= 3 chars?
 
+DW1_IDS_SIMPLE -> DW1_GUESTS
+DW1_IDS_OPENID -> DW1_IDENTITIES
+
 Rename constraints to DW1_TENANTS: ... no, DW1_WEBSITES
     DW1_TNT_ID__C_NE DW1_TNT_ID__C_N0 DW1_TNT_NAME__C_NE
+
+DW1_LOGINS PK should include TENANT_ID
 */
 
 /*
@@ -278,12 +283,12 @@ create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
   COUNTRY varchar(100),
   WEBSITE varchar(100),
   SUPERADMIN varchar(1),  -- SHOULD rename to IS_ADMIN
-  -- todo prod, test, done dev: alter table DW1_USERS add column
+  -- todo prod, done dev, test: alter table DW1_USERS add column
   IS_OWNER varchar(1),
   --
   constraint DW1_USERS_TNT_SNO__P primary key (TENANT, SNO),
   constraint DW1_USERS_SUPERADM__C check (SUPERADMIN in ('T')),
-  -- todo prod, test, done dev:  alter table DW1_USERS add
+  -- todo prod, done dev, test:  alter table DW1_USERS add
   constraint DW1_USERS_ISOWNER__C_B check (IS_OWNER in ('T')),
   --
   constraint DW1_USERS__R__TENANT  -- ix DW1_USERS_TNT_SNO__P
@@ -334,14 +339,15 @@ create table DW1_LOGINS(  -- logins and logouts
   SNO varchar(32)            not null,  -- COULD rename to ID
   TENANT varchar(32)         not null,
   PREV_LOGIN varchar(32),
-  -- COULD replace ID_TYPE/_SNO with: ID_UNAU and ID_AU (for OpenID & OAuth),
+  -- COULD replace ID_TYPE/_SNO with: GUEST_ID and IDENTITY_ID and
   -- require that exactly one be non-NULL, and create foreign keys.
   -- That would have avoided a few bugs! and more future bugs too!?
   ID_TYPE varchar(10)        not null,
   ID_SNO varchar(32)         not null,
   -- COULD add a USR --> DW1_USERS/ROLES column? so there'd be no need to
   -- join w/ all DW1_IDS_<whatever> tables when looking up the user for
-  -- a certain login.
+  -- a certain login. NO! Instead, add USER_ID to DW1_PAGE_ACTIONS,
+  -- then one would load DW1_PAGE_ACTIONS and DW1_USERS only, to render a page.
   LOGIN_IP varchar(39)       not null,
   LOGIN_TIME timestamp       not null,
   LOGOUT_IP varchar(39),
@@ -353,7 +359,7 @@ create table DW1_LOGINS(  -- logins and logouts
   constraint DW1_LOGINS__R__LOGINS  -- ix DW1_LOGINS_PREVL
       foreign key (PREV_LOGIN)
       references DW1_LOGINS(SNO) deferrable,
-  constraint DW1_LOGINS_IDTYPE__C -- should rename Simple --> Unau(thenticated)
+  constraint DW1_LOGINS_IDTYPE__C -- should rename Simple --> Unau/Guest
       check (ID_TYPE in ('Simple', 'Unau', 'OpenID', 'EmailID')),
   constraint DW1_LOGINS_SNO_NOT_0__C check (SNO <> '0')
 );
@@ -376,6 +382,7 @@ create sequence DW1_IDS_SNO start with 10;
 
 -- Simple login identities (no password needed).
 -- (Could rename to DW1_IDS_UNAU? (unauthenticated identities)
+-- (No, rename to DW1_GUESTS? That's better since means both ID and "user"?)
 -- Would that make sense? since a "dummy" user is created anyway (read on).)
 -- When loaded from database, a dummy User is created, with its id
 -- set to -SNO (i.e. "-" + SNO). Users with ids starting with "-"
@@ -469,6 +476,7 @@ create table DW1_IDS_OPENID( -- COULD rename to DW1_IDS_AU(thenticated)
   OID_ENDPOINT varchar(100)      not null,
   -- The version is a URL, e.g. "http://specs.openid.net/auth/2.0/server".
   OID_VERSION varchar(100)       not null,
+  --OAUTH_...
   FIRST_NAME varchar(100)        not null,
   EMAIL varchar(100)             not null,  -- COULD rename to EMAIL_ADDR
   COUNTRY varchar(100)           not null,
@@ -484,7 +492,7 @@ create table DW1_IDS_OPENID( -- COULD rename to DW1_IDS_AU(thenticated)
 create index DW1_IDSOID_TNT_USR on DW1_IDS_OPENID(TENANT, USR);
 create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 
--- TODO prod, test, done dev:
+-- TODO prod, done dev, test:
 -- With Gmail, the claimed_id varies by realm, but the email is unique.
 create unique index DW1_IDSOID_TNT_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
   where OID_ENDPOINT = 'https://www.google.com/accounts/o8/ud';
