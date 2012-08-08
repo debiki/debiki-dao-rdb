@@ -895,6 +895,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
   def listPagePaths(
     withFolderPrefix: String,
+    pathScope: PathScope,
     includeStatuses: List[PageStatus],
     sortBy: PageSortOrder,
     limit: Int,
@@ -916,6 +917,13 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         " order by CACHED_PUBL_TIME desc"
     }
 
+    // Warning: dupl code, see listActions().
+    val (equalsOrLike, folderOrFolderPrefix) = pathScope match {
+      case PathScope.Tree => ("like", withFolderPrefix +"%")
+      case PathScope.Folder => ("=", withFolderPrefix)
+      case PathScope.Page => illArgErr("DwE019QG7", "Bad path scope")
+    }
+
     var items = List[(PagePath, PageDetails)]()
     db.queryAtnms("""
         select PARENT_FOLDER,
@@ -927,10 +935,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             CACHED_PUBL_TIME,
             CACHED_SGFNT_MTIME
         from DW1_PAGE_PATHS
-        where TENANT = ? and PARENT_FOLDER like ?
+        where TENANT = ? and PARENT_FOLDER """+ equalsOrLike +""" ?
         and PAGE_STATUS in ("""+ statusesToInclStr +""")
         """+ orderByStr,
-        List(tenantId, withFolderPrefix +"%"),
+        List(tenantId, folderOrFolderPrefix),
         rs => {
       while (rs.next) {
         val pagePath = _PagePath(rs, tenantId)
@@ -952,6 +960,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
   def listActions(
         folderPrefix: String,
+        pathScope: PathScope,
         includePages: List[PageStatus],
         limit: Int,
         offset: Int): Seq[ActionLocator] = {
@@ -962,6 +971,13 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     require(includePages == PageStatus.All)
     require(offset == 0)
 
+    // Warning: dupl code, see listPagePaths().
+    val (equalsOrLike, folderOrFolderPrefix) = pathScope match {
+      case PathScope.Tree => ("like", folderPrefix +"%")
+      case PathScope.Folder => ("=", folderPrefix)
+      case PathScope.Page => unimplemented("Listing actions per page")
+    }
+
     val query = """
        select p.PARENT_FOLDER, p.PAGE_ID, p.SHOW_ID, p.PAGE_SLUG,
           a.TYPE, a.PAID, a.TIME
@@ -969,11 +985,11 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
          DW1_PAGE_ACTIONS a inner join DW1_PAGE_PATHS p
          on a.TENANT = p.TENANT and a.PAGE_ID = p.PAGE_ID
        where
-         a.TENANT = ? and p.PARENT_FOLDER like ?
+         a.TENANT = ? and p.PARENT_FOLDER """+ equalsOrLike +""" ?
        order by a.TIME desc
        limit """+ limit
 
-    val vals = List[AnyRef](tenantId, folderPrefix +"%")
+    val vals = List[AnyRef](tenantId, folderOrFolderPrefix)
     var actionLocators = List[ActionLocator]()
 
     db.queryAtnms(query, vals, rs => {
