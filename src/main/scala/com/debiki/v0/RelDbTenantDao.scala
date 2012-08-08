@@ -40,6 +40,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     }
     db.transaction { implicit connection =>
       require(where.tenantId == tenantId)
+      // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
       _createPage(where, debate)
       val postsWithIds = _insert(debate.guid, debate.posts)
       debate.copy(posts = postsWithIds)
@@ -949,7 +950,9 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           cachedPublTime =
               Option(rs.getTimestamp("CACHED_PUBL_TIME")).map(ts2d _),
           cachedSgfntMtime =
-              Option(rs.getTimestamp("CACHED_SGFNT_MTIME")).map(ts2d _)
+              Option(rs.getTimestamp("CACHED_SGFNT_MTIME")).map(ts2d _),
+          cachedAuthors = Nil,  // db fields not yet created
+          cachedCommentCount = 0  // db field not yet created
         )
         items ::= pagePath -> pageDetails
       }
