@@ -146,19 +146,15 @@ create table DW1_TENANTS(
   ID varchar(32) not null,
   NAME varchar(100) not null,
   CTIME timestamp default now() not null,
-  -- TODO prod, done test, dev: alter table DW1_TENANTS add column
   CREATOR_IP varchar(39),
   CREATOR_TENANT_ID varchar(32),
   CREATOR_LOGIN_ID varchar(32),
   CREATOR_ROLE_ID varchar(32),
-  ----
   constraint DW1_TENANTS_ID__P primary key (ID),
   constraint DW1_TENANTS_NAME__U unique (NAME),
-  -- TODO prod, done dev, test: alter table DW1_TENANTS add
   constraint DW1_TENANTS_CREATOR__R__TNTS -- ix DW1_TENANTS_CREATORROLE
       foreign key (CREATOR_TENANT_ID)
       references DW1_TENANTS(ID) deferrable,
-  ----
   -- Foreign keys for login and role ids are added later, when referree
   -- tables have been created (DW1_USERS/ROLES and DW1_LOGINS).
   constraint DW1_TNT_ID__C_NE check (trim(ID) <> ''),
@@ -166,7 +162,6 @@ create table DW1_TENANTS(
   constraint DW1_TNT_NAME__C_NE check (trim(NAME) <> '')
 );
 
--- TODO prod, done test, dev:
 create index DW1_TENANTS_CREATORIP on DW1_TENANTS(CREATOR_IP);
 -- Used by FK DW1_TENANTS_CREATOR__R__LOGINS (couldn't create it though)
 create index DW1_TENANTS_CREATORLOGIN
@@ -174,7 +169,6 @@ create index DW1_TENANTS_CREATORLOGIN
 -- Used by two FKs: to DW1_USERS, and from DW1_TENANTS to itself.
 create index DW1_TENANTS_CREATORROLE
     on DW1_TENANTS(CREATOR_TENANT_ID, CREATOR_ROLE_ID);
------
 
 -- The tenant id is a varchar2, although it's currently assigned to from
 -- this number sequence.
@@ -283,14 +277,11 @@ create table DW1_USERS(  -- COULD rename to DW1_ROLES, abbreviated RLS
   COUNTRY varchar(100),
   WEBSITE varchar(100),
   SUPERADMIN varchar(1),  -- SHOULD rename to IS_ADMIN
-  -- todo prod, done dev, test: alter table DW1_USERS add column
   IS_OWNER varchar(1),
-  --
   constraint DW1_USERS_TNT_SNO__P primary key (TENANT, SNO),
   constraint DW1_USERS_SUPERADM__C check (SUPERADMIN in ('T')),
-  -- todo prod, done dev, test:  alter table DW1_USERS add
   constraint DW1_USERS_ISOWNER__C_B check (IS_OWNER in ('T')),
-  --
+  -- COULD rename to ..__R__TENANTS (with S)
   constraint DW1_USERS__R__TENANT  -- ix DW1_USERS_TNT_SNO__P
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
@@ -322,12 +313,10 @@ alter table DW1_USERS add constraint DW1_USERS_WEBSITE__C
     check (WEBSITE <> '');
 
 -- Foreign key from DW1_TENANTS to DW1_USERS / DW1_ROLES.
--- TODO prod, done test, dev:
 alter table DW1_TENANTS
   add constraint DW1_TENANTS_CREATOR__R__ROLES -- ix DW1_TENANTS_CREATORROLE
     foreign key (CREATOR_TENANT_ID, CREATOR_ROLE_ID)
     references DW1_USERS(TENANT, SNO) deferrable;
-----
 
 
 -- create index DW1_USERS_TNT_NAME_EMAIL
@@ -492,7 +481,6 @@ create table DW1_IDS_OPENID( -- COULD rename to DW1_IDS_AU(thenticated)
 create index DW1_IDSOID_TNT_USR on DW1_IDS_OPENID(TENANT, USR);
 create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 
--- TODO prod, done dev, test:
 -- With Gmail, the claimed_id varies by realm, but the email is unique.
 create unique index DW1_IDSOID_TNT_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
   where OID_ENDPOINT = 'https://www.google.com/accounts/o8/ud';
@@ -516,6 +504,7 @@ create table DW1_PAGES(
   GUID varchar(32)      not null,   -- COULD rename to ID
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
+  -- COULD rename to ..__R__TENANTS (with S)
   constraint DW1_PAGES__R__TENANT  -- ix: primary key, well it SHOULD incl TNT
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,

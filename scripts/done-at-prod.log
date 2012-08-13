@@ -146,4 +146,269 @@ debiki_prod=> commit;
 COMMIT
 
 }}}1
+{{{1 2012-08-13
+
+debiki_prod=>  alter table DW1_TENANTS add column  CREATOR_IP varchar(39);
+ALTER TABLE
+debiki_prod=>  alter table DW1_TENANTS add column  CREATOR_TENANT_ID varchar(32);
+ALTER TABLE
+debiki_prod=>  alter table DW1_TENANTS add column  CREATOR_LOGIN_ID varchar(32);
+ALTER TABLE
+debiki_prod=>  alter table DW1_TENANTS add column  CREATOR_ROLE_ID varchar(32);
+ALTER TABLE
+debiki_prod=> alter table DW1_TENANTS add
+debiki_prod->   constraint DW1_TENANTS_CREATOR__R__TNTS -- ix DW1_TENANTS_CREATORROLE
+debiki_prod->       foreign key (CREATOR_TENANT_ID)
+debiki_prod->       references DW1_TENANTS(ID) deferrable;
+ALTER TABLE
+debiki_prod=> create index DW1_TENANTS_CREATORIP on DW1_TENANTS(CREATOR_IP);
+CREATE INDEX
+debiki_prod=> create index DW1_TENANTS_CREATORLOGIN
+debiki_prod->     on DW1_TENANTS(CREATOR_TENANT_ID, CREATOR_LOGIN_ID);
+CREATE INDEX
+debiki_prod=> create index DW1_TENANTS_CREATORROLE
+debiki_prod->     on DW1_TENANTS(CREATOR_TENANT_ID, CREATOR_ROLE_ID);
+CREATE INDEX
+debiki_prod=> alter table DW1_USERS add column
+debiki_prod->   IS_OWNER varchar(1);
+ALTER TABLE
+debiki_prod=> 
+debiki_prod=> alter table DW1_USERS add
+debiki_prod->   constraint DW1_USERS_ISOWNER__C_B check (IS_OWNER in ('T'));
+ALTER TABLE
+debiki_prod=> 
+debiki_prod=> alter table DW1_TENANTS
+debiki_prod->   add constraint DW1_TENANTS_CREATOR__R__ROLES -- ix DW1_TENANTS_CREATORROLE
+debiki_prod->     foreign key (CREATOR_TENANT_ID, CREATOR_ROLE_ID)
+debiki_prod->     references DW1_USERS(TENANT, SNO) deferrable;
+ALTER TABLE
+debiki_prod=> create unique index DW1_IDSOID_TNT_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
+debiki_prod->   where OID_ENDPOINT = 'https://www.google.com/accounts/o8/ud';
+ERROR:  could not create unique index "dw1_idsoid_tnt_email__u"
+DETAIL:  Key (tenant, email)=(12, kajmagnus79d@gmail.com) is duplicated.
+debiki_prod=>
+
+---- Okay, I must consolidate all my own users.
+
+{{{ Initial examination, and fix kajmagnus.debiki.se
+
+debiki_prod=> select * from dw1_users;
+ tenant | sno | display_name |         email          | country | website | superadmin | email_notfs | is_owner 
+--------+-----+--------------+------------------------+---------+---------+------------+-------------+----------
+ 2      | 51  |              |                        |         |         | T          | R           | 
+ 2      | 10  | Magnus       | leomaheo@gmail.com     |         |         | T          | R           | 
+ 2      | 30  | KajMagnus    | kajmagnus79d@gmail.com |         |         | T          | R           | 
+ 2      | 52  | Kaj Magnus   | kajmagnus79@gmail.com  |         |         |            | R           | 
+ 12     | 53  | KajMagnus    | kajmagnus79d@gmail.com |         |         |            | R           | 
+ 12     | 54  | KajMagnus    | kajmagnus79d@gmail.com |         |         | T          | R           | 
+ 3      | 56  | KajMagnus    | kajmagnus79d@gmail.com |         |         |            | R           | 
+ 3      | 55  | KajMagnus    | kajmagnus79d@gmail.com |         |         | T          | R           | 
+ 3      | 57  | Magnus       | leomaheo@gmail.com     |         |         |            | R           | 
+(9 rows)
+
+debiki_prod=> select * from dw1_ids_openid;
+ sno | tenant | usr | usr_orig |                                  oid_claimed_id                                  |                                 oid_op_local_id                                  |         oid_realm          |             oid_endpoint              |               oid_version               | first_
+name |         email          | country 
+-----+--------+-----+----------+----------------------------------------------------------------------------------+----------------------------------------------------------------------------------+----------------------------+---------------------------------------+-----------------------------------------+-------
+-----+------------------------+---------
+ 10  | 2      | 10  | 10       | https://www.google.com/accounts/o8/id?id=AItOawkxwWMHh5TmZtk957ft9BsulTRcdtnkKrw | -                                                                                | http://*.debiki.se         | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | Magnus
+     | leomaheo@gmail.com     | -
+ 230 | 2      | 30  | 30       | https://www.google.com/accounts/o8/id?id=AItOawmyWwB3fjU4pkyQJGZlicWk72n3m7tSUNU | https://www.google.com/accounts/o8/id?id=AItOawmyWwB3fjU4pkyQJGZlicWk72n3m7tSUNU | http://*.debiki.se         | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | KajMag
+nus  | kajmagnus79d@gmail.com | SE
+ 331 | 12     | 53  | 53       | https://www.google.com/accounts/o8/id?id=AItOawmHJL0qLTl95v6kqC0E9DCxsd2slvZdIAk | https://www.google.com/accounts/o8/id?id=AItOawmHJL0qLTl95v6kqC0E9DCxsd2slvZdIAk | http://kajmagnus.debiki.se | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | KajMag
+nus  | kajmagnus79d@gmail.com | SE
+ 289 | 2      | 52  | 52       | https://www.google.com/accounts/o8/id?id=AItOawm42Nyx5CDR1H0rEyC6nQPEImoa5Fk2qcs | -                                                                                | http://localhost:8080      | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | Kaj Ma
+gnus | kajmagnus79@gmail.com  | -
+ 273 | 2      | 30  | 51       | https://www.google.com/accounts/o8/id?id=AItOawnWh122G7C-w3dnTqBXLt1JEjC24QUeJgQ | -                                                                                | http://localhost:8080      | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | KajMag
+nus  | kajmagnus79d@gmail.com | -
+ 351 | 3      | 57  | 57       | https://www.google.com/accounts/o8/id?id=AItOawl4wY2saMza1QvTQ90ivu8F6_SFAtDN28I | https://www.google.com/accounts/o8/id?id=AItOawl4wY2saMza1QvTQ90ivu8F6_SFAtDN28I | http://*.debiki.com        | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | Magnus
+     | leomaheo@gmail.com     | -
+ 344 | 3      | 55  | 55       | https://www.google.com/accounts/o8/id?id=AItOawmaz73rBkUXmMuQTbo731npDu8mCle06lw | https://www.google.com/accounts/o8/id?id=AItOawmaz73rBkUXmMuQTbo731npDu8mCle06lw | http://*.debiki.com        | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | KajMag
+nus  | kajmagnus79d@gmail.com | SE
+ 332 | 12     | 54  | 54       | https://www.google.com/accounts/o8/id?id=AItOawmyWwB3fjU4pkyQJGZlicWk72n3m7tSUNU | https://www.google.com/accounts/o8/id?id=AItOawmyWwB3fjU4pkyQJGZlicWk72n3m7tSUNU | http://*.debiki.se         | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | KajMag
+nus  | kajmagnus79d@gmail.com | SE
+ 345 | 3      | 56  | 56       | https://www.google.com/accounts/o8/id?id=AItOawmz-aOgKYsGm6fer6ITiIBRT_BDkSSzHgc | https://www.google.com/accounts/o8/id?id=AItOawmz-aOgKYsGm6fer6ITiIBRT_BDkSSzHgc | http://localhost:9003      | https://www.google.com/accounts/o8/ud | http://specs.openid.net/auth/2.0/server | KajMag
+nus  | kajmagnus79d@gmail.com | SE
+(9 rows)
+
+debiki_prod=> select count(*), tenant, email from dw1_ids_openid group by tenant, email;
+ count | tenant |         email          
+-------+--------+------------------------
+     1 | 3      | leomaheo@gmail.com
+     2 | 2      | kajmagnus79d@gmail.com
+     2 | 12     | kajmagnus79d@gmail.com
+     1 | 2      | leomaheo@gmail.com
+     1 | 2      | kajmagnus79@gmail.com
+     2 | 3      | kajmagnus79d@gmail.com
+(6 rows)
+
+debiki_prod=> select tenant, usr, email, realm from dw1_ids_openid where tenant in ('2', '12', '3');
+ERROR:  column "realm" does not exist
+LINE 1: select tenant, usr, email, realm from dw1_ids_openid where t...
+                                   ^
+debiki_prod=> select tenant, usr, email, oid_realm from dw1_ids_openid where tenant in ('2', '12', '3');
+ tenant | usr |         email          |         oid_realm          
+--------+-----+------------------------+----------------------------
+ 2      | 10  | leomaheo@gmail.com     | http://*.debiki.se
+ 2      | 30  | kajmagnus79d@gmail.com | http://*.debiki.se
+ 12     | 53  | kajmagnus79d@gmail.com | http://kajmagnus.debiki.se
+ 2      | 52  | kajmagnus79@gmail.com  | http://localhost:8080
+ 2      | 30  | kajmagnus79d@gmail.com | http://localhost:8080
+ 3      | 57  | leomaheo@gmail.com     | http://*.debiki.com
+ 3      | 55  | kajmagnus79d@gmail.com | http://*.debiki.com
+ 12     | 54  | kajmagnus79d@gmail.com | http://*.debiki.se
+ 3      | 56  | kajmagnus79d@gmail.com | http://localhost:9003
+(9 rows)
+
+debiki_prod=> select tenant, usr, email, oid_realm from dw1_ids_openid where tenant in ('2', '12', '3') order by tenant, email;
+ tenant | usr |         email          |         oid_realm          
+--------+-----+------------------------+----------------------------
+ 12     | 54  | kajmagnus79d@gmail.com | http://*.debiki.se
+ 12     | 53  | kajmagnus79d@gmail.com | http://kajmagnus.debiki.se
+ 2      | 30  | kajmagnus79d@gmail.com | http://*.debiki.se
+ 2      | 30  | kajmagnus79d@gmail.com | http://localhost:8080
+ 2      | 52  | kajmagnus79@gmail.com  | http://localhost:8080
+ 2      | 10  | leomaheo@gmail.com     | http://*.debiki.se
+ 3      | 55  | kajmagnus79d@gmail.com | http://*.debiki.com
+ 3      | 56  | kajmagnus79d@gmail.com | http://localhost:9003
+ 3      | 57  | leomaheo@gmail.com     | http://*.debiki.com
+(9 rows)
+
+debiki_prod=> select count(*) from dw1_logins;
+ count 
+-------
+   397
+(1 row)
+
+debiki_prod=> select sno, tenant, usr, email, oid_realm from dw1_ids_openid where tenant in ('2', '12', '3') order by tenant, email;
+ sno | tenant | usr |         email          |         oid_realm          
+-----+--------+-----+------------------------+----------------------------
+ 332 | 12     | 54  | kajmagnus79d@gmail.com | http://*.debiki.se
+ 331 | 12     | 53  | kajmagnus79d@gmail.com | http://kajmagnus.debiki.se
+ 230 | 2      | 30  | kajmagnus79d@gmail.com | http://*.debiki.se
+ 273 | 2      | 30  | kajmagnus79d@gmail.com | http://localhost:8080
+ 289 | 2      | 52  | kajmagnus79@gmail.com  | http://localhost:8080
+ 10  | 2      | 10  | leomaheo@gmail.com     | http://*.debiki.se
+ 344 | 3      | 55  | kajmagnus79d@gmail.com | http://*.debiki.com
+ 345 | 3      | 56  | kajmagnus79d@gmail.com | http://localhost:9003
+ 351 | 3      | 57  | leomaheo@gmail.com     | http://*.debiki.com
+(9 rows)
+
+debiki_prod=> 
+debiki_prod=> \d dw1_logins;
+            Table "debiki_prod.dw1_logins"
+   Column    |            Type             | Modifiers 
+-------------+-----------------------------+-----------
+ sno         | character varying(32)       | not null
+ tenant      | character varying(32)       | not null
+ prev_login  | character varying(32)       | 
+ id_type     | character varying(10)       | not null
+ id_sno      | character varying(32)       | not null
+ login_ip    | character varying(39)       | not null
+ login_time  | timestamp without time zone | not null
+ logout_ip   | character varying(39)       | 
+ logout_time | timestamp without time zone | 
+Indexes:
+    "dw1_logins_sno__p" PRIMARY KEY, btree (sno)
+    "dw1_logins_prevl" btree (prev_login)
+    "dw1_logins_tnt" btree (tenant)
+Check constraints:
+    "dw1_logins_idtype__c" CHECK (id_type::text = ANY (ARRAY['Simple'::character varying, 'Unau'::character varying, 'OpenID'::character varying, 'EmailID'::character varying]::text[]))
+    "dw1_logins_sno_not_0__c" CHECK (sno::text <> '0'::text)
+Foreign-key constraints:
+    "dw1_logins__r__logins" FOREIGN KEY (prev_login) REFERENCES dw1_logins(sno) DEFERRABLE
+    "dw1_logins_tnt__r__tenants" FOREIGN KEY (tenant) REFERENCES dw1_tenants(id) DEFERRABLE
+Referenced by:
+    TABLE "dw1_ids_simple_email" CONSTRAINT "dw1_idsmpleml__r__logins" FOREIGN KEY (login) REFERENCES dw1_logins(sno)
+    TABLE "dw1_logins" CONSTRAINT "dw1_logins__r__logins" FOREIGN KEY (prev_login) REFERENCES dw1_logins(sno) DEFERRABLE
+    TABLE "dw1_page_actions" CONSTRAINT "dw1_pactions__r__logins" FOREIGN KEY (login) REFERENCES dw1_logins(sno) DEFERRABLE
+
+debiki_prod=> 
+debiki_prod=> select count(*), id_sno from dw1_logins where id_sno in ('332', '331') group by id_sno;
+ count | id_sno 
+-------+--------
+     1 | 331
+     3 | 332
+(2 rows)
+
+debiki_prod=> -- Remap logins from (tenant-12, kajmagnus79d@gmail.com, http://kajmagnus.debiki.se) to (tenant-12, kajmagnus79d@gmail.com, *.debiki.se):
+debiki_prod=> update dw1_logins set id_sno = 332 where id_sno = 331 and tenant = '12';
+ERROR:  operator does not exist: character varying = integer
+LINE 1: update dw1_logins set id_sno = 332 where id_sno = 331 and te...
+                                                        ^
+HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+debiki_prod=> -- Remap logins from (tenant-12, kajmagnus79d@gmail.com, http://kajmagnus.debiki.se) to (tenant-12, kajmagnus79d@gmail.com, *.debiki.se):
+update dw1_logins set id_sno = '332' where id_sno = '331' and tenant = '12';
+UPDATE 1
+debiki_prod=> 
+debiki_prod=> select count(*), id_sno from dw1_logins where id_sno in ('332', '331') group by id_sno;
+ count | id_sno 
+-------+--------
+     4 | 332
+(1 row)
+
+debiki_prod=> delete from dw1_ids_openid where tenant = '12' and sno = '331';
+DELETE 1
+
+
+}}}
+{{{  Tenant 2: http://localhost:8080 -> http://*.debiki.se
+
+debiki_prod=> select count(*), id_sno from dw1_logins where id_sno in ('230', '273') group by id_sno;
+ count | id_sno
+-------+--------
+     5 | 273
+    53 | 230
+(2 rows)
+
+debiki_prod=> select count(*), id_sno from dw1_logins where id_sno in ('230', '273') and tenant = '2' group by id_sno;                                                                                                                                                                                                      
+ count | id_sno                                                                                                                                                                                                                                                                                                             
+-------+--------                                                                                                                                                                                                                                                                                                            
+     5 | 273                                                                                                                                                                                                                                                                                                                
+    53 | 230                                                                                                                                                                                                                                                                                                                
+(2 rows)
+
+debiki_prod=> update dw1_logins set id_sno = '230' where id_sno = '273' and tenant = '2'; -- http://localhost:8080 -> http://*.debiki.se
+UPDATE 5
+debiki_prod=> delete from dw1_ids_openid where tenant = '2' and sno = '273';
+DELETE 1
+
+}}}
+{{{2 Fix tenant '3'
+
+debiki_prod=> select count(*), id_sno from dw1_logins where id_sno in ('344', '345') and tenant = '3' group by id_sno;                                                                                                                                                                                                                  
+ count | id_sno 
+-------+--------
+    18 | 344
+     1 | 345
+(2 rows)
+
+debiki_prod=> 
+debiki_prod=> 
+debiki_prod=> update dw1_logins set id_sno = '344' where id_sno = '345' and tenant = '3';
+UPDATE 1
+debiki_prod=> delete from dw1_ids_openid where tenant = '3' and sno = '345';
+DELETE 1
+
+
+}}}2
+{{{ Done :-) Each email now unique, per tenant, in dw1_ids_openid.
+debiki_prod=> select count(*), tenant, email from dw1_ids_openid group by tenant, email;
+ count | tenant |         email          
+-------+--------+------------------------
+     1 | 3      | leomaheo@gmail.com
+     1 | 2      | kajmagnus79d@gmail.com
+     1 | 12     | kajmagnus79d@gmail.com
+     1 | 2      | leomaheo@gmail.com
+     1 | 2      | kajmagnus79@gmail.com
+     1 | 3      | kajmagnus79d@gmail.com
+(6 rows)
+}}}
+
+
+debiki_prod=> create unique index DW1_IDSOID_TNT_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
+debiki_prod->   where OID_ENDPOINT = 'https://www.google.com/accounts/o8/ud';
+CREATE INDEX
+
+}}}1
 
