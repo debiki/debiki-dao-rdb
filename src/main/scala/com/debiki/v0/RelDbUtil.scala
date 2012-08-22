@@ -188,6 +188,32 @@ object RelDbUtil {
       EmailNotfPrefs.Unspecified
   }
 
+
+  /**
+   * Returns e.g.:
+   * ( "(PARENT_FOLDER = ?) or (PARENT_FOLDER like ?)", List(/some/, /paths/) )
+   */
+  def _pageRangeToSql(pageRange: PathRanges, columnPrefix: String = "")
+        : (String, List[String]) = {
+    var sql = new StringBuilder
+    var values = List[String]()
+
+    for (folder <- pageRange.folders) {
+      if (sql nonEmpty) sql append " or "
+      sql.append("("+ columnPrefix + "PARENT_FOLDER = ?)")
+      values ::= folder
+    }
+
+    for (folder <- pageRange.trees) {
+      if (sql nonEmpty) sql append " or "
+      sql.append("("+ columnPrefix + "PARENT_FOLDER like ?)")
+      values ::= folder +"%"
+    }
+
+    (sql.toString, values)
+  }
+
+
   /** Adds a can be Empty Prefix.
    *
    * Oracle converts the empty string to NULL, so prefix strings that might
