@@ -660,10 +660,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
 
   override def loadPage(pageGuid: String): Option[Debate] =
-    _loadPageAnyTenant(tenantId = tenantId, pageGuid = pageGuid)
+    _loadPageAnyTenant(tenantId = tenantId, pageId = pageGuid)
 
 
-  private def _loadPageAnyTenant(tenantId: String, pageGuid: String)
+  private def _loadPageAnyTenant(tenantId: String, pageId: String)
         : Option[Debate] = {
     /*
     db.transaction { implicit connection =>
@@ -677,10 +677,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     // COULD reuse connection throughout function, make it implicit in arg.
     var logins: List[Login] =
-      db.withConnection { _loadLogins(onPageGuid = pageGuid)(_) }
+      db.withConnection { _loadLogins(onPageGuid = pageId)(_) }
 
     // Load identities and users.
-    val (identities, users) = _loadIdtysAndUsers(onPageWithId = pageGuid)
+    val (identities, users) = _loadIdtysAndUsers(onPageWithId = pageId)
 
     // Load rating tags.
     val ratingTags: mut.HashMap[String, List[String]] = db.queryAtnms("""
@@ -689,7 +689,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           and r.TENANT = a.TENANT and r.PAGE_ID = a.PAGE_ID and r.PAID = a.PAID
         order by a.PAID
         """,
-      List(tenantId, pageGuid), rs => {
+      List(tenantId, pageId), rs => {
         val map = mut.HashMap[String, List[String]]()
         var tags = List[String]()
         var curPaid = ""  // current page action id
@@ -722,7 +722,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         where TENANT = ? and PAGE_ID = ?
         order by TIME desc
         """,
-        List(tenantId, pageGuid), rs => {
+        List(tenantId, pageId), rs => {
       var actions = List[AnyRef]()
       while (rs.next) {
         val id = rs.getString("PAID");
@@ -777,7 +777,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         actions ::= action  // this reverses above `order by TIME desc'
       }
 
-      Some(Debate.fromActions(guid = pageGuid,
+      Some(Debate.fromActions(guid = pageId,
           logins, identities, users, actions))
     })
   }
@@ -1433,11 +1433,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _insert[T <: Action](pageGuid: String, actions: List[T])
+  private def _insert[T <: Action](pageId: String, actions: List[T])
         (implicit conn: js.Connection): List[T] = {
 
     var actionsWithIds = Debate.assignIdsTo(actions)
-    val pageId = pageGuid
     for (action <- actionsWithIds) {
       // Could optimize:  (but really *not* important!)
       // Use a CallableStatement and `insert into ... returning ...'
