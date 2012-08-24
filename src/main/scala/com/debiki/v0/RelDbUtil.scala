@@ -7,10 +7,66 @@ package com.debiki.v0
 import com.debiki.v0.EmailNotfPrefs.EmailNotfPrefs
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
+import scala.{collection => col}
 import RelDb._
 
 
 object RelDbUtil {
+
+
+  def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
+        : Action = {
+    val id = rs.getString("PAID")
+    val loginSno = rs.getLong("LOGIN").toString
+    val time = ts2d(rs.getTimestamp("TIME"))
+    val typee = rs.getString("TYPE")
+    val relpa = rs.getString("RELPA")
+    val text_? = rs.getString("TEXT")
+    val markup_? = rs.getString("MARKUP")
+    val where_? = rs.getString("WHEERE")
+    val newIp = Option(rs.getString("NEW_IP"))
+
+    // (This whole match-case will go away when I unify all types
+    // into Post?)  ...
+    val action = typee match {
+      // ... then this ugly if ..||..||.. won't be an issue.
+      case typeStr if typeStr == "Post" ||
+         typeStr == "Publ" || typeStr == "Meta" =>
+        // How repr empty root post parent? ' ' or '-' or '_' or '0'?
+        new Post(id = id, parent = relpa, ctime = time,
+          loginId = loginSno, newIp = newIp, text = n2e(text_?),
+          markup = n2e(markup_?), tyype = _toPostType(typeStr),
+          where = Option(where_?))
+      case "Rating" =>
+        val tags = ratingTags(id)
+        new Rating(id = id, postId = relpa, ctime = time,
+          loginId = loginSno, newIp = newIp, tags = tags)
+      case "Edit" =>
+        new Edit(id = id, postId = relpa, ctime = time,
+          loginId = loginSno, newIp = newIp, text = n2e(text_?),
+          newMarkup = Option(markup_?))
+      case "EditApp" =>
+        new EditApp(id = id, editId = relpa, ctime = time,
+          loginId = loginSno, newIp = newIp,
+          result = n2e(text_?))
+      case flag if flag startsWith "Flag" =>
+        val reasonStr = flag drop 4 // drop "Flag"
+        val reason = FlagReason withName reasonStr
+        Flag(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
+          ctime = time, reason = reason, details = n2e(text_?))
+      case delete if delete startsWith "Del" =>
+        val wholeTree = delete match {
+          case "DelTree" => true
+          case "DelPost" => false
+          case x => assErr("DwE0912k22")
+        }
+        Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
+          ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
+      case x =>
+        assErr("DwEY8k3B", "Bad DW1_ACTIONS.TYPE: "+ safed(typee))
+    }
+    action
+  }
 
 
   def _dummyUserIdFor(identityId: String) = "-"+ identityId
