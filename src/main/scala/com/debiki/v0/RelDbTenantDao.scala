@@ -980,7 +980,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
        order by a.TIME desc
        limit """+ limit
 
-    val vals = List[AnyRef](tenantId, pageRangeValues)
+    val vals = tenantId :: pageRangeValues
     var actionLocators = List[ActionLocator]()
 
     db.queryAtnms(query, vals, rs => {
