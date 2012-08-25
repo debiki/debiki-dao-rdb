@@ -14,6 +14,10 @@ import RelDb._
 object RelDbUtil {
 
 
+  def ActionSelectListItems =
+    "a.PAGE_ID, a.PAID, a.LOGIN, a.TIME, a.TYPE, a.RELPA, " +
+     "a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP"
+
   def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
         : Action = {
     val id = rs.getString("PAID")
