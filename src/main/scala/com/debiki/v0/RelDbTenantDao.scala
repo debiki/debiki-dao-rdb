@@ -734,6 +734,105 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     })
   }
 
+
+  def loadRecentActionExcerpts(fromIp: String = null,
+        byIdentity: IdentityOpenId = null, limit: Int): Seq[ViAc] = {
+
+    require((fromIp ne null) ^ (byIdentity ne null))
+
+    val (loginIdsWhereSql, loginIdsWhereValues) = {
+      if (fromIp ne null)
+          ("l.LOGIN_IP = ? and l.TENANT = ?", List(fromIp, tenantId))
+      else
+          ("l.ID_SNO = ? and l.ID_TYPE = 'OpenID' and l.TENANT = ?",
+            List(byIdentity.id, tenantId))
+    }
+
+    val pagesById = mut.Map[String, Debate]()
+    var pageIdsAndActions = List[(String, Action)]()
+
+    // ((Concerning `distinct` in the last `select` below. Without it, [your
+    // own actions on your own actions] would be selected twice,
+    // because they'd match two rows in actionIds: a.PAID would match
+    // (because it's your action) and a.RELPA would match (because the action
+    // affected an action of yours). ))
+
+    /*
+    // ((The first `limit` below is not really needed, but it might
+    // result in Postgres not loading terribly many login ids (I don't know
+    // what query exec plan Postgres builds). I multiply by a small number,
+    // 3, since some logins might have done 0 actions. If `limit * 3`
+    // login ids have done 0 actions, then nothing will be returned by
+    // this query.))
+    with loginIds as (
+       select TENANT, SNO from DW1_LOGINS
+    """+ loginIdsWhereClause +"""
+    order by LOGIN_TIME desc),
+    actionIds as (
+       select a.TENANT, a.PAGE_ID, a.PAID
+    from DW1_PAGE_ACTIONS a inner join loginIds l
+    on a.TENANT = l.TENANT and a.LOGIN = l.SNO
+    limit """+ limit +""") */
+
+    // SHOULD create index on DW1_LOGINS.LOGIN_TIME
+
+    db.withConnection { implicit connection =>
+      db.query("""
+          with actionIds as (
+            select a.TENANT, a.PAGE_ID, a.PAID
+            from DW1_LOGINS l inner join DW1_PAGE_ACTIONS a
+            on l.TENANT = a.TENANT and l.SNO = a.LOGIN
+            where """+ loginIdsWhereSql +"""
+            order by l.LOGIN_TIME desc
+            limit """+ limit +""")
+          select distinct -- se comment above
+            a.PAGE_ID, a.PAID, a.LOGIN, a.TIME, a.TYPE, a.RELPA,
+            a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP
+          from DW1_PAGE_ACTIONS a inner join actionIds
+            on a.TENANT = actionIds.TENANT
+            and a.PAGE_ID = actionIds.PAGE_ID
+            and (
+              -- load actions by login id
+              a.PAID = actionIds.PAID
+              -- load actions that affected [an action by login id]
+              -- (e.g. edits, flags, approvals)
+              or (
+                a.TYPE <> 'Post' and -- skip replies
+                a.TYPE <> 'Rating' and -- skip ratings
+                a.RELPA = actionIds.PAID))
+          order by a.TIME desc
+          """, loginIdsWhereValues, rs => {
+        while (rs.next) {
+          val pageId = rs.getString("PAGE_ID")
+          // Skip ratings, for now: (as stated in the docs in Dao.scala)
+          val action = _Action(rs, ratingTags = Map.empty.withDefaultValue(Nil))
+          val page = pagesById.getOrElseUpdate(pageId, Debate.empty(pageId))
+          val pageWithAction = page ++ (action::Nil)
+          pagesById(pageId) = pageWithAction
+          pageIdsAndActions ::= pageId -> action
+        }
+      })
+    }
+
+    /* COULD:
+    val people = _loadPeople(whoDid = allActions)
+    but then won't know to which page each Login/IdentityOpenId etc belongs.
+    SHOULD have Page stop inheriting People, use delegation instead?
+     */
+
+    def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity
+
+    val smartActions = pageIdsAndActions map { case (pageId, action) =>
+      val page = pagesById.get(pageId).getOrElse(assErr(
+        "DwE9031211", "Page "+ pageId +" missing when loading recent actions, "+
+        debugDetails))
+      SmartAction(page, action)
+    }
+
+    smartActions
+  }
+
+
   def loadTemplate(templPath: PagePath): Option[TemplateSrcHtml] = {
     // Minor bug: if template /some-page.tmpl does not exist, but there's
     // an odd page /some-page.tmpl/, then that *page* is found and
