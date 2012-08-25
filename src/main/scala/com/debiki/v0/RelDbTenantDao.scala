@@ -737,7 +737,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
   def loadRecentActionExcerpts(fromIp: Option[String],
         byIdentity: Option[String],
-        pathRanges: Option[PathRanges] = None, limit: Int): Seq[ViAc] = {
+        pathRanges: PathRanges, limit: Int): Seq[ViAc] = {
 
     def buildByPersonQuery(fromIp: Option[String],
           byIdentity: Option[String], limit: Int)
@@ -802,9 +802,11 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     }
 
     val lookupByPerson = fromIp.isDefined || byIdentity.isDefined
-    val lookupByPaths = pathRanges isDefined
+    val lookupByPaths = pathRanges != PathRanges.Anywhere
 
-    require(lookupByPaths ^ lookupByPerson)
+    // By IP or identity id lookup cannot be combined with by path lookup.
+    require(!lookupByPaths || !lookupByPerson)
+    // Cannot lookup both by IP and by identity id.
     if (lookupByPerson) require(fromIp.isDefined ^ byIdentity.isDefined)
     require(0 <= limit)
 
@@ -812,8 +814,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     val (sql, values) =
       if (lookupByPerson) buildByPersonQuery(fromIp, byIdentity, limit)
-      else if (lookupByPaths) buildByPathQuery(pathRanges.get, limit)
-      else assErr("DwE93bJQ2")
+      else if (lookupByPaths) buildByPathQuery(pathRanges, limit)
+      else
+        // COULD write more efficient query: don't join with DW1_PAGE_PATHS.
+        buildByPathQuery(PathRanges.Anywhere, limit)
 
     val pagesById = mut.Map[String, Debate]()
     var pageIdsAndActions = List[(String, Action)]()
