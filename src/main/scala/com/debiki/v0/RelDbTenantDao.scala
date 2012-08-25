@@ -735,19 +735,20 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def loadRecentActionExcerpts(fromIp: String = null,
-        byIdentity: IdentityOpenId = null,
+  def loadRecentActionExcerpts(fromIp: Option[String],
+        byIdentity: Option[String],
         pathRanges: Option[PathRanges] = None, limit: Int): Seq[ViAc] = {
 
-    def buildByPersonQuery(fromIp: String, byIdentity: IdentityOpenId,
-          limit: Int): (String, List[AnyRef]) = {
+    def buildByPersonQuery(fromIp: Option[String],
+          byIdentity: Option[String], limit: Int)
+          : (String, List[AnyRef]) = {
 
       val (loginIdsWhereSql, loginIdsWhereValues) =
-        if (fromIp ne null)
-          ("l.LOGIN_IP = ? and l.TENANT = ?", List(fromIp, tenantId))
+        if (fromIp isDefined)
+          ("l.LOGIN_IP = ? and l.TENANT = ?", List(fromIp.get, tenantId))
         else
           ("l.ID_SNO = ? and l.ID_TYPE = 'OpenID' and l.TENANT = ?",
-             List(byIdentity.id, tenantId))
+             List(byIdentity.get, tenantId))
 
       // ((Concerning `distinct` in the last `select` below. Without it, [your
       // own actions on your own actions] would be selected twice,
@@ -800,11 +801,11 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       (sql, tenantId :: pathRangeValues)
     }
 
-    val lookupByPerson = (fromIp ne null) || (byIdentity ne null)
+    val lookupByPerson = fromIp.isDefined || byIdentity.isDefined
     val lookupByPaths = pathRanges isDefined
 
     require(lookupByPaths ^ lookupByPerson)
-    if (lookupByPerson) require((fromIp ne null) ^ (byIdentity ne null))
+    if (lookupByPerson) require(fromIp.isDefined ^ byIdentity.isDefined)
     require(0 <= limit)
 
     // SHOULD create index on DW1_LOGINS.LOGIN_TIME
@@ -837,7 +838,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     SHOULD have Page stop inheriting People, use delegation instead?
      */
 
-    def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity
+    def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity +
+       ", pathRanges: "+ pathRanges
 
     val smartActions = pageIdsAndActions map { case (pageId, action) =>
       val page = pagesById.get(pageId).getOrElse(assErr(
