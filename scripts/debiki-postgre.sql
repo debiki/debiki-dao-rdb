@@ -322,55 +322,6 @@ alter table DW1_TENANTS
 -- create index DW1_USERS_TNT_NAME_EMAIL
 --  on DW1_USERS(TENANT, DISPLAY_NAME, EMAIL);
 
--- DW1_LOGINS isn't named _SESSIONS because I'm not sure a login and logout
--- defines a session? Cannot a session start before you login?
-create table DW1_LOGINS(  -- logins and logouts
-  SNO varchar(32)            not null,  -- COULD rename to ID
-  TENANT varchar(32)         not null,
-  PREV_LOGIN varchar(32),
-  -- COULD replace ID_TYPE/_SNO with: GUEST_ID and IDENTITY_ID and
-  -- require that exactly one be non-NULL, and create foreign keys.
-  -- That would have avoided a few bugs! and more future bugs too!?
-  ID_TYPE varchar(10)        not null,
-  ID_SNO varchar(32)         not null,
-  -- COULD add a USR --> DW1_USERS/ROLES column? so there'd be no need to
-  -- join w/ all DW1_IDS_<whatever> tables when looking up the user for
-  -- a certain login. NO! Instead, add USER_ID to DW1_PAGE_ACTIONS,
-  -- then one would load DW1_PAGE_ACTIONS and DW1_USERS only, to render a page.
-  -- BETTER to add that USR/ROLE/GUEST colunmn to DW1_PAGE_ACTIONS?
-  -- so won't have to join with this DW1_LOGINS table.
-  -- COULD add a USR --> DW1_USERS/ROLES column, so an OpenID row can be
-  -- disassociated from the related user/rolerow can be
-  -- disassociated from the related user/role. Alternatively, I would mark
-  -- the OpenID row as inactive ('O'ld) and optionally associate the OpenID
-  -- with another user/role, by creating a 'C'urrent row, that points
-  -- to that user/role.
-  LOGIN_IP varchar(39)       not null,
-  LOGIN_TIME timestamp       not null,
-  LOGOUT_IP varchar(39),
-  LOGOUT_TIME timestamp,
-  constraint DW1_LOGINS_SNO__P primary key (SNO), -- SHOULD incl TENANT?
-  constraint DW1_LOGINS_TNT__R__TENANTS  -- ix DW1_LOGINS_TNT
-      foreign key (TENANT)
-      references DW1_TENANTS(ID) deferrable,
-  constraint DW1_LOGINS__R__LOGINS  -- ix DW1_LOGINS_PREVL
-      foreign key (PREV_LOGIN)
-      references DW1_LOGINS(SNO) deferrable,
-  constraint DW1_LOGINS_IDTYPE__C -- should rename Simple --> Unau/Guest
-      check (ID_TYPE in ('Simple', 'Unau', 'OpenID', 'EmailID')),
-  constraint DW1_LOGINS_SNO_NOT_0__C check (SNO <> '0')
-);
-
-create index DW1_LOGINS_TNT on DW1_LOGINS(TENANT);
-create index DW1_LOGINS_PREVL on DW1_LOGINS(PREV_LOGIN);
-
-create sequence DW1_LOGINS_SNO start with 10;
-
--- Not currently possible since DW1_LOGINS' PK doesn't include TENANT_ID.
---alter table DW1_TENANTS
---  add constraint DW1_TENANTS_CREATOR__R__LOGINS -- ix DW1_TENANTS_CREATORLOGIN
---  foreign key (CREATOR_TENANT_ID, CREATOR_LOGIN_ID)
---  references DW1_LOGINS(TENANT, SNO) deferrable;
 
 
 -- For usage by both _IDS_SIMPLE and _OPENID, so a given identity-SNO
@@ -401,40 +352,6 @@ create table DW1_IDS_SIMPLE(  -- abbreviated IDSMPL
 
 -- (Uses sequence number from DW1_IDS_SNO.)
 
--- (Could rename to DW1_USERS_UNAU_EMAIL?)
-create table DW1_IDS_SIMPLE_EMAIL(  -- abbreviated IDSMPLEML
-  TENANT varchar(32) not null,
-  -- The user (session) that added this row.
-  LOGIN varchar(32),
-  CTIME timestamp not null,
-  -- C = current,  O = old, kept for auditing purposes.
-  VERSION char(1) not null,
-  -- We might actually attempt to send an email to this address,
-  -- if EMAIL_NOTFS is set to 'R'eceive.
-  EMAIL varchar(100) not null,  -- COULD rename to EMAIL_ADDR
-  -- Email notifications: R = receive, N = do Not receive, F = forbid forever
-  EMAIL_NOTFS varchar(1) not null,
-  -- Is this PK unnecessary?
-  constraint DW1_IDSMPLEML__P primary key (TENANT, EMAIL, CTIME),
-  constraint DW1_IDSMPLEML__R__LOGINS  -- ix DW1_IDSMPLEML_LOGIN
-      foreign key (LOGIN)  -- SHOULD include TENANT?
-      references DW1_LOGINS(SNO),
-  constraint DW1_IDSMPLEML_EMAIL__C check (EMAIL like '%@%.%'),
-  constraint DW1_IDSMPLEML_VERSION__C check (VERSION in ('C', 'O')),
-  constraint DW1_IDSMPLEML_NOTFS__C check (EMAIL_NOTFS in ('R', 'N', 'F'))
-);
-
--- For each email, there's only one current setting.
-create unique index DW1_IDSMPLEML_VERSION__U
-  on DW1_IDS_SIMPLE_EMAIL (TENANT, EMAIL, VERSION)
-  where VERSION = 'C';
-
--- Foregin key index.
-create index DW1_IDSMPLEML_LOGIN on DW1_IDS_SIMPLE_EMAIL (LOGIN);
-
-
--- Could: create table DW1_IDS_SIMPLE_NAME, to rewrite inappropriate names,
--- e.g. rewrite to "F_ck" or "_ssh_l_".
 
 
 -- OpenID identities.
@@ -497,7 +414,94 @@ create unique index DW1_IDSOID_TNT_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
 -- (Uses sequence nunmber from DW1_IDS_SNO.)
 
 
--- Later: DW1_USER_ACTIONS?
+
+-- DW1_LOGINS isn't named _SESSIONS because I'm not sure a login and logout
+-- defines a session? Cannot a session start before you login?
+create table DW1_LOGINS(  -- logins and logouts
+  SNO varchar(32)            not null,  -- COULD rename to ID
+  TENANT varchar(32)         not null,
+  PREV_LOGIN varchar(32),
+  -- COULD replace ID_TYPE/_SNO with: GUEST_ID and IDENTITY_ID and
+  -- require that exactly one be non-NULL, and create foreign keys.
+  -- That would have avoided a few bugs! and more future bugs too!?
+  ID_TYPE varchar(10)        not null,
+  ID_SNO varchar(32)         not null,
+  -- COULD add a USR --> DW1_USERS/ROLES column? so there'd be no need to
+  -- join w/ all DW1_IDS_<whatever> tables when looking up the user for
+  -- a certain login. NO! Instead, add USER_ID to DW1_PAGE_ACTIONS,
+  -- then one would load DW1_PAGE_ACTIONS and DW1_USERS only, to render a page.
+  -- BETTER to add that USR/ROLE/GUEST colunmn to DW1_PAGE_ACTIONS?
+  -- so won't have to join with this DW1_LOGINS table.
+  -- COULD add a USR --> DW1_USERS/ROLES column, so an OpenID row can be
+  -- disassociated from the related user/rolerow can be
+  -- disassociated from the related user/role. Alternatively, I would mark
+  -- the OpenID row as inactive ('O'ld) and optionally associate the OpenID
+  -- with another user/role, by creating a 'C'urrent row, that points
+  -- to that user/role.
+  LOGIN_IP varchar(39)       not null,
+  LOGIN_TIME timestamp       not null,
+  LOGOUT_IP varchar(39),
+  LOGOUT_TIME timestamp,
+  constraint DW1_LOGINS_SNO__P primary key (SNO), -- SHOULD incl TENANT?
+  constraint DW1_LOGINS_TNT__R__TENANTS  -- ix DW1_LOGINS_TNT
+      foreign key (TENANT)
+      references DW1_TENANTS(ID) deferrable,
+  constraint DW1_LOGINS__R__LOGINS  -- ix DW1_LOGINS_PREVL
+      foreign key (PREV_LOGIN)
+      references DW1_LOGINS(SNO) deferrable,
+  constraint DW1_LOGINS_IDTYPE__C -- should rename Simple --> Unau/Guest
+      check (ID_TYPE in ('Simple', 'Unau', 'OpenID', 'EmailID')),
+  constraint DW1_LOGINS_SNO_NOT_0__C check (SNO <> '0')
+);
+
+create index DW1_LOGINS_TNT on DW1_LOGINS(TENANT);
+create index DW1_LOGINS_PREVL on DW1_LOGINS(PREV_LOGIN);
+
+create sequence DW1_LOGINS_SNO start with 10;
+
+-- Not currently possible since DW1_LOGINS' PK doesn't include TENANT_ID.
+--alter table DW1_TENANTS
+--  add constraint DW1_TENANTS_CREATOR__R__LOGINS -- ix DW1_TENANTS_CREATORLOGIN
+--  foreign key (CREATOR_TENANT_ID, CREATOR_LOGIN_ID)
+--  references DW1_LOGINS(TENANT, SNO) deferrable;
+
+
+
+-- (Could rename to DW1_USERS_UNAU_EMAIL?)
+create table DW1_IDS_SIMPLE_EMAIL(  -- abbreviated IDSMPLEML
+  TENANT varchar(32) not null,
+  -- The user (session) that added this row.
+  LOGIN varchar(32),
+  CTIME timestamp not null,
+  -- C = current,  O = old, kept for auditing purposes.
+  VERSION char(1) not null,
+  -- We might actually attempt to send an email to this address,
+  -- if EMAIL_NOTFS is set to 'R'eceive.
+  EMAIL varchar(100) not null,  -- COULD rename to EMAIL_ADDR
+  -- Email notifications: R = receive, N = do Not receive, F = forbid forever
+  EMAIL_NOTFS varchar(1) not null,
+  -- Is this PK unnecessary?
+  constraint DW1_IDSMPLEML__P primary key (TENANT, EMAIL, CTIME),
+  constraint DW1_IDSMPLEML__R__LOGINS  -- ix DW1_IDSMPLEML_LOGIN
+      foreign key (LOGIN)  -- SHOULD include TENANT?
+      references DW1_LOGINS(SNO),
+  constraint DW1_IDSMPLEML_EMAIL__C check (EMAIL like '%@%.%'),
+  constraint DW1_IDSMPLEML_VERSION__C check (VERSION in ('C', 'O')),
+  constraint DW1_IDSMPLEML_NOTFS__C check (EMAIL_NOTFS in ('R', 'N', 'F'))
+);
+
+-- For each email, there's only one current setting.
+create unique index DW1_IDSMPLEML_VERSION__U
+  on DW1_IDS_SIMPLE_EMAIL (TENANT, EMAIL, VERSION)
+  where VERSION = 'C';
+
+-- Foregin key index.
+create index DW1_IDSMPLEML_LOGIN on DW1_IDS_SIMPLE_EMAIL (LOGIN);
+
+
+-- Could: create table DW1_IDS_SIMPLE_NAME, to rewrite inappropriate names,
+-- e.g. rewrite to "F_ck" or "_ssh_l_".
+
 
 
 ----- Pages
