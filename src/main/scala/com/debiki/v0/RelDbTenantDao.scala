@@ -729,8 +729,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         actions ::= action  // this reverses above `order by TIME desc'
       }
 
-      Some(Debate.fromActions(guid = pageId,
-          logins, identities, users, actions))
+      Some(Debate.fromActions(
+          pageId, People(logins, identities, users), actions))
     })
   }
 
