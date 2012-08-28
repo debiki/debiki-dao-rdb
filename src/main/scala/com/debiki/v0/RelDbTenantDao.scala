@@ -484,7 +484,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     def loginInfo = "login id "+ safed(forLoginId) +
           ", tenant "+ safed(tenantId)
 
-    _loadIdtysAndUsers(forLoginId = forLoginId) match {
+    _loadIdtysAndUsers(forLoginIds = forLoginId::Nil) match {
       case (List(i: Identity), List(u: User)) => Some(i, u)
       case (List(i: Identity), Nil) => assErr(
         "DwE6349krq20", "Found no user for "+ loginInfo +
@@ -513,29 +513,31 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  // SHOULD reuse a `connection: js.Connection` but doesnt
   private def _loadIdtysAndUsers(onPageWithId: String = null,
-                         forLoginId: String = null
+                         forLoginIds: List[String] = null
                             ): Pair[List[Identity], List[User]] = {
     // Load users. First find all relevant identities, by joining
     // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
     // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
 
-    val (selectLoginIds, args) = (onPageWithId, forLoginId) match {
+    require((onPageWithId ne null) ^ (forLoginIds ne null))
+
+    val (selectLoginIds, args) = (onPageWithId, forLoginIds) match {
+      case (null, Nil) => return (Nil, Nil)
       // (Need to specify tenant id here, and when selecting from DW1_USERS,
       // because there's no foreign key from DW1_LOGINS to DW1_IDS_<type>.)
-      case (null, loginId) => ("""
+      case (null, loginIds) => ("""
           select ID_SNO, ID_TYPE
               from DW1_LOGINS
-              where SNO = ? and TENANT = ?
-          """, List(loginId, tenantId))
+              where  TENANT = ? and SNO in ("""+ makeInListFor(loginIds) +""")
+          """, tenantId :: loginIds)
       case (pageId, null) => ("""
           select distinct l.ID_SNO, l.ID_TYPE
               from DW1_PAGE_ACTIONS a, DW1_LOGINS l
               where a.PAGE_ID = ? and a.TENANT = ?
                 and a.LOGIN = l.SNO and a.TENANT = l.TENANT
           """, List(pageId, tenantId))
-      case (a, b) => illArgErr(
-          "DwE0kEF3", "onPageWithId: "+ safed(a) +", forLoginId: "+ safed(b))
     }
 
     // Load identities and users. Details: First find identities of all types
