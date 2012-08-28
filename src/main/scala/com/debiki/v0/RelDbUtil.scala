@@ -14,6 +14,13 @@ import RelDb._
 object RelDbUtil {
 
 
+  /**
+   * Use like so: "select ... where X in ("+ makeInListFor(xs) +")"
+   */
+  def makeInListFor(values: List[_]): String =
+    values.map(_ => "?").mkString(",")
+
+
   def ActionSelectListItems =
     "a.PAGE_ID, a.PAID, a.LOGIN, a.TIME, a.TYPE, a.RELPA, " +
      "a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP"
