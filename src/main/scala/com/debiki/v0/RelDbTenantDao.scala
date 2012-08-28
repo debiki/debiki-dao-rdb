@@ -351,15 +351,15 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     db.queryAtnms(selectList + fromWhereClause,
         tenantId :: pageOrLoginIds, rs => {
       while (rs.next) {
-        val loginId = rs.getLong("LOGIN_SNO").toString
-        val prevLogin = Option(rs.getLong("PREV_LOGIN")).map(_.toString)
+        val loginId = rs.getString("LOGIN_SNO")
+        val prevLogin = Option(rs.getString("PREV_LOGIN"))
         val ip = rs.getString("LOGIN_IP")
         val date = ts2d(rs.getTimestamp("LOGIN_TIME"))
         // ID_TYPE need not be remembered, since each ID_SNO value
         // is unique over all DW1_LOGIN_OPENID/SIMPLE/... tables.
         // (So you'd find the appropriate IdentitySimple/OpenId by doing
         // People.identities.find(_.id = x).)
-        val idId = rs.getLong("ID_SNO").toString
+        val idId = rs.getString("ID_SNO")
         logins ::= Login(id = loginId, prevLoginId = prevLogin, ip = ip,
           date = date, identityId = idId)
       }
