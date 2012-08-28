@@ -785,10 +785,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     def buildByPathQuery(pathRanges: PathRanges, limit: Int)
           : (String, List[AnyRef]) = {
-      val (pathRangeClauses, pathRangeValues) =
+      lazy val (pathRangeClauses, pathRangeValues) =
          _pageRangeToSql(pathRanges, "p.")
 
-      val sql = """
+      lazy val foldersAndTreesQuery = """
         select """+ ActionSelectListItems +"""
         from
           DW1_PAGE_ACTIONS a inner join DW1_PAGE_PATHS p
@@ -796,9 +796,38 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         where
           a.TENANT = ? and ("""+ pathRangeClauses +""")
         order by a.TIME desc
-        limit """+ limit
+        limit """+ limit +"""
+        """
 
-      (sql, tenantId :: pathRangeValues)
+      lazy val foldersAndTreesValues = tenantId :: pathRangeValues
+
+      lazy val pageIdsQuery = """
+        select """+ ActionSelectListItems +"""
+        from DW1_PAGE_ACTIONS a
+        where a.TENANT = ?
+          and a.PAGE_ID in ("""+
+           pathRanges.pageIds.map((x: String) => "?").mkString(",") +""")
+        order by a.TIME desc
+        limit """+ limit +"""
+        """
+
+      lazy val pageIdsValues = tenantId :: pathRanges.pageIds.toList
+
+      val (sql, values) = {
+        import pathRanges._
+        (folders.size + trees.size, pageIds.size) match {
+          case (0, 0) => assErr("DwE390XQ2", "No path ranges specified")
+          case (0, _) => (pageIdsQuery, pageIdsValues)
+          case (_, 0) => (foldersAndTreesQuery, foldersAndTreesValues)
+          case (_, _) =>
+            // 1. This query might return 2 x limit rows, that's okay for now.
+            // 2. `union` elliminates duplicates (`union all` keeps them).
+            ("("+ foldersAndTreesQuery +") union ("+ pageIdsQuery +")",
+              foldersAndTreesValues ::: pageIdsValues)
+        }
+      }
+
+      (sql, values)
     }
 
     val lookupByPerson = fromIp.isDefined || byIdentity.isDefined
@@ -978,6 +1007,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     require(limit == Int.MaxValue) // for now
     require(offset == 0)  // for now
+    require(pageRanges.pageIds isEmpty) // for now
 
     val statusesToInclStr =
       includeStatuses.map(_toFlag).mkString("'", "','", "'")
