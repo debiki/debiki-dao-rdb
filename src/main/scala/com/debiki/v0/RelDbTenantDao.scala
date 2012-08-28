@@ -890,7 +890,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     }
 
     // Load users, so each returned SmartAction supports .user_!.displayName.
-    pagesById.mapValues(_.copy(people = people))
+    pagesById.transform((pageId, page) => page.copy(people = people))
 
     def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity +
        ", pathRanges: "+ pathRanges
