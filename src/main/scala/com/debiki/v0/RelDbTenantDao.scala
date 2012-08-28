@@ -650,6 +650,22 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  /**
+   * Loads many users, for example, to send to the Admin app so user
+   * names can be listed with comments and edits.
+   *
+   * Also loads Login:s and IdentityOpenId:s, so each action can be
+   * associated with the relevant user.
+   */
+  private def _loadUsersWhoDid(actions: List[Action])
+        (implicit connection: js.Connection): People = {
+    val loginIds: List[String] = actions map (_.loginId)
+    val logins = _loadLogins(byLoginIds = loginIds)
+    val (idtys, users) = _loadIdtysAndUsers(forLoginIds = loginIds)
+    People(logins, idtys, users)
+  }
+
+
   private def _loadUser(userId: String): Option[User] = {
     val usersByTenantAndId =  // SHOULD specify consumers
        systemDaoSpi.loadUsers(Map(tenantId -> (userId::Nil)))
@@ -743,7 +759,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
   def loadRecentActionExcerpts(fromIp: Option[String],
         byIdentity: Option[String],
-        pathRanges: PathRanges, limit: Int): Seq[ViAc] = {
+        pathRanges: PathRanges, limit: Int): (Seq[ViAc], People) = {
 
     def buildByPersonQuery(fromIp: Option[String],
           byIdentity: Option[String], limit: Int)
@@ -857,7 +873,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     val pagesById = mut.Map[String, Debate]()
     var pageIdsAndActions = List[(String, Action)]()
 
-    db.withConnection { implicit connection =>
+    val people = db.withConnection { implicit connection =>
       db.query(sql, values, rs => {
         while (rs.next) {
           val pageId = rs.getString("PAGE_ID")
@@ -869,13 +885,12 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           pageIdsAndActions ::= pageId -> action
         }
       })
+
+      _loadUsersWhoDid(pageIdsAndActions map (_._2))
     }
 
-    /* COULD:
-    val people = _loadPeople(whoDid = allActions)
-    but then won't know to which page each Login/IdentityOpenId etc belongs.
-    SHOULD have Page stop inheriting People, use delegation instead?
-     */
+    // Load users, so each returned SmartAction supports .user_!.displayName.
+    pagesById.mapValues(_.copy(people = people))
 
     def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity +
        ", pathRanges: "+ pathRanges
@@ -887,7 +902,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       SmartAction(page, action)
     }
 
-    smartActions
+    (smartActions, people)
   }
 
 
