@@ -1029,50 +1029,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def listActions(
-        pageRanges: PathRanges,
-        includePages: List[PageStatus],
-        limit: Int,
-        offset: Int): Seq[ActionLocator] = {
-
-    require(0 <= limit)
-    require(0 <= offset)
-    // For now only:
-    require(includePages == PageStatus.All)
-    require(offset == 0)
-
-    val (pageRangeClauses, pageRangeValues) = _pageRangeToSql(pageRanges, "p.")
-
-    val query = """
-       select p.PARENT_FOLDER, p.PAGE_ID, p.SHOW_ID, p.PAGE_SLUG,
-          a.TYPE, a.PAID, a.TIME
-       from
-         DW1_PAGE_ACTIONS a inner join DW1_PAGE_PATHS p
-         on a.TENANT = p.TENANT and a.PAGE_ID = p.PAGE_ID
-       where
-         a.TENANT = ? and ("""+ pageRangeClauses +""")
-       order by a.TIME desc
-       limit """+ limit
-
-    val vals = tenantId :: pageRangeValues
-    var actionLocators = List[ActionLocator]()
-
-    db.queryAtnms(query, vals, rs => {
-      while (rs.next) {
-        val pagePath = _PagePath(rs, tenantId)
-        val actnLctr = ActionLocator(
-           pagePath = pagePath,
-           actionId = rs.getString("PAID"),
-           actionCtime = rs.getTimestamp("TIME"),
-           actionType = rs.getString("TYPE"))
-        actionLocators ::= actnLctr
-      }
-    })
-
-    actionLocators.reverse
-  }
-
-
   def loadPermsOnPage(reqInfo: RequestInfo): PermsOnPage = {
     // Currently all permissions are actually hardcoded in this function.
     // (There's no permissions db table.)
