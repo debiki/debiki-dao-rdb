@@ -311,16 +311,17 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
   private def _loadLoginById(loginId: String)
         (implicit connection: js.Connection): Option[Login] = {
-    val logins = _loadLogins(byLoginId = loginId)
+    val logins = _loadLogins(byLoginIds = loginId::Nil)
     assErrIf(logins.length > 1, "DwE47IB6")
     logins.headOption
   }
 
 
-  private def _loadLogins(byLoginId: String = null, onPageGuid: String = null)
+  private def _loadLogins(byLoginIds: List[String] = null,
+        onPageGuid: String = null)
         (implicit connection: js.Connection): List[Login] = {
 
-    assert((byLoginId ne null) ^ (onPageGuid ne null))
+    assert((byLoginIds ne null) ^ (onPageGuid ne null))
 
     val selectList = """
         select
@@ -330,22 +331,25 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             l.LOGOUT_IP, l.LOGOUT_TIME
         """
 
-    val (fromWhereClause, pageOrLoginId) =
+    val (fromWhereClause, pageOrLoginIds) =
       if (onPageGuid ne null)
         ("""from DW1_PAGE_ACTIONS a, DW1_LOGINS l
           where a.TENANT = ?
             and a.PAGE_ID = ?
             and l.TENANT = a.TENANT
-            and l.SNO = a.LOGIN""", onPageGuid)
+            and l.SNO = a.LOGIN""", onPageGuid::Nil)
+      else if (byLoginIds isEmpty)
+        return Nil
       else
         ("""from DW1_LOGINS l
           where l.TENANT = ?
-            and l.SNO = ?""", byLoginId)
+            and l.SNO in ("""+ makeInListFor(byLoginIds) +")",
+           byLoginIds)
 
     var logins = List[Login]()
 
     db.queryAtnms(selectList + fromWhereClause,
-        List[AnyRef](tenantId, pageOrLoginId), rs => {
+        tenantId :: pageOrLoginIds, rs => {
       while (rs.next) {
         val loginId = rs.getLong("LOGIN_SNO").toString
         val prevLogin = Option(rs.getLong("PREV_LOGIN")).map(_.toString)
