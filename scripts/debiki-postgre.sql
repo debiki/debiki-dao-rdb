@@ -337,6 +337,14 @@ create table DW1_LOGINS(  -- logins and logouts
   -- join w/ all DW1_IDS_<whatever> tables when looking up the user for
   -- a certain login. NO! Instead, add USER_ID to DW1_PAGE_ACTIONS,
   -- then one would load DW1_PAGE_ACTIONS and DW1_USERS only, to render a page.
+  -- BETTER to add that USR/ROLE/GUEST colunmn to DW1_PAGE_ACTIONS?
+  -- so won't have to join with this DW1_LOGINS table.
+  -- COULD add a USR --> DW1_USERS/ROLES column, so an OpenID row can be
+  -- disassociated from the related user/rolerow can be
+  -- disassociated from the related user/role. Alternatively, I would mark
+  -- the OpenID row as inactive ('O'ld) and optionally associate the OpenID
+  -- with another user/role, by creating a 'C'urrent row, that points
+  -- to that user/role.
   LOGIN_IP varchar(39)       not null,
   LOGIN_TIME timestamp       not null,
   LOGOUT_IP varchar(39),
