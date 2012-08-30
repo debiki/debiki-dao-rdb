@@ -772,35 +772,16 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           ("l.ID_SNO = ? and l.ID_TYPE = 'OpenID' and l.TENANT = ?",
              List(byIdentity.get, tenantId))
 
-      // ((Concerning `distinct` in the last `select` below. Without it, [your
-      // own actions on your own actions] would be selected twice,
-      // because they'd match two rows in actionIds: a.PAID would match
-      // (because it's your action) and a.RELPA would match (because the action
-      // affected an action of yours). ))
+      // For now, don't select posts only. We're probably interested in
+      // all actions by this user, e.g also his/her ratings, to find
+      // out if s/he is astroturfing. (See this function's docs in class Dao.)
       val sql = """
-        with actionIds as (
            select a.TENANT, a.PAGE_ID, a.PAID
            from DW1_LOGINS l inner join DW1_PAGE_ACTIONS a
            on l.TENANT = a.TENANT and l.SNO = a.LOGIN
            where """+ loginIdsWhereSql +"""
            order by l.LOGIN_TIME desc
-           limit """+ limit +""")
-        select distinct -- se comment above
-           """+ ActionSelectListItems +"""
-        from DW1_PAGE_ACTIONS a inner join actionIds
-           on a.TENANT = actionIds.TENANT
-           and a.PAGE_ID = actionIds.PAGE_ID
-           and (
-             -- load actions by login id
-             a.PAID = actionIds.PAID
-             -- load actions that affected [an action by login id]
-              -- (e.g. edits, flags, approvals)
-              or (
-                a.TYPE <> 'Post' and -- skip replies
-                a.TYPE <> 'Rating' and -- skip ratings
-                a.RELPA = actionIds.PAID))
-        order by a.TIME desc
-        """
+           limit """+ limit
 
       (sql, loginIdsWhereValues)
     }
@@ -810,28 +791,30 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       lazy val (pathRangeClauses, pathRangeValues) =
          _pageRangeToSql(pathRanges, "p.")
 
+      // Select posts only. Edits etc are implicitly selected,
+      // later, when actions that affect the selected posts are selected.
       lazy val foldersAndTreesQuery = """
-        select """+ ActionSelectListItems +"""
+        select a.TENANT, a.PAGE_ID, a.PAID
         from
           DW1_PAGE_ACTIONS a inner join DW1_PAGE_PATHS p
           on a.TENANT = p.TENANT and a.PAGE_ID = p.PAGE_ID
         where
           a.TENANT = ? and ("""+ pathRangeClauses +""")
+          and a.TYPE = 'Post'
         order by a.TIME desc
-        limit """+ limit +"""
-        """
+        limit """+ limit
 
       lazy val foldersAndTreesValues = tenantId :: pathRangeValues
 
       lazy val pageIdsQuery = """
-        select """+ ActionSelectListItems +"""
+        select a.TENANT, a.PAGE_ID, a.PAID
         from DW1_PAGE_ACTIONS a
         where a.TENANT = ?
           and a.PAGE_ID in ("""+
            pathRanges.pageIds.map((x: String) => "?").mkString(",") +""")
+          and a.TYPE = 'Post'
         order by a.TIME desc
-        limit """+ limit +"""
-        """
+        limit """+ limit
 
       lazy val pageIdsValues = tenantId :: pathRanges.pageIds.toList
 
@@ -863,12 +846,35 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     // SHOULD create index on DW1_LOGINS.LOGIN_TIME
 
-    val (sql, values) =
+    val (selectActionIds, values) =
       if (lookupByPerson) buildByPersonQuery(fromIp, byIdentity, limit)
       else if (lookupByPaths) buildByPathQuery(pathRanges, limit)
       else
         // COULD write more efficient query: don't join with DW1_PAGE_PATHS.
         buildByPathQuery(PathRanges.Anywhere, limit)
+
+    // ((Concerning `distinct` in the `select` below. Without it, [your
+    // own actions on your own actions] would be selected twice,
+    // because they'd match two rows in actionIds: a.PAID would match
+    // (because it's your action) and a.RELPA would match (because the action
+    // affected an action of yours). ))
+     val sql = """
+      with actionIds as ("""+ selectActionIds +""")
+      select distinct -- se comment above
+         """+ ActionSelectListItems +"""
+      from DW1_PAGE_ACTIONS a inner join actionIds
+         on a.TENANT = actionIds.TENANT
+      and a.PAGE_ID = actionIds.PAGE_ID
+      and (
+        -- Load actions by login id / folder / page id.
+        a.PAID = actionIds.PAID
+        -- Load actions that affected [an action by login id]
+        -- (e.g. edits, flags, approvals).
+        or (
+          a.TYPE <> 'Post' and -- skip replies
+          a.TYPE <> 'Rating' and -- skip ratings
+          a.RELPA = actionIds.PAID))
+      order by a.TIME desc"""
 
     val pagesById = mut.Map[String, Debate]()
     var pageIdsAndActions = List[(String, Action)]()
