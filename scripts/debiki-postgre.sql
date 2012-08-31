@@ -591,11 +591,9 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       end),
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Publ', 'Meta', 'Edit',
-        'EditApp', -- SHOULD replace w Publd?
+        'EditApp',
+        'Aprv', 'Rjct',
         'Rating',
-        -- 'Reason' -- no, only "needed" for Edit - but can use Title instead.
-        -- (Other post types can have their reason inlined, TEXT isn't used
-        -- for those other types.)
         'DelPost', 'DelTree',
         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther')),
   -- There must be no action with id 0; let 0 mean nothing.
@@ -609,6 +607,18 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       check (TYPE = case when PAID = '1' then 'Post' else TYPE end)
 );
   -- Cannot create an index organized table -- not available in Postgre SQL.
+
+----- todo prod, done dev,test:
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
+alter table DW1_PAGE_ACTIONS
+  add constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
+        'Post', 'Publ', 'Meta', 'Edit',
+        'EditApp',
+        'Aprv', 'Rjct',
+        'Rating',
+        'DelPost', 'DelTree',
+        'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
+-----
 
 -- Did later:
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_PAID__C_NE

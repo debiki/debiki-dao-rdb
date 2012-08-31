@@ -73,7 +73,10 @@ object RelDbUtil {
         }
         Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
           ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
-      case x =>
+      case "Aprv" | "Rjct" =>
+        Review(id = id, targetId = relpa, loginId = loginSno, newIp = newIp,
+          ctime = time, isApproved = typee == "Aprv")
+      case _ =>
         assErr("DwEY8k3B", "Bad DW1_ACTIONS.TYPE: "+ safed(typee))
     }
     action

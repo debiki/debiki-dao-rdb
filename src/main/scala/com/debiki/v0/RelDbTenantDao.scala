@@ -1571,6 +1571,11 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             d.loginId, tenantId, pageId, d.id, d.ctime,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
             d.postId, e2n(d.reason), NullVarchar, NullVarchar))
+        case r: Review =>
+          val tyype = r.isApproved ? "Aprv" | "Rjct"
+          db.update(insertIntoActions, commonVals:::List(
+            r.loginId, tenantId, pageId, r.id, r.ctime,
+            tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
       }
