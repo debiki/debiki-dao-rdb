@@ -97,7 +97,7 @@ object RelDbUtil {
       displayName = identity.name, email = identity.email,
       emailNotfPrefs = emailNotfPrefs,
       country = "",
-      website = identity.website, isSuperAdmin = false, isOwner = false)
+      website = identity.website, isAdmin = false, isOwner = false)
   }
 
 
@@ -124,7 +124,7 @@ object RelDbUtil {
       emailNotfPrefs = _toEmailNotfs(rs.getString("u_email_notfs")),
       country = dn2e(rs.getString("u_country")),
       website = dn2e(rs.getString("u_website")),
-      isSuperAdmin = rs.getString("u_superadmin") == "T",
+      isAdmin = rs.getString("u_superadmin") == "T",
       isOwner = rs.getString("u_is_owner") == "T")
 
 

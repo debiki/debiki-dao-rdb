@@ -196,7 +196,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           val idty = loginReq.identity
           val userNoId =  User(id = "?", displayName = idty.displayName,
              email = idty.email, emailNotfPrefs = EmailNotfPrefs.Unspecified,
-             country = "", website = "", isSuperAdmin = false, isOwner = false)
+             country = "", website = "", isAdmin = false, isOwner = false)
           val userWithId = _insertUser(tenantId, userNoId)
           userWithId
       }
@@ -250,7 +250,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         values (?, ?, ?, ?, ?, ?, ?)""",
         List[AnyRef](tenantId, user.id, e2n(user.displayName),
            e2n(user.email), e2n(user.country),
-           tOrNull(user.isSuperAdmin), tOrNull(user.isOwner)))
+           tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     user
   }
 
@@ -954,7 +954,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         assErrIf(newHostCount != 1, "DwE09KRF3")
         val ownerRoleAtNewWebsite = _insertUser(newTenant.id,
           ownerRole.copy(id = "?",
-            isSuperAdmin = true, isOwner = true))
+            isAdmin = true, isOwner = true))
         val ownerIdtyAtNewWebsite = _insertIdentity(newTenant.id,
           ownerIdentity.copy(id = "?", userId = ownerRoleAtNewWebsite.id))
         Some(newTenant.copy(hosts = List(newHost)))
@@ -1104,9 +1104,9 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     // ?? Replace admin test with:
     // if (requeuster.memships.contains(AdminGroupId)) return PermsOnPage.All
 
-    // Allow superadmins to do anything, e.g. create pages anywhere.
+    // Allow admins to do anything, e.g. create pages anywhere.
     // (Currently users can edit their own pages only.)
-    if (reqInfo.user.map(_.isSuperAdmin) == Some(true))
+    if (reqInfo.user.map(_.isAdmin) == Some(true))
       return PermsOnPage.All
 
     // Files whose name starts with '.' are hidden, only admins have access.
