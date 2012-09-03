@@ -738,12 +738,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
     db.queryAtnms("""
-        select PAID, LOGIN, TIME, TYPE, RELPA,
-              TEXT, MARKUP, WHEERE, NEW_IP
-        from DW1_PAGE_ACTIONS
-        where TENANT = ? and PAGE_ID = ?
-        order by TIME desc
-        """,
+        select """+ ActionSelectListItems +"""
+        from DW1_PAGE_ACTIONS a
+        where a.TENANT = ? and a.PAGE_ID = ?
+        order by a.TIME desc""",
         List(tenantId, pageId), rs => {
       var actions = List[AnyRef]()
       while (rs.next) {
@@ -861,7 +859,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
      val sql = """
       with actionIds as ("""+ selectActionIds +""")
       select distinct -- se comment above
-         """+ ActionSelectListItems +"""
+         a.PAGE_ID, """+ ActionSelectListItems +"""
       from DW1_PAGE_ACTIONS a inner join actionIds
          on a.TENANT = actionIds.TENANT
       and a.PAGE_ID = actionIds.PAGE_ID
@@ -1535,47 +1533,58 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       val insertIntoActions = """
           insert into DW1_PAGE_ACTIONS(
             LOGIN, TENANT, PAGE_ID, PAID, TIME,
-            TYPE, RELPA, TEXT, MARKUP, WHEERE)
+            TYPE, RELPA, TEXT, MARKUP, WHEERE,
+            AUTO_APPROVAL, AUTO_APPLICATION)
           values (?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?)
-          """
+            ?, ?, ?, ?, ?,
+            ?, ?)"""
+
       // Keep in mind that Oracle converts "" to null.
-      val commonVals = Nil // p.loginId::pageId::Nil
+      val commonVals: List[AnyRef] = Nil // p.loginId::pageId::Nil
       action match {
         case p: Post =>
           db.update(insertIntoActions, commonVals:::List(
             p.loginId, tenantId, pageId, p.id, p.ctime, _toFlag(p.tyype),
-            p.parent, e2n(p.text), e2n(p.markup), e2n(p.where)))
+            p.parent, e2n(p.text), e2n(p.markup), e2n(p.where),
+            _toDbVal(p.autoApproval), NullVarchar))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
             r.loginId, tenantId, pageId, r.id, r.ctime, "Rating", r.postId,
-            NullVarchar, NullVarchar, NullVarchar))
+            NullVarchar, NullVarchar, NullVarchar,
+            NullVarchar, NullVarchar))
           db.batchUpdate("""
             insert into DW1_PAGE_RATINGS(TENANT, PAGE_ID, PAID, TAG)
             values (?, ?, ?, ?)
             """, r.tags.map(t => List(tenantId, pageId, r.id, t)))
         case e: Edit =>
+          val autoAppliedDbVal =
+             if (e.autoApplied) "A" else NullVarchar
           db.update(insertIntoActions, commonVals:::List(
             e.loginId, tenantId, pageId, e.id, e.ctime, "Edit",
-            e.postId, e2n(e.text), e2n(e.newMarkup), NullVarchar))
+            e.postId, e2n(e.text), e2n(e.newMarkup), NullVarchar,
+            _toDbVal(e.relatedPostAutoApproval), autoAppliedDbVal))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
             a.loginId, tenantId, pageId, a.id, a.ctime, "EditApp",
-            a.editId, e2n(a.result), NullVarchar, NullVarchar))
+            a.editId, e2n(a.result), NullVarchar, NullVarchar,
+            _toDbVal(a.relatedPostAutoApproval), NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
             f.loginId, tenantId, pageId, f.id, f.ctime, "Flag" + f.reason,
-            f.postId, e2n(f.details), NullVarchar, NullVarchar))
+            f.postId, e2n(f.details), NullVarchar, NullVarchar,
+            NullVarchar, NullVarchar))
         case d: Delete =>
           db.update(insertIntoActions, commonVals:::List(
             d.loginId, tenantId, pageId, d.id, d.ctime,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
-            d.postId, e2n(d.reason), NullVarchar, NullVarchar))
+            d.postId, e2n(d.reason), NullVarchar, NullVarchar,
+            NullVarchar, NullVarchar))
         case r: Review =>
           val tyype = r.isApproved ? "Aprv" | "Rjct"
           db.update(insertIntoActions, commonVals:::List(
             r.loginId, tenantId, pageId, r.id, r.ctime,
-            tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar))
+            tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar,
+            NullVarchar, NullVarchar))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
       }

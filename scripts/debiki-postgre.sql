@@ -561,6 +561,19 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   TEXT text,
   MARKUP varchar(30),
   WHEERE varchar(150),
+  -- Non-null if the action was automaticaly approved:
+  -- 'P'reliminarily approved (e.g. a new user that we hope is well behaved)
+  -- 'W'ell behaved user, therefore automatically approved.
+  -- 'A'uthoritative user (e.g. an admin), therefore automatically approved.
+  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add column
+  AUTO_APPROVAL varchar(1),
+  -------
+  -- For edits only.
+  -- 'A' if the edit was applied automatically upon creation.
+  -- (When you edit a post of yours, the edit is automatically applied.)
+  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add column
+  AUTO_APPLICATION varchar(1),
+  -------
   NEW_IP varchar(39), -- null, unless differs from DW1_LOGINS.START_IP
  alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID_ID__P
      primary key (TENANT, PAGE_ID, PAID);
@@ -604,7 +617,29 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       check (RELPA = case when PAID = '1' then '1' else RELPA end),
   -- The root post must be a 'Post'.
   constraint DW1_PACTIONS_ROOT_IS_POST__C
-      check (TYPE = case when PAID = '1' then 'Post' else TYPE end)
+      check (TYPE = case when PAID = '1' then 'Post' else TYPE end),
+  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_AUTOAPPROVAL__C_IN
+      check (AUTO_APPROVAL in ('P', 'W', 'A')),
+  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_AUTOAPPL__C_IN
+      check (AUTO_APPLICATION in ('A')),
+  -- Only edits can be applied.
+  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_AUTOAPPL_TYPE__C check(
+    case
+      when AUTO_APPLICATION is not null then (TYPE = 'Edit')
+      else true
+    end),
+  -- An edit that has been approved must also have been applied.
+  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_AUTO_APPL_APPR__C check(
+    case
+      when AUTO_APPROVAL is not null then (
+        TYPE <> 'Edit' or AUTO_APPLICATION is not null)
+      else true
+    end)
+  -------
 );
   -- Cannot create an index organized table -- not available in Postgre SQL.
 
@@ -618,7 +653,11 @@ alter table DW1_PAGE_ACTIONS
         'Rating',
         'DelPost', 'DelTree',
         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
------
+------
+-- todo prod, done dev,test:
+update DW1_PAGE_ACTIONS
+  set AUTO_APPROVAL = 'W' where TYPE in ('Post', 'EditApp');
+------
 
 -- Did later:
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_PAID__C_NE

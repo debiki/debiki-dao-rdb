@@ -22,8 +22,9 @@ object RelDbUtil {
 
 
   def ActionSelectListItems =
-    "a.PAGE_ID, a.PAID, a.LOGIN, a.TIME, a.TYPE, a.RELPA, " +
-     "a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP"
+    "a.PAID, a.LOGIN, a.TIME, a.TYPE, a.RELPA, " +
+     "a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP, " +
+     "a.AUTO_APPROVAL, a.AUTO_APPLICATION"
 
   def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
         : Action = {
@@ -36,6 +37,8 @@ object RelDbUtil {
     val markup_? = rs.getString("MARKUP")
     val where_? = rs.getString("WHEERE")
     val newIp = Option(rs.getString("NEW_IP"))
+    val autoApproval = _toAutoApproval(rs.getString("AUTO_APPROVAL"))
+    val editAutoApplied = rs.getString("AUTO_APPLICATION") == "A"
 
     // (This whole match-case will go away when I unify all types
     // into Post?)  ...
@@ -47,7 +50,7 @@ object RelDbUtil {
         new Post(id = id, parent = relpa, ctime = time,
           loginId = loginSno, newIp = newIp, text = n2e(text_?),
           markup = n2e(markup_?), tyype = _toPostType(typeStr),
-          where = Option(where_?))
+          where = Option(where_?), autoApproval = autoApproval)
       case "Rating" =>
         val tags = ratingTags(id)
         new Rating(id = id, postId = relpa, ctime = time,
@@ -55,11 +58,13 @@ object RelDbUtil {
       case "Edit" =>
         new Edit(id = id, postId = relpa, ctime = time,
           loginId = loginSno, newIp = newIp, text = n2e(text_?),
-          newMarkup = Option(markup_?))
+          newMarkup = Option(markup_?),
+          relatedPostAutoApproval = autoApproval, autoApplied = editAutoApplied)
       case "EditApp" =>
         new EditApp(id = id, editId = relpa, ctime = time,
           loginId = loginSno, newIp = newIp,
-          result = n2e(text_?))
+          result = n2e(text_?),
+          relatedPostAutoApproval = autoApproval)
       case flag if flag startsWith "Flag" =>
         val reasonStr = flag drop 4 // drop "Flag"
         val reason = FlagReason withName reasonStr
@@ -213,6 +218,23 @@ object RelDbUtil {
           " [error DwE0xcke215]")
       PostType.Text  // fallback to something with no side effects
                       // (except perhaps for a weird post appearing)
+  }
+
+
+  def _toAutoApproval(dbVal: String): Option[AutoApproval] = dbVal match {
+    case null => None
+    case "P" => Some(AutoApproval.Preliminary)
+    case "W" => Some(AutoApproval.WellBehavedUser)
+    case "A" => Some(AutoApproval.AuthoritativeUser)
+  }
+
+
+  def _toDbVal(autoApproval: Option[AutoApproval]): AnyRef =
+      autoApproval match {
+    case None => NullVarchar
+    case Some(AutoApproval.Preliminary) => "P"
+    case Some(AutoApproval.WellBehavedUser) => "W"
+    case Some(AutoApproval.AuthoritativeUser) => "A"
   }
 
 
