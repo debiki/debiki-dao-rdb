@@ -24,7 +24,7 @@ object RelDbUtil {
   def ActionSelectListItems =
     "a.PAID, a.LOGIN, a.TIME, a.TYPE, a.RELPA, " +
      "a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP, " +
-     "a.AUTO_APPROVAL, a.AUTO_APPLICATION"
+     "a.APPROVAL, a.AUTO_APPLICATION"
 
   def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
         : Action = {
@@ -37,7 +37,7 @@ object RelDbUtil {
     val markup_? = rs.getString("MARKUP")
     val where_? = rs.getString("WHEERE")
     val newIp = Option(rs.getString("NEW_IP"))
-    val autoApproval = _toAutoApproval(rs.getString("AUTO_APPROVAL"))
+    val approval = _toAutoApproval(rs.getString("APPROVAL"))
     val editAutoApplied = rs.getString("AUTO_APPLICATION") == "A"
 
     // (This whole match-case will go away when I unify all types
@@ -50,7 +50,7 @@ object RelDbUtil {
         new Post(id = id, parent = relpa, ctime = time,
           loginId = loginSno, newIp = newIp, text = n2e(text_?),
           markup = n2e(markup_?), tyype = _toPostType(typeStr),
-          where = Option(where_?), autoApproval = autoApproval)
+          where = Option(where_?), approval = approval)
       case "Rating" =>
         val tags = ratingTags(id)
         new Rating(id = id, postId = relpa, ctime = time,
@@ -59,12 +59,12 @@ object RelDbUtil {
         new Edit(id = id, postId = relpa, ctime = time,
           loginId = loginSno, newIp = newIp, text = n2e(text_?),
           newMarkup = Option(markup_?),
-          relatedPostAutoApproval = autoApproval, autoApplied = editAutoApplied)
+          approval = approval, autoApplied = editAutoApplied)
       case "EditApp" =>
         new EditApp(id = id, editId = relpa, ctime = time,
           loginId = loginSno, newIp = newIp,
           result = n2e(text_?),
-          relatedPostAutoApproval = autoApproval)
+          approval = approval)
       case flag if flag startsWith "Flag" =>
         val reasonStr = flag drop 4 // drop "Flag"
         val reason = FlagReason withName reasonStr
@@ -79,8 +79,9 @@ object RelDbUtil {
         Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
           ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
       case "Aprv" | "Rjct" =>
+        assert((typee == "Rjct") == approval.isEmpty)
         Review(id = id, targetId = relpa, loginId = loginSno, newIp = newIp,
-          ctime = time, isApproved = typee == "Aprv")
+          ctime = time, approval = approval)
       case _ =>
         assErr("DwEY8k3B", "Bad DW1_ACTIONS.TYPE: "+ safed(typee))
     }
@@ -221,20 +222,21 @@ object RelDbUtil {
   }
 
 
-  def _toAutoApproval(dbVal: String): Option[AutoApproval] = dbVal match {
+  def _toAutoApproval(dbVal: String): Option[Approval] = dbVal match {
     case null => None
-    case "P" => Some(AutoApproval.Preliminary)
-    case "W" => Some(AutoApproval.WellBehavedUser)
-    case "A" => Some(AutoApproval.AuthoritativeUser)
+    case "P" => Some(Approval.Preliminary)
+    case "W" => Some(Approval.WellBehavedUser)
+    case "A" => Some(Approval.AuthoritativeUser)
+    case "M" => Some(Approval.Manual)
   }
 
 
-  def _toDbVal(autoApproval: Option[AutoApproval]): AnyRef =
-      autoApproval match {
+  def _toDbVal(approval: Option[Approval]): AnyRef = approval match {
     case None => NullVarchar
-    case Some(AutoApproval.Preliminary) => "P"
-    case Some(AutoApproval.WellBehavedUser) => "W"
-    case Some(AutoApproval.AuthoritativeUser) => "A"
+    case Some(Approval.Preliminary) => "P"
+    case Some(Approval.WellBehavedUser) => "W"
+    case Some(Approval.AuthoritativeUser) => "A"
+    case Some(Approval.Manual) => "M"
   }
 
 

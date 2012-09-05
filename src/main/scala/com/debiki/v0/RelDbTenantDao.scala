@@ -1534,7 +1534,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           insert into DW1_PAGE_ACTIONS(
             LOGIN, TENANT, PAGE_ID, PAID, TIME,
             TYPE, RELPA, TEXT, MARKUP, WHEERE,
-            AUTO_APPROVAL, AUTO_APPLICATION)
+            APPROVAL, AUTO_APPLICATION)
           values (?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?)"""
@@ -1546,7 +1546,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           db.update(insertIntoActions, commonVals:::List(
             p.loginId, tenantId, pageId, p.id, p.ctime, _toFlag(p.tyype),
             p.parent, e2n(p.text), e2n(p.markup), e2n(p.where),
-            _toDbVal(p.autoApproval), NullVarchar))
+            _toDbVal(p.approval), NullVarchar))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
             r.loginId, tenantId, pageId, r.id, r.ctime, "Rating", r.postId,
@@ -1562,12 +1562,12 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           db.update(insertIntoActions, commonVals:::List(
             e.loginId, tenantId, pageId, e.id, e.ctime, "Edit",
             e.postId, e2n(e.text), e2n(e.newMarkup), NullVarchar,
-            _toDbVal(e.relatedPostAutoApproval), autoAppliedDbVal))
+            _toDbVal(e.approval), autoAppliedDbVal))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
             a.loginId, tenantId, pageId, a.id, a.ctime, "EditApp",
             a.editId, e2n(a.result), NullVarchar, NullVarchar,
-            _toDbVal(a.relatedPostAutoApproval), NullVarchar))
+            _toDbVal(a.approval), NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
             f.loginId, tenantId, pageId, f.id, f.ctime, "Flag" + f.reason,
@@ -1580,11 +1580,11 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             d.postId, e2n(d.reason), NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
         case r: Review =>
-          val tyype = r.isApproved ? "Aprv" | "Rjct"
+          val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
           db.update(insertIntoActions, commonVals:::List(
             r.loginId, tenantId, pageId, r.id, r.ctime,
             tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar,
-            NullVarchar, NullVarchar))
+            _toDbVal(r.approval), NullVarchar))
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
       }

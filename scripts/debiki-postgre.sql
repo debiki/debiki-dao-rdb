@@ -565,8 +565,9 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- 'P'reliminarily approved (e.g. a new user that we hope is well behaved)
   -- 'W'ell behaved user, therefore automatically approved.
   -- 'A'uthoritative user (e.g. an admin), therefore automatically approved.
+  -- 'M'anual approval, by authoritative user
   -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add column
-  AUTO_APPROVAL varchar(1),
+  APPROVAL varchar(1),
   -------
   -- For edits only.
   -- 'A' if the edit was applied automatically upon creation.
@@ -619,8 +620,17 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS_ROOT_IS_POST__C
       check (TYPE = case when PAID = '1' then 'Post' else TYPE end),
   -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
-  constraint DW1_PGAS_AUTOAPPROVAL__C_IN
-      check (AUTO_APPROVAL in ('P', 'W', 'A')),
+  constraint DW1_PGAS_APPROVAL__C_IN
+      check (APPROVAL in ('P', 'W', 'A', 'M')),
+  -- Approval rows must have an approval reason defined,
+  -- but rejections must have no approval reason.
+  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_TYPE_APPROVAL__C check(
+      case TYPE
+        when 'Aprv' then (APPROVAL is not null)
+        when 'Rjct' then (APPROVAL is null)
+        else true
+      end),
   -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_AUTOAPPL__C_IN
       check (AUTO_APPLICATION in ('A')),
@@ -633,9 +643,9 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
     end),
   -- An edit that has been approved must also have been applied.
   -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
-  constraint DW1_PGAS_AUTO_APPL_APPR__C check(
+  constraint DW1_PGAS_APPR_AUTOAPPL__C check(
     case
-      when AUTO_APPROVAL is not null then (
+      when APPROVAL is not null then (
         TYPE <> 'Edit' or AUTO_APPLICATION is not null)
       else true
     end)
@@ -656,7 +666,7 @@ alter table DW1_PAGE_ACTIONS
 ------
 -- todo prod, done dev,test:
 update DW1_PAGE_ACTIONS
-  set AUTO_APPROVAL = 'W' where TYPE in ('Post', 'EditApp');
+  set APPROVAL = 'W' where TYPE in ('Post', 'EditApp');
 ------
 
 -- Did later:
