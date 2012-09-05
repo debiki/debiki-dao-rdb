@@ -899,7 +899,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity +
        ", pathRanges: "+ pathRanges
 
-    val smartActions = pageIdsAndActions map { case (pageId, action) =>
+    val pageIdsAndActionsDescTime =
+      pageIdsAndActions sortBy { case (_, action) => - action.ctime.getTime }
+
+    val smartActions = pageIdsAndActionsDescTime map { case (pageId, action) =>
       val page = pagesById.get(pageId).getOrElse(assErr(
         "DwE9031211", "Page "+ pageId +" missing when loading recent actions, "+
         debugDetails))
