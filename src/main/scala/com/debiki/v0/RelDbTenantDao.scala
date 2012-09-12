@@ -755,6 +755,38 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  def loadPageBodiesTitles(pagePaths: Seq[PagePath]):
+        Seq[(PagePath, Option[Debate])] = {
+
+    if (pagePaths isEmpty)
+      return Nil
+
+    val bodyOrTitle = "'"+ Page.BodyId +"', '"+ Page.TitleId +"'"
+    val sql = """
+      select a.PAGE_ID, """+ ActionSelectListItems +"""
+      from DW1_PAGE_ACTIONS a
+      where a.TENANT = ?
+        and a.PAGE_ID in ("""+ makeInListFor(pagePaths) +""")
+        and (
+          a.PAID in ("""+ bodyOrTitle +""")
+          or (
+            a.RELPA in ("""+ bodyOrTitle +""")
+            and a.type in (
+              'Edit', 'EditApp', 'Rjct', 'Aprv', 'DelPost', 'DelTree')))"""
+
+    val values = tenantId :: pagePaths.toList.map(_.pageId getOrElse assErr(
+      "DwE7HDR3", "Page id unknown, pagePaths: "+ pagePaths.toString))
+
+    val (
+      people: People,
+      pagesById: mut.Map[String, Debate],
+      pageIdsAndActions: List[(String, Action)]) =
+        _loadPeoplePagesActionsNoRatingTags(sql, values)
+
+    pagePaths map { path => (path, pagesById.get(path.pageId.get)) }
+  }
+
+
   def loadRecentActionExcerpts(fromIp: Option[String],
         byIdentity: Option[String],
         pathRanges: PathRanges, limit: Int): (Seq[ViAc], People) = {
@@ -874,6 +906,39 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           a.RELPA = actionIds.PAID))
       order by a.TIME desc"""
 
+
+    val (
+      people: People,
+      pagesById: mut.Map[String, Debate],
+      pageIdsAndActions: List[(String, Action)]) =
+        _loadPeoplePagesActionsNoRatingTags(sql, values)
+
+    val pageIdsAndActionsDescTime =
+      pageIdsAndActions sortBy { case (_, action) => - action.ctime.getTime }
+
+    def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity +
+       ", pathRanges: "+ pathRanges
+
+    val smartActions = pageIdsAndActionsDescTime map { case (pageId, action) =>
+      val page = pagesById.get(pageId).getOrElse(assErr(
+        "DwE9031211", "Page "+ pageId +" missing when loading recent actions, "+
+        debugDetails))
+      SmartAction(page, action)
+    }
+
+    (smartActions, people)
+  }
+
+
+  /**
+   * Loads People, Pages (Debate:s) and Actions given an SQL statement
+   * that selects:
+   *   DW1_PAGE_ACTIONS.PAGE_ID and
+   *   RelDbUtil.ActionSelectListItems.
+   */
+  private def _loadPeoplePagesActionsNoRatingTags(
+        sql: String, values: List[AnyRef])
+        : (People, mut.Map[String, Debate], List[(String, Action)]) = {
     val pagesById = mut.Map[String, Debate]()
     var pageIdsAndActions = List[(String, Action)]()
 
@@ -896,20 +961,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     // Load users, so each returned SmartAction supports .user_!.displayName.
     pagesById.transform((pageId, page) => page.copy(people = people))
 
-    def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity +
-       ", pathRanges: "+ pathRanges
-
-    val pageIdsAndActionsDescTime =
-      pageIdsAndActions sortBy { case (_, action) => - action.ctime.getTime }
-
-    val smartActions = pageIdsAndActionsDescTime map { case (pageId, action) =>
-      val page = pagesById.get(pageId).getOrElse(assErr(
-        "DwE9031211", "Page "+ pageId +" missing when loading recent actions, "+
-        debugDetails))
-      SmartAction(page, action)
-    }
-
-    (smartActions, people)
+    (people, pagesById, pageIdsAndActions)
   }
 
 
@@ -1033,7 +1085,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     offset: Int
   ): Seq[(PagePath, PageDetails)] = {
 
-    require(limit == Int.MaxValue) // for now
+    require(1 <= limit)
     require(offset == 0)  // for now
     require(pageRanges.pageIds isEmpty) // for now
 
@@ -1064,7 +1116,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         from DW1_PAGE_PATHS
         where TENANT = ? and ("""+ pageRangeClauses +""" )
         and PAGE_STATUS in ("""+ statusesToInclStr +""")
-        """+ orderByStr,
+        """+ orderByStr +"""
+        limit """+ limit,
         tenantId :: pageRangeValues,
         rs => {
       while (rs.next) {
