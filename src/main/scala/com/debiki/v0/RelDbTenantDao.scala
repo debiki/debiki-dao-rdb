@@ -874,8 +874,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     if (lookupByPerson) require(fromIp.isDefined ^ byIdentity.isDefined)
     require(0 <= limit)
 
-    // SHOULD create index on DW1_LOGINS.LOGIN_TIME
-
     val (selectActionIds, values) =
       if (lookupByPerson) buildByPersonQuery(fromIp, byIdentity, limit)
       else if (lookupByPaths) buildByPathQuery(pathRanges, limit)

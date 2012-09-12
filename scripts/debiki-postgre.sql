@@ -25,6 +25,8 @@ Naming standard
         "__C_IN" check in (list of allowed values)
         "__C_B" check in ('T') or check in ('T', 'F')
         "__C_EQ" checks that things are equal
+        "__C_LE" checks less than or equal
+                  (and also GT: greater than, GE: greater or eq, etc.)
  "DW1_...__U" for unique constraints and unique indexes
  "DW1_...__R__..." for referential constraints
 where "..." is "<abbreviated-table-name>_<abbreviated>_<column>_<names>".
@@ -457,6 +459,9 @@ create table DW1_LOGINS(  -- logins and logouts
 create index DW1_LOGINS_TNT on DW1_LOGINS(TENANT);
 create index DW1_LOGINS_PREVL on DW1_LOGINS(PREV_LOGIN);
 
+-- SHOULD create index on DW1_LOGINS.TENANT + ID_SNO (+ LOGIN_TIME desc)
+-- COULD create index on DW1_LOGINS.TENANT + IP (+ LOGIN_TIME desc)
+
 create sequence DW1_LOGINS_SNO start with 10;
 
 -- Not currently possible since DW1_LOGINS' PK doesn't include TENANT_ID.
@@ -508,10 +513,8 @@ create index DW1_IDSMPLEML_LOGIN on DW1_IDS_SIMPLE_EMAIL (LOGIN);
 
 -- (How do we know who created the page? The user who created
 -- the root post, its page-action-id is always "1".)
--- COULD remove? select ... from DW1_PAGE_ACTIONS where PAID = '1' instead
--- COULD really remove, use PAGE_PATHS instead and rename it to PAGES?
 create table DW1_PAGES(
-  SNO varchar(32)       not null,   -- COULD remove, use only GUID
+  SNO varchar(32)       not null,   -- COULD remove, use TENANT + ID instead
   TENANT varchar(32)    not null,
   GUID varchar(32)      not null,   -- COULD rename to ID
   constraint DW1_PAGES_SNO__P primary key (SNO),
