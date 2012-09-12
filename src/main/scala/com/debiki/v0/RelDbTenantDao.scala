@@ -1098,7 +1098,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       case PageSortOrder.ByPath =>
         " order by PARENT_FOLDER, SHOW_ID, PAGE_SLUG"
       case PageSortOrder.ByPublTime =>
-        " order by CACHED_PUBL_TIME desc"
+        // For now: (CACHED_PUBL_TIME not implemented)
+        " order by CDATI desc"
     }
 
     val (pageRangeClauses, pageRangeValues) = _pageRangeToSql(pageRanges)
@@ -1136,7 +1137,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         items ::= pagePath -> pageDetails
       }
     })
-    items
+    items.reverse
   }
 
 
@@ -1531,20 +1532,17 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     var vals = List[AnyRef]()
 
     newFolder foreach (folder => {
-      if (!vals.isEmpty) updates append ", "
-      updates.append("PARENT_FOLDER = ?")
+      updates.append("PARENT_FOLDER = ?,")
       vals ::= folder
     })
 
     showId foreach (showId => {
-      if (!vals.isEmpty) updates append ", "
-      updates.append("SHOW_ID = ?")
+      updates.append("SHOW_ID = ?,")
       vals ::= showId ? "T" | "F"
     })
 
     newSlug foreach (slug => {
-      if (!vals.isEmpty) updates append ", "
-      updates.append("PAGE_SLUG = ?")
+      updates.append("PAGE_SLUG = ?,")
       vals ::= slug
     })
 
@@ -1552,7 +1550,9 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       val allVals = (pageId::tenantId::vals).reverse
       val stmt = """
          update DW1_PAGE_PATHS
-         set """+ updates +"""
+         set """+
+           updates +"""
+           MDATI = now()
          where TENANT = ? and PAGE_ID = ?
          """
 

@@ -910,6 +910,12 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   PAGE_ID varchar(32) not null,
   SHOW_ID varchar(1) not null,
   PAGE_SLUG varchar(100) not null,
+  --
+  -- SHOULD move below STATUS + CACHED_... cols to DW1_PAGES, because
+  -- there migt be many paths to each page. (If you move a page,
+  -- old paths should redirect to its new location). And add CANONICAL
+  -- column to this table.
+  --
   -- The page status, see Debiki for Developers #9vG5I.
   -- 'D'raft, 'P'ublished, 'X' deleted, 'E'rased.
   PAGE_STATUS varchar(1) not null,
@@ -920,6 +926,11 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   -- When the page was last modified in a significant way. Of interest
   -- to e.g. Atom feeds.
   CACHED_SGFNT_MTIME timestamp default null,
+  ------ TODO prod, done dev,test: alter table DW1_PAGE_PATHS add column
+  CDATI timestamp not null default now(),
+  ------ TODO prod, done dev,test: alter table DW1_PAGE_PATHS add column
+  MDATI timestamp not null default now(),
+  -------
   constraint DW1_PGPTHS_TNT_PGID__P primary key (TENANT, PAGE_ID),
   constraint DW1_PGPTHS_TNT_PGID__R__PAGES  -- ix DW1_PGPTHS_TNT_PAGE__P
       foreign key (TENANT, PAGE_ID)
@@ -932,8 +943,14 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   constraint DW1_PGPTHS_PGSTS__C_IN check (PAGE_STATUS in('D', 'P', 'X', 'E')),
   constraint DW1_PGPTHS_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
   constraint DW1_PGPTHS_MTIME_PUBLTIME__C check (
-      CACHED_SGFNT_MTIME >= CACHED_PUBL_TIME)
+      CACHED_SGFNT_MTIME >= CACHED_PUBL_TIME),
+  ------ TODO prod, done dev,test: alter table DW1_PAGE_PATHS add
+  constraint DW1_PGPTHS_CDATI_MDATI__C_LE check (CDATI <= MDATI)
+  ------
 );
+
+-- COULD add index on TENANT + CDATI? -- but better to add on
+-- DW1_PAGES.TENANT + CDATI / PUBL_DATI instead?
 
 -- TODO: Test case: no 2 pages with same path, for the index below.
 -- Create an index that ensures (tenant, folder, page-slug) is unique,
@@ -949,6 +966,15 @@ where SHOW_ID = 'F';
 -- shown before the page slug).
 create index DW1_PGPTHS_ALL
 on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, PAGE_ID);
+
+------ TODO prod, done dev,test:
+update DW1_PAGE_PATHS p set cdati =
+  (select min(a.time) from DW1_PAGE_ACTIONS a
+  where p.tenant = a.tenant
+    and p.page_id = a.page_id);
+
+update DW1_PAGE_PATHS p set mdati = cdati;
+------
 
 
 
