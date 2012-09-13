@@ -411,4 +411,87 @@ debiki_prod->   where OID_ENDPOINT = 'https://www.google.com/accounts/o8/ud';
 CREATE INDEX
 
 }}}1
+{{{1 2012-09-13 Adding APPROVAL, AUTO_APPLICATION and paths CDATI, MDATI
 
+-bash-4.1$ . scripts/psql-debiki_prod.src 
+Password for user debiki_prod: 
+psql (9.1.3)
+SSL connection (cipher: DHE-RSA-AES256-SHA, bits: 256)
+Type "help" for help.
+
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGE_ACTIONS add column
+debiki_prod->   APPROVAL varchar(1);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add column
+debiki_prod->   AUTO_APPLICATION varchar(1);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_APPROVAL__C_IN
+debiki_prod->       check (APPROVAL in ('P', 'W', 'A', 'M'));
+ALTER TABLE
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_TYPE_APPROVAL__C check(
+debiki_prod(>       case TYPE
+debiki_prod(>         when 'Aprv' then (APPROVAL is not null)
+debiki_prod(>         when 'Rjct' then (APPROVAL is null)
+debiki_prod(>         else true
+debiki_prod(>       end);
+ALTER TABLE
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_AUTOAPPL__C_IN
+debiki_prod->       check (AUTO_APPLICATION in ('A'));
+ALTER TABLE
+debiki_prod=>
+debiki_prod=>  alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_AUTOAPPL_TYPE__C check(
+debiki_prod(>     case
+debiki_prod(>       when AUTO_APPLICATION is not null then (TYPE = 'Edit')
+debiki_prod(>       else true
+debiki_prod(>     end);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_APPR_AUTOAPPL__C check(
+debiki_prod(>     case
+debiki_prod(>       when APPROVAL is not null then (
+debiki_prod(>         TYPE <> 'Edit' or AUTO_APPLICATION is not null)
+debiki_prod(>       else true
+debiki_prod(>     end);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS
+debiki_prod->   add constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
+debiki_prod(>         'Post', 'Publ', 'Meta', 'Edit',
+debiki_prod(>         'EditApp',
+debiki_prod(>         'Aprv', 'Rjct',
+debiki_prod(>         'Rating',
+debiki_prod(>         'DelPost', 'DelTree',
+debiki_prod(>         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
+ALTER TABLE
+debiki_prod=> 
+debiki_prod=> update DW1_PAGE_ACTIONS
+debiki_prod->   set APPROVAL = 'W' where TYPE in ('Post', 'EditApp');
+UPDATE 917
+debiki_prod=> 
+debiki_prod=> alter table DW1_PAGE_PATHS add column
+debiki_prod->   CDATI timestamp not null default now();
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_PATHS add column
+debiki_prod->   MDATI timestamp not null default now();
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_PATHS add constraint DW1_PGPTHS_CDATI_MDATI__C_LE check (CDATI <= MDATI);
+ALTER TABLE
+debiki_prod=> 
+debiki_prod=> update DW1_PAGE_PATHS p set cdati =
+debiki_prod->   (select min(a.time) from DW1_PAGE_ACTIONS a
+debiki_prod(>   where p.tenant = a.tenant
+debiki_prod(>     and p.page_id = a.page_id);
+UPDATE 68
+debiki_prod=> update DW1_PAGE_PATHS p set mdati = cdati;
+UPDATE 68
+debiki_prod=>
+
+}}}1

@@ -569,15 +569,11 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- 'W'ell behaved user, therefore automatically approved.
   -- 'A'uthoritative user (e.g. an admin), therefore automatically approved.
   -- 'M'anual approval, by authoritative user
-  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add column
   APPROVAL varchar(1),
-  -------
   -- For edits only.
   -- 'A' if the edit was applied automatically upon creation.
   -- (When you edit a post of yours, the edit is automatically applied.)
-  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add column
   AUTO_APPLICATION varchar(1),
-  -------
   NEW_IP varchar(39), -- null, unless differs from DW1_LOGINS.START_IP
  alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID_ID__P
      primary key (TENANT, PAGE_ID, PAID);
@@ -622,55 +618,34 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- The root post must be a 'Post'.
   constraint DW1_PACTIONS_ROOT_IS_POST__C
       check (TYPE = case when PAID = '1' then 'Post' else TYPE end),
-  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_APPROVAL__C_IN
       check (APPROVAL in ('P', 'W', 'A', 'M')),
   -- Approval rows must have an approval reason defined,
   -- but rejections must have no approval reason.
-  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_TYPE_APPROVAL__C check(
       case TYPE
         when 'Aprv' then (APPROVAL is not null)
         when 'Rjct' then (APPROVAL is null)
         else true
       end),
-  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_AUTOAPPL__C_IN
       check (AUTO_APPLICATION in ('A')),
   -- Only edits can be applied.
-  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_AUTOAPPL_TYPE__C check(
     case
       when AUTO_APPLICATION is not null then (TYPE = 'Edit')
       else true
     end),
   -- An edit that has been approved must also have been applied.
-  -- TODO prod, done dev,test: alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_APPR_AUTOAPPL__C check(
     case
       when APPROVAL is not null then (
         TYPE <> 'Edit' or AUTO_APPLICATION is not null)
       else true
     end)
-  -------
 );
   -- Cannot create an index organized table -- not available in Postgre SQL.
 
------ todo prod, done dev,test:
-alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
-alter table DW1_PAGE_ACTIONS
-  add constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
-        'Post', 'Publ', 'Meta', 'Edit',
-        'EditApp',
-        'Aprv', 'Rjct',
-        'Rating',
-        'DelPost', 'DelTree',
-        'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther'));
-------
--- todo prod, done dev,test:
-update DW1_PAGE_ACTIONS
-  set APPROVAL = 'W' where TYPE in ('Post', 'EditApp');
-------
 
 -- Did later:
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_PAID__C_NE
@@ -929,11 +904,8 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   -- When the page was last modified in a significant way. Of interest
   -- to e.g. Atom feeds.
   CACHED_SGFNT_MTIME timestamp default null,
-  ------ TODO prod, done dev,test: alter table DW1_PAGE_PATHS add column
   CDATI timestamp not null default now(),
-  ------ TODO prod, done dev,test: alter table DW1_PAGE_PATHS add column
   MDATI timestamp not null default now(),
-  -------
   constraint DW1_PGPTHS_TNT_PGID__P primary key (TENANT, PAGE_ID),
   constraint DW1_PGPTHS_TNT_PGID__R__PAGES  -- ix DW1_PGPTHS_TNT_PAGE__P
       foreign key (TENANT, PAGE_ID)
@@ -947,9 +919,7 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   constraint DW1_PGPTHS_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
   constraint DW1_PGPTHS_MTIME_PUBLTIME__C check (
       CACHED_SGFNT_MTIME >= CACHED_PUBL_TIME),
-  ------ TODO prod, done dev,test: alter table DW1_PAGE_PATHS add
   constraint DW1_PGPTHS_CDATI_MDATI__C_LE check (CDATI <= MDATI)
-  ------
 );
 
 -- COULD add index on TENANT + CDATI? -- but better to add on
@@ -969,15 +939,6 @@ where SHOW_ID = 'F';
 -- shown before the page slug).
 create index DW1_PGPTHS_ALL
 on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, PAGE_ID);
-
------- TODO prod, done dev,test:
-update DW1_PAGE_PATHS p set cdati =
-  (select min(a.time) from DW1_PAGE_ACTIONS a
-  where p.tenant = a.tenant
-    and p.page_id = a.page_id);
-
-update DW1_PAGE_PATHS p set mdati = cdati;
-------
 
 
 
