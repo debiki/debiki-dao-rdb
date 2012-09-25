@@ -48,6 +48,42 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  def movePages(pageIds: Seq[String], fromFolder: String, toFolder: String) {
+    db.transaction { implicit connection =>
+      _movePages(pageIds, fromFolder = fromFolder, toFolder = toFolder)
+    }
+  }
+
+
+  private def _movePages(pageIds: Seq[String], fromFolder: String,
+        toFolder: String)(implicit connection: js.Connection) {
+    if (pageIds isEmpty)
+      return
+
+    // Valid folder paths?
+    PagePath.checkPath(folder = fromFolder)
+    PagePath.checkPath(folder = toFolder)
+
+    // Escape magic regex chars in folder name — we're using `fromFolder` as a
+    // regex. (As of 2012-09-24, a valid folder path contains no regex chars
+    // except for `.`, so this won't restrict which folder names are allowed.)
+    if (fromFolder.intersect(MagicRegexCharsNoDot).nonEmpty)
+      illArgErr("DwE93KW18", "Regex chars found in fromFolder: "+ fromFolder)
+    val fromFolderEscaped = fromFolder.replace(".", """\.""")
+
+    // Use Postgres' REGEXP_REPLACE to replace only the first occurrance of
+    // `fromFolder`.
+    val sql = """
+      update DW1_PAGE_PATHS
+      set PARENT_FOLDER = REGEXP_REPLACE(PARENT_FOLDER, ?, ?)
+      where TENANT = ?
+        and PAGE_ID in (""" + makeInListFor(pageIds) + ")"
+    val values = fromFolderEscaped :: toFolder :: tenantId :: pageIds.toList
+
+    db.update(sql, values)
+  }
+
+
   def moveRenamePage(pageId: String,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String]): PagePath = {

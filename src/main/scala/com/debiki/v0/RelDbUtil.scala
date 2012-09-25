@@ -15,6 +15,13 @@ object RelDbUtil {
 
 
   /**
+   * I've included too many chars, I think, to play safe.
+   * E.g. `=` and "` and `'` and '`' and `_` are no regex chars?
+   */
+  val MagicRegexCharsNoDot = """!"#$%&'()*+,:;<=>?@[\]^_`{|}~"""
+
+
+  /**
    * Use like so: "select ... where X in ("+ makeInListFor(xs) +")"
    */
   def makeInListFor(values: Seq[_]): String =
