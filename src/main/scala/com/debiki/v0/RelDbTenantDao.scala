@@ -22,6 +22,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
    extends TenantDaoSpi {
   // COULD serialize access, per page?
 
+  val MaxWebsitesPerIp = 6
+
   def tenantId = quotaConsumers.tenantId
 
   def db = systemDaoSpi.db
@@ -1032,11 +1034,16 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         : Option[Tenant] = {
     try {
       db.transaction { implicit connection =>
+        val websiteCount = _countWebsites(createdFromIp = ownerIp)
+        if (websiteCount >= MaxWebsitesPerIp)
+          throw OverQuotaException("Website creation limit exceeded")
+
         val newTenantNoId = Tenant(id = "?", name = name,
            creatorIp = ownerIp, creatorTenantId = tenantId,
            creatorLoginId = ownerLoginId, creatorRoleId = ownerRole.id,
            hosts = Nil)
         val newTenant = _createTenant(newTenantNoId)
+
         val newHost = TenantHost(address, TenantHost.RoleCanonical,
           TenantHost.HttpsNone)
         val newHostCount = _insertTenantHost(newTenant.id, newHost)
@@ -1054,6 +1061,18 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         if (!isUniqueConstrViolation(ex)) throw ex
         None
     }
+  }
+
+
+  private def _countWebsites(createdFromIp: String)
+        (implicit connection: js.Connection): Int = {
+    db.query("""
+        select count(*) WEBSITE_COUNT from DW1_TENANTS where CREATOR_IP = ?
+        """, createdFromIp::Nil, rs => {
+      rs.next()
+      val websiteCount = rs.getInt("WEBSITE_COUNT")
+      websiteCount
+    })
   }
 
 
@@ -1102,7 +1121,6 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
 
   def lookupOtherTenant(scheme: String, host: String): TenantLookup = {
-    // TODO consume quota
     systemDaoSpi.lookupTenant(scheme, host)
   }
 
