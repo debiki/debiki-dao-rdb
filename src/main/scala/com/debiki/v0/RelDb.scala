@@ -105,7 +105,7 @@ class RelDb(val server: String,
     //  http://jdbc.postgresql.org/documentation/publicapi/org/
     //    postgresql/ds/PGPoolingDataSource.html
 
-    // TODO: Read and implement:
+    // COULD read and implement:
     //   http://postgresql.1045698.n5.nabble.com/
     //      keeping-Connection-alive-td2172330.html
     //   http://www.rosam.se/doc/atsdoc/Server%20-%20Messages%20and%20Codes/
@@ -257,7 +257,7 @@ class RelDb(val server: String,
         }
         updateCount
       })
-      TODO // handle errors, throw exception
+      COULD // handle errors, throw exception
       result
     } catch {
       case ex: js.SQLException =>

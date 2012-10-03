@@ -37,8 +37,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       // be Some or None? Would Some be the guid to reuse, or would Some
       // indicate that the page already exists, an error!?
     } else {
-      debatePerhapsGuid.copy(guid = nextRandomString)  // TODO use the same
-                                              // method in all DAO modules!
+      debatePerhapsGuid.copy(guid = nextRandomString)  // COULD ensure same
+                                          // method used in all DAO modules!
     }
     db.transaction { implicit connection =>
       require(where.tenantId == tenantId)
@@ -1004,9 +1004,9 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   def loadTemplate(templPath: PagePath): Option[TemplateSrcHtml] = {
     // Minor bug: if template /some-page.tmpl does not exist, but there's
     // an odd page /some-page.tmpl/, then that *page* is found and
-    // returned although it's probably not a template.  ? Solution:
-    // TODO disallow '.' in directory names? but allow e.g. style.css,
-    // scripts.js, template.tpl.
+    // returned although it's probably not a template.  ? Solution: ??
+    // COULD disallow '.' in directory names, except for first char (which
+    // means that the directory is hidden).
 
     val templ = _findCorrectPagePath(templPath) match {
       // If the template does not exist:

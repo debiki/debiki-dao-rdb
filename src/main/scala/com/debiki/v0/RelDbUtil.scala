@@ -326,7 +326,7 @@ object RelDbUtil {
   /** Removes a can be Empty Prefix. */
   //private def _rep(str: String) = str drop 1
 
-  // TODO:
+  // COULD do this:
   /*
   From http://www.exampledepot.com/egs/java.sql/GetSqlWarnings.html:
 
