@@ -127,7 +127,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     }
 
     def _loginWithEmailId(emailId: String): LoginGrant = {
-      val (email: EmailSent, notf: NotfOfPageAction) = (
+      val (email: Email, notf: NotfOfPageAction) = (
          loadEmailById(emailId = emailId),
          loadNotfByEmailId(emailId = emailId)
          ) match {
@@ -1326,7 +1326,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def saveUnsentEmailConnectToNotfs(email: EmailSent,
+  def saveUnsentEmailConnectToNotfs(email: Email,
         notfs: Seq[NotfOfPageAction]) {
     db.transaction { implicit connection =>
       _saveUnsentEmail(email)
@@ -1335,7 +1335,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def _saveUnsentEmail(email: EmailSent)(implicit connection: js.Connection) {
+  def _saveUnsentEmail(email: Email)(implicit connection: js.Connection) {
 
     require(email.failureText isEmpty)
     require(email.providerEmailId isEmpty)
@@ -1353,7 +1353,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def updateSentEmail(email: EmailSent) {
+  def updateSentEmail(email: Email) {
     db.transaction { implicit connection =>
 
       val sentOn = email.sentOn.map(d2ts(_)) getOrElse NullTimestamp
@@ -1378,7 +1378,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def loadEmailById(emailId: String): Option[EmailSent] = {
+  def loadEmailById(emailId: String): Option[Email] = {
     val query = """
       select SENT_TO, SENT_ON, SUBJECT,
         BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
@@ -1386,9 +1386,9 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       where TENANT = ? and ID = ?
       """
     val emailOpt = db.queryAtnms(query, List(tenantId, emailId), rs => {
-      var allEmails = List[EmailSent]()
+      var allEmails = List[Email]()
       while (rs.next) {
-        val email = EmailSent(
+        val email = Email(
            id = emailId,
            sentTo = rs.getString("SENT_TO"),
            sentOn = Option(ts2d(rs.getTimestamp("SENT_ON"))),
