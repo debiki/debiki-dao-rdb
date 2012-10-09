@@ -1335,8 +1335,15 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def _saveUnsentEmail(email: Email)(implicit connection: js.Connection) {
+  def saveUnsentEmail(email: Email) {
+    db.transaction { _saveUnsentEmail(email)(_) }
+  }
 
+
+  private def _saveUnsentEmail(email: Email)
+        (implicit connection: js.Connection) {
+
+    require(email.id != "?")
     require(email.failureText isEmpty)
     require(email.providerEmailId isEmpty)
     require(email.sentOn isEmpty)
