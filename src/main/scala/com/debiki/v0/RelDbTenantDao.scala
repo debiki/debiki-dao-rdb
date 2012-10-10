@@ -1013,10 +1013,12 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       case None => None
       case Some(path) =>
         _loadPageAnyTenant(path.tenantId, path.pageId.get) match {
-          case Some(page) => page.body map (TemplateSrcHtml(_, templPath.path))
-          // If someone deleted the template moments ago, after its
-          // guid was found:
-          case None => None
+          case Some(page) =>
+            page.body map (post => TemplateSrcHtml(post.text, templPath.path))
+          case None =>
+            // This is in case someone deleted the template moments ago,
+            // after its guid was found.
+            None
       }
     }
     templ
