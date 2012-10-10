@@ -1604,7 +1604,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     newSlug foreach (slug => {
       updates.append("PAGE_SLUG = ?,")
-      vals ::= slug
+      vals ::= e2d(slug)
     })
 
     if (vals nonEmpty) {
