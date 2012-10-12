@@ -535,13 +535,13 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         // This might happen however, if a server is restarted and switches
         // over to another database, where the login id does not exist, and
         // the server continues using the same signed cookie salt.
-        // -- The server could do that if a failover happens to a standby
+        // 1. The server could do that if a failover happens to a standby
         // database, and a few transactions were lost when the master died?!
-        // COULD throw an exception and let the HTTP module delete the
-        // dwCoSid cookie.
-        error("Found no identity for "+ loginInfo +". Has the server" +
-            " connected to a standby database? Please delete your " +
-            " session cookie, \"dwCoSid\". [error DwE0921kxa13]")
+        // 2. This could also happen during testing, if I manually
+        // delete the login.
+        // Let the caller deal with the error (it'll probably silently
+        // create a new session or show an error message).
+        None
       case (is, us) =>
         // There should be exactly one identity per login, and at most
         // one user per identity.
