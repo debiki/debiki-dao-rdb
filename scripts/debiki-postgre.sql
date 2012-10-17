@@ -92,6 +92,8 @@ Use PAGE.ID not SNO.
 INBOX_PAGE_ACTIONS -> INBOX_POSTS
 USERS -> ROLES
 
+DW1_PAGES -> DW1_PAGE_META
+
 TENANT.ID >= 3 chars?
 
 DW1_IDS_SIMPLE -> DW1_GUESTS
@@ -513,21 +515,37 @@ create index DW1_IDSMPLEML_LOGIN on DW1_IDS_SIMPLE_EMAIL (LOGIN);
 
 -- (How do we know who created the page? The user who created
 -- the root post, its page-action-id is always "1".)
+-- COULD rename to DW1_PAGE_META
 create table DW1_PAGES(
   SNO varchar(32)       not null,   -- COULD remove, use TENANT + ID instead
   TENANT varchar(32)    not null,
   GUID varchar(32)      not null,   -- COULD rename to ID
+  ------ todo prod,dev, done test: alter table DW1_PAGES add column
+  PAGE_ROLE varchar(20),
+  PARENT_PAGE_ID varchar(32),
+  ------
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
   -- COULD rename to ..__R__TENANTS (with S)
   constraint DW1_PAGES__R__TENANT  -- ix: primary key, well it SHOULD incl TNT
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
-  constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0')
+  ------ todo prod,dev, done test: alter table DW1_PAGES add
+  constraint DW1_PAGES_PARENTPAGE__R__PAGES  -- ix: DW1_PAGES_TNT_PARENTPAGE
+      foreign key (TENANT, PARENT_PAGE_ID)
+      references DW1_PAGES(TENANT, GUID) deferrable,
+  constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0'),
+  ------ todo prod,dev, done test: alter table DW1_PAGES add
+  constraint DW1_PAGES_PAGEROLE__C_IN
+      check (PAGE_ROLE in (
+        'Any', 'Homepage', 'BlogMainPage', 'BlogArticle',
+        'ForumMainPage', 'ForumThread', 'WikiMainPage', 'WikiPage'))
 );
 
 create sequence DW1_PAGES_SNO start with 10;
 
+------ todo prod,dev, done test:
+create index DW1_PAGES_TNT_PARENTPAGE on DW1_PAGES (TENANT, PARENT_PAGE_ID);
 
 ----- Actions
 
