@@ -29,23 +29,24 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   def db = systemDaoSpi.db
 
 
-  def createPage(where: PagePath, debatePerhapsGuid: Debate): Debate = {
-    var debate = if (debatePerhapsGuid.guid != "?") {
+  // COULD return a PageStuff instead, with the correct ID.
+  def createPage(pagePerhapsId: PageStuff): Debate = {
+    var page = if (pagePerhapsId.hasIdAssigned) {
       unimplemented
-      // Could use debatePerhapsGuid, instead of generatinig a new guid,
-      // but i have to test that this works. But should where.guid
+      // Could use pagePerhapsId, instead of generatinig a new guid,
+      // but i have to test that this works. But should page.id
       // be Some or None? Would Some be the guid to reuse, or would Some
       // indicate that the page already exists, an error!?
     } else {
-      debatePerhapsGuid.copy(guid = nextRandomString)  // COULD ensure same
+      pagePerhapsId.copyWithNewId(nextRandomString)  // COULD ensure same
                                           // method used in all DAO modules!
     }
     db.transaction { implicit connection =>
-      require(where.tenantId == tenantId)
+      require(page.tenantId == tenantId)
       // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
-      _createPage(where, debate)
-      val postsWithIds = _insert(debate.guid, debate.posts)
-      debate.copy(posts = postsWithIds)
+      _createPage(page)
+      val postsWithIds = _insert(page.id, page.actions.posts)
+      page.actions.copy(posts = postsWithIds)
     }
   }
 
@@ -1560,14 +1561,13 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _createPage[T](where: PagePath, debate: Debate)
-                            (implicit conn: js.Connection) {
+  private def _createPage[T](page: PageStuff)(implicit conn: js.Connection) {
     db.update("""
         insert into DW1_PAGES (SNO, TENANT, GUID)
         values (nextval('DW1_PAGES_SNO'), ?, ?)
-        """, List(where.tenantId, debate.guid))
+        """, List(page.tenantId, page.id))
 
-    val showPageId = where.showId ? "T" | "F"
+    val showPageId = page.idShownInUrl ? "T" | "F"
 
     // Create a draft, always a draft ('D') -- the user needs to
     // write something before it makes sense to publish the page.
@@ -1576,8 +1576,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
           TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, PAGE_STATUS)
         values (?, ?, ?, ?, ?, 'D')
         """,
-        List(where.tenantId, where.folder, debate.guid, showPageId,
-            e2d(where.pageSlug)))
+        List(page.tenantId, page.folder, page.id, showPageId, e2d(page.slug)))
   }
 
 
