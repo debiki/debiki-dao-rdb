@@ -28,3 +28,51 @@ create table DW1_SUPERADMINS(
 */
 --------
 
+
+In case I'd like to recursively select page meta for all parent pages, this
+might/should work: (not tested)
+    /*
+    val MaxDistance = 30
+    val sql = """
+        with recursive req_page_meta (
+          TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID, distance)
+        as (
+          select
+            TENANT,
+            GUID,
+            PAGE_ROLE,
+            PARENT_PAGE_ID,
+            0 as distance
+          from DW1_PAGES
+          where TENANT = ? and GUID = ?
+          union all
+          select
+            DW1_PAGES.TENANT,
+            DW1_PAGES.GUID,
+            DW1_PAGES.PAGE_ROLE,
+            DW1_PAGES.PARENT_PAGE_ID,
+            req_page_meta.distance + 1 as distance
+          from
+            req_page_meta, DW1_PAGES
+          where
+            req_page_meta.TENANT = DW1_PAGES.TENANT and
+            req_page_meta.GUID = DW1_PAGES.PARENT_PAGE_ID and
+            req_page_meta.distance <= """ +
+              MaxDistance.toString /* in case of cycles */ + """
+        )
+        select GUID ID, PAGE_ROLE, PARENT_PAGE_ID, distance
+        from req_page_meta
+        order by distance desc
+        """
+
+        // This reverses above `order by distance desc`, so the PageMeta
+        // for `pageId` becomes the list head.
+        pageMeta ::= _PageMeta(rs)
+  
+        // Warn for cycles.
+        val distance = rs.getInt("distance")
+        if (distance == MaxDistance) logger.warn(
+          "There seems to be a PARENT_PAGE_ID cycle; it includes page "+ pageId)
+      */
+
+

@@ -145,6 +145,14 @@ object RelDbUtil {
       pageSlug = d2e(resultSet.getString("PAGE_SLUG")))
 
 
+  def _PageMeta(resultSet: js.ResultSet, pageId: String = null) =
+    PageMeta(
+      pageId = if (pageId ne null) pageId else
+          unimplemented, // wrong column name: resultSet.getString("PAGE_ID"),
+      pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
+      parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")))
+
+
   def _QuotaConsumer(rs: js.ResultSet) = {
     val tenantId = rs.getString("TENANT")
     val ip = rs.getString("IP")
@@ -254,6 +262,34 @@ object RelDbUtil {
     case x =>
       warnDbgDie("Bad page status: "+ safed(x) +" [error DwE0395k7]")
       PageStatus.Draft  // make it visible to admins only
+  }
+
+
+  def _toPageRole(pageRoleString: String): PageRole = pageRoleString match {
+    case null => PageRole.Any
+    case "Any" => PageRole.Any
+    case "BlogMainPage" => PageRole.BlogMainPage
+    case "BlogArticle" => PageRole.BlogArticle
+    case "ForumMainPage" => PageRole.ForumMainPage
+    case "ForumThread" => PageRole.ForumThread
+    case "WikiMainPage" => PageRole.WikiMainPage
+    case "WikiPage" => PageRole.WikiPage
+    case _ =>
+      warnDbgDie(
+        "Bad page role string: "+ pageRoleString +" [error DwE390KW8]")
+      PageRole.Any
+  }
+
+
+  def _pageRoleToSql(pageRole: PageRole): String = pageRole match {
+    case PageRole.Any => "Any"
+    case PageRole.Homepage => "Homepage"
+    case PageRole.BlogMainPage => "BlogMainPage"
+    case PageRole.BlogArticle => "BlogArticle"
+    case PageRole.ForumMainPage => "ForumMainPage"
+    case PageRole.ForumThread => "ForumThread"
+    case PageRole.WikiMainPage => "WikiMainPage"
+    case PageRole.WikiPage => "WikiPage"
   }
 
 

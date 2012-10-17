@@ -51,6 +51,26 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   }
 
 
+  def loadPageMeta(pageId: String): Option[PageMeta] = {
+    db.transaction { _loadPageMeta(pageId)(_) }
+  }
+
+
+  private def _loadPageMeta(pageId: String)
+        (implicit connection: js.Connection): Option[PageMeta] = {
+    val values = List(tenantId, pageId)
+    val sql = """
+        select PAGE_ROLE, PARENT_PAGE_ID
+        from DW1_PAGES
+        where TENANT = ? and GUID = ?
+        """
+    db.query(sql, values, rs => {
+      if (rs.next) Some(_PageMeta(rs, pageId = pageId))
+      else None
+    })
+  }
+
+
   def movePages(pageIds: Seq[String], fromFolder: String, toFolder: String) {
     db.transaction { implicit connection =>
       _movePages(pageIds, fromFolder = fromFolder, toFolder = toFolder)
@@ -1562,10 +1582,12 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
 
   private def _createPage[T](page: PageStuff)(implicit conn: js.Connection) {
-    db.update("""
-        insert into DW1_PAGES (SNO, TENANT, GUID)
-        values (nextval('DW1_PAGES_SNO'), ?, ?)
-        """, List(page.tenantId, page.id))
+    val values = List[AnyRef](page.tenantId, page.id,
+      _pageRoleToSql(page.role), page.parentPageId.orNullVarchar)
+    val sql = """
+      insert into DW1_PAGES (SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID)
+      values (nextval('DW1_PAGES_SNO'), ?, ?, ?, ?)"""
+    db.update(sql, values)
 
     val showPageId = page.idShownInUrl ? "T" | "F"
 
