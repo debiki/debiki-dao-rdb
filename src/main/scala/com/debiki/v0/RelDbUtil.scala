@@ -267,13 +267,13 @@ object RelDbUtil {
 
   def _toPageRole(pageRoleString: String): PageRole = pageRoleString match {
     case null => PageRole.Any
-    case "Any" => PageRole.Any
-    case "BlogMainPage" => PageRole.BlogMainPage
-    case "BlogArticle" => PageRole.BlogArticle
-    case "ForumMainPage" => PageRole.ForumMainPage
-    case "ForumThread" => PageRole.ForumThread
-    case "WikiMainPage" => PageRole.WikiMainPage
-    case "WikiPage" => PageRole.WikiPage
+    case "HP" => PageRole.Homepage
+    case "BMP" => PageRole.BlogMainPage
+    case "BA" => PageRole.BlogArticle
+    case "FMP" => PageRole.ForumMainPage
+    case "FT" => PageRole.ForumThread
+    case "WMP" => PageRole.WikiMainPage
+    case "WP" => PageRole.WikiPage
     case _ =>
       warnDbgDie(
         "Bad page role string: "+ pageRoleString +" [error DwE390KW8]")
@@ -281,15 +281,15 @@ object RelDbUtil {
   }
 
 
-  def _pageRoleToSql(pageRole: PageRole): String = pageRole match {
-    case PageRole.Any => "Any"
-    case PageRole.Homepage => "Homepage"
-    case PageRole.BlogMainPage => "BlogMainPage"
-    case PageRole.BlogArticle => "BlogArticle"
-    case PageRole.ForumMainPage => "ForumMainPage"
-    case PageRole.ForumThread => "ForumThread"
-    case PageRole.WikiMainPage => "WikiMainPage"
-    case PageRole.WikiPage => "WikiPage"
+  def _pageRoleToSql(pageRole: PageRole): AnyRef = pageRole match {
+    case PageRole.Any => NullVarchar
+    case PageRole.Homepage => "HP"
+    case PageRole.BlogMainPage => "BMP"
+    case PageRole.BlogArticle => "BA"
+    case PageRole.ForumMainPage => "FMP"
+    case PageRole.ForumThread => "FT"
+    case PageRole.WikiMainPage => "WMP"
+    case PageRole.WikiPage => "WP"
   }
 
 

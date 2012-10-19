@@ -520,8 +520,8 @@ create table DW1_PAGES(
   SNO varchar(32)       not null,   -- COULD remove, use TENANT + ID instead
   TENANT varchar(32)    not null,
   GUID varchar(32)      not null,   -- COULD rename to ID
-  ------ todo prod,dev, done test: alter table DW1_PAGES add column
-  PAGE_ROLE varchar(20),
+  ------ todo prod, done dev,test: alter table DW1_PAGES add column
+  PAGE_ROLE varchar(10),
   PARENT_PAGE_ID varchar(32),
   ------
   constraint DW1_PAGES_SNO__P primary key (SNO),
@@ -530,22 +530,22 @@ create table DW1_PAGES(
   constraint DW1_PAGES__R__TENANT  -- ix: primary key, well it SHOULD incl TNT
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
-  ------ todo prod,dev, done test: alter table DW1_PAGES add
+  ------ todo prod, done dev,test: alter table DW1_PAGES add
   constraint DW1_PAGES_PARENTPAGE__R__PAGES  -- ix: DW1_PAGES_TNT_PARENTPAGE
       foreign key (TENANT, PARENT_PAGE_ID)
       references DW1_PAGES(TENANT, GUID) deferrable,
   constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0'),
-  ------ todo prod,dev, done test: alter table DW1_PAGES add
+  ------ todo prod, done dev,test: alter table DW1_PAGES add
   constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in (
-        'Any', 'Homepage', 'BlogMainPage', 'BlogArticle',
-        'ForumMainPage', 'ForumThread', 'WikiMainPage', 'WikiPage'))
+      check (PAGE_ROLE in ('HP', 'BMP', 'BA', 'FMP', 'FT', 'WMP', 'WP'))
 );
 
 create sequence DW1_PAGES_SNO start with 10;
 
------- todo prod,dev, done test:
+------ todo prod, done dev,test:
 create index DW1_PAGES_TNT_PARENTPAGE on DW1_PAGES (TENANT, PARENT_PAGE_ID);
+
+
 
 ----- Actions
 
