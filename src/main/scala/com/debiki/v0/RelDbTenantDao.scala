@@ -1171,35 +1171,42 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
 
     val orderByStr = sortBy match {
       case PageSortOrder.ByPath =>
-        " order by PARENT_FOLDER, SHOW_ID, PAGE_SLUG"
+        " order by t.PARENT_FOLDER, t.SHOW_ID, t.PAGE_SLUG"
       case PageSortOrder.ByPublTime =>
         // For now: (CACHED_PUBL_TIME not implemented)
-        " order by CDATI desc"
+        " order by t.CDATI desc"
     }
 
     val (pageRangeClauses, pageRangeValues) = _pageRangeToSql(pageRanges)
 
-    var items = List[(PagePath, PageDetails)]()
-    db.queryAtnms("""
-        select PARENT_FOLDER,
-            PAGE_ID,
-            SHOW_ID,
-            PAGE_SLUG,
-            PAGE_STATUS,
-            CACHED_TITLE,
-            CACHED_PUBL_TIME,
-            CACHED_SGFNT_MTIME
-        from DW1_PAGE_PATHS
-        where TENANT = ? and ("""+ pageRangeClauses +""" )
-        and PAGE_STATUS in ("""+ statusesToInclStr +""")
+    val values = tenantId :: pageRangeValues
+    val sql = """
+        select t.PARENT_FOLDER,
+            t.PAGE_ID,
+            t.SHOW_ID,
+            t.PAGE_SLUG,
+            t.PAGE_STATUS,
+            t.CACHED_TITLE,
+            t.CACHED_PUBL_TIME,
+            t.CACHED_SGFNT_MTIME,
+            g.PAGE_ROLE,
+            g.PARENT_PAGE_ID
+        from DW1_PAGE_PATHS t left join DW1_PAGES g
+          on t.TENANT = g.TENANT and t.PAGE_ID = g.GUID
+        where t.TENANT = ? and ("""+ pageRangeClauses +""" )
+        and t.PAGE_STATUS in ("""+ statusesToInclStr +""")
         """+ orderByStr +"""
-        limit """+ limit,
-        tenantId :: pageRangeValues,
-        rs => {
+        limit """+ limit
+
+    var items = List[(PagePath, PageDetails)]()
+
+    db.queryAtnms(sql, values, rs => {
       while (rs.next) {
         val pagePath = _PagePath(rs, tenantId)
         val pageDetails = PageDetails(
           status = _toPageStatus(rs.getString("PAGE_STATUS")),
+          pageRole = _toPageRole(rs.getString("PAGE_ROLE")),
+          parentPageId = Option(rs.getString("PARENT_PAGE_ID")),
           cachedTitle =
               Option(rs.getString(("CACHED_TITLE"))),
           cachedPublTime =
