@@ -29,14 +29,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
   def db = systemDaoSpi.db
 
 
-  // COULD return a PageStuff instead, with the correct ID.
-  def createPage(pagePerhapsId: PageStuff): Debate = {
+  def createPage(pagePerhapsId: PageStuff): PageStuff = {
     var page = if (pagePerhapsId.hasIdAssigned) {
-      unimplemented
-      // Could use pagePerhapsId, instead of generatinig a new guid,
-      // but i have to test that this works. But should page.id
-      // be Some or None? Would Some be the guid to reuse, or would Some
-      // indicate that the page already exists, an error!?
+      // Fine, a valid new page id has been assigned somewhere else?
+      pagePerhapsId
     } else {
       pagePerhapsId.copyWithNewId(nextRandomString)  // COULD ensure same
                                           // method used in all DAO modules!
@@ -46,7 +42,8 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
       // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
       _createPage(page)
       val postsWithIds = _insert(page.id, page.actions.posts)
-      page.actions.copy(posts = postsWithIds)
+      val actionsWithIds = page.actions.copy(posts = postsWithIds)
+      page.copy(actions = actionsWithIds)
     }
   }
 
