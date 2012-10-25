@@ -523,6 +523,11 @@ create table DW1_PAGES(
   ------ todo prod, done dev,test: alter table DW1_PAGES add column
   PAGE_ROLE varchar(10),
   PARENT_PAGE_ID varchar(32),
+  ------ todo prod, done test,dev: alter table DW1_PAGES add column
+  CDATI timestamp not null default now(),
+  MDATI timestamp not null default now(),
+  -- Page published if not null.
+  PUBL_DATI timestamp default now(),
   ------
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
@@ -531,20 +536,44 @@ create table DW1_PAGES(
       foreign key (TENANT)
       references DW1_TENANTS(ID) deferrable,
   ------ todo prod, done dev,test: alter table DW1_PAGES add
-  constraint DW1_PAGES_PARENTPAGE__R__PAGES  -- ix: DW1_PAGES_TNT_PARENTPAGE
+  constraint DW1_PAGES_PARENTPAGE__R__PAGES -- ix: DW1_PAGES_TNT_PARENTPAGE
       foreign key (TENANT, PARENT_PAGE_ID)
       references DW1_PAGES(TENANT, GUID) deferrable,
   constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0'),
   ------ todo prod, done dev,test: alter table DW1_PAGES add
   constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in ('HP', 'BMP', 'BA', 'FMP', 'FT', 'WMP', 'WP'))
+      check (PAGE_ROLE in ('HP', 'BMP', 'BA', 'FMP', 'FT', 'WMP', 'WP')),
+  ------ todo prod, done dev,test: alter table DW1_PAGES add
+  constraint DW1_PAGES_CDATI_MDATI__C_LE check (CDATI <= MDATI),
+  constraint DW1_PAGES_CDATI_PUBLDATI__C_LE check (CDATI <= PUBL_DATI)
 );
 
 create sequence DW1_PAGES_SNO start with 10;
 
------- todo prod, done dev,test:
-create index DW1_PAGES_TNT_PARENTPAGE on DW1_PAGES (TENANT, PARENT_PAGE_ID);
 
+------ todo prod, done test,dev:
+update DW1_PAGES g
+  set CDATI = t.CDATI,
+      MDATI = t.MDATI,
+      PUBL_DATI = t.CDATI
+  from DW1_PAGE_PATHS t
+  where t.PAGE_ID = g.GUID and t.TENANT = g.TENANT;
+
+-- COULD be removed? It would bee needed because of a foreign key above
+-- (search for the index name), *unless* Postgres is able to use
+-- DW1_PAGES_TNT_PARENT_PUBLDATI instead -- but that index has some
+-- may-be-Null columns, so I don't know if it is usable?
+create index DW1_PAGES_TNT_PARENTPAGE
+    on DW1_PAGES (TENANT, PARENT_PAGE_ID);
+
+create index DW1_PAGES_TNT_PARENT_PUBLDATI
+    on DW1_PAGES (TENANT, PARENT_PAGE_ID, PUBL_DATI);
+
+-- So one can easily find all non-published pages.
+create index DW1_PAGES_TNT_PRNT_CDATI_NOPUB
+    on DW1_PAGES (TENANT, PARENT_PAGE_ID, CDATI)
+    where PUBL_DATI is null;
+------
 
 
 ----- Actions
