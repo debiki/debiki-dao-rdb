@@ -153,6 +153,19 @@ object RelDbUtil {
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")))
 
 
+  def _PageDetails(resultSet: js.ResultSet) =
+    PageDetails(
+      status = _toPageStatus(resultSet.getString("PAGE_STATUS")),
+      pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
+      parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
+      cachedTitle = Option(resultSet.getString(("CACHED_TITLE"))),
+      cachedPublTime = Option(resultSet.getTimestamp("PUBL_DATI")).map(ts2d _),
+      cachedSgfntMtime =
+         Option(resultSet.getTimestamp("CACHED_SGFNT_MTIME")).map(ts2d _),
+      cachedAuthors = Nil,  // db fields not yet created
+      cachedCommentCount = 0)  // db field not yet created
+
+
   def _QuotaConsumer(rs: js.ResultSet) = {
     val tenantId = rs.getString("TENANT")
     val ip = rs.getString("IP")

@@ -1184,7 +1184,7 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
             t.PAGE_SLUG,
             t.PAGE_STATUS,
             t.CACHED_TITLE,
-            t.CACHED_PUBL_TIME,
+            g.PUBL_DATI,
             t.CACHED_SGFNT_MTIME,
             g.PAGE_ROLE,
             g.PARENT_PAGE_ID
@@ -1200,19 +1200,49 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
     db.queryAtnms(sql, values, rs => {
       while (rs.next) {
         val pagePath = _PagePath(rs, tenantId)
-        val pageDetails = PageDetails(
-          status = _toPageStatus(rs.getString("PAGE_STATUS")),
-          pageRole = _toPageRole(rs.getString("PAGE_ROLE")),
-          parentPageId = Option(rs.getString("PARENT_PAGE_ID")),
-          cachedTitle =
-              Option(rs.getString(("CACHED_TITLE"))),
-          cachedPublTime =
-              Option(rs.getTimestamp("CACHED_PUBL_TIME")).map(ts2d _),
-          cachedSgfntMtime =
-              Option(rs.getTimestamp("CACHED_SGFNT_MTIME")).map(ts2d _),
-          cachedAuthors = Nil,  // db fields not yet created
-          cachedCommentCount = 0  // db field not yet created
-        )
+        val pageDetails = _PageDetails(rs)
+        items ::= pagePath -> pageDetails
+      }
+    })
+    items.reverse
+  }
+
+
+  def listChildPages(parentPageId: String, sortBy: PageSortOrder,
+        limit: Int, offset: Int): Seq[(PagePath, PageDetails)] = {
+
+    require(1 <= limit)
+    require(offset == 0)  // for now
+
+    val orderByStr = sortBy match {
+      case PageSortOrder.ByPublTime => " order by g.PUBL_DATI desc"
+      case _ => unimplemented("sorting by anything but page publ dati")
+    }
+
+    val values = tenantId :: parentPageId :: Nil
+    val sql = """
+        select t.PARENT_FOLDER,
+            t.PAGE_ID,
+            t.SHOW_ID,
+            t.PAGE_SLUG,
+            t.PAGE_STATUS,
+            t.CACHED_TITLE,
+            g.PUBL_DATI,
+            t.CACHED_SGFNT_MTIME,
+            g.PAGE_ROLE,
+            g.PARENT_PAGE_ID
+        from DW1_PAGES g left join DW1_PAGE_PATHS t
+          on g.TENANT = t.TENANT and g.GUID = t.PAGE_ID
+        where g.TENANT = ? and g.PARENT_PAGE_ID = ?
+        """+ orderByStr +"""
+        limit """+ limit
+
+    var items = List[(PagePath, PageDetails)]()
+
+    db.queryAtnms(sql, values, rs => {
+      while (rs.next) {
+        val pagePath = _PagePath(rs, tenantId)
+        val pageDetails = _PageDetails(rs)
         items ::= pagePath -> pageDetails
       }
     })
