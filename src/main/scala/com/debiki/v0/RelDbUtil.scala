@@ -25,7 +25,7 @@ object RelDbUtil {
    * Use like so: "select ... where X in ("+ makeInListFor(xs) +")"
    */
   def makeInListFor(values: Seq[_]): String =
-    values.map(_ => "?").mkString(",")
+    values.map((x: Any) => "?").mkString(",")
 
 
   def ActionSelectListItems =

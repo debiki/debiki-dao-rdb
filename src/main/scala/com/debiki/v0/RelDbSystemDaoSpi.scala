@@ -437,7 +437,6 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
         try db.updateAny(stmt, vals.reverse)
         catch {
           case e: js.SQLException if isUniqueConstrViolation(e) => ()
-          case e => throw e
         }
       }
     }
