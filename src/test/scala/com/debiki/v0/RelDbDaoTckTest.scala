@@ -88,6 +88,7 @@ object ReDbDaoTckTest {
         case _ => assErr("Broken test suite")
       }
 
+    // A simple quota charger, which never throws any OverQuotaException.
     val kindQuotaCharger = new QuotaCharger {
       override def chargeOrThrow(quotaConsumers: QuotaConsumers,
             resourceUse: ResourceUse, mayPilfer: Boolean) { }
