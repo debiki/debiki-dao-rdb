@@ -18,4 +18,11 @@ libraryDependencies ++= Seq(
   "org.specs2" % "specs2_2.10.0-RC1" % "1.12.2" % "test"
 )
 
+
+// Make Specs2 ignore child specs. This ought to be placed in debiki-tck-dao but
+// I don't know how to place it there *and* affect dependent projects.
+testOptions := Seq(Tests.Filter(s =>
+  s.endsWith("Spec") && !s.endsWith("ChildSpec")))
+
+
 // vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list

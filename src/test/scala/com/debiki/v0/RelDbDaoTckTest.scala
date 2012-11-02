@@ -103,7 +103,7 @@ object ReDbDaoTckTest {
 }
 
 
-class RelDbDaoTckTest extends tck.DaoTckTest(
+class RelDbDaoTckSpec extends tck.DaoTckTest(
               ReDbDaoTckTest.testContextBuilder) {
   // Tests defined in parent class DaoTckTest.
 }
