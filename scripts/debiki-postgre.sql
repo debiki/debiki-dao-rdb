@@ -388,6 +388,7 @@ create table DW1_IDS_OPENID( -- COULD rename to DW1_IDS_AU(thenticated)
   -- (Not yet implemented though: currently USR = USR_ORIG always.)
   USR varchar(32)                not null, -- COULD rename to USER_ID
   USR_ORIG varchar(32)           not null, -- COULD rename to USER_ID_ORIG
+  CDATI timestamp not null default now(),
   OID_CLAIMED_ID varchar(500)    not null, -- Google's ID hashes 200-300 long
   OID_OP_LOCAL_ID varchar(500)   not null,
   OID_REALM varchar(100)         not null,
