@@ -495,3 +495,72 @@ UPDATE 68
 debiki_prod=>
 
 }}}1
+{{{1 2012-11-06 Page role and parent id columns
+
+[ec2-user@dw0azewdbpv11danny ~]$ sudo su - postgres
+-bash-4.1$ . scripts/psql-debiki_prod.src
+Password for user debiki_prod:
+psql (9.1.3)
+SSL connection (cipher: DHE-RSA-AES256-SHA, bits: 256)
+Type "help" for help.
+
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGES add column
+debiki_prod->   PAGE_ROLE varchar(10);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  PARENT_PAGE_ID varchar(32);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+debiki_prod->   CDATI timestamp not null default now();
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  MDATI timestamp not null default now();
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  PUBL_DATI timestamp default now();
+ALTER TABLE
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGES add
+debiki_prod->   constraint DW1_PAGES_PARENTPAGE__R__PAGES -- ix: DW1_PAGES_TNT_PARENTPAGE
+debiki_prod->       foreign key (TENANT, PARENT_PAGE_ID)
+debiki_prod->       references DW1_PAGES(TENANT, GUID) deferrable;
+ALTER TABLE
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGES add
+debiki_prod->   constraint DW1_PAGES_PAGEROLE__C_IN
+debiki_prod->       check (PAGE_ROLE in ('HP', 'BMP', 'BA', 'FMP', 'FT', 'WMP', 'WP'));
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add
+debiki_prod->   constraint DW1_PAGES_CDATI_MDATI__C_LE check (CDATI <= MDATI);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add constraint DW1_PAGES_CDATI_PUBLDATI__C_LE check (CDATI <= PUBL_DATI);
+ALTER TABLE
+debiki_prod=> update DW1_PAGES g
+debiki_prod->   set CDATI = t.CDATI,
+debiki_prod->       MDATI = t.MDATI,
+debiki_prod->       PUBL_DATI = t.CDATI
+debiki_prod->   from DW1_PAGE_PATHS t
+debiki_prod->   where t.PAGE_ID = g.GUID and t.TENANT = g.TENANT;
+UPDATE 85
+debiki_prod=>
+debiki_prod=> create index DW1_PAGES_TNT_PARENTPAGE
+debiki_prod->     on DW1_PAGES (TENANT, PARENT_PAGE_ID);
+CREATE INDEX
+debiki_prod=> create index DW1_PAGES_TNT_PARENT_PUBLDATI
+debiki_prod->     on DW1_PAGES (TENANT, PARENT_PAGE_ID, PUBL_DATI);
+CREATE INDEX
+debiki_prod=> create index DW1_PAGES_TNT_PRNT_CDATI_NOPUB
+debiki_prod->     on DW1_PAGES (TENANT, PARENT_PAGE_ID, CDATI)
+debiki_prod->     where PUBL_DATI is null;
+CREATE INDEX
+debiki_prod=>
+debiki_prod=> alter table DW1_IDS_OPENID add column
+debiki_prod->   CDATI timestamp not null default now();
+ALTER TABLE
+debiki_prod=> commit;
+WARNING:  there is no transaction in progress
+COMMIT
+debiki_prod=> \q
+
+}}}1
