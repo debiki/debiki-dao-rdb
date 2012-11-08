@@ -103,6 +103,10 @@ Rename constraints to DW1_TENANTS: ... no, DW1_WEBSITES
     DW1_TNT_ID__C_NE DW1_TNT_ID__C_N0 DW1_TNT_NAME__C_NE
 
 DW1_LOGINS PK should include TENANT_ID
+
+DW1_NOTFS_PAGE_ACTIONS.TARGET_PGA --> TRIGGER_PGA, NOT NULL
+    TARGET_USER_DISP_NAME --> TRIGGER_USER.., NOT NULL
+
 */
 
 /*
@@ -818,20 +822,22 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   RCPT_ID_SIMPLE varchar(32),
   RCPT_ROLE_ID varchar(32),
   ----- What, why?
-  -- The event page action id is the action that generated this inbox item.
-  -- The target page action id is an optional action that the
-  -- event-action acted upon.
+  -- The event page action is the action that the recipient is
+  -- being notified about.
+  -- The trigger page action is the action that triggered this notification.
   -- For example, if an admin publishes an edit of a comment of yours,
-  -- then the publication would be the event, the edit would be the
-  -- event target, and your comment is the recipient's page action.
+  -- then the publication would be the trigger, the edit would be the
+  -- event, and your comment is the recipient's page action.
   -- Another example: Someone replies to a comment of yours. Then
-  -- that reply is the event, and TARGET_PGA would be null.
-  -- (Perhaps TARGET_PGA can be derived from EVENT_PGA, but doing that
-  -- would require > 1 query, or 1 query with rather complicated joins,
-  -- when loading notifications.)
+  -- that reply is the event, and the trigger is the approval of the reply
+  -- — which could be the reply itself, in case it's written by an admin
+  -- and hence auto approved.
   EVENT_TYPE varchar(20) not null,
   EVENT_PGA varchar(32) not null,
-  TARGET_PGA varchar(32),
+  ----- todo prod,dev,test:
+  -- alter table DW1_NOTFS_PAGE_ACTIONS alter column TARGET_PGA set not null;
+  -----
+  TARGET_PGA varchar(32) not null, -- COULD rename to TRIGGER_PGA?
   -- The page action that is the reason that the recipient is to be notified.
   -- For example, if a user has written a comment, with id X,
   -- then RCPT_PGA could be = X, and EVENT_PGA could be the id of a reply
@@ -840,7 +846,7 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   ----- Related user names
   RCPT_USER_DISP_NAME varchar(100) not null,
   EVENT_USER_DISP_NAME varchar(100) not null,
-  TARGET_USER_DISP_NAME varchar(100),
+  TARGET_USER_DISP_NAME varchar(100), -- COULD ren to TRIGGER_USER..,
   ----- State
   -- 'N' New, means: Attempt to notify the user, perhaps send email.
   -- 'O' Old means: The user has been notified. Okay to delete, or keep for
