@@ -1314,10 +1314,10 @@ class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
         notf.recipientIdtySmplId.orNullVarchar,
         notf.recipientRoleId.orNullVarchar,
         notf.eventType.toString, notf.eventActionId,
-        notf.targetActionId.orNullVarchar,
+        notf.triggerActionId,
         notf.recipientActionId,
         notf.recipientUserDispName, notf.eventUserDispName,
-        notf.targetUserDispName.orNullVarchar,
+        notf.triggerUserDispName.orNullVarchar,
         if (notf.emailPending) "P" else NullVarchar,
         notf.debug.orNullVarchar)
 

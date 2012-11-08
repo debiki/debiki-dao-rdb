@@ -535,11 +535,11 @@ class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
           pageId = rs.getString("PAGE_ID"),
           eventType = NotfOfPageAction.Type.PersonalReply,  // for now
           eventActionId = rs.getString("EVENT_PGA"),
-          targetActionId = Option(rs.getString("TARGET_PGA")),
+          triggerActionId = rs.getString("TARGET_PGA"),
           recipientActionId = rs.getString("RCPT_PGA"),
           recipientUserDispName = rs.getString("RCPT_USER_DISP_NAME"),
           eventUserDispName = rs.getString("EVENT_USER_DISP_NAME"),
-          targetUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")),
+          triggerUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")),
           emailPending = rs.getString("EMAIL_STATUS") == "P",
           emailId = Option(rs.getString("EMAIL_SENT")),
           debug = Option(rs.getString("DEBUG")))
