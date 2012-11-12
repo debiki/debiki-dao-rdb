@@ -5,7 +5,7 @@
 package com.debiki.v0
 
 
-class RelDbDaoSpiFactory(val db: RelDb) extends DaoSpiFactory {
+class RelDbDaoFactory(val db: RelDb) extends DbDaoFactory {
 
   val systemDaoSpi = new RelDbSystemDaoSpi(db)
 

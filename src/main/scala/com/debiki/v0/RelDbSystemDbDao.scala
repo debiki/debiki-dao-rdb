@@ -17,7 +17,7 @@ import RelDbUtil._
 import collection.mutable.StringBuilder
 
 
-class RelDbSystemDaoSpi(val db: RelDb) extends SystemDaoSpi {
+class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao {
   // COULD serialize access, per page?
 
   import RelDb._
