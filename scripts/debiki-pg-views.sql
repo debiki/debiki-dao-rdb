@@ -25,14 +25,14 @@
 -- Login identities
 create or replace view dw1v_logins as
 select l.tenant tid, l.sno lid, l.login_time, l.logout_time,
-    l.login_ip, l.prev_login, l.id_type, o.sno idid, o.first_name name,
+    l.login_ip, l.prev_login, l.id_type, o.sno idid, o.first_name fname,
     o.email, o.country loc, N'-' url
   from dw1_logins l, dw1_ids_openid o
   where l.id_type = 'OpenID'
     and l.id_sno = o.sno
 union
 select l.tenant tid, l.sno lid, l.login_time, l.logout_time,
-    l.login_ip, l.prev_login, l.id_type, s.sno idid, s.name,
+    l.login_ip, l.prev_login, l.id_type, s.sno idid, s.name fname,
     s.email, s.location loc, s.website url
   from dw1_logins l, dw1_ids_simple s
   where l.id_type = 'Simple'
@@ -42,11 +42,11 @@ order by login_time;
 
 -- All identities
 create or replace view dw1v_ids_all as
-select 'OpenID' id_type, o.sno idid, o.usr usrid, o.first_name name,
+select 'OpenID' id_type, o.sno idid, o.usr usrid, o.first_name fname,
     o.email, o.country loc, N'-' url
   from dw1_ids_openid o
 union
-select 'Simple' id_type, sno idid, -sno usrid, name,
+select 'Simple' id_type, sno idid, -sno usrid, name fname,
     email, location loc, website url
   from dw1_ids_simple;
 
@@ -62,7 +62,7 @@ select
   --      end
   --   path,
   pg.sno page_sno,
-  lg.lid, lg.name, lg.email, lg.id_type, lg.idid,
+  lg.lid, lg.fname, lg.email, lg.id_type, lg.idid,
   a.time, a.type, a.paid, a.relpa, a.text, a.wheere, a.new_ip
 from dw1_page_actions a, dw1_pages pg, dw1_paths pt, dw1_tenants t,
   dw1v_logins lg
@@ -73,6 +73,7 @@ where
   a.login = lg.lid;
 
 
+-- RENAME? There's another dw1v_pages below
 create or replace view dw1v_pages as
 --with posts_per_page as (
 --  select page page_sno, count(*) num from dw1_page_actions where type = 'Post'
@@ -89,5 +90,12 @@ from dw1v_page_actions -- , posts_per_page
 group by folder, page_name, gip, page_guid, page_sno
 ;
 
+-- Pages and paths
+create or replace view dw1v_pages as
+select 
+  t.tenant, g.page_role, g.parent_page_id, t.page_id, t.parent_folder, t.page_slug, t.show_id, t.page_status, t.cdati
+from dw1_page_paths t left join dw1_pages g
+  on t.page_id = g.guid and t.tenant = g.tenant
+;
 
 -- vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
