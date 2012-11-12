@@ -1,4 +1,8 @@
 
+select * from dw1_tenant_hosts;
+select tenant, count(*) from dw1_page_actions group by tenant order by tenant;
+
+
 -- Delete tenant no. 10, assuming there are no DW1_PAGE_ACTIONS rows.
 
 delete from dw1_logins where tenant = '10';
