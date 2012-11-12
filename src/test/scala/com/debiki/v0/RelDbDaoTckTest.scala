@@ -19,22 +19,23 @@ Password (for all users): "auto-dropped"
 */
 
 
-class RelDbTestContext(override val daoFactory: DaoFactory)
-   extends tck.TestContext {
+/**
+ * The test suite. Actual tests are defined in parent class DaoTckTest.
+ */
+class RelDbDaoTckSpec extends tck.DaoTckTest(ReDbDaoTckTest)
 
-  override def createRestorePoint() {
-    unimplemented
-  }
 
-  override def revertToRestorePoint() {
-    unimplemented
-  }
 
-  def hasRefConstraints = true
-}
+class RelDbTestContext(
+  override val daoSpiFactory: DaoSpiFactory,
+  override val quotaManager: QuotaCharger)
+  extends tck.TestContext
 
-object ReDbDaoTckTest {
-  def testContextBuilder(what: tck.DaoTckTest.What, version: String) = {
+
+
+object ReDbDaoTckTest extends tck.TestContextBuilder {
+
+  override def buildTestContext(what: tck.DaoTckTest.What, version: String) = {
     import tck.DaoTckTest._
 
     // Connect.
@@ -96,16 +97,8 @@ object ReDbDaoTckTest {
             resourceUse: ResourceUse, mayPilfer: Boolean) { }
     }
 
-    new RelDbTestContext(
-       new NonCachingDaoFactory(new RelDbDaoSpiFactory(db),
-          kindQuotaCharger))
+    new RelDbTestContext(new RelDbDaoSpiFactory(db), kindQuotaCharger)
   }
-}
-
-
-class RelDbDaoTckSpec extends tck.DaoTckTest(
-              ReDbDaoTckTest.testContextBuilder) {
-  // Tests defined in parent class DaoTckTest.
 }
 
 
