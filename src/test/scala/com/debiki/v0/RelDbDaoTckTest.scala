@@ -20,9 +20,9 @@ Password (for all users): "auto-dropped"
 
 
 /**
- * The test suite. Actual tests are defined in parent class DaoTckTest.
+ * The test suite. Actual tests are defined in parent class DbDaoTckTest.
  */
-class RelDbDaoTckSpec extends tck.DaoTckTest(ReDbDaoTckTest)
+class RelDbDaoTckSpec extends tck.DbDaoTckTest(ReDbDaoTckTest)
 
 
 
@@ -35,8 +35,8 @@ class RelDbTestContext(
 
 object ReDbDaoTckTest extends tck.TestContextBuilder {
 
-  override def buildTestContext(what: tck.DaoTckTest.What, version: String) = {
-    import tck.DaoTckTest._
+  override def buildTestContext(what: tck.DbDaoTckTest.What, version: String) = {
+    import tck.DbDaoTckTest._
 
     // Connect.
     //val connStr = "jdbc:postgresql://192.168.0.123:5432/debiki"
