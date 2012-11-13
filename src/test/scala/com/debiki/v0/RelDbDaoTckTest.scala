@@ -27,7 +27,7 @@ class RelDbDaoTckSpec extends tck.DaoTckTest(ReDbDaoTckTest)
 
 
 class RelDbTestContext(
-  override val daoSpiFactory: DaoSpiFactory,
+  override val dbDaoFactory: DbDaoFactory,
   override val quotaManager: QuotaCharger)
   extends tck.TestContext
 
@@ -97,7 +97,7 @@ object ReDbDaoTckTest extends tck.TestContextBuilder {
             resourceUse: ResourceUse, mayPilfer: Boolean) { }
     }
 
-    new RelDbTestContext(new RelDbDaoSpiFactory(db), kindQuotaCharger)
+    new RelDbTestContext(new RelDbDaoFactory(db), kindQuotaCharger)
   }
 }
 

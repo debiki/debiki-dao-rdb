@@ -7,10 +7,10 @@ package com.debiki.v0
 
 class RelDbDaoFactory(val db: RelDb) extends DbDaoFactory {
 
-  val systemDaoSpi = new RelDbSystemDaoSpi(db)
+  val systemDbDao = new RelDbSystemDbDao(db)
 
-  def buildTenantDaoSpi(quotaConsumers: QuotaConsumers): TenantDaoSpi =
-    new RelDbTenantDaoSpi(quotaConsumers, systemDaoSpi)
+  def newTenantDbDao(quotaConsumers: QuotaConsumers): TenantDbDao =
+    new RelDbTenantDbDao(quotaConsumers, systemDbDao)
 
 }
 

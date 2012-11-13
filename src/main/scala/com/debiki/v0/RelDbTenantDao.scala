@@ -17,9 +17,9 @@ import RelDbUtil._
 import collection.mutable.StringBuilder
 
 
-class RelDbTenantDaoSpi(val quotaConsumers: QuotaConsumers,
-        val systemDaoSpi: RelDbSystemDaoSpi)
-   extends TenantDaoSpi {
+class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
+        val systemDaoSpi: RelDbSystemDbDao)
+   extends TenantDbDao {
   // COULD serialize access, per page?
 
   val MaxWebsitesPerIp = 6

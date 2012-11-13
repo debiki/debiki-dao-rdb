@@ -110,7 +110,7 @@ object RelDbUtil {
 
 
   val _UserSelectListItems =
-    // (These u_* item names are relied on e.g. by RelDbSystemDaoSpi.loadUsers.)
+    // (These u_* item names are relied on e.g. by RelDbSystemDbDao.loadUsers.)
     """u.SNO u_id,
       |u.DISPLAY_NAME u_disp_name,
       |u.EMAIL u_email,
@@ -125,7 +125,7 @@ object RelDbUtil {
     User(
       // Use dn2e not n2e. ((So works if joined w/ DW1_IDS_SIMPLE, which
       // uses '-' instead of null to indicate absence of email address etc.
-      // See usage of this function in RelDbSystemDaoSpi.loadUsers(). ))
+      // See usage of this function in RelDbSystemDbDao.loadUsers(). ))
       id = rs.getString("u_id"),
       displayName = dn2e(rs.getString("u_disp_name")),
       email = dn2e(rs.getString("u_email")),
