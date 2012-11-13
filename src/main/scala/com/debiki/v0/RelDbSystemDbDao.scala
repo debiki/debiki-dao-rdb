@@ -5,7 +5,7 @@
 package com.debiki.v0
 
 import com.debiki.v0.PagePath._
-import com.debiki.v0.Dao._
+import com.debiki.v0.DbDao._
 import com.debiki.v0.EmailNotfPrefs.EmailNotfPrefs
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
