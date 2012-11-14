@@ -283,8 +283,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             _updateIdentity(nev)
           }
           nev
-        case (_, _: IdentitySimple) => assErr("DwE83209qk12")
-        case (_, _: IdentityEmailId) => assErr("DwE83kIR31")
+        case (x, y) => assErr(
+          "DwE8IR31", s"Mismatch: (${classNameOf(x)}, ${classNameOf(y)})")
       }
 
       val login = _saveLogin(loginReq.login, identity)
@@ -594,6 +594,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
               where a.PAGE_ID = ? and a.TENANT = ?
                 and a.LOGIN = l.SNO and a.TENANT = l.TENANT
           """, List(pageId, tenantId))
+      case (x, y) => assErr(
+        "DwE33Zb7", s"Mismatch: (${classNameOf(x)}, ${classNameOf(y)})")
     }
 
     // Load identities and users. Details: First find identities of all types
@@ -1019,6 +1021,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
+  @deprecated("", since = "")
   def loadTemplate(templPath: PagePath): Option[TemplateSrcHtml] = {
     // Minor bug: if template /some-page.tmpl does not exist, but there's
     // an odd page /some-page.tmpl/, then that *page* is found and
