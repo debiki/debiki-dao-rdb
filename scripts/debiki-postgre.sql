@@ -527,10 +527,21 @@ create table DW1_PAGES(
   GUID varchar(32)      not null,   -- COULD rename to ID
   PAGE_ROLE varchar(10),
   PARENT_PAGE_ID varchar(32),
+  -- todo prod, done dev,test: alter table DW1_PAGES add column
+  -- Should be updated whenever the page is renamed.
+  CACHED_TITLE varchar(100) default null,
+  ----------
   CDATI timestamp not null default now(),
   MDATI timestamp not null default now(),
-  -- Page published if not null.
+  -- The most recent publication dati; the page is published, unless is null.
+  -- (In the future, null will be the default.)
   PUBL_DATI timestamp default now(),
+  -- When the page was last modified in a significant way. Of interest
+  -- to e.g. Atom feeds.
+  -- Might be < PUBL_DATI if the page is unpublished and then published again.
+  -- todo prod, done dev,test: alter table DW1_PAGES add column
+  SGFNT_MDATI timestamp default null,
+  ----------
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
   -- COULD rename to ..__R__TENANTS (with S)
@@ -543,8 +554,15 @@ create table DW1_PAGES(
   constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0'),
   constraint DW1_PAGES_PAGEROLE__C_IN
       check (PAGE_ROLE in ('HP', 'BMP', 'BA', 'FMP', 'FT', 'WMP', 'WP')),
+  ----------
+  -- todo prod, done test,dev: alter table DW1_PAGES add
+  constraint DW1_PAGES_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
+  ----------
+
   constraint DW1_PAGES_CDATI_MDATI__C_LE check (CDATI <= MDATI),
-  constraint DW1_PAGES_CDATI_PUBLDATI__C_LE check (CDATI <= PUBL_DATI)
+  constraint DW1_PAGES_CDATI_PUBLDATI__C_LE check (CDATI <= PUBL_DATI),
+  -- todo prod, done dev,test: alter table DW1_PAGES add
+  constraint DW1_PAGES_CDATI_SMDATI__C_LE check (CDATI <= SGFNT_MDATI)
 );
 
 create sequence DW1_PAGES_SNO start with 10;
@@ -571,6 +589,8 @@ create index DW1_PAGES_TNT_PARENT_PUBLDATI
 create index DW1_PAGES_TNT_PRNT_CDATI_NOPUB
     on DW1_PAGES (TENANT, PARENT_PAGE_ID, CDATI)
     where PUBL_DATI is null;
+
+-- COULD also add index on DW1_PAGES.TENANT + CDATI or PUBL_DATI?
 
 
 
@@ -935,22 +955,7 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   PAGE_ID varchar(32) not null,
   SHOW_ID varchar(1) not null,
   PAGE_SLUG varchar(100) not null,
-  --
-  -- SHOULD move below STATUS + CACHED_... cols to DW1_PAGES, because
-  -- there migt be many paths to each page. (If you move a page,
-  -- old paths should redirect to its new location). And add CANONICAL
-  -- column to this table.
-  --
-  -- The page status, see Debiki for Developers #9vG5I.
-  -- 'D'raft, 'P'ublished, 'X' deleted, 'E'rased.
-  PAGE_STATUS varchar(1) not null,
-  -- Should be updated whenever the page is renamed.
-  CACHED_TITLE varchar(100) default null,
-  -- When the page body was published (draft versions don't count).
-  CACHED_PUBL_TIME timestamp default null,
-  -- When the page was last modified in a significant way. Of interest
-  -- to e.g. Atom feeds.
-  CACHED_SGFNT_MTIME timestamp default null,
+  -- COULD add CANONICAL column to this table.
   CDATI timestamp not null default now(),
   MDATI timestamp not null default now(),
   constraint DW1_PGPTHS_TNT_PGID__P primary key (TENANT, PAGE_ID),
@@ -962,15 +967,17 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   constraint DW1_PGPTHS_FOLDER__C_START check (PARENT_FOLDER like '/%'),
   constraint DW1_PGPTHS_SHOWID__C_IN check (SHOW_ID in ('T', 'F')),
   constraint DW1_PGPTHS_SLUG__C_NE check (trim(PAGE_SLUG) <> ''),
-  constraint DW1_PGPTHS_PGSTS__C_IN check (PAGE_STATUS in('D', 'P', 'X', 'E')),
-  constraint DW1_PGPTHS_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
-  constraint DW1_PGPTHS_MTIME_PUBLTIME__C check (
-      CACHED_SGFNT_MTIME >= CACHED_PUBL_TIME),
   constraint DW1_PGPTHS_CDATI_MDATI__C_LE check (CDATI <= MDATI)
 );
 
--- COULD add index on TENANT + CDATI? -- but better to add on
--- DW1_PAGES.TENANT + CDATI / PUBL_DATI instead?
+-----
+-- todo prdo, done test,dev: alter table DW1_PAGE_PATHS drop column
+PAGE_STATUS;
+CACHED_TITLE;
+CACHED_PUBL_TIME;
+CACHED_SGFNT_MTIME;
+-----
+
 
 -- TODO: Test case: no 2 pages with same path, for the index below.
 -- Create an index that ensures (tenant, folder, page-slug) is unique,

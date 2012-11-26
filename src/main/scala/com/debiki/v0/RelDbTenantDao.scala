@@ -56,10 +56,10 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   private def _loadPageMeta(pageId: String)
         (implicit connection: js.Connection): Option[PageMeta] = {
     val values = List(tenantId, pageId)
-    val sql = """
-        select PAGE_ROLE, PARENT_PAGE_ID
-        from DW1_PAGES
-        where TENANT = ? and GUID = ?
+    val sql = s"""
+        select ${_PageMetaSelectListItems}
+        from DW1_PAGES g
+        where g.TENANT = ? and g.GUID = ?
         """
     db.query(sql, values, rs => {
       if (rs.next) Some(_PageMeta(rs, pageId = pageId))
@@ -1158,7 +1158,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     sortBy: PageSortOrder,
     limit: Int,
     offset: Int
-  ): Seq[(PagePath, PageDetails)] = {
+  ): Seq[(PagePath, PageMeta)] = {
 
     require(1 <= limit)
     require(offset == 0)  // for now
@@ -1179,32 +1179,32 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     val (pageRangeClauses, pageRangeValues) = _pageRangeToSql(pageRanges)
 
+    val filterStatusClauses =
+      if (includeStatuses.contains(PageStatus.Draft)) "true"
+      else "g.PUBL_DATI is not null"
+
     val values = tenantId :: pageRangeValues
-    val sql = """
+    val sql = s"""
         select t.PARENT_FOLDER,
             t.PAGE_ID,
             t.SHOW_ID,
             t.PAGE_SLUG,
-            t.PAGE_STATUS,
-            t.CACHED_TITLE,
-            g.PUBL_DATI,
-            t.CACHED_SGFNT_MTIME,
-            g.PAGE_ROLE,
-            g.PARENT_PAGE_ID
+            ${_PageMetaSelectListItems}
         from DW1_PAGE_PATHS t left join DW1_PAGES g
           on t.TENANT = g.TENANT and t.PAGE_ID = g.GUID
-        where t.TENANT = ? and ("""+ pageRangeClauses +""" )
-        and t.PAGE_STATUS in ("""+ statusesToInclStr +""")
-        """+ orderByStr +"""
-        limit """+ limit
+        where t.TENANT = ?
+          and ($pageRangeClauses)
+          and ($filterStatusClauses)
+        $orderByStr
+        limit $limit"""
 
-    var items = List[(PagePath, PageDetails)]()
+    var items = List[(PagePath, PageMeta)]()
 
     db.queryAtnms(sql, values, rs => {
       while (rs.next) {
         val pagePath = _PagePath(rs, tenantId)
-        val pageDetails = _PageDetails(rs)
-        items ::= pagePath -> pageDetails
+        val pageMeta = _PageMeta(rs, pagePath.pageId.get)
+        items ::= pagePath -> pageMeta
       }
     })
     items.reverse
@@ -1212,7 +1212,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   def listChildPages(parentPageId: String, sortBy: PageSortOrder,
-        limit: Int, offset: Int): Seq[(PagePath, PageDetails)] = {
+        limit: Int, offset: Int): Seq[(PagePath, PageMeta)] = {
 
     require(1 <= limit)
     require(offset == 0)  // for now
@@ -1223,30 +1223,25 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     }
 
     val values = tenantId :: parentPageId :: Nil
-    val sql = """
+    val sql = s"""
         select t.PARENT_FOLDER,
             t.PAGE_ID,
             t.SHOW_ID,
             t.PAGE_SLUG,
-            t.PAGE_STATUS,
-            t.CACHED_TITLE,
-            g.PUBL_DATI,
-            t.CACHED_SGFNT_MTIME,
-            g.PAGE_ROLE,
-            g.PARENT_PAGE_ID
+            ${_PageMetaSelectListItems}
         from DW1_PAGES g left join DW1_PAGE_PATHS t
           on g.TENANT = t.TENANT and g.GUID = t.PAGE_ID
         where g.TENANT = ? and g.PARENT_PAGE_ID = ?
         """+ orderByStr +"""
         limit """+ limit
 
-    var items = List[(PagePath, PageDetails)]()
+    var items = List[(PagePath, PageMeta)]()
 
     db.queryAtnms(sql, values, rs => {
       while (rs.next) {
         val pagePath = _PagePath(rs, tenantId)
-        val pageDetails = _PageDetails(rs)
-        items ::= pagePath -> pageDetails
+        val pageMeta = _PageMeta(rs, pagePath.pageId.get)
+        items ::= pagePath -> pageMeta
       }
     })
     items.reverse
@@ -1632,8 +1627,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     // write something before it makes sense to publish the page.
     db.update("""
         insert into DW1_PAGE_PATHS (
-          TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, PAGE_STATUS)
-        values (?, ?, ?, ?, ?, 'D')
+          TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG)
+        values (?, ?, ?, ?, ?)
         """,
         List(page.tenantId, page.folder, page.id, showPageId, e2d(page.slug)))
   }

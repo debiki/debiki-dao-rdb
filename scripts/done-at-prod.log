@@ -564,3 +564,24 @@ COMMIT
 debiki_prod=> \q
 
 }}}1
+{{{1 TODO prod: Move columns from DW1_PAGE_PATHS to DW1_PAGES
+
+drop view dw1v_pages; -- if any (it depends on PAGE_STATUS)
+
+alter table DW1_PAGE_PATHS drop column PAGE_STATUS;
+alter table DW1_PAGE_PATHS drop column CACHED_TITLE;
+alter table DW1_PAGE_PATHS drop column CACHED_PUBL_TIME;
+alter table DW1_PAGE_PATHS drop column CACHED_SGFNT_MTIME;
+
+alter table DW1_PAGES add column CACHED_TITLE varchar(100) default null;
+
+alter table DW1_PAGES add column
+   SGFNT_MDATI timestamp default null;
+
+alter table DW1_PAGES add
+   constraint DW1_PAGES_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> '');
+
+alter table DW1_PAGES add
+  constraint DW1_PAGES_CDATI_SMDATI__C_LE check (CDATI <= SGFNT_MDATI);
+
+}}}1

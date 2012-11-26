@@ -145,25 +145,35 @@ object RelDbUtil {
       pageSlug = d2e(resultSet.getString("PAGE_SLUG")))
 
 
-  def _PageMeta(resultSet: js.ResultSet, pageId: String = null) =
+  val _PageMetaSelectListItems =
+    """g.CACHED_TITLE,
+      |g.CDATI,
+      |g.MDATI,
+      |g.PUBL_DATI,
+      |g.SGFNT_MDATI,
+      |g.PAGE_ROLE,
+      |g.PARENT_PAGE_ID""".stripMargin
+
+
+  def _PageMeta(resultSet: js.ResultSet, pageId: String = null) = {
+    val publDati = Option(resultSet.getTimestamp("PUBL_DATI")).map(ts2d _)
+    val status =
+      if (publDati isDefined) PageStatus.Published else PageStatus.Draft
     PageMeta(
       pageId = if (pageId ne null) pageId else
           unimplemented, // wrong column name: resultSet.getString("PAGE_ID"),
       pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
-      parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")))
-
-
-  def _PageDetails(resultSet: js.ResultSet) =
-    PageDetails(
-      status = _toPageStatus(resultSet.getString("PAGE_STATUS")),
-      pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
+      status = status,
       cachedTitle = Option(resultSet.getString(("CACHED_TITLE"))),
-      cachedPublTime = Option(resultSet.getTimestamp("PUBL_DATI")).map(ts2d _),
+      creationDati = resultSet.getTimestamp("CDATI"),
+      modificationDati = resultSet.getTimestamp("MDATI"),
+      cachedPublTime = publDati,
       cachedSgfntMtime =
-         Option(resultSet.getTimestamp("CACHED_SGFNT_MTIME")).map(ts2d _),
+        Option(resultSet.getTimestamp("SGFNT_MDATI")).map(ts2d _),
       cachedAuthors = Nil,  // db fields not yet created
       cachedCommentCount = 0)  // db field not yet created
+  }
 
 
   def _QuotaConsumer(rs: js.ResultSet) = {
