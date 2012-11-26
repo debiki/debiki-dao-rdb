@@ -49,7 +49,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   def loadPageMeta(pageId: String): Option[PageMeta] = {
-    db.transaction { _loadPageMeta(pageId)(_) }
+    db.withConnection { _loadPageMeta(pageId)(_) }
   }
 
 
@@ -65,6 +65,36 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       if (rs.next) Some(_PageMeta(rs, pageId = pageId))
       else None
     })
+  }
+
+
+  def updatePageMeta(meta: PageMeta) {
+    db.transaction {
+      _updatePageMeta(meta)(_)
+    }
+  }
+
+
+  private def _updatePageMeta(newMeta: PageMeta)
+        (implicit connection: js.Connection) {
+    val values = List(
+      _pageRoleToSql(newMeta.pageRole),
+      newMeta.parentPageId.orNullVarchar,
+      newMeta.cachedTitle.orNullVarchar,
+      d2ts(newMeta.modificationDati),
+      tenantId,
+      newMeta.pageId)
+    val sql = s"""
+      update DW1_PAGES set
+        PAGE_ROLE = ?,
+        PARENT_PAGE_ID = ?,
+        CACHED_TITLE = ?,
+        MDATI = ?
+        -- PUBL_DATI = ?,
+        -- SGFNT_MDATI = ?
+      where TENANT = ? and GUID = ?
+      """
+    db.update(sql, values)
   }
 
 
