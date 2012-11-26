@@ -164,13 +164,11 @@ object RelDbUtil {
           unimplemented, // wrong column name: resultSet.getString("PAGE_ID"),
       pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
-      status = status,
       cachedTitle = Option(resultSet.getString(("CACHED_TITLE"))),
-      creationDati = resultSet.getTimestamp("CDATI"),
-      modificationDati = resultSet.getTimestamp("MDATI"),
+      creationDati = ts2d(resultSet.getTimestamp("CDATI")),
+      modificationDati = ts2d(resultSet.getTimestamp("MDATI")),
       cachedPublTime = publDati,
-      cachedSgfntMtime =
-        Option(resultSet.getTimestamp("SGFNT_MDATI")).map(ts2d _),
+      cachedSgfntMtime = Option(ts2d(resultSet.getTimestamp("SGFNT_MDATI"))),
       cachedAuthors = Nil,  // db fields not yet created
       cachedCommentCount = 0)  // db field not yet created
   }

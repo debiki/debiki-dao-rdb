@@ -51,7 +51,11 @@ object RelDb {
   /** Converts java.util.Date to java.sql.Timestamp. */
   def d2ts(d: ju.Date) = new js.Timestamp(d.getTime)
 
-  /** Converts java.sql.Timestamp to java.util.Date. */
+  /**
+   * Converts java.sql.Timestamp to java.util.Date. (If you send a ju.Date
+   * to the database, it throws away the fractional seconds value,
+   * when saving and loading.)
+   */
   def ts2d(ts: js.Timestamp) =
      (ts eq null) ? (null: ju.Date) | (new ju.Date(ts.getTime))
 
