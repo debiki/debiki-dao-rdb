@@ -43,7 +43,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       _createPage(page)
       val postsWithIds = _insert(page.id, page.actions.posts)
       val actionsWithIds = page.actions.copy(posts = postsWithIds)
-      page.copy(actions = actionsWithIds)
+      val newPageMeta = _loadPageMeta(page.id) getOrElse runErr(
+        "DwE1RHK5", s"Found no meta for newly created page, id: ${page.id}")
+      page.copy(meta = newPageMeta, actions = actionsWithIds)
     }
   }
 
