@@ -16,9 +16,9 @@ object RelDbUtil {
 
   /**
    * I've included too many chars, I think, to play safe.
-   * E.g. `=` and "` and `'` and '`' and `_` are no regex chars?
+   * E.g. `=` and "` and `'` and '`' are no regex chars?
    */
-  val MagicRegexCharsNoDot = """!"#$%&'()*+,:;<=>?@[\]^_`{|}~"""
+  val MagicRegexChars = """!"#$%&'()*+,.:;<=>?@[\]^`{|}~"""
 
 
   /**

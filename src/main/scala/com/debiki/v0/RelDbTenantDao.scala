@@ -117,9 +117,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     PagePath.checkPath(folder = toFolder)
 
     // Escape magic regex chars in folder name — we're using `fromFolder` as a
-    // regex. (As of 2012-09-24, a valid folder path contains no regex chars
-    // except for `.`, so this won't restrict which folder names are allowed.)
-    if (fromFolder.intersect(MagicRegexCharsNoDot).nonEmpty)
+    // regex. (As of 2012-09-24, a valid folder path contains no regex chars,
+    // so this won't restrict which folder names are allowed.)
+    if (fromFolder.intersect(MagicRegexChars).nonEmpty)
       illArgErr("DwE93KW18", "Regex chars found in fromFolder: "+ fromFolder)
     val fromFolderEscaped = fromFolder.replace(".", """\.""")
 
