@@ -596,6 +596,9 @@ create index DW1_PAGES_TNT_PRNT_CDATI_NOPUB
 
 ----- Actions
 
+-- todo prod, done dev,test:
+--    alter table DW1_PAGE_ACTIONS alter column LOGIN drop not null;
+
 -- Contains all posts, edits, ratings etc, everything that's needed to
 -- render a discussion.
 create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
@@ -603,7 +606,8 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   TENANT varchar(32)  not null,
   PAGE_ID varchar(32)  not null,
   PAID varchar(32)     not null,  -- page action id  COULD rename to ID
-  LOGIN varchar(32)    not null,  -- COULD rename to LOGIN_ID
+  -- Null means the action was created by the system.
+  LOGIN varchar(32),  -- COULD rename to LOGIN_ID
   TIME timestamp       not null,  -- COULD rename to CTIME
   TYPE varchar(20)     not null,
   -- COULD split into TARGET_PGA (for edits) and PARENT_PGA (for posts)
@@ -971,7 +975,7 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
 );
 
 -----
--- todo prdo, done test,dev: alter table DW1_PAGE_PATHS drop column
+-- todo prod, done test,dev: alter table DW1_PAGE_PATHS drop column
 PAGE_STATUS;
 CACHED_TITLE;
 CACHED_PUBL_TIME;

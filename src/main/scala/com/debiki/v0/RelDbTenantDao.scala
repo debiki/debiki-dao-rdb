@@ -386,6 +386,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   override def saveLogout(loginId: String, logoutIp: String) {
+    require(loginId != SystemUser.Login.id)
     db.transaction { implicit connection =>
       db.update("""
           update DW1_LOGINS set LOGOUT_IP = ?, LOGOUT_TIME = ?
@@ -1741,17 +1742,29 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             ?, ?, ?, ?, ?,
             ?, ?)"""
 
+      // There's no login (or identity or user) stored for the system user,
+      // so don't try to reference it via DW1_PAGE_ACTIONS.LOGIN_ID.
+      val loginIdNullForSystem =
+        if (action.loginId == SystemUser.Login.id) NullVarchar
+        else action.loginId
+
       // Keep in mind that Oracle converts "" to null.
-      val commonVals: List[AnyRef] = Nil // p.loginId::pageId::Nil
+      val commonVals: List[AnyRef] = List(
+        loginIdNullForSystem,
+        tenantId,
+        pageId,
+        action.id,
+        d2ts(action.ctime))
+
       action match {
         case p: Post =>
           db.update(insertIntoActions, commonVals:::List(
-            p.loginId, tenantId, pageId, p.id, p.ctime, _toFlag(p.tyype),
+            _toFlag(p.tyype),
             p.parent, e2n(p.text), e2n(p.markup), e2n(p.where),
             _toDbVal(p.approval), NullVarchar))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
-            r.loginId, tenantId, pageId, r.id, r.ctime, "Rating", r.postId,
+            "Rating", r.postId,
             NullVarchar, NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
           db.batchUpdate("""
@@ -1762,29 +1775,27 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           val autoAppliedDbVal =
              if (e.autoApplied) "A" else NullVarchar
           db.update(insertIntoActions, commonVals:::List(
-            e.loginId, tenantId, pageId, e.id, e.ctime, "Edit",
+            "Edit",
             e.postId, e2n(e.text), e2n(e.newMarkup), NullVarchar,
             _toDbVal(e.approval), autoAppliedDbVal))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
-            a.loginId, tenantId, pageId, a.id, a.ctime, "EditApp",
+            "EditApp",
             a.editId, e2n(a.result), NullVarchar, NullVarchar,
             _toDbVal(a.approval), NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
-            f.loginId, tenantId, pageId, f.id, f.ctime, "Flag" + f.reason,
+            "Flag" + f.reason,
             f.postId, e2n(f.details), NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
         case d: Delete =>
           db.update(insertIntoActions, commonVals:::List(
-            d.loginId, tenantId, pageId, d.id, d.ctime,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
             d.postId, e2n(d.reason), NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
         case r: Review =>
           val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
           db.update(insertIntoActions, commonVals:::List(
-            r.loginId, tenantId, pageId, r.id, r.ctime,
             tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar,
             _toDbVal(r.approval), NullVarchar))
         case x => unimplemented(

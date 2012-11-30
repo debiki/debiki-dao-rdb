@@ -36,7 +36,14 @@ object RelDbUtil {
   def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
         : Action = {
     val id = rs.getString("PAID")
-    val loginSno = rs.getLong("LOGIN").toString
+    val loginSno = {
+      // No login/identity/user is stored for the hardcoded system user.
+      val loginIdOrNull = rs.getString("LOGIN")
+      if (loginIdOrNull eq null)
+        SystemUser.Login.id
+      else
+        loginIdOrNull
+    }
     val time = ts2d(rs.getTimestamp("TIME"))
     val typee = rs.getString("TYPE")
     val relpa = rs.getString("RELPA")
