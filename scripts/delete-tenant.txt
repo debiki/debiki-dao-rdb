@@ -14,6 +14,7 @@ delete from dw1_tenants where id = '10';
 
 
 -- Delete tenant 'new-website', assuming there are no DW1_PAGE_ACTIONS rows.
+-- (Uncomment lines to also delete actions!)
 
 \set AUTOCOMMIT 'off'
 do $$
@@ -22,6 +23,12 @@ begin
   select id into strict website_id from dw1_tenants where name = 'new-website';
   
   raise notice 'Deleting website with id %...', website_id;
+
+  -- delete from dw1_page_ratings where tenant = website_id;
+  -- delete from dw1_page_actions where tenant = website_id;
+
+  delete from dw1_page_paths where tenant = website_id;
+  delete from dw1_pages where tenant = website_id;
 
   delete from dw1_logins where tenant = website_id;
   delete from dw1_ids_openid where tenant = website_id;
