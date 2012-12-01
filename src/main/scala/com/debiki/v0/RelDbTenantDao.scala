@@ -109,6 +109,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
   private def _movePages(pageIds: Seq[String], fromFolder: String,
         toFolder: String)(implicit connection: js.Connection) {
+    unimplemented("Moving pages and updating DW1_PAGE_PATHS.CANONICAL")
+    /*
     if (pageIds isEmpty)
       return
 
@@ -133,6 +135,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     val values = fromFolderEscaped :: toFolder :: tenantId :: pageIds.toList
 
     db.update(sql, values)
+    */
   }
 
 
@@ -919,6 +922,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         from
           DW1_PAGE_ACTIONS a inner join DW1_PAGE_PATHS p
           on a.TENANT = p.TENANT and a.PAGE_ID = p.PAGE_ID
+            and p.CANONICAL = 'C'
         where
           a.TENANT = ? and ("""+ pathRangeClauses +""")
           and a.TYPE = 'Post'
@@ -1225,6 +1229,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             ${_PageMetaSelectListItems}
         from DW1_PAGE_PATHS t left join DW1_PAGES g
           on t.TENANT = g.TENANT and t.PAGE_ID = g.GUID
+          and t.CANONICAL = 'C'
         where t.TENANT = ?
           and ($pageRangeClauses)
           and ($filterStatusClauses)
@@ -1264,6 +1269,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             ${_PageMetaSelectListItems}
         from DW1_PAGES g left join DW1_PAGE_PATHS t
           on g.TENANT = t.TENANT and g.GUID = t.PAGE_ID
+          and t.CANONICAL = 'C'
         where g.TENANT = ? and g.PARENT_PAGE_ID = ?
         """+ orderByStr +"""
         limit """+ limit
@@ -1567,16 +1573,20 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       (implicit connection: js.Connection = null): Option[PagePath] = {
 
     var query = """
-        select PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG
+        select PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL
         from DW1_PAGE_PATHS
         where TENANT = ?
         """
+
+    // Sort order that places the canonical row first.
+    // ('C'anonical is before 'R'edirect.)
+    val CanonicalFirst = "CANONICAL asc"
+
     assert(pagePathIn.tenantId == tenantId)
     var binds = List(pagePathIn.tenantId)
-    var maxRowsFound = 1  // there's a unique key
     pagePathIn.pageId match {
       case Some(id) =>
-        query += " and PAGE_ID = ?"
+        query += s" and PAGE_ID = ? order by $CanonicalFirst"
         binds ::= id
       case None =>
         // SHOW_ID = 'F' means that the page guid must not be part
@@ -1601,48 +1611,61 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           // Perhaps the correct path is /folder/page/ not /folder/page.
           // Try that path too. Choose sort orter so /folder/page appears
           // first, and skip /folder/page/ if /folder/page is found.
-          query += """
+          query += s"""
               or (PARENT_FOLDER = ? and PAGE_SLUG = '-')
               )
-            order by length(PARENT_FOLDER) asc
+            order by length(PARENT_FOLDER) asc, $CanonicalFirst
             """
           binds ::= pagePathIn.folder + pagePathIn.pageSlug +"/"
-          maxRowsFound = 2
         }
         else if (pagePathIn.folder.count(_ == '/') >= 2) {
           // Perhaps the correct path is /folder/page not /folder/page/.
           // But prefer /folder/page/ if both pages are found.
-          query += """
+          query += s"""
               or (PARENT_FOLDER = ? and PAGE_SLUG = ?)
               )
-            order by length(PARENT_FOLDER) desc
+            order by length(PARENT_FOLDER) desc, $CanonicalFirst
             """
           val perhapsPath = pagePathIn.folder.dropRight(1)  // drop `/'
           val lastSlash = perhapsPath.lastIndexOf("/")
           val (shorterPath, nonEmptyName) = perhapsPath.splitAt(lastSlash + 1)
           binds ::= shorterPath
           binds ::= nonEmptyName
-          maxRowsFound = 2
         }
         else {
-          query += ")"
+          query += s"""
+              )
+            order by $CanonicalFirst
+            """
         }
     }
 
-    db.query(query, binds.reverse, rs => {
-      var correctPath: Option[PagePath] = None
-      if (rs.next) {
-        correctPath = Some(pagePathIn.copy(  // keep pagePathIn.tenantId
+    val (correctPath: PagePath, isCanonical: Boolean) =
+      db.query(query, binds.reverse, rs => {
+        if (!rs.next)
+          return None
+        var correctPath = PagePath(
+            tenantId = pagePathIn.tenantId,
             folder = rs.getString("PARENT_FOLDER"),
             pageId = Some(rs.getString("PAGE_ID")),
             showId = rs.getString("SHOW_ID") == "T",
             // If there is a root page ("serveraddr/") with no name,
             // it is stored as a single space; s2e removes such a space:
-            pageSlug = d2e(rs.getString("PAGE_SLUG"))))
-      }
-      assert(maxRowsFound == 2 || !rs.next)
-      correctPath
-    })
+            pageSlug = d2e(rs.getString("PAGE_SLUG")))
+        val isCanonical = rs.getString("CANONICAL") == "C"
+        (correctPath, isCanonical)
+      })
+
+    if (!isCanonical) {
+      // We've found a page path that's been inactivated and therefore should
+      // redirect to the currently active path to the page. Find that other
+      // path (the canonical path), by page id.
+      runErrIf3(correctPath.pageId.isEmpty,
+        "DwE31Rg5", s"Page id not found when looking up $pagePathIn")
+      return _findCorrectPagePath(correctPath)
+    }
+
+    Some(correctPath)
   }
 
 
@@ -1660,8 +1683,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     // write something before it makes sense to publish the page.
     db.update("""
         insert into DW1_PAGE_PATHS (
-          TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG)
-        values (?, ?, ?, ?, ?)
+          TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL)
+        values (?, ?, ?, ?, ?, 'C')
         """,
         List(page.tenantId, page.folder, page.id, showPageId, e2d(page.slug)))
   }
@@ -1699,7 +1722,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
          update DW1_PAGE_PATHS
          set """+
            updates +"""
-           MDATI = now()
+           CANONICAL_DATI = now()
          where TENANT = ? and PAGE_ID = ?
          """
 

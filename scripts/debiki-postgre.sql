@@ -967,10 +967,13 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   PAGE_ID varchar(32) not null,
   SHOW_ID varchar(1) not null,
   PAGE_SLUG varchar(100) not null,
-  -- COULD add CANONICAL column to this table.
   CDATI timestamp not null default now(),
-  MDATI timestamp not null default now(),
-  constraint DW1_PGPTHS_TNT_PGID__P primary key (TENANT, PAGE_ID),
+  -- 'C'anonical: this is the main path to the page (there is only one,
+  -- so there's a unique index: DW1_PGPTHS_TNT_PGID_CNCL__U)
+  -- 'R'edirect: this path redirects to the canonical path.
+  CANONICAL varchar(1) not null,
+  -- The last time this path was made canonical. Currently used for debugging.
+  CANONICAL_DATI timestamp not null default now(),
   constraint DW1_PGPTHS_TNT_PGID__R__PAGES  -- ix DW1_PGPTHS_TNT_PAGE__P
       foreign key (TENANT, PAGE_ID)
       references DW1_PAGES (TENANT, GUID) deferrable,
@@ -978,17 +981,48 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   constraint DW1_PGPTHS_FOLDER__C_DASH check (PARENT_FOLDER not like '%/-%'),
   constraint DW1_PGPTHS_FOLDER__C_START check (PARENT_FOLDER like '/%'),
   constraint DW1_PGPTHS_SHOWID__C_IN check (SHOW_ID in ('T', 'F')),
+  -- todo prod,dev, done test: alter table DW1_PAGE_PATHS add
+  constraint DW1_PGPTHS_CNCL__C check (CANONICAL in ('C', 'R')),
+  -- /todo
   constraint DW1_PGPTHS_SLUG__C_NE check (trim(PAGE_SLUG) <> ''),
   constraint DW1_PGPTHS_CDATI_MDATI__C_LE check (CDATI <= MDATI)
 );
 
------
+------------------------------------------------
+-- todo prod,dev, done test:
+-- UNTESTED!
+
+alter table DW1_PAGE_PATHS add column CANONICAL varchar(1);
+update DW1_PAGE_PATHS set CANONICAL = 'C';
+alter table DW1_PAGE_PATHS alter column CANONICAL set not null;
+
+alter table DW1_PAGE_PATHS rename column MDATI to CANONICAL_DATI;
+
+alter table DW1_PAGE_PATHS drop constraint DW1_PGPTHS_TNT_PGID__P;
+
+create index DW1_PGPTHS_TNT_PGID_CNCL
+    on DW1_PAGE_PATHS (TENANT, PAGE_ID, CANONICAL);
+
+-- There must be only one canonical path to each page.
+create unique index DW1_PGPTHS_TNT_PGID_CNCL__U
+    on DW1_PAGE_PATHS (TENANT, PAGE_ID)
+    where CANONICAL = 'C';
+
+-- And no duplicate non-canonical paths.
+create unique index DW1_PGPTHS_PATH_NOCNCL__U
+    on DW1_PAGE_PATHS(TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID)
+    where CANONICAL <> 'C';
+
+------------------------------------------------
+
+
+------------------------------------------------
 -- todo prod, done test,dev: alter table DW1_PAGE_PATHS drop column
 PAGE_STATUS;
 CACHED_TITLE;
 CACHED_PUBL_TIME;
 CACHED_SGFNT_MTIME;
------
+------------------------------------------------
 
 
 -- TODO: Test case: no 2 pages with same path, for the index below.
@@ -997,15 +1031,35 @@ CACHED_SGFNT_MTIME;
 -- That is, if the path is like:  /some/folder/page-slug  (*no* guid in path)
 -- rather than:  /some/folder/-<guid>-page-slug  (guid included in path)
 -- then ensure there's no other page with the same /some/folder/page-slug.
+
+------------------------------------------------
+-- todo prod,dev, done test:
+
+drop index DW1_PGPTHS__U;
+
+-- Each path maps to only one page.
+create unique index DW1_PGPTHS_PATH_NOID_CNCL__U
+    on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG)
+    where SHOW_ID = 'F' and CANONICAL = 'C';
+
+-- old: /*
 create unique index DW1_PGPTHS__U
 on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG)
 where SHOW_ID = 'F';
+*/
 
 -- Also create an index that covers *all* pages (even those without the ID
 -- shown before the page slug).
+
+drop index DW1_PGPTHS_ALL;
+create index DW1_PGPTHS_TNT_FLDR_SLG_CNCL
+    on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, CANONICAL);
+
+-- old: /*
 create index DW1_PGPTHS_ALL
 on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, PAGE_ID);
-
+*/
+------------------------------------------------
 
 
 ----- Quotas
