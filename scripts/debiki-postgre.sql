@@ -646,9 +646,9 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   NEW_IP varchar(39), -- null, unless differs from DW1_LOGINS.START_IP
  alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID_ID__P
      primary key (TENANT, PAGE_ID, PAID);
- alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID__R__PGPTHS
+ constraint DW1_PGAS_TNT_PGID__R__PAGES -- ix: PK
      foreign key (TENANT, PAGE_ID)
-     references DW1_PAGE_PATHS (TENANT, PAGE_ID) deferrable;
+     references DW1_PAGES (TENANT, GUID) deferrable,
  alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS__R__PGAS
      foreign key (TENANT, PAGE_ID, RELPA) -- no ix! no dels/upds in prnt tbl
                        -- and no joins (loading whole page at once instead)
@@ -714,6 +714,14 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
     end)
 );
   -- Cannot create an index organized table -- not available in Postgre SQL.
+
+----- todo prod,dev, done test:
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TNT_PGID__R__PGPTHS;
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID__R__PAGES
+     foreign key (TENANT, PAGE_ID)
+     references DW1_PAGES (TENANT, GUID) deferrable;
+----- /todo
+
 
 
 -- Did later:
