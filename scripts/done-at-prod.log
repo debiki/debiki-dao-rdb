@@ -585,3 +585,111 @@ alter table DW1_PAGES add
   constraint DW1_PAGES_CDATI_SMDATI__C_LE check (CDATI <= SGFNT_MDATI);
 
 }}}1
+{{{1 TODO prod: Canonical paths
+
+{{{ Done @ test
+debiki=> alter table DW1_PAGE_PATHS add column CANONICAL varchar(1);
+ALTER TABLE
+debiki=> update DW1_PAGE_PATHS set CANONICAL = 'C';
+UPDATE 0
+debiki=> alter table DW1_PAGE_PATHS alter column CANONICAL not null;
+ERROR:  syntax error at or near "not"
+LINE 1: alter table DW1_PAGE_PATHS alter column CANONICAL not null;
+                                                          ^
+debiki=> alter table DW1_PAGE_PATHS alter column CANONICAL set not null;
+ALTER TABLE
+debiki=>
+debiki=> alter table DW1_PAGE_PATHS rename column MDATI to CANONICAL_DATI;
+ALTER TABLE
+debiki=> alter table DW1_PAGE_PATHS drop constraint DW1_PGPTHS_TNT_PGID__P;
+ERROR:  cannot drop constraint dw1_pgpths_tnt_pgid__p on table dw1_page_paths because other objects depend on it
+DETAIL:  constraint dw1_pgas_tnt_pgid__r__pgpths on table dw1_page_actions depends on index dw1_pgpths_tnt_pgid__p
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+debiki=>
+debiki=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TNT_PGID__R__PGPTHS;
+ALTER TABLE
+debiki=>
+debiki=> alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID__R__PAGES
+debiki->      foreign key (TENANT, PAGE_ID)
+debiki->      references DW1_PAGES (TENANT, PAGE_ID) deferrable;
+ERROR:  column "page_id" referenced in foreign key constraint does not exist
+debiki=>
+debiki=> alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID__R__PAGES
+debiki->      foreign key (TENANT, PAGE_ID)
+debiki->      references DW1_PAGES (TENANT, GUID) deferrable;
+ALTER TABLE
+debiki=> alter table DW1_PAGE_PATHS drop constraint DW1_PGPTHS_TNT_PGID__P;
+ALTER TABLE
+debiki=> create index DW1_PGPTHS_TNT_PGID_CNCL
+debiki->     on DW1_PAGE_PATHS (TENANT, PAGE_ID, CANONICAL);
+CREATE INDEX
+debiki=> create unique index DW1_PGPTHS_TNT_PGID_CNCL__U
+debiki->     on DW1_PAGE_PATHS (TENANT, PAGE_ID, CANONICAL)
+debiki-> ^C
+debiki=>
+debiki=>
+debiki=> create unique index DW1_PGPTHS_TNT_PGID_CNCL__U
+debiki->     on DW1_PAGE_PATHS (TENANT, PAGE_ID)
+debiki->     where CANONICAL = 'C';
+CREATE INDEX
+debiki=> drop index DW1_PGPTHS__U;
+DROP INDEX
+debiki=>
+debiki=> create unique index DW1_PGPTHS_PATH_NOID_CNCL__U
+debiki->     on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG)
+debiki->     where SHOW_ID = 'F' and CANONICAL = 'C';
+CREATE INDEX
+debiki=>
+debiki=> drop index DW1_PGPTHS_ALL;
+DROP INDEX
+debiki=>
+debiki=> create index DW1_PGPTHS_TNT_FLDR_SLG_CNCL
+debiki->     on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, CANONICAL);
+CREATE INDEX
+debiki=> alter table DW1_PAGE_PATHS add
+debiki->   constraint DW1_PGPTHS_CNCL__C check (CANONICAL in ('C', 'R'));
+ALTER TABLE
+debiki=>
+debiki=> create unique index DW1_PGPTHS_PATH_NOCNCL__U
+debiki->     on DW1_PAGE_PATHS(TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID)
+debiki->     where CANONICAL <> 'C';
+CREATE INDEX
+debiki=>
+}}}
+
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TNT_PGID__R__PGPTHS;
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID__R__PAGES
+    foreign key (TENANT, PAGE_ID)
+    references DW1_PAGES (TENANT, GUID) deferrable;
+
+alter table DW1_PAGE_PATHS add column CANONICAL varchar(1);
+update DW1_PAGE_PATHS set CANONICAL = 'C';
+alter table DW1_PAGE_PATHS alter column CANONICAL set not null;
+alter table DW1_PAGE_PATHS rename column MDATI to CANONICAL_DATI;
+
+alter table DW1_PAGE_PATHS drop constraint DW1_PGPTHS_TNT_PGID__P;
+
+create index DW1_PGPTHS_TNT_PGID_CNCL
+     on DW1_PAGE_PATHS (TENANT, PAGE_ID, CANONICAL);
+
+create unique index DW1_PGPTHS_TNT_PGID_CNCL__U
+     on DW1_PAGE_PATHS (TENANT, PAGE_ID)
+     where CANONICAL = 'C';
+
+create unique index DW1_PGPTHS_PATH_NOCNCL__U
+     on DW1_PAGE_PATHS(TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID)
+     where CANONICAL <> 'C';
+
+drop index DW1_PGPTHS__U;
+create unique index DW1_PGPTHS_PATH_NOID_CNCL__U
+     on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG)
+     where SHOW_ID = 'F' and CANONICAL = 'C';
+
+drop index DW1_PGPTHS_ALL;
+create index DW1_PGPTHS_TNT_FLDR_SLG_CNCL
+     on DW1_PAGE_PATHS(TENANT, PARENT_FOLDER, PAGE_SLUG, CANONICAL);
+
+alter table DW1_PAGE_PATHS add
+   constraint DW1_PGPTHS_CNCL__C check (CANONICAL in ('C', 'R'));
+
+}}}1

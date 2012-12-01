@@ -715,7 +715,7 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
 );
   -- Cannot create an index organized table -- not available in Postgre SQL.
 
------ todo prod,dev, done test:
+----- todo prod, done dev,test:
 alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TNT_PGID__R__PGPTHS;
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID__R__PAGES
      foreign key (TENANT, PAGE_ID)
@@ -981,7 +981,7 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   constraint DW1_PGPTHS_FOLDER__C_DASH check (PARENT_FOLDER not like '%/-%'),
   constraint DW1_PGPTHS_FOLDER__C_START check (PARENT_FOLDER like '/%'),
   constraint DW1_PGPTHS_SHOWID__C_IN check (SHOW_ID in ('T', 'F')),
-  -- todo prod,dev, done test: alter table DW1_PAGE_PATHS add
+  -- todo prod, done dev,test: alter table DW1_PAGE_PATHS add
   constraint DW1_PGPTHS_CNCL__C check (CANONICAL in ('C', 'R')),
   -- /todo
   constraint DW1_PGPTHS_SLUG__C_NE check (trim(PAGE_SLUG) <> ''),
@@ -989,7 +989,7 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
 );
 
 ------------------------------------------------
--- todo prod,dev, done test:
+-- todo prod, done dev,test:
 -- UNTESTED!
 
 alter table DW1_PAGE_PATHS add column CANONICAL varchar(1);
@@ -1012,7 +1012,6 @@ create unique index DW1_PGPTHS_TNT_PGID_CNCL__U
 create unique index DW1_PGPTHS_PATH_NOCNCL__U
     on DW1_PAGE_PATHS(TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID)
     where CANONICAL <> 'C';
-
 ------------------------------------------------
 
 
@@ -1033,7 +1032,7 @@ CACHED_SGFNT_MTIME;
 -- then ensure there's no other page with the same /some/folder/page-slug.
 
 ------------------------------------------------
--- todo prod,dev, done test:
+-- todo prod, done dev,test:
 
 drop index DW1_PGPTHS__U;
 
