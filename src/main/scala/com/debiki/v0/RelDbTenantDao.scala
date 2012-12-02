@@ -143,7 +143,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String]): PagePath = {
     db.transaction { implicit connection =>
-      _updatePage(pageId, newFolder = newFolder, showId = showId,
+      moveRenamePageImpl(pageId, newFolder = newFolder, showId = showId,
          newSlug = newSlug)
     }
   }
@@ -1677,70 +1677,123 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       values (nextval('DW1_PAGES_SNO'), ?, ?, ?, ?)"""
     db.update(sql, values)
 
-    val showPageId = page.idShownInUrl ? "T" | "F"
+    insertPagePathOrThrow(page.path)
+  }
 
-    // Create a draft, always a draft ('D') -- the user needs to
-    // write something before it makes sense to publish the page.
-    db.update("""
+
+  private def insertPagePathOrThrow(pagePath: PagePath)(
+        implicit conn: js.Connection) {
+    illArgErrIf3(pagePath.pageId.isEmpty, "DwE21UY9", s"No page id: $pagePath")
+    val showPageId = pagePath.showId ? "T" | "F"
+    try {
+      db.update("""
         insert into DW1_PAGE_PATHS (
           TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL)
         values (?, ?, ?, ?, ?, 'C')
         """,
-        List(page.tenantId, page.folder, page.id, showPageId, e2d(page.slug)))
+        List(pagePath.tenantId, pagePath.folder, pagePath.pageId.get,
+          showPageId, e2d(pagePath.pageSlug)))
+    }
+    catch {
+      case ex: js.SQLException if (isUniqueConstrViolation(ex)) =>
+        val mess = ex.getMessage.toUpperCase
+        if (mess.contains("DW1_PGPTHS_PATH_NOID_CNCL__U")) {
+          // There's already a page path where we attempt to insert
+          // the new path.
+          throw PathClashException(
+            pagePath.copy(pageId = None), newPagePath = pagePath)
+        }
+        if (ex.getMessage.contains("DW1_PGPTHS_TNT_PGID_CNCL__U")) {
+          // Race condition. Another session just moved this page, that is,
+          // inserted a new 'C'anonical row. There must be only one such row.
+          // This probably means that two admins attempted to move pageId
+          // at the same time (or that longer page ids should be generated).
+          // Details:
+          // 1. `moveRenamePageImpl` deletes any 'C'anonical rows before
+          //  it inserts a new 'C'anonical row, so unless another session
+          //  does the same thing inbetween, this error shouldn't happen.
+          // 2 When creating new pages: Page ids are generated randomly,
+          //  and are fairly long, unlikely to clash.
+          throw new ju.ConcurrentModificationException(
+            s"Another administrator/moderator apparently just added a path" +
+            s" to this page: ${pagePath.path}, id `${pagePath.pageId.get}'." +
+            s" (Or the server needs to generate longer page ids.)")
+        }
+        throw ex
+    }
   }
 
 
-  private def _updatePage(pageId: String,
+  private def moveRenamePageImpl(pageId: String,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String])
         (implicit conn: js.Connection): PagePath = {
 
+    // Verify new path is legal.
     PagePath.checkPath(tenantId = tenantId, pageId = Some(pageId),
       folder = newFolder getOrElse "/", pageSlug = newSlug getOrElse "")
 
-    var updates = new StringBuilder
-    var vals = List[AnyRef]()
+    // Lets do this:
+    // 1. Set all current paths to pageId to CANONICAL = 'R'edirect
+    // 2. Delete any 'R'edirecting path that clashes with the new path
+    //    we're about to save (also if it points to pageId).
+    // 3. Insert the new path.
+    // 4. If the insertion fails, abort; this means we tried to overwrite
+    //    a 'C'anonical path to another page (which we shouldn't do,
+    //    because then that page would no longer be reachable).
 
-    newFolder foreach (folder => {
-      updates.append("PARENT_FOLDER = ?,")
-      vals ::= folder
-    })
+    val currentPath: PagePath = _lookupPagePathByPageId(pageId) getOrElse (
+      throw DbDao.PageNotFoundException(tenantId, pageId))
 
-    showId foreach (showId => {
-      updates.append("SHOW_ID = ?,")
-      vals ::= showId ? "T" | "F"
-    })
+    val newPath = {
+      var path = currentPath
+      newFolder foreach { folder => path = path.copy(folder = folder) }
+      showId foreach { show => path = path.copy(showId = show) }
+      newSlug foreach { slug => path = path.copy(pageSlug = slug) }
+      path
+    }
 
-    newSlug foreach (slug => {
-      updates.append("PAGE_SLUG = ?,")
-      vals ::= e2d(slug)
-    })
-
-    if (vals nonEmpty) {
-      val allVals = (pageId::tenantId::vals).reverse
+    def changeExistingPathsToRedirects(pageId: String) {
+      val vals = List(tenantId, pageId)
       val stmt = """
-         update DW1_PAGE_PATHS
-         set """+
-           updates +"""
-           CANONICAL_DATI = now()
-         where TENANT = ? and PAGE_ID = ?
-         """
-
-      val numRowsChanged = db.update(stmt, allVals)
-
-      assert(numRowsChanged <= 1)
+        update DW1_PAGE_PATHS
+        set CANONICAL = 'R'
+        where TENANT = ? and PAGE_ID = ?
+        """
+      val numRowsChanged = db.update(stmt, vals)
       if (numRowsChanged == 0)
-        throw PageNotFoundException(tenantId, pageId)
+        throw DbDao.PageNotFoundException(tenantId, pageId, details = Some(
+          "It seems all paths to the page were deleted moments ago"))
     }
 
-    // This shouldn't fail; it's the same transaction as the update.
-    val newPath = _lookupPagePathByPageId(pageId) getOrElse {
-      val mess = "Page suddenly gone, id: "+ pageId
-      // logger.error(mess)  LOG
-      runErr("DwE093KFH3", mess)
+    def deleteAnyExistingRedirectFrom(newPath: PagePath) {
+      val showPageId = newPath.showId ? "T" | "F"
+      var vals = List(tenantId, newPath.folder, newPath.pageSlug, showPageId)
+      var stmt = """
+        delete from DW1_PAGE_PATHS
+        where TENANT = ? and PARENT_FOLDER = ? and PAGE_SLUG = ?
+          and SHOW_ID = ? and CANONICAL = 'R'
+        """
+      if (newPath.showId) {
+        // We'll find at most one row, and it'd be similar to the one
+        // we intend to insert, except for 'R'edirect not 'C'anonical.
+        stmt = stmt + " and PAGE_ID = ?"
+        vals = vals ::: List(pageId)
+      }
+      val numRowsDeleted = db.update(stmt, vals)
+      assErrIf(1 < numRowsDeleted && newPath.showId, "DwE09Ij7")
     }
 
-    newPath
+    changeExistingPathsToRedirects(pageId)
+    deleteAnyExistingRedirectFrom(newPath)
+    insertPagePathOrThrow(newPath)
+
+    val resultingPath = _lookupPagePathByPageId(pageId)
+    runErrIf3(resultingPath != Some(newPath),
+      "DwE31ZB0", s"Resulting path: $resultingPath, and intended path: " +
+      s"$newPath, are different")
+
+    return newPath
   }
 
 
