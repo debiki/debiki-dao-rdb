@@ -1826,6 +1826,13 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
+  def moveRenamePage(newPath: PagePath) {
+    db.transaction { implicit connection =>
+      moveRenamePageImpl(newPath)
+    }
+  }
+
+
   private def moveRenamePageImpl(newPath: PagePath)
         (implicit conn: js.Connection) {
 
