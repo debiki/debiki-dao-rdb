@@ -1707,13 +1707,24 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   private def _createPage[T](page: PageStuff)(implicit conn: js.Connection) {
-    val values = List[AnyRef](page.tenantId, page.id,
-      _pageRoleToSql(page.role), page.parentPageId.orNullVarchar)
-    val sql = """
-      insert into DW1_PAGES (SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID)
-      values (nextval('DW1_PAGES_SNO'), ?, ?, ?, ?)"""
-    db.update(sql, values)
+    require(page.meta.creationDati == page.meta.modificationDati)
+    page.meta.cachedPublTime.foreach(publDati =>
+      require(page.meta.creationDati.getTime <= publDati.getTime))
 
+    val values = List[AnyRef](page.tenantId, page.id,
+      _pageRoleToSql(page.role), page.parentPageId.orNullVarchar,
+      d2ts(page.meta.creationDati), d2ts(page.meta.modificationDati),
+      page.meta.cachedPublTime.map(d2ts _).getOrElse(NullTimestamp))
+
+    val sql = """
+      insert into DW1_PAGES (
+        SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID,
+        CDATI, MDATI, PUBL_DATI)
+      values (
+        nextval('DW1_PAGES_SNO'), ?, ?, ?, ?,
+        ?, ?, ?)"""
+
+    db.update(sql, values)
     insertPagePathOrThrow(page.path)
   }
 
