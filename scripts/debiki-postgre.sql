@@ -972,7 +972,9 @@ create table DW1_PAGE_PATHS(  -- abbreviated PGPTHS
   -- so there's a unique index: DW1_PGPTHS_TNT_PGID_CNCL__U)
   -- 'R'edirect: this path redirects to the canonical path.
   CANONICAL varchar(1) not null,
-  -- The last time this path was made canonical. Currently used for debugging.
+  -- The last time this path was made canonical. Useful if you want to
+  -- replace the homepage with another page, and automatically move the
+  -- current homepage to its previous location.
   CANONICAL_DATI timestamp not null default now(),
   constraint DW1_PGPTHS_TNT_PGID__R__PAGES  -- ix DW1_PGPTHS_TNT_PAGE__P
       foreign key (TENANT, PAGE_ID)
@@ -1009,9 +1011,8 @@ create unique index DW1_PGPTHS_TNT_PGID_CNCL__U
     where CANONICAL = 'C';
 
 -- And no duplicate non-canonical paths.
-create unique index DW1_PGPTHS_PATH_NOCNCL__U
-    on DW1_PAGE_PATHS(TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID)
-    where CANONICAL <> 'C';
+create unique index DW1_PGPTHS_PATH__U
+    on DW1_PAGE_PATHS (TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID);
 ------------------------------------------------
 
 

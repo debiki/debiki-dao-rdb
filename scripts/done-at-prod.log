@@ -676,9 +676,8 @@ create unique index DW1_PGPTHS_TNT_PGID_CNCL__U
      on DW1_PAGE_PATHS (TENANT, PAGE_ID)
      where CANONICAL = 'C';
 
-create unique index DW1_PGPTHS_PATH_NOCNCL__U
-     on DW1_PAGE_PATHS(TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID)
-     where CANONICAL <> 'C';
+ create unique index DW1_PGPTHS_PATH__U
+    on DW1_PAGE_PATHS (TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID);
 
 drop index DW1_PGPTHS__U;
 create unique index DW1_PGPTHS_PATH_NOID_CNCL__U
