@@ -1229,8 +1229,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             ${_PageMetaSelectListItems}
         from DW1_PAGE_PATHS t left join DW1_PAGES g
           on t.TENANT = g.TENANT and t.PAGE_ID = g.GUID
-          and t.CANONICAL = 'C'
-        where t.TENANT = ?
+        where t.CANONICAL = 'C'
+          and t.TENANT = ?
           and ($pageRangeClauses)
           and ($filterStatusClauses)
         $orderByStr
