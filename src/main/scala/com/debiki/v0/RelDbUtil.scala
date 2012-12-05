@@ -143,11 +143,12 @@ object RelDbUtil {
       isOwner = rs.getString("u_is_owner") == "T")
 
 
-  def _PagePath(resultSet: js.ResultSet, tenantId: String) =
+  def _PagePath(resultSet: js.ResultSet, tenantId: String,
+        pageId: Option[Option[String]] = None) =
     PagePath(
       tenantId = tenantId,
       folder = resultSet.getString("PARENT_FOLDER"),
-      pageId = Some(resultSet.getString("PAGE_ID")),
+      pageId = pageId getOrElse Some(resultSet.getString("PAGE_ID")),
       showId = resultSet.getString("SHOW_ID") == "T",
       pageSlug = d2e(resultSet.getString("PAGE_SLUG")))
 

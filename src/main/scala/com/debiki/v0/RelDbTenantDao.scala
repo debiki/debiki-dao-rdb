@@ -1552,20 +1552,60 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def lookupPagePathByPageId(pageId: String) =
-    _lookupPagePathByPageId(pageId)(null)
+  def lookupPagePath(pageId: String): Option[PagePath] =
+    lookupPagePathImpl(pageId)(null)
 
 
-  private def _lookupPagePathByPageId(pageId: String)
+  def lookupPagePathImpl(pageId: String)(implicit connection: js.Connection)
+        : Option[PagePath] =
+    lookupPagePathsImpl(pageId, loadRedirects = false).headOption
+
+
+  def lookupPagePathAndRedirects(pageId: String): List[PagePath] =
+    lookupPagePathsImpl(pageId, loadRedirects = true)(null)
+
+
+  private def lookupPagePathsImpl(pageId: String, loadRedirects: Boolean)
         (implicit connection: js.Connection)
-        : Option[PagePath] = {
-    // _findCorrectPagePath does a page id lookup, if Some(pageId)
-    // is available.
-    val idPath = PagePath(
-      tenantId = tenantId, pageId = Some(pageId),
-      folder = "/", showId = false, pageSlug = "")
-    _findCorrectPagePath(idPath)
+        : List[PagePath] = {
+
+    val andOnlyCanonical = if (loadRedirects) "" else "and CANONICAL = 'C'"
+    val values = List(tenantId, pageId)
+    val sql = s"""
+      select PARENT_FOLDER, SHOW_ID, PAGE_SLUG,
+        -- For debug assertions:
+        CANONICAL, CANONICAL_DATI
+      from DW1_PAGE_PATHS
+      where TENANT = ? and PAGE_ID = ? $andOnlyCanonical
+      order by $CanonicalLast, CANONICAL_DATI asc"""
+
+    var pagePaths = List[PagePath]()
+
+    db.query(sql, values, rs => {
+      var debugLastIsCanonical = false
+      var debugLastCanonicalDati = new ju.Date(0)
+      while (rs.next) {
+        // Assert that there are no sort order bugs.
+        assert(!debugLastIsCanonical)
+        debugLastIsCanonical = rs.getString("CANONICAL") == "C"
+        val canonicalDati = ts2d(rs.getTimestamp("CANONICAL_DATI"))
+        assert(canonicalDati.getTime > debugLastCanonicalDati.getTime)
+        debugLastCanonicalDati = canonicalDati
+
+        pagePaths ::= _PagePath(rs, tenantId, pageId = Some(Some(pageId)))
+      }
+      assert(debugLastIsCanonical || pagePaths.isEmpty)
+    })
+
+    pagePaths
   }
+
+
+  // Sort order that places the canonical row first.
+  // ('C'anonical is before 'R'edirect.)
+  val CanonicalFirst = "CANONICAL asc"
+
+  val CanonicalLast = "CANONICAL desc"
 
 
   // Looks up the correct PagePath for a possibly incorrect PagePath.
@@ -1577,10 +1617,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         from DW1_PAGE_PATHS
         where TENANT = ?
         """
-
-    // Sort order that places the canonical row first.
-    // ('C'anonical is before 'R'edirect.)
-    val CanonicalFirst = "CANONICAL asc"
 
     assert(pagePathIn.tenantId == tenantId)
     var binds = List(pagePathIn.tenantId)
