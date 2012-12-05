@@ -12,6 +12,7 @@ import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
 import scala.collection.{mutable => mut}
+import DbDao._
 import RelDb._
 import RelDbUtil._
 import collection.mutable.StringBuilder
@@ -1760,6 +1761,29 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
+  def movePageToItsPreviousLocation(pagePath: PagePath): Option[PagePath] = {
+    db.transaction { implicit connection =>
+      movePageToItsPreviousLocationImpl(pagePath)
+    }
+  }
+
+
+  def movePageToItsPreviousLocationImpl(pagePath: PagePath)(
+        implicit connection: js.Connection): Option[PagePath] = {
+    val pageId = pagePath.pageId getOrElse {
+      _findCorrectPagePath(pagePath).flatMap(_.pageId).getOrElse(
+        throw PageNotFoundByPathException(pagePath))
+    }
+    val allPathsToPage = lookupPagePathsImpl(pageId, loadRedirects = true)
+    if (allPathsToPage.length < 2)
+      return None
+    val allRedirects = allPathsToPage.tail
+    val mostRecentRedirect = allRedirects.head
+    moveRenamePageImpl(mostRecentRedirect)
+    Some(mostRecentRedirect)
+  }
+
+
   private def moveRenamePageImpl(pageId: String,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String])
@@ -1768,6 +1792,34 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     // Verify new path is legal.
     PagePath.checkPath(tenantId = tenantId, pageId = Some(pageId),
       folder = newFolder getOrElse "/", pageSlug = newSlug getOrElse "")
+
+    val currentPath: PagePath = lookupPagePathImpl(pageId) getOrElse (
+          throw PageNotFoundByIdException(tenantId, pageId))
+
+    val newPath = {
+      var path = currentPath
+      newFolder foreach { folder => path = path.copy(folder = folder) }
+      showId foreach { show => path = path.copy(showId = show) }
+      newSlug foreach { slug => path = path.copy(pageSlug = slug) }
+      path
+    }
+
+    moveRenamePageImpl(newPath)
+
+    val resultingPath = lookupPagePathImpl(pageId)
+    runErrIf3(resultingPath != Some(newPath),
+      "DwE31ZB0", s"Resulting path: $resultingPath, and intended path: " +
+        s"$newPath, are different")
+
+    newPath
+  }
+
+
+  private def moveRenamePageImpl(newPath: PagePath)
+        (implicit conn: js.Connection) {
+
+    val pageId = newPath.pageId getOrElse
+      illArgErr("DwE37KZ2", s"Page id missing: $newPath")
 
     // Lets do this:
     // 1. Set all current paths to pageId to CANONICAL = 'R'edirect
@@ -1778,17 +1830,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     //    a 'C'anonical path to another page (which we shouldn't do,
     //    because then that page would no longer be reachable).
 
-    val currentPath: PagePath = _lookupPagePathByPageId(pageId) getOrElse (
-      throw DbDao.PageNotFoundException(tenantId, pageId))
-
-    val newPath = {
-      var path = currentPath
-      newFolder foreach { folder => path = path.copy(folder = folder) }
-      showId foreach { show => path = path.copy(showId = show) }
-      newSlug foreach { slug => path = path.copy(pageSlug = slug) }
-      path
-    }
-
     def changeExistingPathsToRedirects(pageId: String) {
       val vals = List(tenantId, pageId)
       val stmt = """
@@ -1798,13 +1839,13 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         """
       val numRowsChanged = db.update(stmt, vals)
       if (numRowsChanged == 0)
-        throw DbDao.PageNotFoundException(tenantId, pageId, details = Some(
+        throw PageNotFoundByIdException(tenantId, pageId, details = Some(
           "It seems all paths to the page were deleted moments ago"))
     }
 
     def deleteAnyExistingRedirectFrom(newPath: PagePath) {
       val showPageId = newPath.showId ? "T" | "F"
-      var vals = List(tenantId, newPath.folder, newPath.pageSlug, showPageId)
+      var vals = List(tenantId, newPath.folder, e2d(newPath.pageSlug), showPageId)
       var stmt = """
         delete from DW1_PAGE_PATHS
         where TENANT = ? and PARENT_FOLDER = ? and PAGE_SLUG = ?
@@ -1823,13 +1864,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     changeExistingPathsToRedirects(pageId)
     deleteAnyExistingRedirectFrom(newPath)
     insertPagePathOrThrow(newPath)
-
-    val resultingPath = _lookupPagePathByPageId(pageId)
-    runErrIf3(resultingPath != Some(newPath),
-      "DwE31ZB0", s"Resulting path: $resultingPath, and intended path: " +
-      s"$newPath, are different")
-
-    return newPath
   }
 
 
