@@ -390,7 +390,7 @@ class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao {
       val updateCounts: Seq[Array[Int]] = db.batchUpdateAny(stmt, batches)
 
       for (batchUpdCounts <- updateCounts; stmtUpdCount <- batchUpdCounts)
-        assErrIf(stmtUpdCount != 1, "DwE9KGZ3")
+        assErrIf(stmtUpdCount != 1, "DwE9KGZ3", s"stmtUpdCount: $stmtUpdCount")
     }
   }
 
