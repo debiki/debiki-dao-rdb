@@ -19,3 +19,8 @@ project/project.iml
 # licensing issues).
 lib/ojdbc6.jar
 
+# Eclipse
+.cache
+.classpath
+.project
+.settings/
