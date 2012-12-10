@@ -20,7 +20,7 @@ delete from dw1_tenants where id = '10';
 do $$
 declare website_id varchar(32);
 begin
-  select id into strict website_id from dw1_tenants where name = 'new-website';
+  select id into strict website_id from dw1_tenants where name = 'new-website-2';
   
   raise notice 'Deleting website with id %...', website_id;
 
@@ -29,6 +29,9 @@ begin
 
   delete from dw1_page_paths where tenant = website_id;
   delete from dw1_pages where tenant = website_id;
+
+  delete from dw1_emails_out where tenant = website_id;
+  delete from dw1_notfs_page_actions where tenant = website_id;
 
   delete from dw1_logins where tenant = website_id;
   delete from dw1_ids_openid where tenant = website_id;
