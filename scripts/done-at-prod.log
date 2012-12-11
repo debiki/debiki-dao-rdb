@@ -692,3 +692,13 @@ alter table DW1_PAGE_PATHS add
    constraint DW1_PGPTHS_CNCL__C check (CANONICAL in ('C', 'R'));
 
 }}}1
+{{{ TODO prod: Change '.page' to '_page'
+
+\set AUTOCOMMIT 'off'
+select page_slug, '_' || substr(page_slug, 2) from dw1_page_paths where page_slug like '.%';
+update dw1_page_paths set page_slug = '_' || substr(page_slug, 2) where page_slug like '.%';
+select page_slug, '_' || substr(page_slug, 2) from dw1_page_paths where page_slug like '\_%';
+select page_slug, '_' || substr(page_slug, 2) from dw1_page_paths where page_slug like '.%';
+commit;
+
+}}}
