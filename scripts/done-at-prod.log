@@ -564,7 +564,7 @@ COMMIT
 debiki_prod=> \q
 
 }}}1
-{{{1 TODO prod: Move columns from DW1_PAGE_PATHS to DW1_PAGES
+{{{1 2012-12-12 Move columns from DW1_PAGE_PATHS to DW1_PAGES
 
 drop view dw1v_pages; -- if any (it depends on PAGE_STATUS)
 
@@ -585,7 +585,7 @@ alter table DW1_PAGES add
   constraint DW1_PAGES_CDATI_SMDATI__C_LE check (CDATI <= SGFNT_MDATI);
 
 }}}1
-{{{1 TODO prod: Canonical paths
+{{{1 2012-12-12 Canonical paths
 
 {{{ Done @ test
 debiki=> alter table DW1_PAGE_PATHS add column CANONICAL varchar(1);
@@ -657,10 +657,10 @@ CREATE INDEX
 debiki=>
 }}}
 
-alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TNT_PGID__R__PGPTHS;
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID__R__PAGES
     foreign key (TENANT, PAGE_ID)
     references DW1_PAGES (TENANT, GUID) deferrable;
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TNT_PGID__R__PGPTHS;
 
 alter table DW1_PAGE_PATHS add column CANONICAL varchar(1);
 update DW1_PAGE_PATHS set CANONICAL = 'C';
@@ -676,7 +676,7 @@ create unique index DW1_PGPTHS_TNT_PGID_CNCL__U
      on DW1_PAGE_PATHS (TENANT, PAGE_ID)
      where CANONICAL = 'C';
 
- create unique index DW1_PGPTHS_PATH__U
+create unique index DW1_PGPTHS_PATH__U
     on DW1_PAGE_PATHS (TENANT, PAGE_ID, PARENT_FOLDER, PAGE_SLUG, SHOW_ID);
 
 drop index DW1_PGPTHS__U;
@@ -692,7 +692,7 @@ alter table DW1_PAGE_PATHS add
    constraint DW1_PGPTHS_CNCL__C check (CANONICAL in ('C', 'R'));
 
 }}}1
-{{{ TODO prod: Change '.page' to '_page'
+{{{ 2012-12-12 Change '.page' to '_page'
 
 \set AUTOCOMMIT 'off'
 select page_slug, '_' || substr(page_slug, 2) from dw1_page_paths where page_slug like '.%';
@@ -702,3 +702,9 @@ select page_slug, '_' || substr(page_slug, 2) from dw1_page_paths where page_slu
 commit;
 
 }}}
+{{{ 2012-12-12 Allow NULL login in DW1_PAGE_ACTIONS
+
+alter table DW1_PAGE_ACTIONS alter column LOGIN drop not null;
+
+}}}
+
