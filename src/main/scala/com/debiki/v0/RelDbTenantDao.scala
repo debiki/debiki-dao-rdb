@@ -1059,31 +1059,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  @deprecated("", since = "")
-  def loadTemplate(templPath: PagePath): Option[TemplateSrcHtml] = {
-    // Minor bug: if template /some-page.tmpl does not exist, but there's
-    // an odd page /some-page.tmpl/, then that *page* is found and
-    // returned although it's probably not a template.  ? Solution: ??
-    // COULD disallow '.' in directory names, except for first char (which
-    // means that the directory is hidden).
-
-    val templ = _findCorrectPagePath(templPath) match {
-      // If the template does not exist:
-      case None => None
-      case Some(path) =>
-        _loadPageAnyTenant(path.tenantId, path.pageId.get) match {
-          case Some(page) =>
-            page.body map (post => TemplateSrcHtml(post.text, templPath.path))
-          case None =>
-            // This is in case someone deleted the template moments ago,
-            // after its guid was found.
-            None
-      }
-    }
-    templ
-  }
-
-
   def loadTenant(): Tenant = {
     systemDaoSpi.loadTenants(List(tenantId)).head
     // Should tax quotaConsumer with 2 db IO requests: tenant + tenant hosts.
