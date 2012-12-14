@@ -776,8 +776,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  override def loadPage(pageGuid: String): Option[Debate] =
-    _loadPageAnyTenant(tenantId = tenantId, pageId = pageGuid)
+  override def loadPage(pageGuid: String, tenantId: Option[String] = None)
+        : Option[Debate] =
+    _loadPageAnyTenant(
+      tenantId = tenantId getOrElse this.tenantId,
+      pageId = pageGuid)
 
 
   private def _loadPageAnyTenant(tenantId: String, pageId: String)
@@ -855,6 +858,13 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     if (pagePaths isEmpty)
       return Nil
+
+    // For now, load pages on behalf of the current tenant only.
+    // (Otherwise need to rewrite the query below!)
+    pagePaths.find(_.tenantId != tenantId) foreach { foreignPagePath =>
+      assErr("DwE39B32", o"""Path to foreign tenant: $foreignPagePath,
+        this tenant id: $tenantId""")
+    }
 
     val bodyOrTitle = "'"+ Page.BodyId +"', '"+ Page.TitleId +"'"
     val sql = """
@@ -1594,7 +1604,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         where TENANT = ?
         """
 
-    assert(pagePathIn.tenantId == tenantId)
     var binds = List(pagePathIn.tenantId)
     pagePathIn.pageId match {
       case Some(id) =>
