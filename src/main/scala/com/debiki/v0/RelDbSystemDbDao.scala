@@ -559,6 +559,36 @@ class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao {
     NotfsToMail(notfsByTenant, usersByTenantAndId)
   }
 
+
+  override def emptyDatabase() {
+    db.transaction { implicit connection =>
+
+      // There are foreign keys from DW1_TENANTS to other tables, and
+      // back.
+      db.update("SET CONSTRAINTS ALL DEFERRED");
+
+      """
+      delete from DW1_NOTFS_PAGE_ACTIONS
+      delete from DW1_EMAILS_OUT
+      delete from DW1_PAGE_RATINGS
+      delete from DW1_PAGE_ACTIONS
+      delete from DW1_PATHS
+      delete from DW1_PAGE_PATHS
+      delete from DW1_PAGES
+      delete from DW1_IDS_SIMPLE_EMAIL
+      delete from DW1_LOGINS
+      delete from DW1_IDS_SIMPLE
+      delete from DW1_IDS_OPENID
+      delete from DW1_QUOTAS
+      delete from DW1_USERS
+      delete from DW1_TENANT_HOSTS
+      delete from DW1_TENANTS
+      """.trim.split("\n") foreach { db.update(_) }
+
+      db.update("SET CONSTRAINTS ALL IMMEDIATE")
+    }
+  }
+
 }
 
 // vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
