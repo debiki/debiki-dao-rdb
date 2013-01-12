@@ -51,6 +51,10 @@ object RelDb {
   /** Converts java.util.Date to java.sql.Timestamp. */
   def d2ts(d: ju.Date) = new js.Timestamp(d.getTime)
 
+  /** Converts an Option[Date] to Null or java.sql.Timestamp. */
+  def o2ts(maybeDati: Option[ju.Date]) =
+    maybeDati.map(d2ts(_)) getOrElse NullTimestamp
+
   /**
    * Converts java.sql.Timestamp to java.util.Date. (If you send a ju.Date
    * to the database, it throws away the fractional seconds value,
