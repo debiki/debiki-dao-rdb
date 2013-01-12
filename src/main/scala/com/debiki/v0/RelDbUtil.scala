@@ -164,9 +164,6 @@ object RelDbUtil {
 
 
   def _PageMeta(resultSet: js.ResultSet, pageId: String = null) = {
-    val publDati = Option(resultSet.getTimestamp("PUBL_DATI")).map(ts2d _)
-    val status =
-      if (publDati isDefined) PageStatus.Published else PageStatus.Draft
     PageMeta(
       pageId = if (pageId ne null) pageId else
           unimplemented, // wrong column name: resultSet.getString("PAGE_ID"),
@@ -174,9 +171,9 @@ object RelDbUtil {
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
       cachedTitle = Option(resultSet.getString(("CACHED_TITLE"))),
       creationDati = ts2d(resultSet.getTimestamp("CDATI")),
-      modificationDati = ts2d(resultSet.getTimestamp("MDATI")),
-      cachedPublTime = publDati,
-      cachedSgfntMtime = Option(ts2d(resultSet.getTimestamp("SGFNT_MDATI"))),
+      modDati = ts2d(resultSet.getTimestamp("MDATI")),
+      pubDati = Option(ts2d(resultSet.getTimestamp("PUBL_DATI"))),
+      sgfntModDati = Option(ts2d(resultSet.getTimestamp("SGFNT_MDATI"))),
       cachedAuthors = Nil,  // db fields not yet created
       cachedCommentCount = 0)  // db field not yet created
   }

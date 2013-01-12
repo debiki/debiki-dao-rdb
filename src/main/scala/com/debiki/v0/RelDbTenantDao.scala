@@ -84,7 +84,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       _pageRoleToSql(newMeta.pageRole),
       newMeta.parentPageId.orNullVarchar,
       newMeta.cachedTitle.orNullVarchar,
-      d2ts(newMeta.modificationDati),
+      d2ts(newMeta.modDati),
+      o2ts(newMeta.pubDati),
+      o2ts(newMeta.sgfntModDati),
       tenantId,
       newMeta.pageId)
     val sql = s"""
@@ -92,9 +94,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         PAGE_ROLE = ?,
         PARENT_PAGE_ID = ?,
         CACHED_TITLE = ?,
-        MDATI = ?
-        -- PUBL_DATI = ?,
-        -- SGFNT_MDATI = ?
+        MDATI = ?,
+        PUBL_DATI = ?,
+        SGFNT_MDATI = ?
       where TENANT = ? and GUID = ?
       """
     db.update(sql, values)
@@ -1691,14 +1693,14 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   private def _createPage[T](page: PageStuff)(implicit conn: js.Connection) {
-    require(page.meta.creationDati == page.meta.modificationDati)
-    page.meta.cachedPublTime.foreach(publDati =>
+    require(page.meta.creationDati == page.meta.modDati)
+    page.meta.pubDati.foreach(publDati =>
       require(page.meta.creationDati.getTime <= publDati.getTime))
 
     val values = List[AnyRef](page.tenantId, page.id,
       _pageRoleToSql(page.role), page.parentPageId.orNullVarchar,
-      d2ts(page.meta.creationDati), d2ts(page.meta.modificationDati),
-      page.meta.cachedPublTime.map(d2ts _).getOrElse(NullTimestamp))
+      d2ts(page.meta.creationDati), d2ts(page.meta.modDati),
+      page.meta.pubDati.map(d2ts _).getOrElse(NullTimestamp))
 
     val sql = """
       insert into DW1_PAGES (
