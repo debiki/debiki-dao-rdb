@@ -1238,7 +1238,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   def listChildPages(parentPageId: String, sortBy: PageSortOrder,
-        limit: Int, offset: Int): Seq[(PagePath, PageMeta)] = {
+        limit: Int, offset: Int, filterPageRole: Option[PageRole] = None)
+        : Seq[(PagePath, PageMeta)] = {
 
     require(1 <= limit)
     require(offset == 0)  // for now
@@ -1248,7 +1249,16 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       case _ => unimplemented("sorting by anything but page publ dati")
     }
 
-    val values = tenantId :: parentPageId :: Nil
+    var values: List[AnyRef] = tenantId :: parentPageId :: Nil
+
+    val pageRoleTestAnd = filterPageRole match {
+      case Some(pageRole) =>
+        illArgIf(pageRole == PageRole.Any, "DwE20kIR8")
+        values ::= _pageRoleToSql(pageRole)
+        "g.PAGE_ROLE = ? and"
+      case None => ""
+    }
+
     val sql = s"""
         select t.PARENT_FOLDER,
             t.PAGE_ID,
@@ -1258,7 +1268,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         from DW1_PAGES g left join DW1_PAGE_PATHS t
           on g.TENANT = t.TENANT and g.GUID = t.PAGE_ID
           and t.CANONICAL = 'C'
-        where g.TENANT = ? and g.PARENT_PAGE_ID = ?
+        where $pageRoleTestAnd g.TENANT = ? and g.PARENT_PAGE_ID = ?
         """+ orderByStr +"""
         limit """+ limit
 
