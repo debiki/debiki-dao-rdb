@@ -1321,10 +1321,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     // For now, hardcode rules here:
     val mayCreatePage = {
       val p = reqInfo.pagePath.path
-      if (p == "/test/") true
-      else if (p == "/allt/") true
-      else if (p == "/forum/") true
-      else if (p == "/wiki/") true
+      if (p startsWith "/test/") true
+      else if (p startsWith "/forum/") true
+      else if (p startsWith "/wiki/") true
       else false
     }
 
