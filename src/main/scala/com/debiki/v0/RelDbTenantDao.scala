@@ -855,25 +855,17 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def loadPageBodiesTitles(pagePaths: Seq[PagePath]):
-        Seq[(PagePath, Option[Debate])] = {
+  def loadPageBodiesTitles(pageIds: Seq[String]): Map[String, Debate] = {
 
-    if (pagePaths isEmpty)
-      return Nil
-
-    // For now, load pages on behalf of the current tenant only.
-    // (Otherwise need to rewrite the query below!)
-    pagePaths.find(_.tenantId != tenantId) foreach { foreignPagePath =>
-      assErr("DwE39B32", o"""Path to foreign tenant: $foreignPagePath,
-        this tenant id: $tenantId""")
-    }
+    if (pageIds isEmpty)
+      return Map.empty
 
     val bodyOrTitle = "'"+ Page.BodyId +"', '"+ Page.TitleId +"'"
     val sql = """
       select a.PAGE_ID, """+ ActionSelectListItems +"""
       from DW1_PAGE_ACTIONS a
       where a.TENANT = ?
-        and a.PAGE_ID in ("""+ makeInListFor(pagePaths) +""")
+        and a.PAGE_ID in ("""+ makeInListFor(pageIds) +""")
         and (
           a.PAID in ("""+ bodyOrTitle +""")
           or (
@@ -881,8 +873,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             and a.type in (
               'Edit', 'EditApp', 'Rjct', 'Aprv', 'DelPost', 'DelTree')))"""
 
-    val values = tenantId :: pagePaths.toList.map(_.pageId getOrElse assErr(
-      "DwE7HDR3", "Page id unknown, pagePaths: "+ pagePaths.toString))
+    val values = tenantId :: pageIds.toList
 
     val (
       people: People,
@@ -890,7 +881,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       pageIdsAndActions: List[(String, Action)]) =
         _loadPeoplePagesActionsNoRatingTags(sql, values)
 
-    pagePaths map { path => (path, pagesById.get(path.pageId.get)) }
+    Map[String, Debate](pagesById.toList: _*)
   }
 
 
