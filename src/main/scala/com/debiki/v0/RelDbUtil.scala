@@ -294,10 +294,10 @@ object RelDbUtil {
   def _toPageRole(pageRoleString: String): PageRole = pageRoleString match {
     case null => PageRole.Any
     case "HP" => PageRole.Homepage
-    case "BMP" => PageRole.BlogMainPage
-    case "BA" => PageRole.BlogArticle
-    case "FMP" => PageRole.ForumMainPage
-    case "FT" => PageRole.ForumThread
+    case "BMP" => PageRole.Blog
+    case "BA" => PageRole.BlogPost
+    case "FMP" => PageRole.Forum
+    case "FT" => PageRole.ForumTopic
     case "WMP" => PageRole.WikiMainPage
     case "WP" => PageRole.WikiPage
     case _ =>
@@ -310,10 +310,10 @@ object RelDbUtil {
   def _pageRoleToSql(pageRole: PageRole): AnyRef = pageRole match {
     case PageRole.Any => NullVarchar
     case PageRole.Homepage => "HP"
-    case PageRole.BlogMainPage => "BMP"
-    case PageRole.BlogArticle => "BA"
-    case PageRole.ForumMainPage => "FMP"
-    case PageRole.ForumThread => "FT"
+    case PageRole.Blog => "BMP"
+    case PageRole.BlogPost => "BA"
+    case PageRole.Forum => "FMP"
+    case PageRole.ForumTopic => "FT"
     case PageRole.WikiMainPage => "WMP"
     case PageRole.WikiPage => "WP"
   }
