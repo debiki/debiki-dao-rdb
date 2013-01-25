@@ -293,13 +293,13 @@ object RelDbUtil {
 
   def _toPageRole(pageRoleString: String): PageRole = pageRoleString match {
     case null => PageRole.Any
-    case "HP" => PageRole.Homepage
-    case "BMP" => PageRole.Blog
-    case "BA" => PageRole.BlogPost
+    case "P" => PageRole.Any
+    case "B" => PageRole.Blog
+    case "BP" => PageRole.BlogPost
     case "FG" => PageRole.ForumGroup
-    case "FMP" => PageRole.Forum
+    case "F" => PageRole.Forum
     case "FT" => PageRole.ForumTopic
-    case "WMP" => PageRole.WikiMainPage
+    case "W" => PageRole.WikiMainPage
     case "WP" => PageRole.WikiPage
     case _ =>
       warnDbgDie(
@@ -309,14 +309,13 @@ object RelDbUtil {
 
 
   def _pageRoleToSql(pageRole: PageRole): AnyRef = pageRole match {
-    case PageRole.Any => NullVarchar
-    case PageRole.Homepage => "HP"
-    case PageRole.Blog => "BMP"
-    case PageRole.BlogPost => "BA"
+    case PageRole.Any => "P"
+    case PageRole.Blog => "B"
+    case PageRole.BlogPost => "BP"
     case PageRole.ForumGroup => "FG"
-    case PageRole.Forum => "FMP"
+    case PageRole.Forum => "F"
     case PageRole.ForumTopic => "FT"
-    case PageRole.WikiMainPage => "WMP"
+    case PageRole.WikiMainPage => "W"
     case PageRole.WikiPage => "WP"
   }
 
