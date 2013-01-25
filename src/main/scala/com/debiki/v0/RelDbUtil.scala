@@ -296,6 +296,7 @@ object RelDbUtil {
     case "HP" => PageRole.Homepage
     case "BMP" => PageRole.Blog
     case "BA" => PageRole.BlogPost
+    case "FG" => PageRole.ForumGroup
     case "FMP" => PageRole.Forum
     case "FT" => PageRole.ForumTopic
     case "WMP" => PageRole.WikiMainPage
@@ -312,6 +313,7 @@ object RelDbUtil {
     case PageRole.Homepage => "HP"
     case PageRole.Blog => "BMP"
     case PageRole.BlogPost => "BA"
+    case PageRole.ForumGroup => "FG"
     case PageRole.Forum => "FMP"
     case PageRole.ForumTopic => "FT"
     case PageRole.WikiMainPage => "WMP"

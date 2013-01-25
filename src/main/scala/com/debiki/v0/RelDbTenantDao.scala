@@ -81,25 +81,31 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   private def _updatePageMeta(newMeta: PageMeta)
         (implicit connection: js.Connection) {
     val values = List(
-      _pageRoleToSql(newMeta.pageRole),
       newMeta.parentPageId.orNullVarchar,
       newMeta.cachedTitle.orNullVarchar,
       d2ts(newMeta.modDati),
       o2ts(newMeta.pubDati),
       o2ts(newMeta.sgfntModDati),
       tenantId,
-      newMeta.pageId)
+      newMeta.pageId,
+      _pageRoleToSql(newMeta.pageRole))
     val sql = s"""
       update DW1_PAGES set
-        PAGE_ROLE = ?,
         PARENT_PAGE_ID = ?,
         CACHED_TITLE = ?,
         MDATI = ?,
         PUBL_DATI = ?,
         SGFNT_MDATI = ?
-      where TENANT = ? and GUID = ?
+      where TENANT = ? and GUID = ? and PAGE_ROLE = ?
       """
-    db.update(sql, values)
+
+    val numChangedRows = db.update(sql, values)
+
+    if (numChangedRows == 0)
+      throw DbDao.PageNotFoundByIdAndRoleException(
+        tenantId, newMeta.pageId, newMeta.pageRole)
+    if (2 <= numChangedRows)
+      assErr("DwE4Ikf1")
   }
 
 
@@ -1697,20 +1703,64 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     page.meta.pubDati.foreach(publDati =>
       require(page.meta.creationDati.getTime <= publDati.getTime))
 
-    val values = List[AnyRef](page.tenantId, page.id,
+    var values = List[AnyRef]()
+
+    val insertIntoColumnsSql = """
+      insert into DW1_PAGES (
+         SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID,
+         CDATI, MDATI, PUBL_DATI)
+      """
+
+    val valuesSql =
+      "nextval('DW1_PAGES_SNO'), ?, ?, ?, ?, ?, ?, ?"
+
+    // If there is no parent page, use an `insert ... values (...)` statement.
+    // Otherwise, use an `insert ... select ... from ...` and verify that the
+    // parent page has the appropriate page role.
+    val sql = page.parentPageId match {
+      case None =>
+        s"$insertIntoColumnsSql values ($valuesSql)"
+
+      case Some(parentPageId) =>
+        // Add `from ... where ...` values.
+        values :::= List(
+          page.tenantId,
+          parentPageId,
+          _pageRoleToSql(page.role.parentRole getOrElse {
+            runErr("DwE77DK1", s"Page role ${page.role} cannot have any parent page")
+          }))
+
+        // (I think the below `where exists` results in race conditions, if
+        // PAGE_ROLE can ever be changed. It is never changed though. Consider reading
+        // this:  http://www.postgresql.org/docs/9.2/static/transaction-iso.html
+        //          #XACT-READ-COMMITTED )
+        s"""
+          $insertIntoColumnsSql
+          select $valuesSql
+          from DW1_PAGES p
+            where p.TENANT = ?
+              and p.GUID = ?
+              and p.PAGE_ROLE = ?
+          """
+    }
+
+    values :::= List[AnyRef](page.tenantId, page.id,
       _pageRoleToSql(page.role), page.parentPageId.orNullVarchar,
       d2ts(page.meta.creationDati), d2ts(page.meta.modDati),
       page.meta.pubDati.map(d2ts _).getOrElse(NullTimestamp))
 
-    val sql = """
-      insert into DW1_PAGES (
-        SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID,
-        CDATI, MDATI, PUBL_DATI)
-      values (
-        nextval('DW1_PAGES_SNO'), ?, ?, ?, ?,
-        ?, ?, ?)"""
 
-    db.update(sql, values)
+    val numNewRows = db.update(sql, values)
+
+    if (numNewRows == 0) {
+      // If the problem was a primary key violation, we wouldn't get to here.
+      runErr("DwE48GS3", o"""Cannot create a `${page.role}' page because
+        the parent page, id `${page.parentPageId}', has an incompatible role""")
+    }
+
+    if (2 <= numNewRows)
+      assErr("DwE45UL8") // there's a primary key on site + page id
+
     insertPagePathOrThrow(page.path)
   }
 
