@@ -1307,12 +1307,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     if (reqInfo.user.map(_.isAdmin) == Some(true))
       return PermsOnPage.All
 
-    // Files whose name starts with '.' are hidden, only admins have access.
+    // Files whose name starts with '_' are hidden, only admins have access.
     if (reqInfo.pagePath.isHiddenPage)
       return PermsOnPage.None
 
     // People may view and use Javascript and CSS, but of course not edit it.
-    if (reqInfo.pagePath.isCodePage)
+    if (reqInfo.pagePath.isScriptOrStyle)
       return PermsOnPage.None.copy(accessPage = true)
 
     // For now, hardcode rules here:
