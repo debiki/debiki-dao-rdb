@@ -44,5 +44,30 @@ begin
 end $$;
 
 -- And, optionally:
-commit;
+-- commit;
+
+
+
+-- Delete single page
+
+\set AUTOCOMMIT 'off'
+do $$
+declare the_site_id varchar(32) = '?';
+declare the_page_id varchar(32) = '??';
+begin
+
+  raise notice 'Deleting page with id %, site id %...', the_page_id, the_site_id;
+
+  delete from dw1_page_ratings where tenant = the_site_id and page_id = the_page_id;
+  delete from dw1_page_actions where tenant = the_site_id and page_id = the_page_id;
+
+  delete from dw1_page_paths where tenant = the_site_id and page_id = the_page_id;
+  delete from dw1_pages where tenant = the_site_id and guid = the_page_id;
+
+  raise notice '...Done. You need to commit manually.';
+end $$;
+
+-- And, optionally:
+-- commit;
+
 
