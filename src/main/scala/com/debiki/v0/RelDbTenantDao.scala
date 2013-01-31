@@ -1250,7 +1250,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     val pageRoleTestAnd = filterPageRole match {
       case Some(pageRole) =>
-        illArgIf(pageRole == PageRole.Any, "DwE20kIR8")
+        illArgIf(pageRole == PageRole.Generic, "DwE20kIR8")
         values ::= _pageRoleToSql(pageRole)
         "g.PAGE_ROLE = ? and"
       case None => ""

@@ -525,7 +525,7 @@ create table DW1_PAGES(
   SNO varchar(32)       not null,   -- COULD remove, use TENANT + ID instead
   TENANT varchar(32)    not null,
   GUID varchar(32)      not null,   -- COULD rename to ID
-  -- 'P'age (e.g. homepage or generic info page or landing page).
+  -- 'G'eneric page (e.g. homepage or generic info page or landing page).
   -- 'B'log, 'BP' blog post.
   -- 'FG' forum group, 'F' forum, 'FT' forum topic.
   -- 'W'iki, 'WP' wiki page.
@@ -555,7 +555,7 @@ create table DW1_PAGES(
       references DW1_PAGES(TENANT, GUID) deferrable,
   constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0'),
   constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in ('P', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C')),
+      check (PAGE_ROLE in ('G', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C')),
   constraint DW1_PAGES_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
   constraint DW1_PAGES_CDATI_MDATI__C_LE check (CDATI <= MDATI),
   constraint DW1_PAGES_CDATI_PUBLDATI__C_LE check (CDATI <= PUBL_DATI),
@@ -567,13 +567,13 @@ create sequence DW1_PAGES_SNO start with 10;
 --------
 -- todo prod, done dev,test:
 alter table DW1_PAGES drop constraint DW1_PAGES_PAGEROLE__C_IN;
-update DW1_PAGES set PAGE_ROLE = 'P' where PAGE_ROLE is null;
-update DW1_PAGES set PAGE_ROLE = 'P' where PAGE_ROLE = 'HP';
+update DW1_PAGES set PAGE_ROLE = 'G' where PAGE_ROLE is null;
+update DW1_PAGES set PAGE_ROLE = 'G' where PAGE_ROLE = 'HP';
 update DW1_PAGES set PAGE_ROLE = 'B' where PAGE_ROLE = 'BMP';
 update DW1_PAGES set PAGE_ROLE = 'F' where PAGE_ROLE = 'FMP';
 update DW1_PAGES set PAGE_ROLE = 'BP' where PAGE_ROLE = 'BA';
 alter table DW1_PAGES add constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in ('P', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C'));
+      check (PAGE_ROLE in ('G', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C'));
 alter table DW1_PAGES alter column PAGE_ROLE set not null;
 
 update dw1_pages g
