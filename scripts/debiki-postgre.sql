@@ -525,6 +525,11 @@ create table DW1_PAGES(
   SNO varchar(32)       not null,   -- COULD remove, use TENANT + ID instead
   TENANT varchar(32)    not null,
   GUID varchar(32)      not null,   -- COULD rename to ID
+  -- 'P'age (e.g. homepage or generic info page or landing page).
+  -- 'B'log, 'BP' blog post.
+  -- 'FG' forum group, 'F' forum, 'FT' forum topic.
+  -- 'W'iki, 'WP' wiki page.
+  -- 'C'ode page.
   PAGE_ROLE varchar(10) not null,
   PARENT_PAGE_ID varchar(32),
   -- Should be updated whenever the page is renamed.
@@ -550,7 +555,7 @@ create table DW1_PAGES(
       references DW1_PAGES(TENANT, GUID) deferrable,
   constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0'),
   constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in ('P', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP')),
+      check (PAGE_ROLE in ('P', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C')),
   constraint DW1_PAGES_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
   constraint DW1_PAGES_CDATI_MDATI__C_LE check (CDATI <= MDATI),
   constraint DW1_PAGES_CDATI_PUBLDATI__C_LE check (CDATI <= PUBL_DATI),
@@ -568,8 +573,20 @@ update DW1_PAGES set PAGE_ROLE = 'B' where PAGE_ROLE = 'BMP';
 update DW1_PAGES set PAGE_ROLE = 'F' where PAGE_ROLE = 'FMP';
 update DW1_PAGES set PAGE_ROLE = 'BP' where PAGE_ROLE = 'BA';
 alter table DW1_PAGES add constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in ('P', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP'));
+      check (PAGE_ROLE in ('P', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C'));
 alter table DW1_PAGES alter column PAGE_ROLE set not null;
+
+update dw1_pages g
+set page_role = 'C'
+from dw1_page_paths t
+where g.tenant = t.tenant and g.guid = t.page_id and (
+  t.page_slug like '%.css' or
+  t.page_slug like '%.js' or
+  t.page_slug like '%.yaml' or
+  t.page_slug like '%.conf' or
+  t.page_slug like '%.template');
+
+select * from dw1_pages where page_role = 'C';
 --------
 
 update DW1_PAGES g

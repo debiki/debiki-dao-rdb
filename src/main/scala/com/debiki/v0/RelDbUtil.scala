@@ -301,6 +301,7 @@ object RelDbUtil {
     case "FT" => PageRole.ForumTopic
     case "W" => PageRole.WikiMainPage
     case "WP" => PageRole.WikiPage
+    case "C" => PageRole.Code
     case _ =>
       warnDbgDie(
         "Bad page role string: "+ pageRoleString +" [error DwE390KW8]")
@@ -317,6 +318,7 @@ object RelDbUtil {
     case PageRole.ForumTopic => "FT"
     case PageRole.WikiMainPage => "W"
     case PageRole.WikiPage => "WP"
+    case PageRole.Code => "C"
   }
 
 
