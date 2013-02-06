@@ -25,6 +25,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
   val MaxWebsitesPerIp = 6
 
+  def siteId = quotaConsumers.tenantId
+
   def tenantId = quotaConsumers.tenantId
 
   def db = systemDaoSpi.db
