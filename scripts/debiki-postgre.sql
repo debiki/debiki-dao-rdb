@@ -564,30 +564,6 @@ create table DW1_PAGES(
 
 create sequence DW1_PAGES_SNO start with 10;
 
---------
--- todo prod, done dev,test:
-alter table DW1_PAGES drop constraint DW1_PAGES_PAGEROLE__C_IN;
-update DW1_PAGES set PAGE_ROLE = 'G' where PAGE_ROLE is null;
-update DW1_PAGES set PAGE_ROLE = 'G' where PAGE_ROLE = 'HP';
-update DW1_PAGES set PAGE_ROLE = 'B' where PAGE_ROLE = 'BMP';
-update DW1_PAGES set PAGE_ROLE = 'F' where PAGE_ROLE = 'FMP';
-update DW1_PAGES set PAGE_ROLE = 'BP' where PAGE_ROLE = 'BA';
-alter table DW1_PAGES add constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in ('G', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C'));
-alter table DW1_PAGES alter column PAGE_ROLE set not null;
-
-update dw1_pages g
-set page_role = 'C'
-from dw1_page_paths t
-where g.tenant = t.tenant and g.guid = t.page_id and (
-  t.page_slug like '%.css' or
-  t.page_slug like '%.js' or
-  t.page_slug like '%.yaml' or
-  t.page_slug like '%.conf' or
-  t.page_slug like '%.template');
-
-select * from dw1_pages where page_role = 'C';
---------
 
 update DW1_PAGES g
   set CDATI = t.CDATI,

@@ -707,4 +707,177 @@ commit;
 alter table DW1_PAGE_ACTIONS alter column LOGIN drop not null;
 
 }}}
+{{{ 2013-01-10 Add & change PAGE_ROLE:s
 
+02:55:40 46 ~/me-dev/debiki/all/debiki-app-play-2.1[master*]$ s/psql-debiki_prod-tunnel.sh
++ psql -h 127.0.0.1 -p 55432 debiki_prod debiki_prod
+Password for user debiki_prod:
+psql (9.1.7, server 9.1.3)
+SSL connection (cipher: DHE-RSA-AES256-SHA, bits: 256)
+Type "help" for help.
+
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGES drop constraint DW1_PAGES_PAGEROLE__C_IN;
+ALTER TABLE
+debiki_prod=> select count(*), PAGE_ROLE from DW1_PAGES group by PAGE_ROLE;
+ count | page_role
+-------+-----------
+    87 |
+     1 | BMP
+     2 | BA
+(3 rows)
+
+debiki_prod=> select guid, parent_page_id, PAGE_ROLE from DW1_PAGES where page_role is not null;
+ guid  | parent_page_id | page_role
+-------+----------------+-----------
+ 81504 |                | BMP
+ 6zju6 | 81504          | BA
+ 3qg82 | 81504          | BA
+(3 rows)
+
+debiki_prod=> update DW1_PAGES set PAGE_ROLE = 'G' where PAGE_ROLE is null;
+UPDATE 87
+debiki_prod=> select count(*), PAGE_ROLE from DW1_PAGES group by PAGE_ROLE;
+ count | page_role
+-------+-----------
+     1 | BMP
+    87 | G
+     2 | BA
+(3 rows)
+
+debiki_prod=> update DW1_PAGES set PAGE_ROLE = 'G' where PAGE_ROLE = 'HP';
+UPDATE 0
+debiki_prod=> update DW1_PAGES set PAGE_ROLE = 'B' where PAGE_ROLE = 'BMP';
+UPDATE 1
+debiki_prod=> update DW1_PAGES set PAGE_ROLE = 'F' where PAGE_ROLE = 'FMP';
+UPDATE 0
+debiki_prod=> \set AUTOCOMMIT 'off'
+debiki_prod=> \set
+AUTOCOMMIT = 'off'
+PROMPT1 = '%/%R%# '
+PROMPT2 = '%/%R%# '
+PROMPT3 = '>> '
+VERBOSITY = 'default'
+VERSION = 'PostgreSQL 9.1.7 on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3, 64-bit'
+DBNAME = 'debiki_prod'
+USER = 'debiki_prod'
+HOST = '127.0.0.1'
+PORT = '55432'
+ENCODING = 'UTF8'
+LASTOID = '0'
+debiki_prod=> update DW1_PAGES set PAGE_ROLE = 'BP' where PAGE_ROLE = 'BA';
+UPDATE 2
+debiki_prod=> select count(*), PAGE_ROLE from DW1_PAGES group by PAGE_ROLE;
+ count | page_role
+-------+-----------
+     1 | B
+    87 | G
+     2 | BP
+(3 rows)
+
+debiki_prod=> alter table DW1_PAGES add constraint DW1_PAGES_PAGEROLE__C_IN
+debiki_prod->       check (PAGE_ROLE in ('G', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C'));
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES alter column PAGE_ROLE set not null;
+ALTER TABLE
+debiki_prod=> commit;
+COMMIT
+debiki_prod=>
+debiki_prod=>
+debiki_prod=> update dw1_pages g
+debiki_prod-> set page_role = 'C'
+debiki_prod-> from dw1_page_paths t
+debiki_prod-> where g.tenant = t.tenant and g.guid = t.page_id and (
+debiki_prod(>   t.page_slug like '%.css' or
+debiki_prod(>   t.page_slug like '%.js' or
+debiki_prod(>   t.page_slug like '%.yaml' or
+debiki_prod(>   t.page_slug like '%.conf' or
+debiki_prod(>   t.page_slug like '%.template');
+UPDATE 20
+debiki_prod=> select * from dw1_pages where page_role = 'C';
+ sno | tenant |    guid    | page_role | parent_page_id |           cdati            |           mdati            |         publ_dati          |    cached_title    | sgfnt_mdati
+-----+--------+------------+-----------+----------------+----------------------------+----------------------------+----------------------------+--------------------+-------------
+ 50  | 2      | 11bxs13umh | C         |                | 2011-10-11 19:24:06.599    | 2011-10-11 19:24:06.599    | 2011-10-11 19:24:06.599    |                    |
+ 51  | 2      | 15px2pwjyn | C         |                | 2011-10-11 19:27:39.328    | 2011-10-11 19:27:39.328    | 2011-10-11 19:27:39.328    |                    |
+ 90  | 2      | 1h5ckk842q | C         |                | 2011-10-15 19:38:36.569    | 2011-10-15 19:38:36.569    | 2011-10-15 19:38:36.569    |                    |
+ 53  | 2      | 57xb9tn1t4 | C         |                | 2011-10-11 19:35:35.77     | 2011-10-11 19:35:35.77     | 2011-10-11 19:35:35.77     |                    |
+ 192 | 2      | hhlqpx3ur2 | C         |                | 2012-02-05 14:58:17.556    | 2012-02-05 14:58:17.556    | 2012-02-05 14:58:17.556    |                    |
+ 193 | 2      | 1kw4zumc43 | C         |                | 2012-02-12 10:48:33.803    | 2012-02-12 10:48:33.803    | 2012-02-12 10:48:33.803    |                    |
+ 202 | 12     | 0nn45      | C         |                | 2012-04-07 06:56:17.347    | 2012-04-07 06:56:17.347    | 2012-04-07 06:56:17.347    |                    |
+ 203 | 12     | 2mvh6      | C         |                | 2012-04-07 07:19:20.733    | 2012-04-07 07:19:20.733    | 2012-04-07 07:19:20.733    |                    |
+ 212 | 3      | 61f28      | C         |                | 2012-04-21 08:05:13.224    | 2012-04-21 08:05:13.224    | 2012-04-21 08:05:13.224    |                    |
+ 216 | 3      | 2fur2      | C         |                | 2012-04-22 19:48:57.69     | 2012-04-22 19:48:57.69     | 2012-04-22 19:48:57.69     |                    |
+ 217 | 3      | 115j2      | C         |                | 2012-04-22 22:23:58.63     | 2012-04-22 22:23:58.63     | 2012-04-22 22:23:58.63     |                    |
+ 230 | 11     | 51cb7      | C         |                | 2012-09-15 17:18:13.917672 | 2012-09-15 17:18:13.917672 | 2012-09-15 17:18:13.917672 |                    |
+ 237 | 3      | 5clt1      | C         |                | 2012-10-09 13:00:09.762611 | 2012-10-09 13:00:41.10513  | 2012-10-09 13:00:09.762611 |                    |
+ 241 | 3      | 8ryn0      | C         |                | 2012-10-13 06:44:06.847799 | 2012-10-13 06:44:13.256386 | 2012-10-13 06:44:06.847799 |                    |
+ 245 | 3      | 8yk05      | C         |                | 2012-11-06 14:50:08.685439 | 2012-12-16 16:13:18.472    | 2012-11-06 14:50:08.685439 |                    |
+ 231 | 11     | 414f7      | C         |                | 2012-09-15 17:50:30.966094 | 2012-12-17 09:10:30.219    | 2012-09-15 17:50:30.966094 | site.css           |
+ 246 | 11     | 0fmq7      | C         |                | 2012-12-17 08:58:52.812    | 2012-12-30 06:15:36.579    |                            |                    |
+ 224 | 2      | 7l6y2      | C         |                | 2012-05-05 06:16:17.624    | 2012-12-30 06:06:32.132    | 2012-05-05 06:16:17.624    | debiki.se CSS      |
+ 213 | 3      | 514r5      | C         |                | 2012-04-21 18:50:37.315    | 2012-12-21 06:19:08.287    | 2012-04-21 18:50:37.315    | www.debiki.com CSS |
+ 247 | 2      | 7p2v0      | C         |                | 2012-12-17 13:13:00.651    | 2012-12-30 06:07:34.556    |                            |                    |
+(20 rows)
+
+debiki_prod=> select count(*), PAGE_ROLE from DW1_PAGES group by PAGE_ROLE;
+ count | page_role
+-------+-----------
+     1 | B
+    67 | G
+     2 | BP
+    20 | C
+(4 rows)
+
+debiki_prod=> select guid, parent_page_id, PAGE_ROLE from DW1_PAGES where page_role not in ('G', 'C');
+ guid  | parent_page_id | page_role
+-------+----------------+-----------
+ 81504 |                | B
+ 6zju6 | 81504          | BP
+ 3qg82 | 81504          | BP
+(3 rows)
+
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> \d dw1_pages;
+                         Table "debiki_prod.dw1_pages"
+     Column     |            Type             |            Modifiers
+----------------+-----------------------------+---------------------------------
+ sno            | character varying(32)       | not null
+ tenant         | character varying(32)       | not null
+ guid           | character varying(32)       | not null
+ page_role      | character varying(10)       | not null
+ parent_page_id | character varying(32)       |
+ cdati          | timestamp without time zone | not null default now()
+ mdati          | timestamp without time zone | not null default now()
+ publ_dati      | timestamp without time zone | default now()
+ cached_title   | character varying(100)      | default NULL::character varying
+ sgfnt_mdati    | timestamp without time zone |
+Indexes:
+    "dw1_pages_sno__p" PRIMARY KEY, btree (sno)
+    "dw1_pages__u" UNIQUE CONSTRAINT, btree (tenant, guid)
+    "dw1_pages_tnt_parent_publdati" btree (tenant, parent_page_id, publ_dati)
+    "dw1_pages_tnt_parentpage" btree (tenant, parent_page_id)
+    "dw1_pages_tnt_prnt_cdati_nopub" btree (tenant, parent_page_id, cdati) WHERE publ_dati IS NULL
+Check constraints:
+    "dw1_pages_cachedtitle__c_ne" CHECK (btrim(cached_title::text) <> ''::text)
+    "dw1_pages_cdati_mdati__c_le" CHECK (cdati <= mdati)
+    "dw1_pages_cdati_publdati__c_le" CHECK (cdati <= publ_dati)
+    "dw1_pages_cdati_smdati__c_le" CHECK (cdati <= sgfnt_mdati)
+    "dw1_pages_pagerole__c_in" CHECK (page_role::text = ANY (ARRAY['G'::character varying, 'B'::character varying, 'BP'::character varying, 'FG'::character varying, 'F'::character varying, 'FT'::character varying, 'W'::character varying, 'WP'::character varying, 'C'::character varying]::text[]))
+    "dw1_pages_sno_not_0__c" CHECK (sno::text <> '0'::text)
+Foreign-key constraints:
+    "dw1_pages__r__tenant" FOREIGN KEY (tenant) REFERENCES dw1_tenants(id) DEFERRABLE
+    "dw1_pages_parentpage__r__pages" FOREIGN KEY (tenant, parent_page_id) REFERENCES dw1_pages(tenant, guid) DEFERRABLE
+Referenced by:
+    TABLE "dw1_page_actions" CONSTRAINT "dw1_pactions__r__pages" FOREIGN KEY (page) REFERENCES dw1_pages(sno) DEFERRABLE
+    TABLE "dw1_pages" CONSTRAINT "dw1_pages_parentpage__r__pages" FOREIGN KEY (tenant, parent_page_id) REFERENCES dw1_pages(tenant, guid) DEFERRABLE
+    TABLE "dw1_paths" CONSTRAINT "dw1_paths_tnt_page__r__pages" FOREIGN KEY (tenant, page_guid) REFERENCES dw1_pages(tenant, guid) DEFERRABLE
+    TABLE "dw1_page_actions" CONSTRAINT "dw1_pgas_tnt_pgid__r__pages" FOREIGN KEY (tenant, page_id) REFERENCES dw1_pages(tenant, guid) DEFERRABLE
+    TABLE "dw1_page_paths" CONSTRAINT "dw1_pgpths_tnt_pgid__r__pages" FOREIGN KEY (tenant, page_id) REFERENCES dw1_pages(tenant, guid) DEFERRABLE
+
+debiki_prod=> \q
+03:05:17 47 ~/me-dev/debiki/all/debiki-app-play-2.1[master*]$
+03:05:18 47 ~/me-dev/debiki/all/debiki-app-play-2.1[master*]$ date
+Sun Feb 10 03:05:19 CET 2013
+
+}}}
