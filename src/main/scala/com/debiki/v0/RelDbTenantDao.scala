@@ -1078,12 +1078,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
   def createWebsite(name: String, address: String, ownerIp: String,
         ownerLoginId: String, ownerIdentity: IdentityOpenId, ownerRole: User)
-        : Option[Tenant] = {
+        : Option[(Tenant, User)] = {
     try {
       db.transaction { implicit connection =>
         val websiteCount = _countWebsites(createdFromIp = ownerIp)
         if (websiteCount >= MaxWebsitesPerIp)
-          throw OverQuotaException("Website creation limit exceeded")
+          throw TooManySitesCreatedException(ownerIp)
 
         val newTenantNoId = Tenant(id = "?", name = name,
            creatorIp = ownerIp, creatorTenantId = tenantId,
@@ -1100,7 +1100,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             isAdmin = true, isOwner = true))
         val ownerIdtyAtNewWebsite = _insertIdentity(newTenant.id,
           ownerIdentity.copy(id = "?", userId = ownerRoleAtNewWebsite.id))
-        Some(newTenant.copy(hosts = List(newHost)))
+        Some((newTenant.copy(hosts = List(newHost)), ownerRoleAtNewWebsite))
       }
     }
     catch {
