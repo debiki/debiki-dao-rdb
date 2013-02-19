@@ -486,6 +486,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
+  /**
+   * Looks up detailed info on a single user.
+   */
   // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
   private def _loadIdtyDetailsAndUser(forLoginId: String = null,
         forIdentity: Identity = null)(implicit connection: js.Connection)
@@ -616,6 +619,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
+  /**
+   * Looks up people by page id or login id. Does not load all authentication details.
+   */
   // SHOULD reuse a `connection: js.Connection` but doesnt
   private def _loadIdtysAndUsers(onPageWithId: String = null,
                          forLoginIds: List[String] = null
@@ -775,6 +781,68 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     val usersByTenantAndId =  // SHOULD specify consumers
        systemDaoSpi.loadUsers(Map(tenantId -> (userId::Nil)))
     usersByTenantAndId.get((tenantId, userId))
+  }
+
+
+  override def listUsers(userQuery: UserQuery): Seq[(User, Seq[String])] = {
+    db.withConnection(implicit connection => {
+      listUsersImp(userQuery)
+    })
+  }
+
+
+  /**
+   * Looks up people by user details. List details and all endpoints via which
+   * the user has connected.
+   */
+  private def listUsersImp(userQuery: UserQuery)(implicit connection: js.Connection)
+        : Seq[(User, Seq[String])] = {
+
+    // For now, simply list all users (guests union roles).
+    val query = i"""
+      select
+        '-' || g.SNO as u_id,
+        g.NAME u_disp_name,
+        g.EMAIL u_email,
+        e.EMAIL_NOTFS u_email_notfs,
+        g.LOCATION u_country,
+        g.WEBSITE u_website,
+        'F' u_superadmin,
+        'F' u_is_owner,
+        'Guest' i_endpoint
+      from
+        DW1_IDS_SIMPLE g left join DW1_IDS_SIMPLE_EMAIL e
+      on
+        g.EMAIL = e.EMAIL and e.TENANT = ?
+      union
+      select
+        ${_UserSelectListItems},
+        i.OID_ENDPOINT i_endpoint
+      from
+        DW1_USERS u left join DW1_IDS_OPENID i
+      on
+        u.SNO = i.USR and u.TENANT = i.TENANT
+      where
+        u.TENANT = ?
+      """
+
+    val values = List(siteId, siteId)
+    val result: mut.Map[String, (User, List[String])] = mut.Map.empty
+
+    db.queryAtnms(query, values, rs => {
+      while (rs.next) {
+        val endpoint = rs.getString("i_endpoint")
+        val user = _User(rs)
+        result.get(user.id) match {
+          case Some((user, endpoints)) =>
+            result(user.id) = (user, endpoint :: endpoints)
+          case None =>
+            result(user.id) = (user, endpoint :: Nil)
+        }
+      }
+    })
+
+    result.values.toList
   }
 
 
