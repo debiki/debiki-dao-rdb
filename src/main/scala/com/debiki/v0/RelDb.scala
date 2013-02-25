@@ -242,6 +242,16 @@ class RelDb(val server: String,
   }
 
 
+  /**
+   * For calls to stored functions: """{? = call some_function(?, ?, ...) }"""
+   */
+  def call(sql: String, binds: List[AnyRef] = Nil, outParamSqlType: Int,
+           resultHandler: (js.CallableStatement) => Unit)
+          (implicit conn: js.Connection) {
+    callImpl(sql, binds, outParamSqlType, resultHandler, conn)
+  }
+
+
   private def execImpl(query: String, binds: List[AnyRef],
                 resultSetHandler: js.ResultSet => Any,
                 conn: js.Connection): Any = {
@@ -340,10 +350,30 @@ class RelDb(val server: String,
     }
   }
 
-  private def _bind(values: List[AnyRef], pstmt: js.PreparedStatement) {
-    var bindPos = 0
+
+  private def callImpl[A](query: String, binds: List[AnyRef],
+        outParamSqlType: Int, resultHandler: (js.CallableStatement) => Unit,
+        conn: js.Connection) {
+    // (Optionally, see my self-answered StackOverflow question:
+    //  http://stackoverflow.com/a/15063409/694469 )
+    var statement: js.CallableStatement = null
+    try {
+      statement = conn.prepareCall(query)
+      statement.registerOutParameter(1, outParamSqlType)
+      _bind(binds, statement, firstBindPos = 2)
+      statement.execute()
+      resultHandler(statement)
+    }
+    finally {
+     if (statement ne null) statement.close()
+    }
+  }
+
+
+  private def _bind(
+        values: List[AnyRef], pstmt: js.PreparedStatement, firstBindPos: Int = 1) {
+    var bindPos = firstBindPos
     for (v <- values) {
-      bindPos += 1
       v match {
         case i: jl.Integer => pstmt.setInt(bindPos, i.intValue)
         case l: jl.Long => pstmt.setLong(bindPos, l.longValue)
@@ -355,6 +385,7 @@ class RelDb(val server: String,
         case Null(sqlType) => pstmt.setNull(bindPos, sqlType)
         case x => unimplemented("Binding this: "+ classNameOf(x))
       }
+      bindPos += 1
     }
   }
 

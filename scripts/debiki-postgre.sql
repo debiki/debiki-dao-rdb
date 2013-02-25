@@ -630,6 +630,20 @@ create index DW1_PAGES_TNT_PRNT_CDATI_NOPUB
 
 
 -- todo prod done test,dev:
+create or replace function INC_NEXT_PER_PAGE_REPLY_ID(
+  site_id varchar(32), page_id varchar(32), step int) returns int as $$
+declare
+  next_id int;
+begin
+  update DW1_PAGES
+    set NEXT_REPLY_ID = NEXT_REPLY_ID + step
+    where TENANT = site_id and GUID = page_id
+    returning NEXT_REPLY_ID into next_id;
+  return next_id;
+end;
+$$ language plpgsql;
+
+-- todo prod done test,dev:
 update DW1_PAGES p
 set CACHED_NUM_CHILD_PAGES = (select count(*) from DW1_PAGES c where c.PARENT_PAGE_ID = p.GUID and c.TENANT = p.TENANT);
 

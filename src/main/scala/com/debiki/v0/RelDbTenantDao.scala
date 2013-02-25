@@ -2026,7 +2026,29 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   private def _insert[T <: Action](pageId: String, actions: List[T])
         (implicit conn: js.Connection): List[T] = {
 
-    var actionsWithIds = Debate.assignIdsTo(actions)
+    val numNewReplies = actions.filter(Page.isReply _).size
+
+    val nextNewReplyId =
+      if (numNewReplies == 0) -1
+      else {
+        // I'd rather avoid stored functions, but UPDATE ... RETURNING ... INTO
+        // otherwise fails: This:
+        //   {call update DW1_PAGES
+        //     set NEXT_REPLY_ID = NEXT_REPLY_ID + ?
+        //     where TENANT = ? and GUID = ?
+        //     returning NEXT_REPLY_ID into ?  }
+        // results in an error: """PSQLException: ERROR: syntax error at or near "set" """
+        // with no further details. So instead use a stored function:
+        val sql = "{? = call INC_NEXT_PER_PAGE_REPLY_ID(?, ?, ?) }"
+        val values = List(siteId, pageId, numNewReplies.asInstanceOf[AnyRef])
+        var nextNewIdAfterwards = -1
+        db.call(sql, values, js.Types.INTEGER, result => {
+          nextNewIdAfterwards = result.getInt(1)
+        })
+        nextNewIdAfterwards - numNewReplies
+      }
+
+    val actionsWithIds = Debate.assignIdsTo(actions, nextNewReplyId)
     for (action <- actionsWithIds) {
       // Could optimize:  (but really *not* important!)
       // Use a CallableStatement and `insert into ... returning ...'
