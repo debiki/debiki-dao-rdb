@@ -73,14 +73,14 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def updatePageMeta(meta: PageMeta) {
+  def updatePageMeta(meta: PageMeta, old: PageMeta) {
     db.transaction {
-      _updatePageMeta(meta)(_)
+      _updatePageMeta(meta, anyOld = Some(old))(_)
     }
   }
 
 
-  private def _updatePageMeta(newMeta: PageMeta)
+  private def _updatePageMeta(newMeta: PageMeta, anyOld: Option[PageMeta])
         (implicit connection: js.Connection) {
     val values = List(
       newMeta.parentPageId.orNullVarchar,
@@ -126,6 +126,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         tenantId, newMeta.pageId, newMeta.pageRole)
     if (2 <= numChangedRows)
       assErr("DwE4Ikf1")
+
+    val newParentPage = anyOld.isEmpty || newMeta.parentPageId != anyOld.get.parentPageId
+    if (newParentPage) {
+      anyOld.flatMap(_.parentPageId) foreach { updateParentPageChildCount(_, -1) }
+      newMeta.parentPageId foreach { updateParentPageChildCount(_, +1) }
+    }
   }
 
 
@@ -1849,9 +1855,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     if (2 <= numNewRows)
       assErr("DwE45UL8") // there's a primary key on site + page id
 
-    _updatePageMeta(page.meta)
+    _updatePageMeta(page.meta, anyOld = None)
     insertPagePathOrThrow(page.path)
-    page.parentPageId foreach { updateParentPageChildCount _ }
   }
 
 
@@ -1898,10 +1903,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def updateParentPageChildCount(parentId: String)(implicit conn: js.Connection) {
+  private def updateParentPageChildCount(parentId: String, change: Int)
+        (implicit conn: js.Connection) {
+    require(change == 1 || change == -1)
     val sql = i"""
       |update DW1_PAGES
-      |set CACHED_NUM_CHILD_PAGES = CACHED_NUM_CHILD_PAGES + 1
+      |set CACHED_NUM_CHILD_PAGES = CACHED_NUM_CHILD_PAGES + ($change)
       |where TENANT = ? and GUID = ?
       """
     val values = List(siteId, parentId)
