@@ -17,6 +17,13 @@ Add constraints that check for the empty string -- name them
 
 *****************
 
+Whenever adding columns/creating tables, consider having a look at the
+similar tables here:
+  https://github.com/discourse/discourse/blob/master/db/structure.sql
+E.g. on that page search for "create table topics" to find a table that
+somewhat corresponds to DW1_PAGES.
+
+
 Naming standard
 ------------------
  "DW1_...__C" for check constraints,
@@ -532,18 +539,50 @@ create table DW1_PAGES(
   -- 'C'ode page.
   PAGE_ROLE varchar(10) not null,
   PARENT_PAGE_ID varchar(32),
+  ------------
+  -- Let ids of replies be small consecutive integers, so they can be used
+  -- as indexes into per page byte arrays, which clarifies which comments
+  -- a visitor-that-votes-on-comments has read.
+  -- todo prod done test,dev: alter table DW1_PAGES add column
+  NEXT_REPLY_ID int default 10 not null,
+  ------------
   -- Should be updated whenever the page is renamed.
   CACHED_TITLE varchar(100) default null,
+  ------------
+  -- todo prod,dev done test: alter table DW1_PAGES add column
+  CACHED_AUTHOR_DISPLAY_NAME varchar(100),
+  CACHED_AUTHOR_USER_ID varchar(32),
+  -- How many people have contributed to this page, e.g. via posts, edits, flags.
+  CACHED_NUM_POSTERS int not null default 0,
+  -- Total number of page actions for this page.
+  CACHED_NUM_ACTIONS int not null default 0,
+  -- Of interest on the admin page.
+  CACHED_NUM_POSTS_TO_REVIEW int not null default 0,
+  -- Somewhat indicates how controversial the discussion is.
+  CACHED_NUM_POSTS_DELETED int not null default 0,
+  -- Num approved and non-deleted replies. Of interest on forum topic and
+  -- blog post list pages.
+  CACHED_NUM_REPLIES_VISIBLE int not null default 0,
+  -- CACHED_NUM_POSTS_FLAGGED_SPAM/INAPPROPRIATE/ILLEGAL/...
+  CACHED_LAST_VISIBLE_POST_DATI timestamp default null,
+  -- Useful on forum group pages, when listings num topics per forum.
+  CACHED_NUM_CHILD_PAGES int not null default 0,
+  ------------
+
   CDATI timestamp not null default now(),
+  -- When this page was last modified in any way whatsoever (including tiny edits
+  -- and deletion of unapproved spam).
   MDATI timestamp not null default now(),
   -- The most recent publication dati; the page is published, unless is null.
   -- (In the future, null will be the default.)
   PUBL_DATI timestamp default now(),
-  -- When the page was last modified in a significant way. Of interest
+  -- When the page body was last modified in a significant way. Of interest
   -- to e.g. Atom feeds.
   -- Might be < PUBL_DATI if the page is unpublished and then published again.
   SGFNT_MDATI timestamp default null,
-  ----------
+  -- When the most recent post was added. Can be used in forum topic list:
+  -- "Latest reply: NN days ago."
+
   constraint DW1_PAGES_SNO__P primary key (SNO),
   constraint DW1_PAGES__U unique (TENANT, GUID),
   -- COULD rename to ..__R__TENANTS (with S)
@@ -588,6 +627,11 @@ create index DW1_PAGES_TNT_PRNT_CDATI_NOPUB
     where PUBL_DATI is null;
 
 -- COULD also add index on DW1_PAGES.TENANT + CDATI or PUBL_DATI?
+
+
+-- todo prod done test,dev:
+update DW1_PAGES p
+set CACHED_NUM_CHILD_PAGES = (select count(*) from DW1_PAGES c where c.PARENT_PAGE_ID = p.GUID and c.TENANT = p.TENANT);
 
 
 

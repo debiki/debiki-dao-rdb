@@ -153,14 +153,24 @@ object RelDbUtil {
       pageSlug = d2e(resultSet.getString("PAGE_SLUG")))
 
 
-  val _PageMetaSelectListItems =
-    """g.CACHED_TITLE,
+  val _PageMetaSelectListItems = i"""
       |g.CDATI,
       |g.MDATI,
       |g.PUBL_DATI,
       |g.SGFNT_MDATI,
       |g.PAGE_ROLE,
-      |g.PARENT_PAGE_ID""".stripMargin
+      |g.PARENT_PAGE_ID,
+      |g.CACHED_TITLE,
+      |g.CACHED_AUTHOR_DISPLAY_NAME,
+      |g.CACHED_AUTHOR_USER_ID,
+      |g.CACHED_NUM_POSTERS,
+      |g.CACHED_NUM_ACTIONS,
+      |g.CACHED_NUM_POSTS_DELETED,
+      |g.CACHED_NUM_REPLIES_VISIBLE,
+      |g.CACHED_NUM_POSTS_TO_REVIEW,
+      |g.CACHED_LAST_VISIBLE_POST_DATI,
+      |g.CACHED_NUM_CHILD_PAGES
+      |"""
 
 
   def _PageMeta(resultSet: js.ResultSet, pageId: String = null) = {
@@ -169,13 +179,21 @@ object RelDbUtil {
           unimplemented, // wrong column name: resultSet.getString("PAGE_ID"),
       pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
-      cachedTitle = Option(resultSet.getString(("CACHED_TITLE"))),
       creationDati = ts2d(resultSet.getTimestamp("CDATI")),
       modDati = ts2d(resultSet.getTimestamp("MDATI")),
       pubDati = Option(ts2d(resultSet.getTimestamp("PUBL_DATI"))),
       sgfntModDati = Option(ts2d(resultSet.getTimestamp("SGFNT_MDATI"))),
-      cachedAuthors = Nil,  // db fields not yet created
-      cachedCommentCount = 0)  // db field not yet created
+      cachedTitle = Option(resultSet.getString(("CACHED_TITLE"))),
+      cachedAuthorDispName = resultSet.getString("CACHED_AUTHOR_DISPLAY_NAME"),
+      cachedAuthorUserId = resultSet.getString("CACHED_AUTHOR_USER_ID"),
+      cachedNumPosters = resultSet.getInt("CACHED_NUM_POSTERS"),
+      cachedNumActions = resultSet.getInt("CACHED_NUM_ACTIONS"),
+      cachedNumPostsDeleted = resultSet.getInt("CACHED_NUM_POSTS_DELETED"),
+      cachedNumRepliesVisible = resultSet.getInt("CACHED_NUM_REPLIES_VISIBLE"),
+      cachedNumPostsToReview = resultSet.getInt("CACHED_NUM_POSTS_TO_REVIEW"),
+      cachedLastVisiblePostDati =
+        Option(ts2d(resultSet.getTimestamp("CACHED_LAST_VISIBLE_POST_DATI"))),
+      cachedNumChildPages = resultSet.getInt("CACHED_NUM_CHILD_PAGES"))
   }
 
 

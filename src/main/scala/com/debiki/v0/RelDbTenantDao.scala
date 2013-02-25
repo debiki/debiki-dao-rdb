@@ -84,20 +84,38 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         (implicit connection: js.Connection) {
     val values = List(
       newMeta.parentPageId.orNullVarchar,
-      newMeta.cachedTitle.orNullVarchar,
       d2ts(newMeta.modDati),
       o2ts(newMeta.pubDati),
       o2ts(newMeta.sgfntModDati),
+      newMeta.cachedTitle.orNullVarchar,
+      newMeta.cachedAuthorDispName orIfEmpty NullVarchar,
+      newMeta.cachedAuthorUserId orIfEmpty NullVarchar,
+      newMeta.cachedNumPosters.asInstanceOf[AnyRef],
+      newMeta.cachedNumActions.asInstanceOf[AnyRef],
+      newMeta.cachedNumPostsToReview.asInstanceOf[AnyRef],
+      newMeta.cachedNumPostsDeleted.asInstanceOf[AnyRef],
+      newMeta.cachedNumRepliesVisible.asInstanceOf[AnyRef],
+      o2ts(newMeta.cachedLastVisiblePostDati),
+      newMeta.cachedNumChildPages.asInstanceOf[AnyRef],
       tenantId,
       newMeta.pageId,
       _pageRoleToSql(newMeta.pageRole))
     val sql = s"""
       update DW1_PAGES set
         PARENT_PAGE_ID = ?,
-        CACHED_TITLE = ?,
         MDATI = ?,
         PUBL_DATI = ?,
-        SGFNT_MDATI = ?
+        SGFNT_MDATI = ?,
+        CACHED_TITLE = ?,
+        CACHED_AUTHOR_DISPLAY_NAME = ?,
+        CACHED_AUTHOR_USER_ID = ?,
+        CACHED_NUM_POSTERS = ?,
+        CACHED_NUM_ACTIONS = ?,
+        CACHED_NUM_POSTS_TO_REVIEW = ?,
+        CACHED_NUM_POSTS_DELETED = ?,
+        CACHED_NUM_REPLIES_VISIBLE = ?,
+        CACHED_LAST_VISIBLE_POST_DATI = ?,
+        CACHED_NUM_CHILD_PAGES = ?
       where TENANT = ? and GUID = ? and PAGE_ROLE = ?
       """
 
@@ -1831,7 +1849,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     if (2 <= numNewRows)
       assErr("DwE45UL8") // there's a primary key on site + page id
 
+    _updatePageMeta(page.meta)
     insertPagePathOrThrow(page.path)
+    page.parentPageId foreach { updateParentPageChildCount _ }
   }
 
 
@@ -1875,6 +1895,18 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         }
         throw ex
     }
+  }
+
+
+  private def updateParentPageChildCount(parentId: String)(implicit conn: js.Connection) {
+    val sql = i"""
+      |update DW1_PAGES
+      |set CACHED_NUM_CHILD_PAGES = CACHED_NUM_CHILD_PAGES + 1
+      |where TENANT = ? and GUID = ?
+      """
+    val values = List(siteId, parentId)
+    val rowsUpdated = db.update(sql, values)
+    assErrIf(rowsUpdated != 1, "DwE70BK12")
   }
 
 
