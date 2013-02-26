@@ -716,8 +716,13 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- char only, and are their own parents.
   -- No other actions may have 1 char ids.
   -- alter table DW1_PAGE_ACTIONS add
+  --------
+  -- todo prod done test,dev:
+  alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_PAID_RELPA__C_EQ;
+  -- and reomve:
   constraint DW1_PGAS_PAID_RELPA__C_EQ
       check ((length(PAID) = 1) = (RELPA = PAID)),
+  --------
   -- The body, titles and templates are always of type 'Post'.
   constraint DW1_PGAS_TYPE__C_IS_POST
       check (case length(PAID)
@@ -735,11 +740,24 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS_PAID_NOT_0__C
       check (PAID <> '0'),
   -- The root post has id 1 and it must be its own parent.
-  constraint DW1_PACTIONS_ROOT_IS_1__C
-      check (RELPA = case when PAID = '1' then '1' else RELPA end),
+  ------------
+  -- todo prod done test,dev:
+  alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_ROOT_IS_1__C;
+  alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_MAGIC_ID_PARENTS__C
+      check (RELPA = case
+      when PAID = '0t' then '0t'
+      when PAID = '0b' then '0b'
+      when PAID = '0c' then '0c'
+      else RELPA end),
   -- The root post must be a 'Post'.
-  constraint DW1_PACTIONS_ROOT_IS_POST__C
-      check (TYPE = case when PAID = '1' then 'Post' else TYPE end),
+  ------------
+  -- todo prod done test,dev:
+  alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_ROOT_IS_POST__C;
+  alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_MAGIC_ID_TYPES__C
+      check (TYPE = case when PAID in ('0t', '0b', '0c') then 'Post' else TYPE end),
+  ------------
   constraint DW1_PGAS_APPROVAL__C_IN
       check (APPROVAL in ('P', 'W', 'A', 'M')),
   -- Approval rows must have an approval reason defined,
@@ -804,6 +822,7 @@ alter table DW1_PAGE_ACTIONS add column TARGET_VERSION varchar(32);
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TGTVER__U
     unique (PAGE, RELPA, TARGET_VERSION);
 
+-- OLD:
 -- Currently there's only the root post and its replies,
 -- and the root post has id 1. So when ACTION_PATH is introduced,
 -- all paths start with '1' (the root post).
@@ -845,6 +864,22 @@ create table DW1_PAGE_RATINGS(  -- abbreviated ARTS? PRATINGS deprctd.
 --   IDTY_UNAU_ID varchar(32), -- FK to DW1_IDS_UNAU (DW1_IDS_SIMPLE currently)
 --   ROLE_ID varchar(32))  -- FK to DW1_ROLES  (DW1_USERS currently)
 -- and either IDTY_UNAU_ID or ROLE_ID is specified.
+
+-- todo prod done test,dev: --------------------
+\set AUTOCOMMIT 'off'
+
+SET CONSTRAINTS ALL DEFERRED
+
+update DW1_PAGE_RATINGS
+set PAID = case PAID when '2' then '0t' when '1' then '0b' when '3' then '0c' end
+where PAID in ('1', '2', '3');
+
+update DW1_PAGE_ACTIONS set
+  PAID = case PAID when '2' then '0t' when '1' then '0b' when '3' then '0c' else PAID end,
+  RELPA = case RELPA when '2' then '0t' when '1' then '0b' when '3' then '0c' else RELPA end
+where PAID in ('1', '2', '3') or RELPA in ('1', '2', '3');
+-------------------------------------------
+
 
 
 ----- Emails and Inbox
