@@ -949,7 +949,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         actions ::= action  // this reverses above `order by TIME desc'
       }
 
-      Some(Debate.fromActions(
+      Some(Page.fromActions(
           pageId, People(logins, identities, users), actions))
     })
   }
@@ -1145,7 +1145,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           val pageId = rs.getString("PAGE_ID")
           // Skip rating tags, for now: (as stated in the docs in Dao.scala)
           val action = _Action(rs, ratingTags = Map.empty.withDefaultValue(Nil))
-          val page = pagesById.getOrElseUpdate(pageId, Debate.empty(pageId))
+          val page = pagesById.getOrElseUpdate(pageId, Debate(pageId))
           val pageWithAction = page ++ (action::Nil)
           pagesById(pageId) = pageWithAction
           pageIdsAndActions ::= pageId -> action
@@ -2055,7 +2055,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         nextNewIdAfterwards - numNewReplies
       }
 
-    val actionsWithIds = Debate.assignIdsTo(actions, nextNewReplyId)
+    val actionsWithIds = Page.assignIdsTo(actions, nextNewReplyId)
     for (action <- actionsWithIds) {
       // Could optimize:  (but really *not* important!)
       // Use a CallableStatement and `insert into ... returning ...'
