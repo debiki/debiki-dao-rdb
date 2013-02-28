@@ -540,11 +540,11 @@ create table DW1_PAGES(
   PAGE_ROLE varchar(10) not null,
   PARENT_PAGE_ID varchar(32),
   ------------
-  -- Let ids of replies be small consecutive integers, so they can be used
+  -- Derive reply ids from small consecutive integers, so they can be used
   -- as indexes into per page byte arrays, which clarifies which comments
   -- a visitor-that-votes-on-comments has read.
   -- todo prod done test,dev: alter table DW1_PAGES add column
-  NEXT_REPLY_ID int default 10 not null,
+  NEXT_REPLY_ID int default 1 not null,
   ------------
   -- Should be updated whenever the page is renamed.
   CACHED_TITLE varchar(100) default null,
