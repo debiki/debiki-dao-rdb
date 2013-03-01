@@ -539,17 +539,14 @@ create table DW1_PAGES(
   -- 'C'ode page.
   PAGE_ROLE varchar(10) not null,
   PARENT_PAGE_ID varchar(32),
-  ------------
+
   -- Derive reply ids from small consecutive integers, so they can be used
   -- as indexes into per page byte arrays, which clarifies which comments
   -- a visitor-that-votes-on-comments has read.
-  -- todo prod done test,dev: alter table DW1_PAGES add column
   NEXT_REPLY_ID int default 1 not null,
-  ------------
+
   -- Should be updated whenever the page is renamed.
   CACHED_TITLE varchar(100) default null,
-  ------------
-  -- todo prod,dev done test: alter table DW1_PAGES add column
   CACHED_AUTHOR_DISPLAY_NAME varchar(100),
   CACHED_AUTHOR_USER_ID varchar(32),
   -- How many people have contributed to this page, e.g. via posts, edits, flags.
@@ -567,7 +564,6 @@ create table DW1_PAGES(
   CACHED_LAST_VISIBLE_POST_DATI timestamp default null,
   -- Useful on forum group pages, when listings num topics per forum.
   CACHED_NUM_CHILD_PAGES int not null default 0,
-  ------------
 
   CDATI timestamp not null default now(),
   -- When this page was last modified in any way whatsoever (including tiny edits
@@ -629,7 +625,6 @@ create index DW1_PAGES_TNT_PRNT_CDATI_NOPUB
 -- COULD also add index on DW1_PAGES.TENANT + CDATI or PUBL_DATI?
 
 
--- todo prod done test,dev:
 create or replace function INC_NEXT_PER_PAGE_REPLY_ID(
   site_id varchar(32), page_id varchar(32), step int) returns int as $$
 declare
@@ -642,10 +637,6 @@ begin
   return next_id;
 end;
 $$ language plpgsql;
-
--- todo prod done test,dev:
-update DW1_PAGES p
-set CACHED_NUM_CHILD_PAGES = (select count(*) from DW1_PAGES c where c.PARENT_PAGE_ID = p.GUID and c.TENANT = p.TENANT);
 
 
 
@@ -697,12 +688,12 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- (When you edit a post of yours, the edit is automatically applied.)
   AUTO_APPLICATION varchar(1),
   NEW_IP varchar(39), -- null, unless differs from DW1_LOGINS.START_IP
- alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TNT_PGID_ID__P
+ constraint DW1_PGAS_TNT_PGID_ID__P
      primary key (TENANT, PAGE_ID, PAID);
  constraint DW1_PGAS_TNT_PGID__R__PAGES -- ix: PK
      foreign key (TENANT, PAGE_ID)
      references DW1_PAGES (TENANT, GUID) deferrable,
- alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS__R__PGAS
+ constraint DW1_PGAS__R__PGAS
      foreign key (TENANT, PAGE_ID, RELPA) -- no ix! no dels/upds in prnt tbl
                        -- and no joins (loading whole page at once instead)
      references DW1_PAGE_ACTIONS (TENANT, PAGE_ID, PAID) deferrable;
@@ -712,23 +703,6 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS__R__PAGES -- deprecated. Ix DW1_PACTIONS_PAGE_PAID__P
       foreign key (PAGE)
       references DW1_PAGES (SNO) deferrable,
-  -- The body and title and template etc. have ids 1, 2, 3 etc, i.e. one
-  -- char only, and are their own parents.
-  -- No other actions may have 1 char ids.
-  -- alter table DW1_PAGE_ACTIONS add
-  --------
-  -- todo prod done test,dev:
-  alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_PAID_RELPA__C_EQ;
-  -- and reomve:
-  constraint DW1_PGAS_PAID_RELPA__C_EQ
-      check ((length(PAID) = 1) = (RELPA = PAID)),
-  --------
-  -- The body, titles and templates are always of type 'Post'.
-  constraint DW1_PGAS_TYPE__C_IS_POST
-      check (case length(PAID)
-        when 1 then (TYPE = 'Post')
-        else true
-      end),
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Publ', 'Meta', 'Edit',
         'EditApp',
@@ -740,24 +714,15 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS_PAID_NOT_0__C
       check (PAID <> '0'),
   -- The root post has id 1 and it must be its own parent.
-  ------------
-  -- todo prod done test,dev:
-  alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_ROOT_IS_1__C;
-  alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_MAGIC_ID_PARENTS__C
       check (RELPA = case
       when PAID = '0t' then '0t'
       when PAID = '0b' then '0b'
       when PAID = '0c' then '0c'
       else RELPA end),
-  -- The root post must be a 'Post'.
-  ------------
-  -- todo prod done test,dev:
-  alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_ROOT_IS_POST__C;
-  alter table DW1_PAGE_ACTIONS add
+  -- A body, title or config post is always of type 'Post'.
   constraint DW1_PGAS_MAGIC_ID_TYPES__C
       check (TYPE = case when PAID in ('0t', '0b', '0c') then 'Post' else TYPE end),
-  ------------
   constraint DW1_PGAS_APPROVAL__C_IN
       check (APPROVAL in ('P', 'W', 'A', 'M')),
   -- Approval rows must have an approval reason defined,
@@ -864,21 +829,6 @@ create table DW1_PAGE_RATINGS(  -- abbreviated ARTS? PRATINGS deprctd.
 --   IDTY_UNAU_ID varchar(32), -- FK to DW1_IDS_UNAU (DW1_IDS_SIMPLE currently)
 --   ROLE_ID varchar(32))  -- FK to DW1_ROLES  (DW1_USERS currently)
 -- and either IDTY_UNAU_ID or ROLE_ID is specified.
-
--- todo prod done test,dev: --------------------
-\set AUTOCOMMIT 'off'
-
-SET CONSTRAINTS ALL DEFERRED
-
-update DW1_PAGE_RATINGS
-set PAID = case PAID when '2' then '0t' when '1' then '0b' when '3' then '0c' end
-where PAID in ('1', '2', '3');
-
-update DW1_PAGE_ACTIONS set
-  PAID = case PAID when '2' then '0t' when '1' then '0b' when '3' then '0c' else PAID end,
-  RELPA = case RELPA when '2' then '0t' when '1' then '0b' when '3' then '0c' else RELPA end
-where PAID in ('1', '2', '3') or RELPA in ('1', '2', '3');
--------------------------------------------
 
 
 

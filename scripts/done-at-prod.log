@@ -881,3 +881,134 @@ debiki_prod=> \q
 Sun Feb 10 03:05:19 CET 2013
 
 }}}
+{{{ 2013-03-01 Change ids to 0t, 0b, 0c
+
+15:19:35 1 ~/me-dev/debiki/all/debiki-app-play-2.1[master]$ s/psql-debiki_prod-tunnel.sh 
++ psql -h 127.0.0.1 -p 55432 debiki_prod debiki_prod
+Password for user debiki_prod: 
+psql (9.1.8, server 9.1.3)
+SSL connection (cipher: DHE-RSA-AES256-SHA, bits: 256)
+Type "help" for help.
+
+debiki_prod=> 
+debiki_prod=> 
+debiki_prod=> alter table DW1_PAGES add column
+debiki_prod->   NEXT_REPLY_ID int default 1 not null;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+debiki_prod->   CACHED_AUTHOR_DISPLAY_NAME varchar(100);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  CACHED_AUTHOR_USER_ID varchar(32);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  CACHED_NUM_POSTERS int not null default 0;
+ALTER TABLE
+debiki_prod=> select distinct CACHED_NUM_POSTERS from dw1_pages;
+ cached_num_posters 
+--------------------
+                  0
+(1 row)
+
+debiki_prod=> alter table DW1_PAGES add column
+  CACHED_NUM_ACTIONS int not null default 0;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  CACHED_NUM_POSTS_TO_REVIEW int not null default 0;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  CACHED_NUM_POSTS_DELETED int not null default 0;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  CACHED_NUM_REPLIES_VISIBLE int not null default 0;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  CACHED_LAST_VISIBLE_POST_DATI timestamp default null;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGES add column
+  CACHED_NUM_CHILD_PAGES int not null default 0;
+ALTER TABLE
+debiki_prod=>
+debiki_prod=> create or replace function INC_NEXT_PER_PAGE_REPLY_ID(
+debiki_prod(>   site_id varchar(32), page_id varchar(32), step int) returns int as $$
+debiki_prod$> declare
+debiki_prod$>   next_id int;
+debiki_prod$> begin
+debiki_prod$>   update DW1_PAGES
+debiki_prod$>     set NEXT_REPLY_ID = NEXT_REPLY_ID + step
+debiki_prod$>     where TENANT = site_id and GUID = page_id
+debiki_prod$>     returning NEXT_REPLY_ID into next_id;
+debiki_prod$>   return next_id;
+debiki_prod$> end;
+debiki_prod$> $$ language plpgsql;
+CREATE FUNCTION
+debiki_prod=> update DW1_PAGES p
+debiki_prod-> set CACHED_NUM_CHILD_PAGES = (select count(*) from DW1_PAGES c where c.PARENT_PAGE_ID = p.GUID and c.TENANT = p.TENANT);
+UPDATE 103
+debiki_prod=>
+debiki_prod=> --------
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_ROOT_IS_1__C;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_MAGIC_ID_PARENTS__C
+debiki_prod->       check (RELPA = case
+debiki_prod(>       when PAID = '0t' then '0t'
+debiki_prod(>       when PAID = '0b' then '0b'
+debiki_prod(>       when PAID = '0c' then '0c'
+debiki_prod(>       else RELPA end);
+ALTER TABLE
+debiki_prod=>
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PACTIONS_ROOT_IS_POST__C;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_MAGIC_ID_TYPES__C
+debiki_prod->       check (TYPE = case when PAID in ('0t', '0b', '0c') then 'Post' else TYPE end);
+ALTER TABLE
+debiki_prod=>
+debiki_prod=> ------
+debiki_prod=>
+debiki_prod=> \set AUTOCOMMIT 'off'
+debiki_prod=>
+debiki_prod=> SET CONSTRAINTS ALL DEFERRED
+debiki_prod->
+debiki_prod-> ;
+SET CONSTRAINTS
+debiki_prod=>
+debiki_prod=> update DW1_PAGE_RATINGS
+debiki_prod-> set PAID = case PAID when '2' then '0t' when '1' then '0b' when '3' then '0c' end
+debiki_prod-> where PAID in ('1', '2', '3');
+UPDATE 0
+debiki_prod=>
+debiki_prod=> update DW1_PAGE_ACTIONS set
+debiki_prod->   PAID = case PAID when '2' then '0t' when '1' then '0b' when '3' then '0c' else PAID end,
+debiki_prod->   RELPA = case RELPA when '2' then '0t' when '1' then '0b' when '3' then '0c' else RELPA end
+debiki_prod-> where PAID in ('1', '2', '3') or RELPA in ('1', '2', '3');
+ERROR:  new row for relation "dw1_page_actions" violates check constraint "dw1_pgas_paid_relpa__c_eq"
+debiki_prod=> 
+debiki_prod=> 
+debiki_prod=> rollback;
+ROLLBACK
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_PAID_RELPA__C_EQ;
+ALTER TABLE
+debiki_prod=> 
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> 
+debiki_prod=> update DW1_PAGE_ACTIONS set
+debiki_prod->   PAID = case PAID when '2' then '0t' when '1' then '0b' when '3' then '0c' else PAID end,
+debiki_prod->   RELPA = case RELPA when '2' then '0t' when '1' then '0b' when '3' then '0c' else RELPA end
+debiki_prod-> where PAID in ('1', '2', '3') or RELPA in ('1', '2', '3');
+UPDATE 1197
+debiki_prod=> 
+debiki_prod=> select * from dw1_page_actions where page_id = '4xsq1';
+debiki_prod=> 
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> \q
+
+
+And also:
+alter table dw1_page_actions drop constraint DW1_PGAS_TYPE__C_IS_POST;
+
+}}}
