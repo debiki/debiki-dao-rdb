@@ -32,6 +32,9 @@ object RelDb {
   /** Converts null to the empty string ("Null To Empty"). */
   def n2e(s: String) = if (s eq null) "" else s
 
+  /** Converts null to 0 (zero). */
+  def n20(i: Integer): Integer = if (i eq null) 0 else i
+
   /** Converts empty to SQL NULL. */
   def e2n(o: Option[String]) = o.getOrElse(Null(js.Types.VARCHAR))
     // Oracle: use NVARCHAR ?
