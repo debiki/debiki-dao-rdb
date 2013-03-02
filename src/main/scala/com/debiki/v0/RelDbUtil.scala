@@ -34,7 +34,7 @@ object RelDbUtil {
      "a.APPROVAL, a.AUTO_APPLICATION"
 
   def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
-        : Action = {
+        : RawPostActionOld = {
     val id = rs.getString("PAID")
     val loginSno = {
       // No login/identity/user is stored for the hardcoded system user.
