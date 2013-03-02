@@ -57,14 +57,11 @@ object RelDbUtil {
     // (This whole match-case will go away when I unify all types
     // into Post?)  ...
     val action = typee match {
-      // ... then this ugly if ..||..||.. won't be an issue.
-      case typeStr if typeStr == "Post" ||
-         typeStr == "Publ" || typeStr == "Meta" =>
+      case "Post" =>
         // How repr empty root post parent? ' ' or '-' or '_' or '0'?
         new Post(id = id, parent = relpa, ctime = time,
           loginId = loginSno, newIp = newIp, text = n2e(text_?),
-          markup = n2e(markup_?), tyype = _toPostType(typeStr),
-          where = Option(where_?), approval = approval)
+          markup = n2e(markup_?), where = Option(where_?), approval = approval)
       case "Rating" =>
         val tags = ratingTags(id)
         new Rating(id = id, postId = relpa, ctime = time,
@@ -259,25 +256,6 @@ object RelDbUtil {
     case "R" => TenantHost.HttpsRequired
     case "A" => TenantHost.HttpsAllowed
     case "N" => TenantHost.HttpsNone
-  }
-
-
-  def _toFlag(postType: PostType): String = postType match {
-    case PostType.Text => "Post"
-    case PostType.Publish => "Publ"
-    case PostType.Meta => "Meta"
-  }
-
-
-  def _toPostType(flag: String): PostType = flag match {
-    case "Post" => PostType.Text
-    case "Publ" => PostType.Publish
-    case "Meta" => PostType.Meta
-    case x =>
-      warnDbgDie("Bad PostType value: "+ safed(x) +
-          " [error DwE0xcke215]")
-      PostType.Text  // fallback to something with no side effects
-                      // (except perhaps for a weird post appearing)
   }
 
 

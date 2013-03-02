@@ -704,7 +704,7 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       foreign key (PAGE)
       references DW1_PAGES (SNO) deferrable,
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
-        'Post', 'Publ', 'Meta', 'Edit',
+        'Post', 'Publ', 'Meta', 'Edit',  -- todo: remove 'Publ' and 'Meta'
         'EditApp',
         'Aprv', 'Rjct',
         'Rating',
