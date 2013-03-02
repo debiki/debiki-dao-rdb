@@ -2124,7 +2124,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
             d.postId, e2n(d.reason), NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
-        case r: Review =>
+        case r: ReviewPostAction =>
           val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
           db.update(insertIntoActions, commonVals:::List(
             tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar,

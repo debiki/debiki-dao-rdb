@@ -91,7 +91,7 @@ object RelDbUtil {
           ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
       case "Aprv" | "Rjct" =>
         assert((typee == "Rjct") == approval.isEmpty)
-        Review(id = id, targetId = relpa, loginId = loginSno, newIp = newIp,
+        ReviewPostAction(id = id, targetId = relpa, loginId = loginSno, newIp = newIp,
           ctime = time, approval = approval)
       case _ =>
         assErr("DwEY8k3B", "Bad DW1_ACTIONS.TYPE: "+ safed(typee))
