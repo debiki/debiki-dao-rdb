@@ -2088,7 +2088,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         d2ts(action.ctime))
 
       action match {
-        case p: Post =>
+        case p: CreatePostAction =>
           db.update(insertIntoActions, commonVals:::List(
             "Post",
             p.parent, e2n(p.text), e2n(p.markup), e2n(p.where),
