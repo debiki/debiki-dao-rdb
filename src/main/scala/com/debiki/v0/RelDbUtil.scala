@@ -54,6 +54,9 @@ object RelDbUtil {
     val approval = _toAutoApproval(rs.getString("APPROVAL"))
     val editAutoApplied = rs.getString("AUTO_APPLICATION") == "A"
 
+    def buildAction(payload: PostActionPayload) =
+      RawPostAction(id, time, payload, postId = relpa, loginId = loginSno, newIp = newIp)
+
     // (This whole match-case will go away when I unify all types
     // into CreatePostAction?)  ...
     val action = typee match {
@@ -93,6 +96,11 @@ object RelDbUtil {
         assert((typee == "Rjct") == approval.isEmpty)
         ReviewPostAction(id = id, targetId = relpa, loginId = loginSno, newIp = newIp,
           ctime = time, approval = approval)
+      case "CloseTree" => buildAction(PostActionPayload.CloseTree)
+      case "CollapsePost" => buildAction(PostActionPayload.CollapsePost)
+      case "CollapseReplies" => buildAction(PostActionPayload.CollapseReplies)
+      case "CollapseTree" => buildAction(PostActionPayload.CollapseTree)
+      case "Undo" => unimplemented
       case _ =>
         assErr("DwEY8k3B", "Bad DW1_ACTIONS.TYPE: "+ safed(typee))
     }

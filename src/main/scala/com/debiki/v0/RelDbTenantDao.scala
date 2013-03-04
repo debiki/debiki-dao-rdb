@@ -2129,6 +2129,19 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           db.update(insertIntoActions, commonVals:::List(
             tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar,
             _toDbVal(r.approval), NullVarchar))
+        case a: RawPostAction =>
+          def insertSimpleValue(tyype: String) =
+            db.update(insertIntoActions, commonVals:::List(
+              tyype, a.postId, NullVarchar, NullVarchar, NullVarchar,
+              NullVarchar, NullVarchar))
+
+          a.payload match {
+            case PostActionPayload.CloseTree => insertSimpleValue("CloseTree")
+            case PostActionPayload.CollapsePost => insertSimpleValue("CollapsePost")
+            case PostActionPayload.CollapseReplies => insertSimpleValue("CollapseReplies")
+            case PostActionPayload.CollapseTree => insertSimpleValue("CollapseTree")
+            case PostActionPayload.Undo(_) => unimplemented
+          }
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
       }
