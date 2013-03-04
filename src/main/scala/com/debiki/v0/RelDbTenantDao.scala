@@ -792,7 +792,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
    * Also loads Login:s and IdentityOpenId:s, so each action can be
    * associated with the relevant user.
    */
-  private def _loadUsersWhoDid(actions: List[RawPostActionOld])
+  private def _loadUsersWhoDid(actions: List[PostActionDtoOld])
         (implicit connection: js.Connection): People = {
     val loginIds: List[String] = actions map (_.loginId)
     val logins = _loadLogins(byLoginIds = loginIds)
@@ -870,7 +870,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  override def savePageActions[T <: RawPostActionOld](pageGuid: String,
+  override def savePageActions[T <: PostActionDtoOld](pageGuid: String,
                                   actions: List[T]): List[T] = {
     db.transaction { implicit connection =>
       _insert(pageGuid, actions)
@@ -978,7 +978,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     val (
       people: People,
       pagesById: mut.Map[String, Debate],
-      pageIdsAndActions: List[(String, RawPostActionOld)]) =
+      pageIdsAndActions: List[(String, PostActionDtoOld)]) =
         _loadPeoplePagesActionsNoRatingTags(sql, values)
 
     Map[String, Debate](pagesById.toList: _*)
@@ -987,7 +987,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
   def loadRecentActionExcerpts(fromIp: Option[String],
         byIdentity: Option[String],
-        pathRanges: PathRanges, limit: Int): (Seq[PostAction], People) = {
+        pathRanges: PathRanges, limit: Int): (Seq[PostActionOld], People) = {
 
     def buildByPersonQuery(fromIp: Option[String],
           byIdentity: Option[String], limit: Int)
@@ -1107,7 +1107,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     val (
       people: People,
       pagesById: mut.Map[String, Debate],
-      pageIdsAndActions: List[(String, RawPostActionOld)]) =
+      pageIdsAndActions: List[(String, PostActionDtoOld)]) =
         _loadPeoplePagesActionsNoRatingTags(sql, values)
 
     val pageIdsAndActionsDescTime =
@@ -1120,7 +1120,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       val page = pagesById.get(pageId).getOrElse(assErr(
         "DwE9031211", "Page "+ pageId +" missing when loading recent actions, "+
         debugDetails))
-      PostAction(page, action)
+      PostActionOld(page, action)
     }
 
     (smartActions, people)
@@ -1135,9 +1135,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
    */
   private def _loadPeoplePagesActionsNoRatingTags(
         sql: String, values: List[AnyRef])
-        : (People, mut.Map[String, Debate], List[(String, RawPostActionOld)]) = {
+        : (People, mut.Map[String, Debate], List[(String, PostActionDtoOld)]) = {
     val pagesById = mut.Map[String, Debate]()
-    var pageIdsAndActions = List[(String, RawPostActionOld)]()
+    var pageIdsAndActions = List[(String, PostActionDtoOld)]()
 
     val people = db.withConnection { implicit connection =>
       db.query(sql, values, rs => {
@@ -2030,7 +2030,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _insert[T <: RawPostActionOld](pageId: String, actions: List[T])
+  private def _insert[T <: PostActionDtoOld](pageId: String, actions: List[T])
         (implicit conn: js.Connection): List[T] = {
 
     val numNewReplies = actions.filter(Page.isReply _).size
@@ -2129,7 +2129,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           db.update(insertIntoActions, commonVals:::List(
             tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar,
             _toDbVal(r.approval), NullVarchar))
-        case a: RawPostAction =>
+        case a: PostActionDto =>
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
               tyype, a.postId, NullVarchar, NullVarchar, NullVarchar,

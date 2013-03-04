@@ -34,7 +34,7 @@ object RelDbUtil {
      "a.APPROVAL, a.AUTO_APPLICATION"
 
   def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
-        : RawPostActionOld = {
+        : PostActionDtoOld = {
     val id = rs.getString("PAID")
     val loginSno = {
       // No login/identity/user is stored for the hardcoded system user.
@@ -55,7 +55,7 @@ object RelDbUtil {
     val editAutoApplied = rs.getString("AUTO_APPLICATION") == "A"
 
     def buildAction(payload: PostActionPayload) =
-      RawPostAction(id, time, payload, postId = relpa, loginId = loginSno, newIp = newIp)
+      PostActionDto(id, time, payload, postId = relpa, loginId = loginSno, newIp = newIp)
 
     // (This whole match-case will go away when I unify all types
     // into CreatePostAction?)  ...
