@@ -703,8 +703,6 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS__R__PAGES -- deprecated. Ix DW1_PACTIONS_PAGE_PAID__P
       foreign key (PAGE)
       references DW1_PAGES (SNO) deferrable,
- ------ todo prod, done test,dev: alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
- ------ todo prod, done test,dev: alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Edit', 'EditApp',
         'Aprv', 'Rjct',
@@ -714,7 +712,6 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
         'DelPost', 'DelTree',
         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther',
         'Undo')),
- ------
   -- There must be no action with id 0; let 0 mean nothing.
   constraint DW1_PACTIONS_PAID_NOT_0__C
       check (PAID <> '0'),

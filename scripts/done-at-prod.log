@@ -1012,3 +1012,119 @@ And also:
 alter table dw1_page_actions drop constraint DW1_PGAS_TYPE__C_IS_POST;
 
 }}}
+{{{ 2013-03-06 Add CollapsePost etc action types
+
+$ s/psql-debiki_prod-tunnel.sh 
++ psql -h 127.0.0.1 -p 55432 debiki_prod debiki_prod
+Password for user debiki_prod: 
+psql (9.1.8, server 9.1.3)
+SSL connection (cipher: DHE-RSA-AES256-SHA, bits: 256)
+Type "help" for help.
+
+debiki_prod=> 
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
+ALTER TABLE
+debiki_prod=> 
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
+debiki_prod(>         'Post', 'Edit', 'EditApp',
+debiki_prod(>         'Aprv', 'Rjct',
+debiki_prod(>         'Rating',
+debiki_prod(>         'MoveTree',
+debiki_prod(>         'CloseTree', 'CollapsePost', 'CollapseTree', 'CollapseReplies',
+debiki_prod(>         'DelPost', 'DelTree',
+debiki_prod(>         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther',
+debiki_prod(>         'Undo'));
+ERROR:  check constraint "dw1_pgas_type__c_in" is violated by some row
+debiki_prod=> 
+debiki_prod=> select distinct type from dw1_page_actions ;
+    type     
+-------------
+ DelPost
+ Aprv
+ Meta
+ Post
+ FlagSpam
+ FlagCopyVio
+ FlagIllegal
+ Edit
+ FlagOther
+ EditApp
+ Rating
+ DelTree
+ Rjct
+(13 rows)
+
+debiki_prod=> select * from dw1_page_actions  where type = 'Meta';
+ page |    paid    | login |          time           | type |   relpa    |       text        | markup | wheere | new_ip | tenant |  page_id   | approval | auto_application 
+------+------------+-------+-------------------------+------+------------+-------------------+--------+--------+--------+--------+------------+----------+------------------
+ 134  | 4z1ng46wp0 | 370   | 2011-11-14 07:42:48.416 | Meta | 186cf91nv2 | fixed-position: 2 |        |        |        | 2      | gt098frb2y |          | 
+ 110  | mpcz64d0vd | 270   | 2011-11-06 16:37:31.837 | Meta | 19l08rg22p | article-question  |        |        |        | 2      | uhwg7g7pb5 |          | 
+ 134  | 1lbmcw5ur3 | 370   | 2011-11-14 07:42:57.317 | Meta | u6psx85l13 | fixed-position: 3 |        |        |        | 2      | gt098frb2y |          | 
+ 110  | 12u0mdtnkc | 270   | 2011-11-06 16:37:36.918 | Meta | 18xk3v3k75 | article-question  |        |        |        | 2      | uhwg7g7pb5 |          | 
+ 110  | lu5qr2m6dh | 270   | 2011-11-06 16:37:41.774 | Meta | 14kdx06288 | article-question  |        |        |        | 2      | uhwg7g7pb5 |          | 
+ 134  | skgcc8tnun | 370   | 2011-11-14 07:42:40.521 | Meta | 1j4ujz52hg | fixed-position: 1 |        |        |        | 2      | gt098frb2y |          | 
+(6 rows)
+
+debiki_prod=> 
+debiki_prod=> -- update dw1_page_actions set type = 'Post'  where type = 'Meta';
+debiki_prod=> 
+debiki_prod=> ;
+debiki_prod=> \set AUTOCOMMIT 'off'
+debiki_prod=> \set
+AUTOCOMMIT = 'off'
+PROMPT1 = '%/%R%# '
+PROMPT2 = '%/%R%# '
+PROMPT3 = '>> '
+VERBOSITY = 'default'
+VERSION = 'PostgreSQL 9.1.8 on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3, 64-bit'
+DBNAME = 'debiki_prod'
+USER = 'debiki_prod'
+HOST = '127.0.0.1'
+PORT = '55432'
+ENCODING = 'UTF8'
+LASTOID = '0'
+debiki_prod=> update dw1_page_actions set type = 'Post'  where type = 'Meta';
+ERROR:  new row for relation "dw1_page_actions" violates check constraint "dw1_pgas_post_markup__c_nn"
+debiki_prod=> 
+debiki_prod=> select distinct markup from dw1_page_actions;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+debiki_prod=> rollback;
+ROLLBACK
+debiki_prod=> select distinct markup from dw1_page_actions;
+ markup 
+--------
+ 
+ code
+ para
+ dmd0
+ html
+(5 rows)
+
+debiki_prod=> 
+debiki_prod=> update dw1_page_actions set type = 'Post', markup = 'code'  where type = 'Meta';
+UPDATE 6
+debiki_prod=> select * from dw1_page_actions  where type = 'Meta';
+ page | paid | login | time | type | relpa | text | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+------+-------+------+------+-------+------+--------+--------+--------+--------+---------+----------+------------------
+(0 rows)
+
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> 
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
+debiki_prod(>         'Post', 'Edit', 'EditApp',
+debiki_prod(>         'Aprv', 'Rjct',
+debiki_prod(>         'Rating',
+debiki_prod(>         'MoveTree',
+debiki_prod(>         'CloseTree', 'CollapsePost', 'CollapseTree', 'CollapseReplies',
+debiki_prod(>         'DelPost', 'DelTree',
+debiki_prod(>         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther',
+debiki_prod(>         'Undo'));
+ALTER TABLE
+debiki_prod=> commit;
+COMMIT
+
+}}}
+
