@@ -1127,4 +1127,119 @@ debiki_prod=> commit;
 COMMIT
 
 }}}
+{{{ 2013-03-06 Delete obsolete comment ("close" didn't work well)
 
+$ s/psql-debiki_prod-tunnel.sh 
++ psql -h 127.0.0.1 -p 55432 debiki_prod debiki_prod
+Password for user debiki_prod: 
+psql (9.1.8, server 9.1.3)
+SSL connection (cipher: DHE-RSA-AES256-SHA, bits: 256)
+Type "help" for help.
+
+debiki_prod=> select * from dw1_page_actions order by time desc limit 20;
+debiki_prod=> 
+debiki_prod=> select * from dw1_page_actions where page_id = '4u0x4' and paid in ('1ukh1', '810t4', '316z7');
+ page | paid | login | time | type | relpa | text | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+------+-------+------+------+-------+------+--------+--------+--------+--------+---------+----------+------------------
+(0 rows)
+
+debiki_prod=> select * from dw1_page_actions order by time desc limit 20;
+debiki_prod=> select * from dw1_page_actions order by time desc limit 20;
+debiki_prod=> 
+debiki_prod=> select * from dw1_page_actions where page_id = '9qb49' and paid in ('1ukh1', '810t4', '316z7');
+ page | paid  | login |          time           |   type    | relpa |   text   | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+-------+-------+-------------------------+-----------+-------+----------+--------+--------+--------+--------+---------+----------+------------------
+      | 1ukh1 | 926   | 2013-03-06 14:54:45.899 | CloseTree | 4u0x4 |          |        |        |        | 3      | 9qb49   |          | 
+      | 810t4 | 926   | 2013-03-06 14:57:13.021 | DelPost   | 4u0x4 | Obsolete |        |        |        | 3      | 9qb49   |          | 
+      | 316z7 | 926   | 2013-03-06 14:57:27.118 | DelTree   | 4u0x4 |          |        |        |        | 3      | 9qb49   |          | 
+(3 rows)
+
+debiki_prod=> delete from dw1_page_actions where page_id = '9qb49' and paid in ('1ukh1', '810t4', '316z7');
+DELETE 3
+debiki_prod=> 
+debiki_prod=> select * from dw1_page_actions where page_id = '9qb49' and paid in ('1'');
+debiki_prod'> ');
+ page | paid | login | time | type | relpa | text | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+------+-------+------+------+-------+------+--------+--------+--------+--------+---------+----------+------------------
+(0 rows)
+
+debiki_prod=> select * from dw1_page_actions where page_id = '9qb49' and paid in ('1');
+ page | paid | login |          time           | type | relpa |                           text                            | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+------+-------+-------------------------+------+-------+-----------------------------------------------------------+--------+--------+--------+--------+---------+----------+------------------
+      | 1    | 926   | 2013-03-06 14:54:32.699 | Post | 4u0x4 | Nu har jag skrivit om artikeln ordentligt, och fixat det. | dmd0   |        |        | 3      | 9qb49   | A        | 
+(1 row)
+
+debiki_prod=> 
+debiki_prod=> select * from dw1_page_actions where page_id = '9qb49' and relpa in ('1');
+ page | paid | login | time | type | relpa | text | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+------+-------+------+------+-------+------+--------+--------+--------+--------+---------+----------+------------------
+(0 rows)
+
+debiki_prod=> delete from dw1_page_actions where page_id = '9qb49' and paid in ('1');
+DELETE 1
+debiki_prod=> 
+debiki_prod=> select * from dw1_page_actions where page_id = '9qb49' and relpa in ('4u0x4');
+ page | paid  | login |          time           |  type  | relpa | text | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+-------+-------+-------------------------+--------+-------+------+--------+--------+--------+--------+---------+----------+------------------
+      | 815t0 | 917   | 2013-02-24 15:41:50.522 | Rating | 4u0x4 |      |        |        |        | 3      | 9qb49   |          | 
+(1 row)
+
+debiki_prod=> 
+debiki_prod=> 
+debiki_prod=> \set AUTOCOMMIT 'off'
+debiki_prod=> \set
+AUTOCOMMIT = 'off'
+PROMPT1 = '%/%R%# '
+PROMPT2 = '%/%R%# '
+PROMPT3 = '>> '
+VERBOSITY = 'default'
+VERSION = 'PostgreSQL 9.1.8 on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3, 64-bit'
+DBNAME = 'debiki_prod'
+USER = 'debiki_prod'
+HOST = '127.0.0.1'
+PORT = '55432'
+ENCODING = 'UTF8'
+LASTOID = '0'
+debiki_prod=> select * from dw1_page_actions where page_id = '9qb49' and relpa in ('4u0x4');
+ page | paid  | login |          time           |  type  | relpa | text | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+-------+-------+-------------------------+--------+-------+------+--------+--------+--------+--------+---------+----------+------------------
+      | 815t0 | 917   | 2013-02-24 15:41:50.522 | Rating | 4u0x4 |      |        |        |        | 3      | 9qb49   |          | 
+(1 row)
+
+debiki_prod=> delete from dw1_page_actions where page_id = '9qb49' and relpa in ('4u0x4');
+ERROR:  update or delete on table "dw1_page_actions" violates foreign key constraint "dw1_arts__r__pgas" on table "dw1_page_ratings"
+DETAIL:  Key (tenant, page_id, paid)=(3, 9qb49, 815t0) is still referenced from table "dw1_page_ratings".
+debiki_prod=> 
+debiki_prod=> select * from dw1_page_ratings where page_id = '9qb49';
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+debiki_prod=> rollback;
+ROLLBACK
+debiki_prod=> select * from dw1_page_ratings where page_id = '9qb49';
+ page | paid  |     tag     | tenant | page_id 
+------+-------+-------------+--------+---------
+      | 815t0 | interesting | 3      | 9qb49
+(1 row)
+
+debiki_prod=> delete from dw1_page_ratings where page_id = '9qb49';
+DELETE 1
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> delete from dw1_page_actions where page_id = '9qb49' and relpa in ('4u0x4');
+DELETE 1
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> 
+debiki_prod=> select * from  dw1_page_actions where page_id = '9qb49' and paid in ('4u0x4');
+ page | paid  | login |          time           | type | relpa |                                                                       text                                                                       | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+------+-------+-------+-------------------------+------+-------+--------------------------------------------------------------------------------------------------------------------------------------------------+--------+--------+--------+--------+---------+----------+------------------
+      | 4u0x4 | 917   | 2013-02-24 15:41:30.106 | Post | 0b    | Tycker det blir osäkert. Bara för att jag sett en kommentar, råkat hålla fast skärmen ett tag på ett ställe så betyder det ej att jag läst det.  | dmd0   |        |        | 3      | 9qb49   | P        | 
+(1 row)
+
+debiki_prod=> delete from  dw1_page_actions where page_id = '9qb49' and paid in ('4u0x4');
+DELETE 1
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> \q
+
+
+}}}
