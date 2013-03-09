@@ -1243,3 +1243,26 @@ debiki_prod=> \q
 
 
 }}}
+{{{ 2013-03-08 Delete comment photos from a.warming-smile.org.  Add a.warming-smile.org host.
+
+debiki_prod=> delete from dw1_page_actions where tenant = '18' and page_id = '03x28' and paid not like '0%' and relpa in ('112w3', '1ppt5', '211r4', '250c0', '3pkb3', '51975', '61192');
+DELETE 3
+debiki_prod=> delete from dw1_page_actions where tenant = '18' and page_id = '03x28' and paid not like '0%' and paid in ('112w3', '1ppt5', '211r4', '250c0', '3pkb3', '51975', '61192') and type = 'Post';
+DELETE 7
+debiki_prod=> select * from dw1_page_actions where tenant = '18' and page_id = '03x28' order by time desc;
+debiki_prod=>
+debiki_prod=> select * from dw1_page_actions where tenant = '18' and page_id = '03x28' and paid not like '0%' and type = 'Post';
+ page | paid | login | time | type | relpa | text | markup | wheere | new_ip | tenant | page_id | approval | auto_application 
+ ------+------+-------+------+------+-------+------+--------+--------+--------+--------+---------+----------+------------------
+ (0 rows)
+
+ debiki_prod=> commit;
+
+
+-- Later: (autocommit on)
+debiki_prod=> update dw1_tenant_hosts set canonical = 'R' where tenant = '18' and host = 'warming-smile.debiki.net';
+UPDATE 1
+debiki_prod=> insert into dw1_tenant_hosts (tenant, host, canonical, https) values ('18', 'a.warming-smile.org', 'C', 'N');
+INSERT 0 1
+
+}}}
