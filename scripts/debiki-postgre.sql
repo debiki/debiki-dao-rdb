@@ -434,6 +434,11 @@ create unique index DW1_IDSOID_TNT_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
 
 -- DW1_LOGINS isn't named _SESSIONS because I'm not sure a login and logout
 -- defines a session? Cannot a session start before you login?
+-- ***Not needed!?** Instead, add 1) a IDENTITY_ID to DW1_ACTIONS
+-- which references DW1_IDENTITIES (currently DW1_IDS_OPENID),
+-- And add 2) a IS_LOGIN column, if 'T' then the action required a login.
+-- (If IDENTITY_ID is Null then it was a guest login.)
+-- (IP, time etc is already included on the DW1_ACTIONS row.)
 create table DW1_LOGINS(  -- logins and logouts
   SNO varchar(32)            not null,  -- COULD rename to ID
   TENANT varchar(32)         not null,
