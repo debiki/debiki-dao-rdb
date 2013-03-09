@@ -2066,10 +2066,10 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
       val insertIntoActions = """
           insert into DW1_PAGE_ACTIONS(
-            LOGIN, TENANT, PAGE_ID, PAID, TIME,
+            LOGIN, TENANT, PAGE_ID, POST_ID, PAID, TIME,
             TYPE, RELPA, TEXT, MARKUP, WHEERE,
             APPROVAL, AUTO_APPLICATION)
-          values (?, ?, ?, ?, ?,
+          values (?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?)"""
 
@@ -2084,6 +2084,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         loginIdNullForSystem,
         tenantId,
         pageId,
+        action.postId,
         action.id,
         d2ts(action.ctime))
 
@@ -2095,7 +2096,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             _toDbVal(p.approval), NullVarchar))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
-            "Rating", r.postId,
+            "Rating", NullVarchar,
             NullVarchar, NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
           db.batchUpdate("""
@@ -2107,7 +2108,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
              if (e.autoApplied) "A" else NullVarchar
           db.update(insertIntoActions, commonVals:::List(
             "Edit",
-            e.postId, e2n(e.text), e2n(e.newMarkup), NullVarchar,
+            NullVarchar, e2n(e.text), e2n(e.newMarkup), NullVarchar,
             _toDbVal(e.approval), autoAppliedDbVal))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
@@ -2117,17 +2118,17 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
             "Flag" + f.reason,
-            f.postId, e2n(f.details), NullVarchar, NullVarchar,
+            NullVarchar, e2n(f.details), NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
         case d: Delete =>
           db.update(insertIntoActions, commonVals:::List(
             "Del" + (if (d.wholeTree) "Tree" else "Post"),
-            d.postId, e2n(d.reason), NullVarchar, NullVarchar,
+            NullVarchar, e2n(d.reason), NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
         case r: ReviewPostAction =>
           val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
           db.update(insertIntoActions, commonVals:::List(
-            tyype, r.targetId, NullVarchar, NullVarchar, NullVarchar,
+            tyype, NullVarchar, NullVarchar, NullVarchar, NullVarchar,
             _toDbVal(r.approval), NullVarchar))
         case a: PostActionDto =>
           def insertSimpleValue(tyype: String) =

@@ -29,12 +29,13 @@ object RelDbUtil {
 
 
   def ActionSelectListItems =
-    "a.PAID, a.LOGIN, a.TIME, a.TYPE, a.RELPA, " +
+    "a.POST_ID, a.PAID, a.LOGIN, a.TIME, a.TYPE, a.RELPA, " +
      "a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP, " +
      "a.APPROVAL, a.AUTO_APPLICATION"
 
   def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
         : PostActionDtoOld = {
+    val postId = rs.getString("POST_ID")
     val id = rs.getString("PAID")
     val loginSno = {
       // No login/identity/user is stored for the hardcoded system user.
@@ -57,6 +58,10 @@ object RelDbUtil {
     def buildAction(payload: PostActionPayload) =
       PostActionDto(id, time, payload, postId = relpa, loginId = loginSno, newIp = newIp)
 
+    def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
+      target: ${Option(relpa)}, login id: ${Option(loginSno)}"""
+    assErrIf(postId eq null, "DwE5YQ08", s"POST_ID is null, details: $details")
+
     // (This whole match-case will go away when I unify all types
     // into CreatePostAction?)  ...
     val action = typee match {
@@ -67,22 +72,22 @@ object RelDbUtil {
           markup = n2e(markup_?), where = Option(where_?), approval = approval)
       case "Rating" =>
         val tags = ratingTags(id)
-        new Rating(id = id, postId = relpa, ctime = time,
+        new Rating(id = id, postId = postId, ctime = time,
           loginId = loginSno, newIp = newIp, tags = tags)
       case "Edit" =>
-        new Edit(id = id, postId = relpa, ctime = time,
+        new Edit(id = id, postId = postId, ctime = time,
           loginId = loginSno, newIp = newIp, text = n2e(text_?),
           newMarkup = Option(markup_?),
           approval = approval, autoApplied = editAutoApplied)
       case "EditApp" =>
-        new EditApp(id = id, editId = relpa, ctime = time,
+        new EditApp(id = id, editId = relpa, postId = postId, ctime = time,
           loginId = loginSno, newIp = newIp,
           result = n2e(text_?),
           approval = approval)
       case flag if flag startsWith "Flag" =>
         val reasonStr = flag drop 4 // drop "Flag"
         val reason = FlagReason withName reasonStr
-        Flag(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
+        Flag(id = id, postId = postId, loginId = loginSno, newIp = newIp,
           ctime = time, reason = reason, details = n2e(text_?))
       case delete if delete startsWith "Del" =>
         val wholeTree = delete match {
@@ -90,11 +95,11 @@ object RelDbUtil {
           case "DelPost" => false
           case x => assErr("DwE0912k22")
         }
-        Delete(id = id, postId = relpa, loginId = loginSno, newIp = newIp,
+        Delete(id = id, postId = postId, loginId = loginSno, newIp = newIp,
           ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
       case "Aprv" | "Rjct" =>
         assert((typee == "Rjct") == approval.isEmpty)
-        ReviewPostAction(id = id, targetId = relpa, loginId = loginSno, newIp = newIp,
+        ReviewPostAction(id = id, postId = postId, loginId = loginSno, newIp = newIp,
           ctime = time, approval = approval)
       case "CloseTree" => buildAction(PostActionPayload.CloseTree)
       case "CollapsePost" => buildAction(PostActionPayload.CollapsePost)
@@ -102,7 +107,7 @@ object RelDbUtil {
       case "CollapseTree" => buildAction(PostActionPayload.CollapseTree)
       case "Undo" => unimplemented
       case _ =>
-        assErr("DwEY8k3B", "Bad DW1_ACTIONS.TYPE: "+ safed(typee))
+        assErr("DwEY8k3B", s"Bad DW1_ACTIONS.TYPE: `$typee', details: $details")
     }
     action
   }
