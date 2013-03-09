@@ -2066,22 +2066,29 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
       val insertIntoActions = """
           insert into DW1_PAGE_ACTIONS(
-            LOGIN, TENANT, PAGE_ID, POST_ID, PAID, TIME,
+            LOGIN, GUEST_ID, ROLE_ID,
+            TENANT, PAGE_ID, POST_ID, PAID, TIME,
             TYPE, RELPA, TEXT, MARKUP, WHEERE,
             APPROVAL, AUTO_APPLICATION)
-          values (?, ?, ?, ?, ?, ?,
+          values (?, ?, ?,
+            ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?)"""
 
       // There's no login (or identity or user) stored for the system user,
       // so don't try to reference it via DW1_PAGE_ACTIONS.LOGIN_ID.
-      val loginIdNullForSystem =
-        if (action.loginId == SystemUser.Login.id) NullVarchar
-        else action.loginId
+      val (loginIdNullForSystem, roleIdNullForSystem) =
+        if (action.loginId == SystemUser.Login.id) {
+          assErrIf(action.userId != SystemUser.User.id, "DwE57FU1")
+          (NullVarchar, NullVarchar)
+        }
+        else (action.loginId, action.anyRoleId.orNullVarchar)
 
       // Keep in mind that Oracle converts "" to null.
       val commonVals: List[AnyRef] = List(
         loginIdNullForSystem,
+        action.anyGuestId.orNullVarchar,
+        roleIdNullForSystem,
         tenantId,
         pageId,
         action.postId,
