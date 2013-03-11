@@ -990,8 +990,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         pathRanges: PathRanges, limit: Int): (Seq[PostActionOld], People) = {
 
     def buildByPersonQuery(fromIp: Option[String],
-          byIdentity: Option[String], limit: Int)
-          : (String, List[AnyRef]) = {
+          byIdentity: Option[String], limit: Int) = {
 
       val (loginIdsWhereSql, loginIdsWhereValues) =
         if (fromIp isDefined)
@@ -1004,25 +1003,36 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       // all actions by this user, e.g also his/her ratings, to find
       // out if s/he is astroturfing. (See this function's docs in class Dao.)
       val sql = """
-           select a.TENANT, a.PAGE_ID, a.PAID
+           select a.TENANT, a.PAGE_ID, a.PAID, a.POST_ID
            from DW1_LOGINS l inner join DW1_PAGE_ACTIONS a
            on l.TENANT = a.TENANT and l.SNO = a.LOGIN
            where """+ loginIdsWhereSql +"""
            order by l.LOGIN_TIME desc
            limit """+ limit
 
-      (sql, loginIdsWhereValues)
+      // Load things that concerns the selected actions only — not
+      // everything that concerns the related posts.
+      val whereClause = """
+        -- Load actions by login id / folder / page id.
+        a.PAID = actionIds.PAID
+        -- Load actions that affected [an action by login id]
+        -- (e.g. edits, flags, approvals).
+          or (
+          a.TYPE <> 'Post' and -- skip replies
+          a.TYPE <> 'Rating' and -- skip ratings
+          a.RELPA = actionIds.PAID)"""
+
+      (sql, loginIdsWhereValues, whereClause)
     }
 
-    def buildByPathQuery(pathRanges: PathRanges, limit: Int)
-          : (String, List[AnyRef]) = {
+    def buildByPathQuery(pathRanges: PathRanges, limit: Int) = {
       lazy val (pathRangeClauses, pathRangeValues) =
          _pageRangeToSql(pathRanges, "p.")
 
       // Select posts only. Edits etc are implicitly selected,
       // later, when actions that affect the selected posts are selected.
       lazy val foldersAndTreesQuery = """
-        select a.TENANT, a.PAGE_ID, a.PAID
+        select a.TENANT, a.PAGE_ID, a.PAID, a.POST_ID
         from
           DW1_PAGE_ACTIONS a inner join DW1_PAGE_PATHS p
           on a.TENANT = p.TENANT and a.PAGE_ID = p.PAGE_ID
@@ -1036,7 +1046,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       lazy val foldersAndTreesValues = tenantId :: pathRangeValues
 
       lazy val pageIdsQuery = """
-        select a.TENANT, a.PAGE_ID, a.PAID
+        select a.TENANT, a.PAGE_ID, a.PAID, a.POST_ID
         from DW1_PAGE_ACTIONS a
         where a.TENANT = ?
           and a.PAGE_ID in ("""+
@@ -1061,7 +1071,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         }
       }
 
-      (sql, values)
+      // Load everything that concerns the selected posts, so their current
+      // state can be constructed.
+      val whereClause = "a.POST_ID = actionIds.POST_ID"
+
+      (sql, values, whereClause)
     }
 
     val lookupByPerson = fromIp.isDefined || byIdentity.isDefined
@@ -1073,7 +1087,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     if (lookupByPerson) require(fromIp.isDefined ^ byIdentity.isDefined)
     require(0 <= limit)
 
-    val (selectActionIds, values) =
+    val (selectActionIds, values, postIdWhereClause) =
       if (lookupByPerson) buildByPersonQuery(fromIp, byIdentity, limit)
       else if (lookupByPaths) buildByPathQuery(pathRanges, limit)
       else
@@ -1085,22 +1099,14 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     // because they'd match two rows in actionIds: a.PAID would match
     // (because it's your action) and a.RELPA would match (because the action
     // affected an action of yours). ))
-     val sql = """
-      with actionIds as ("""+ selectActionIds +""")
+     val sql = s"""
+      with actionIds as ($selectActionIds)
       select distinct -- se comment above
-         a.PAGE_ID, """+ ActionSelectListItems +"""
+         a.PAGE_ID, $ActionSelectListItems
       from DW1_PAGE_ACTIONS a inner join actionIds
          on a.TENANT = actionIds.TENANT
       and a.PAGE_ID = actionIds.PAGE_ID
-      and (
-        -- Load actions by login id / folder / page id.
-        a.PAID = actionIds.PAID
-        -- Load actions that affected [an action by login id]
-        -- (e.g. edits, flags, approvals).
-        or (
-          a.TYPE <> 'Post' and -- skip replies
-          a.TYPE <> 'Rating' and -- skip ratings
-          a.RELPA = actionIds.PAID))
+      and ($postIdWhereClause)
       order by a.TIME desc"""
 
 
