@@ -44,8 +44,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       require(page.tenantId == tenantId)
       // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
       _createPage(page)
-      val postsWithIds = _insert(page.id, page.actions.posts)
-      val actionsWithIds = page.actions.copy(posts = postsWithIds)
+      val actionDtosWithIds = _insert(page.id, page.actions.actionDtos)
+      val actionsWithIds = page.actions.copy(actionDtos = actionDtosWithIds)
       val newPageMeta = _loadPageMeta(page.id) getOrElse runErr(
         "DwE1RHK5", s"Found no meta for newly created page, id: ${page.id}")
       page.copy(meta = newPageMeta, actions = actionsWithIds)
@@ -2096,11 +2096,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         d2ts(action.ctime))
 
       action match {
-        case p: CreatePostAction =>
-          db.update(insertIntoActions, commonVals:::List(
-            "Post",
-            p.parent, e2n(p.text), e2n(p.markup), e2n(p.where),
-            _toDbVal(p.approval), NullVarchar))
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
             "Rating", NullVarchar,
@@ -2137,18 +2132,23 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           db.update(insertIntoActions, commonVals:::List(
             tyype, NullVarchar, NullVarchar, NullVarchar, NullVarchar,
             _toDbVal(r.approval), NullVarchar))
-        case a: PostActionDto =>
+        case a: PostActionDto[_] =>
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
               tyype, a.postId, NullVarchar, NullVarchar, NullVarchar,
               NullVarchar, NullVarchar))
 
+          val PAP = PostActionPayload
           a.payload match {
-            case PostActionPayload.CloseTree => insertSimpleValue("CloseTree")
-            case PostActionPayload.CollapsePost => insertSimpleValue("CollapsePost")
-            case PostActionPayload.CollapseReplies => insertSimpleValue("CollapseReplies")
-            case PostActionPayload.CollapseTree => insertSimpleValue("CollapseTree")
-            case PostActionPayload.Undo(_) => unimplemented
+            case p: PAP.CreatePost =>
+              db.update(insertIntoActions, commonVals:::List(
+                "Post", p.parentPostId, e2n(p.text), e2n(p.markup), e2n(p.where),
+                _toDbVal(p.approval), NullVarchar))
+            case PAP.CloseTree => insertSimpleValue("CloseTree")
+            case PAP.CollapsePost => insertSimpleValue("CollapsePost")
+            case PAP.CollapseReplies => insertSimpleValue("CollapseReplies")
+            case PAP.CollapseTree => insertSimpleValue("CollapseTree")
+            case PAP.Undo(_) => unimplemented
           }
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")

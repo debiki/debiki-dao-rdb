@@ -66,12 +66,11 @@ object RelDbUtil {
 
     // (This whole match-case will go away when I unify all types
     // into CreatePostAction?)  ...
+    val PAP = PostActionPayload
     val action = typee match {
       case "Post" =>
-        // How repr empty root post parent? ' ' or '-' or '_' or '0'?
-        new CreatePostAction(id = id, parent = relpa, ctime = time,
-          loginId = loginSno, userId = userId, newIp = newIp, text = n2e(text_?),
-          markup = n2e(markup_?), where = Option(where_?), approval = approval)
+        buildAction(PAP.CreatePost(parentPostId = relpa, text = n2e(text_?),
+          markup = n2e(markup_?), where = Option(where_?), approval = approval))
       case "Rating" =>
         val tags = ratingTags(id)
         new Rating(id = id, postId = postId, ctime = time,
