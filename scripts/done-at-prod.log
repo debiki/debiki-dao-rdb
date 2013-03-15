@@ -1266,3 +1266,118 @@ debiki_prod=> insert into dw1_tenant_hosts (tenant, host, canonical, https) valu
 INSERT 0 1
 
 }}}
+{{{ 2013-03-15 Add PAGE_ACTIONS.POST_ID, ROLE_ID, GUEST_ID
+
+$ s/psql-debiki_prod-tunnel.sh 
++ psql -h 127.0.0.1 -p 55432 debiki_prod debiki_prod
+Password for user debiki_prod: 
+psql (9.1.8, server 9.1.3)
+SSL connection (cipher: DHE-RSA-AES256-SHA, bits: 256)
+Type "help" for help.
+
+debiki_prod=> \set AUTOCOMMIT 'off'
+debiki_prod=> \set
+AUTOCOMMIT = 'off'
+PROMPT1 = '%/%R%# '
+PROMPT2 = '%/%R%# '
+PROMPT3 = '>> '
+VERBOSITY = 'default'
+VERSION = 'PostgreSQL 9.1.8 on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3, 64-bit'
+DBNAME = 'debiki_prod'
+USER = 'debiki_prod'
+HOST = '127.0.0.1'
+PORT = '55432'
+ENCODING = 'UTF8'
+debiki_prod=> 
+debiki_prod=>   alter table DW1_PAGE_ACTIONS add column GUEST_ID varchar(32);
+ALTER TABLE
+debiki_prod=>   alter table DW1_PAGE_ACTIONS add column ROLE_ID varchar(32);
+ALTER TABLE
+debiki_prod=>   update DW1_PAGE_ACTIONS a set
+debiki_prod->       GUEST_ID = (case l.ID_TYPE when 'Simple' then l.ID_SNO else null end)
+debiki_prod->     from DW1_LOGINS l where a.TENANT = l.TENANT and a.LOGIN = l.SNO;
+UPDATE 2641
+debiki_prod=>   update DW1_PAGE_ACTIONS a set
+debiki_prod->       ROLE_ID = case l.ID_TYPE when 'OpenID' then i.USR else null end
+debiki_prod->     from DW1_LOGINS l, DW1_IDS_OPENID i
+debiki_prod->       where a.TENANT = l.TENANT and a.LOGIN = l.SNO
+debiki_prod->         and l.TENANT = i.TENANT and l.ID_SNO = i.SNO;
+UPDATE 1998
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> 
+debiki_prod=>   alter table DW1_PAGE_ACTIONS alter column RELPA drop not null;
+ALTER TABLE
+debiki_prod=>   alter table DW1_PAGE_ACTIONS add column POST_ID varchar(32);
+ALTER TABLE
+debiki_prod=>   update DW1_PAGE_ACTIONS set POST_ID = RELPA where TYPE in (
+debiki_prod(>     'Edit', 'Aprv', 'Rjct', 'Rating',
+debiki_prod(>     'CloseTree', 'CollapsePost', 'CollapseTree', 'CollapseReplies',
+debiki_prod(>     'DelPost', 'DelTree',
+debiki_prod(>     'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther');
+UPDATE 1497
+debiki_prod=>   update DW1_PAGE_ACTIONS set POST_ID = PAID where TYPE in ('Post');
+UPDATE 561
+debiki_prod=>   update DW1_PAGE_ACTIONS a set POST_ID = (
+debiki_prod(>     select RELPA from DW1_PAGE_ACTIONS b
+debiki_prod(>     where a.TENANT = b.TENANT and a.PAGE_ID = b.PAGE_ID
+debiki_prod(>       and a.RELPA = b.PAID and a.TYPE = 'EditApp' and b.TYPE = 'Edit')
+debiki_prod->     where a.TYPE = 'EditApp';
+UPDATE 585
+debiki_prod=>   alter table DW1_PAGE_ACTIONS alter column POST_ID set not null;
+ALTER TABLE
+debiki_prod=>   select * from DW1_PAGE_ACTIONS a left join DW1_PAGE_ACTIONS b
+debiki_prod->   on a.TENANT = b.TENANT and a.PAGE_ID = b.PAGE_ID
+debiki_prod-> ^C
+debiki_prod=> commit;
+COMMIT
+debiki_prod=>   alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS__R__GUESTS  -- ix DW1_PGAS_GUESTID
+debiki_prod->       foreign key (GUEST_ID)
+debiki_prod->       references DW1_IDS_SIMPLE (SNO) deferrable;
+ALTER TABLE
+debiki_prod=>   alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS__R__ROLES  -- ix DW1_PGAS_TNT_ROLEID
+debiki_prod->       foreign key (TENANT, ROLE_ID)
+debiki_prod->       references DW1_USERS (TENANT, SNO) deferrable;
+ALTER TABLE
+debiki_prod=>  alter table DW1_PAGE_ACTIONS add
+debiki_prod->  constraint DW1_PGAS_LOGIN_GUEST_ROLE__C check(
+debiki_prod(>     (LOGIN is null and GUEST_ID is null and ROLE_ID is null) -- it's the system user
+debiki_prod(>      or (LOGIN is not null and (GUEST_ID is null) <> (ROLE_ID is null)));
+ALTER TABLE
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> create index DW1_PGAS_GUESTID on DW1_PAGE_ACTIONS(GUEST_ID); -- because of FK
+CREATE INDEX
+debiki_prod=> create index DW1_PGAS_TNT_GUESTID on DW1_PAGE_ACTIONS(TENANT, GUEST_ID);
+CREATE INDEX
+debiki_prod=> create index DW1_PGAS_TNT_ROLEID on DW1_PAGE_ACTIONS(TENANT, ROLE_ID);
+CREATE INDEX
+debiki_prod=> create index DW1_PGAS_TENANT_PAGE_POST on DW1_PAGE_ACTIONS(TENANT, PAGE_ID, POST_ID);
+CREATE INDEX
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> \q
+
+}}}
+{{{ Harmless TODO: 2013-03-09 Introducing DW1_PAGE_ACTIONS.POST_ID
+
+In prod db, this is a bad row: a DelPost that deletes an EditApp not a Post:
+
+select * from dw1_page_actions a left join dw1_page_actions b on a.tenant = b.tenant and a.page_id = b.page_id and a.relpa = b.paid where a.type in ('DelPost', 'DelTree', 'Aprv', 'Rjct') and b.type <> 'Post';
+-->
+ page |    paid    | login |          time           |  type   |   relpa    | text | markup | wheere | new_ip | tenant |  page_id   | approval | auto_application | page |    paid    | login |          time           |  type   |   relpa    |                                   text                                    | markup | wheere | new_ip | tenant |  page_id   | approval | auto_application 
+------+------------+-------+-------------------------+---------+------------+------+--------+--------+--------+--------+------------+----------+------------------+------+------------+-------+-------------------------+---------+------------+---------------------------------------------------------------------------+--------+--------+--------+--------+------------+----------+------------------
+ 110  | 1kkksp0q34 | 270   | 2011-11-06 16:43:03.226 | DelPost | j8n7zrg89j |      |        |        |        | 2      | uhwg7g7pb5 |          |                  | 110  | j8n7zrg89j | 270   | 2011-11-06 16:42:27.322 | EditApp | 7wmy1wfsm2 | Hur tror du det skulle gå, om ni använde rolighetsbaserad utveckling?  \r+|        |        |        | 2      | uhwg7g7pb5 | W        | 
+      |            |       |                         |         |            |      |        |        |        |        |            |          |                  |      |            |       |                         |         |            |   (Jag arbetar ju ensam och slipper konflikter och förvirring)            |        |        |        |        |            |          | 
+(1 row)
+
+I'll need to delete it?
+
+In dev db, there are *many* such DelPost:s -- I'll simply delete them all.
+
+
+}}}
+
+(See harmless TODO above)

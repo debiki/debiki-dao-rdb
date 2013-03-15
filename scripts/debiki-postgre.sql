@@ -661,44 +661,10 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   LOGIN varchar(32),  -- COULD rename to LOGIN_ID
   ROLE_ID varchar(32),
   GUEST_ID varchar(32),
- ------- todo prod done dev,test:
-  alter table DW1_PAGE_ACTIONS add column GUEST_ID varchar(32);
-  alter table DW1_PAGE_ACTIONS add column ROLE_ID varchar(32);
-  update DW1_PAGE_ACTIONS a set
-      GUEST_ID = (case l.ID_TYPE when 'Simple' then l.ID_SNO else null end)
-    from DW1_LOGINS l where a.TENANT = l.TENANT and a.LOGIN = l.SNO;
-
-  update DW1_PAGE_ACTIONS a set
-      ROLE_ID = case l.ID_TYPE when 'OpenID' then i.USR else null end
-    from DW1_LOGINS l, DW1_IDS_OPENID i
-      where a.TENANT = l.TENANT and a.LOGIN = l.SNO
-        and l.TENANT = i.TENANT and l.ID_SNO = i.SNO;
-
-  -------
   TIME timestamp       not null,  -- COULD rename to CTIME
   TYPE varchar(20)     not null,
   RELPA varchar(32),  -- related page action, COULD rename to TARGET_ACTION_ID
                        -- and Null would mean the target is POST_ID.
-  ------- todo prod, done dev,test:
-  alter table DW1_PAGE_ACTIONS alter column RELPA drop not null;
-  alter table DW1_PAGE_ACTIONS add column POST_ID varchar(32);
-  update DW1_PAGE_ACTIONS set POST_ID = RELPA where TYPE in (
-    'Edit', 'Aprv', 'Rjct', 'Rating',
-    'CloseTree', 'CollapsePost', 'CollapseTree', 'CollapseReplies',
-    'DelPost', 'DelTree',
-    'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther');
-  update DW1_PAGE_ACTIONS set POST_ID = PAID where TYPE in ('Post');
-  update DW1_PAGE_ACTIONS a set POST_ID = (
-    select RELPA from DW1_PAGE_ACTIONS b
-    where a.TENANT = b.TENANT and a.PAGE_ID = b.PAGE_ID
-      and a.RELPA = b.PAID and a.TYPE = 'EditApp' and b.TYPE = 'Edit')
-    where a.TYPE = 'EditApp';
-  alter table DW1_PAGE_ACTIONS alter column POST_ID set not null;
-
-  select * from DW1_PAGE_ACTIONS a left join DW1_PAGE_ACTIONS b
-  on a.TENANT = b.TENANT and a.PAGE_ID = b.PAGE_ID
-    and a.RELPA = b.PAID where a.TYPE = 'EditApp' and b.TYPE = 'Edit';
-  -------
   -- (consider this carefully before doing anything!)
   -- The most recent action applied to RELPA,
   -- before this action. A unique key on -version ensures all actions
@@ -741,16 +707,12 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS__R__LOGINS  -- ix DW1_PACTIONS_LOGIN
       foreign key (LOGIN)
       references DW1_LOGINS (SNO) deferrable,
- ------- todo prod done dev,test:
-  alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS__R__GUESTS  -- ix DW1_PGAS_GUESTID
       foreign key (GUEST_ID)
       references DW1_IDS_SIMPLE (SNO) deferrable,
-  alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS__R__ROLES  -- ix DW1_PGAS_TNT_ROLEID
       foreign key (TENANT, ROLE_ID)
       references DW1_USERS (TENANT, SNO) deferrable,
-  -------
   constraint DW1_PACTIONS__R__PAGES -- deprecated. Ix DW1_PACTIONS_PAGE_PAID__P
       foreign key (PAGE)
       references DW1_PAGES (SNO) deferrable,
@@ -776,12 +738,9 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- A body, title or config post is always of type 'Post'.
   constraint DW1_PGAS_MAGIC_ID_TYPES__C
       check (TYPE = case when PAID in ('0t', '0b', '0c') then 'Post' else TYPE end),
- ------- todo prod done dev,test:
- alter table DW1_PAGE_ACTIONS add
  constraint DW1_PGAS_LOGIN_GUEST_ROLE__C check(
     (LOGIN is null and GUEST_ID is null and ROLE_ID is null) -- it's the system user
      or (LOGIN is not null and (GUEST_ID is null) <> (ROLE_ID is null))),
- -------
   constraint DW1_PGAS_APPROVAL__C_IN
       check (APPROVAL in ('P', 'W', 'A', 'M')),
   -- Approval rows must have an approval reason defined,
@@ -863,13 +822,11 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_ACTIONPATH__C
 -- updated at the end of the session.
 create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
- ------- todo prod, done dev,test:
 create index DW1_PGAS_GUESTID on DW1_PAGE_ACTIONS(GUEST_ID); -- because of FK
 create index DW1_PGAS_TNT_GUESTID on DW1_PAGE_ACTIONS(TENANT, GUEST_ID);
 create index DW1_PGAS_TNT_ROLEID on DW1_PAGE_ACTIONS(TENANT, ROLE_ID);
 
 create index DW1_PGAS_TENANT_PAGE_POST on DW1_PAGE_ACTIONS(TENANT, PAGE_ID, POST_ID);
--------
 
 
 -- COULD rename to DW1_ACTION_RATINGS.
