@@ -967,11 +967,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       where a.TENANT = ?
         and a.PAGE_ID in ("""+ makeInListFor(pageIds) +""")
         and (
-          a.PAID in ("""+ bodyOrTitle +""")
-          or (
-            a.RELPA in ("""+ bodyOrTitle +""")
-            and a.type in (
-              'Edit', 'EditApp', 'Rjct', 'Aprv', 'DelPost', 'DelTree')))"""
+          a.POST_ID in ("""+ bodyOrTitle +""") and
+          a.type in (
+              'Post', 'Edit', 'EditApp', 'Rjct', 'Aprv', 'DelPost', 'DelTree'))"""
 
     val values = tenantId :: pageIds.toList
 
