@@ -823,8 +823,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         : Seq[(User, Seq[String])] = {
 
     // For now, simply list all users (guests union roles).
-    val query = i"""
-      select
+    val query =
+      /* select  // bug! doesn't filter on tenant id!
         '-' || g.SNO as u_id,
         g.NAME u_disp_name,
         g.EMAIL u_email,
@@ -838,8 +838,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         DW1_IDS_SIMPLE g left join DW1_IDS_SIMPLE_EMAIL e
       on
         g.EMAIL = e.EMAIL and e.TENANT = ?
-      union
-      select
+      union */
+       i"""select
         ${_UserSelectListItems},
         i.OID_ENDPOINT i_endpoint
       from
@@ -850,7 +850,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         u.TENANT = ?
       """
 
-    val values = List(siteId, siteId)
+    val values = List(siteId) //, siteId)
     val result: mut.Map[String, (User, List[String])] = mut.Map.empty
 
     db.queryAtnms(query, values, rs => {
