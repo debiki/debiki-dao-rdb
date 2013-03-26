@@ -247,36 +247,39 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         var createdNewIdty = false
         for (i <- 1 to 2 if idtyId.isEmpty) {
           db.query("""
-            select i.SNO, e.EMAIL_NOTFS from DW1_IDS_SIMPLE i
+            select g.ID, e.EMAIL_NOTFS from DW1_GUESTS g
               left join DW1_IDS_SIMPLE_EMAIL e
-              on i.EMAIL = e.EMAIL and e.VERSION = 'C'
-            where i.NAME = ? and i.EMAIL = ? and i.LOCATION = ? and
-                  i.WEBSITE = ?
-            """,
-            List(e2d(idtySmpl.name), e2d(idtySmpl.email),
+              on g.EMAIL_ADDR = e.EMAIL and e.VERSION = 'C'
+            where g.SITE_ID = ?
+              and g.NAME = ?
+              and g.EMAIL_ADDR = ?
+              and g.LOCATION = ?
+              and g.URL = ?
+                   """,
+            List(siteId, e2d(idtySmpl.name), e2d(idtySmpl.email),
               e2d(idtySmpl.location), e2d(idtySmpl.website)),
             rs => {
               if (rs.next) {
-                idtyId = rs.getString("SNO")
+                idtyId = rs.getString("ID")
                 emailNotfsStr = rs.getString("EMAIL_NOTFS")
               }
             })
           if (idtyId isEmpty) {
             // Create simple user info.
-            // There is a unique constraint on NAME, EMAIL, LOCATION,
-            // WEBSITE, so this insert might fail (if another thread does
+            // There is a unique constraint on SITE_ID, NAME, EMAIL, LOCATION, URL,
+            // so this insert might fail (if another thread does
             // the insert, just before). Should it fail, the above `select'
             // is run again and finds the row inserted by the other thread.
             // Could avoid logging any error though!
             createdNewIdty = true
             db.update("""
-              insert into DW1_IDS_SIMPLE(
-                  SNO, NAME, EMAIL, LOCATION, WEBSITE)
-              values (nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
-              List(idtySmpl.name, e2d(idtySmpl.email),
+              insert into DW1_GUESTS(
+                  SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
+              values (?, nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
+              List(siteId, idtySmpl.name, e2d(idtySmpl.email),
                 e2d(idtySmpl.location), e2d(idtySmpl.website)))
-            // COULD fix: returning SNO into ?""", saves 1 roundtrip.
-            // Loop one more lap to read SNO.
+            // (Could fix: `returning ID into ?`, saves 1 roundtrip.)
+            // Loop one more lap to read ID.
           }
         }
         assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
@@ -693,14 +696,16 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         with logins as ("""+ selectLoginIds +"""),
         identities as (
             -- Simple identities
-            select ID_TYPE, s.SNO I_ID, '' I_USR,
-                   s.NAME I_NAME, s.EMAIL I_EMAIL,
+            select ID_TYPE, g.ID I_ID, '' I_USR,
+                   g.NAME I_NAME, g.EMAIL_ADDR I_EMAIL,
                    e.EMAIL_NOTFS I_EMAIL_NOTFS,
-                   s.LOCATION I_WHERE, s.WEBSITE I_WEBSITE
-            from logins, DW1_IDS_SIMPLE s
+                   g.LOCATION I_WHERE, g.URL I_WEBSITE
+            from logins, DW1_GUESTS g
               left join DW1_IDS_SIMPLE_EMAIL e
-              on s.EMAIL = e.EMAIL and e.VERSION = 'C'
-            where s.SNO = logins.ID_SNO and logins.ID_TYPE = 'Simple'
+              on g.EMAIL_ADDR = e.EMAIL and e.VERSION = 'C'
+            where g.SITE_ID = ?
+              and g.ID = logins.ID_SNO
+              and logins.ID_TYPE = 'Simple'
             union
             -- OpenID
             select ID_TYPE, oi.SNO I_ID, oi.USR,
@@ -709,6 +714,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
                    oi.COUNTRY I_WHERE, cast('' as varchar(100)) I_WEBSITE
             from DW1_IDS_OPENID oi, logins
             where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID'
+              and oi.TENANT = ?
             -- union
             -- Twitter tables
             -- Facebook tables
@@ -732,7 +738,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         from identities i left join DW1_USERS u on
               u.SNO = i.I_USR and
               u.TENANT = ?
-        """, args ::: List(tenantId), rs => {
+        """, args ::: List(siteId, siteId, siteId), rs => {
       var usersById = mut.HashMap[String, User]()
       var identities = List[Identity]()
       while (rs.next) {
@@ -824,22 +830,21 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     // For now, simply list all users (guests union roles).
     val query =
-      /* select  // bug! doesn't filter on tenant id!
-        '-' || g.SNO as u_id,
+      i"""select
+        '-' || g.ID as u_id,
         g.NAME u_disp_name,
-        g.EMAIL u_email,
+        g.EMAIL_ADDR u_email,
         e.EMAIL_NOTFS u_email_notfs,
         g.LOCATION u_country,
-        g.WEBSITE u_website,
+        g.URL u_website,
         'F' u_superadmin,
         'F' u_is_owner,
         'Guest' i_endpoint
-      from
-        DW1_IDS_SIMPLE g left join DW1_IDS_SIMPLE_EMAIL e
-      on
-        g.EMAIL = e.EMAIL and e.TENANT = ?
-      union */
-       i"""select
+      from DW1_GUESTS g left join DW1_IDS_SIMPLE_EMAIL e
+      on g.EMAIL_ADDR = e.EMAIL and g.SITE_ID = e.TENANT
+      where g.SITE_ID = ?
+      union
+      select
         ${_UserSelectListItems},
         i.OID_ENDPOINT i_endpoint
       from
@@ -850,7 +855,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         u.TENANT = ?
       """
 
-    val values = List(siteId) //, siteId)
+    val values = List(siteId, siteId)
     val result: mut.Map[String, (User, List[String])] = mut.Map.empty
 
     db.queryAtnms(query, values, rs => {

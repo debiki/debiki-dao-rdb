@@ -48,15 +48,16 @@ class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao {
       // Use "u_*" select list item names, so works with _User(result-set).
       val q = """
          select
-            e.TENANT, '-'||s.SNO u_id, s.NAME u_disp_name,
-            s.EMAIL u_email, e.EMAIL_NOTFS u_email_notfs, s.LOCATION u_country,
-            s.WEBSITE u_website, 'F' u_superadmin, 'F' u_is_owner
+            e.TENANT, '-'||g.ID u_id, g.NAME u_disp_name,
+            g.EMAIL_ADDR u_email, e.EMAIL_NOTFS u_email_notfs, g.LOCATION u_country,
+            g.URL u_website, 'F' u_superadmin, 'F' u_is_owner
          from
-           DW1_IDS_SIMPLE s left join DW1_IDS_SIMPLE_EMAIL e
-           on s.EMAIL = e.EMAIL and e.TENANT = ?
+           DW1_GUESTS g left join DW1_IDS_SIMPLE_EMAIL e
+           on g.SITE_ID = e.TENANT and g.EMAIL_ADDR = e.EMAIL
          where
-           s.SNO in (""" + inList +")"
-      // An unauthenticated user id starts with '-', drop it.
+           g.SITE_ID = ? and
+           g.ID in (""" + inList +")"
+      // A guest user id starts with '-', drop it.
       val vals = tenantId :: idsUnau.map(_.drop(1))
       (q, vals)
     }
@@ -577,7 +578,7 @@ class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao {
       delete from DW1_PAGES
       delete from DW1_IDS_SIMPLE_EMAIL
       delete from DW1_LOGINS
-      delete from DW1_IDS_SIMPLE
+      delete from DW1_GUESTS
       delete from DW1_IDS_OPENID
       delete from DW1_QUOTAS
       delete from DW1_USERS

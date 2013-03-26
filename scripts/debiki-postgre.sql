@@ -347,14 +347,10 @@ alter table DW1_TENANTS
 create sequence DW1_IDS_SNO start with 10;
 
 -- Simple login identities (no password needed).
--- (Could rename to DW1_IDS_UNAU? (unauthenticated identities)
--- (No, rename to DW1_GUESTS? That's better since means both ID and "user"?)
--- Would that make sense? since a "dummy" user is created anyway (read on).)
 -- When loaded from database, a dummy User is created, with its id
 -- set to -SNO (i.e. "-" + SNO). Users with ids starting with "-"
 -- are thus unauthenticated users (and don't exist in DW1_USERS).
--- If value absent, '-' is inserted -- but not '', since Oracle converts
--- '' to null, but I think it's easier to write SQL queries if I don't
+-- If value absent, '-' is inserted — it's easier (?) to write queries if I don't
 -- have to take all possible combinations of null values into account.
 create table DW1_IDS_SIMPLE(  -- abbreviated IDSMPL
   SNO varchar(32)         not null,  -- COULD rename to ID
@@ -367,6 +363,29 @@ create table DW1_IDS_SIMPLE(  -- abbreviated IDSMPL
   constraint DW1_IDSSIMPLE__U unique (NAME, EMAIL, LOCATION, WEBSITE),
   constraint DW1_IDSSIMPLE_SNO_NOT_0__C check (SNO <> '0')
 );
+
+-- todo prod done test,dev:
+create table DW1_GUESTS(
+  SITE_ID varchar(32) not null,
+  ID varchar(32) not null,
+  NAME varchar(100) not null,
+  -- COULD require like '%@%.%' and update all existing data ... hmm.
+  EMAIL_ADDR varchar(100) not null,
+  LOCATION varchar(100) not null,
+  URL varchar(100) not null,
+  constraint DW1_GUESTS_SITE_ID__P primary key (SITE_ID, ID),
+  constraint DW1_GUESTS__U unique (SITE_ID, NAME, EMAIL_ADDR, LOCATION, URL)
+);
+
+-- todo prod done test,dev:
+insert into DW1_GUESTS(SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
+  select distinct l.TENANT, i.SNO, i.NAME, i.EMAIL, i.LOCATION, i.WEBSITE
+  from DW1_LOGINS l left join DW1_IDS_SIMPLE i
+  on l.ID_SNO = i.SNO
+  where l.ID_TYPE = 'Simple';
+
+-- todo prod done test,dev: (do this later, after some week?)
+-- drop table DW1_IDS_SIMPLE;
 
 -- (Uses sequence number from DW1_IDS_SNO.)
 
@@ -494,7 +513,10 @@ create sequence DW1_LOGINS_SNO start with 10;
 
 
 
--- (Could rename to DW1_USERS_UNAU_EMAIL?)
+-- (Could rename to DW1_GUEST_EMAIL_PREFS?)
+-- Email preferences for guest users, per email address.
+-- (Not per guest user name, email, location, url — but per *email address* only.)
+--
 create table DW1_IDS_SIMPLE_EMAIL(  -- abbreviated IDSMPLEML
   TENANT varchar(32) not null,
   -- The user (session) that added this row.
@@ -709,9 +731,13 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS__R__LOGINS  -- ix DW1_PACTIONS_LOGIN
       foreign key (LOGIN)
       references DW1_LOGINS (SNO) deferrable,
-  constraint DW1_PGAS__R__GUESTS  -- ix DW1_PGAS_GUESTID
-      foreign key (GUEST_ID)
-      references DW1_IDS_SIMPLE (SNO) deferrable,
+ ------ todo prod done test,dev:
+  alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS__R__GUESTS;
+  alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS__R__GUESTS  -- ix DW1_PGAS_TNT_GUESTID
+      foreign key (TENANT, GUEST_ID)
+      references DW1_GUESTS (SITE_ID, ID) deferrable,
+ ------
   constraint DW1_PGAS__R__ROLES  -- ix DW1_PGAS_TNT_ROLEID
       foreign key (TENANT, ROLE_ID)
       references DW1_USERS (TENANT, SNO) deferrable,
@@ -824,7 +850,9 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_ACTIONPATH__C
 -- updated at the end of the session.
 create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
-create index DW1_PGAS_GUESTID on DW1_PAGE_ACTIONS(GUEST_ID); -- because of FK
+----- todo prod done test,dev:
+drop index DW1_PGAS_GUESTID;
+------
 create index DW1_PGAS_TNT_GUESTID on DW1_PAGE_ACTIONS(TENANT, GUEST_ID);
 create index DW1_PGAS_TNT_ROLEID on DW1_PAGE_ACTIONS(TENANT, ROLE_ID);
 
@@ -845,16 +873,6 @@ create table DW1_PAGE_RATINGS(  -- abbreviated ARTS? PRATINGS deprctd.
       foreign key (TENANT, PAGE_ID, PAID)
       references DW1_PAGE_ACTIONS(TENANT, PAGE_ID, PAID) deferrable
 );
-
-
--- COULD create, so it'd be possible to link a Role from an Action,
--- e.g. to implement a ChangeAuthor action.
--- create table DW1_ACTIONS_TO_USERS(
---   PAGE_ID varchar(32) not null,
---   ACTION_ID varchar(32) not null,
---   IDTY_UNAU_ID varchar(32), -- FK to DW1_IDS_UNAU (DW1_IDS_SIMPLE currently)
---   ROLE_ID varchar(32))  -- FK to DW1_ROLES  (DW1_USERS currently)
--- and either IDTY_UNAU_ID or ROLE_ID is specified.
 
 
 
@@ -971,11 +989,12 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   constraint DW1_NTFPGA__R__RLS  -- e.g. ix DW1_NTFPGA_TNT_ROLE_CTIME
       foreign key (TENANT, RCPT_ROLE_ID)
       references DW1_USERS (TENANT, SNO) deferrable,
-  -- Not possible, because DW1_IDS_SIMPLE has no TENANT column, should I add one?
-  -- constraint DW1_NTFPGA__R__IDSSMPL  -- e.g. ix DW1_NTFPGA_TNT_IDSMPL_CTIME
-  --    foreign key (TENANT, RCPT_ID_SIMPLE)
-  --    references DW1_IDS_SIMPLE (TENANT, SNO) deferrable,
-  --
+  --------
+  -- todo prod done test,dev: alter table DW1_NOTFS_PAGE_ACTIONS add
+  constraint DW1_NTFPGA__R__GUESTS  -- e.g. ix DW1_NTFPGA_TNT_IDSMPL_CTIME
+      foreign key (TENANT, RCPT_ID_SIMPLE)
+      references DW1_GUESTS (SITE_ID, ID) deferrable,
+  --------
   -- Ensure exactly one of ROLE and ID_SIMPLE is specified.
   constraint DW1_NTFPGA_IDSMPL_ROLE__C check (
       (RCPT_ROLE_ID is null) <> (RCPT_ID_SIMPLE is null)),
