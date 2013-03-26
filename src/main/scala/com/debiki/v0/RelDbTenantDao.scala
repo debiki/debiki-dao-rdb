@@ -32,7 +32,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   def db = systemDaoSpi.db
 
 
-  def createPage(pagePerhapsId: PageStuff): PageStuff = {
+  def createPage(pagePerhapsId: Page): Page = {
     var page = if (pagePerhapsId.hasIdAssigned) {
       // Fine, a valid new page id has been assigned somewhere else?
       pagePerhapsId
@@ -44,11 +44,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       require(page.tenantId == tenantId)
       // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
       _createPage(page)
-      val actionDtosWithIds = _insert(page.id, page.actions.actionDtos)
-      val actionsWithIds = page.actions.copy(actionDtos = actionDtosWithIds)
+      val actionDtosWithIds = _insert(page.id, page.parts.actionDtos)
+      val actionsWithIds = page.parts.copy(actionDtos = actionDtosWithIds)
       val newPageMeta = _loadPageMeta(page.id) getOrElse runErr(
         "DwE1RHK5", s"Found no meta for newly created page, id: ${page.id}")
-      page.copy(meta = newPageMeta, actions = actionsWithIds)
+      page.copy(meta = newPageMeta, parts = actionsWithIds)
     }
   }
 
@@ -1796,7 +1796,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _createPage[T](page: PageStuff)(implicit conn: js.Connection) {
+  private def _createPage[T](page: Page)(implicit conn: js.Connection) {
     require(page.meta.creationDati == page.meta.modDati)
     page.meta.pubDati.foreach(publDati =>
       require(page.meta.creationDati.getTime <= publDati.getTime))
