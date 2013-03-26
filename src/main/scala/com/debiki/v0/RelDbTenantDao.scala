@@ -879,14 +879,14 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   override def loadPage(pageGuid: String, tenantId: Option[String] = None)
-        : Option[Debate] =
+        : Option[PageParts] =
     _loadPageAnyTenant(
       tenantId = tenantId getOrElse this.tenantId,
       pageId = pageGuid)
 
 
   private def _loadPageAnyTenant(tenantId: String, pageId: String)
-        : Option[Debate] = {
+        : Option[PageParts] = {
     /*
     db.transaction { implicit connection =>
       // BUG: There might be a NPE / None.get because of phantom reads.
@@ -949,18 +949,18 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         actions ::= action  // this reverses above `order by TIME desc'
       }
 
-      Some(Page.fromActions(
+      Some(PageParts.fromActions(
           pageId, People(logins, identities, users), actions))
     })
   }
 
 
-  def loadPageBodiesTitles(pageIds: Seq[String]): Map[String, Debate] = {
+  def loadPageBodiesTitles(pageIds: Seq[String]): Map[String, PageParts] = {
 
     if (pageIds isEmpty)
       return Map.empty
 
-    val bodyOrTitle = "'"+ Page.BodyId +"', '"+ Page.TitleId +"'"
+    val bodyOrTitle = "'"+ PageParts.BodyId +"', '"+ PageParts.TitleId +"'"
     val sql = """
       select a.PAGE_ID, """+ ActionSelectListItems +"""
       from DW1_PAGE_ACTIONS a
@@ -975,11 +975,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     val (
       people: People,
-      pagesById: mut.Map[String, Debate],
+      pagesById: mut.Map[String, PageParts],
       pageIdsAndActions: List[(String, PostActionDtoOld)]) =
         _loadPeoplePagesActionsNoRatingTags(sql, values)
 
-    Map[String, Debate](pagesById.toList: _*)
+    Map[String, PageParts](pagesById.toList: _*)
   }
 
 
@@ -1110,7 +1110,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     val (
       people: People,
-      pagesById: mut.Map[String, Debate],
+      pagesById: mut.Map[String, PageParts],
       pageIdsAndActions: List[(String, PostActionDtoOld)]) =
         _loadPeoplePagesActionsNoRatingTags(sql, values)
 
@@ -1139,8 +1139,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
    */
   private def _loadPeoplePagesActionsNoRatingTags(
         sql: String, values: List[AnyRef])
-        : (People, mut.Map[String, Debate], List[(String, PostActionDtoOld)]) = {
-    val pagesById = mut.Map[String, Debate]()
+        : (People, mut.Map[String, PageParts], List[(String, PostActionDtoOld)]) = {
+    val pagesById = mut.Map[String, PageParts]()
     var pageIdsAndActions = List[(String, PostActionDtoOld)]()
 
     val people = db.withConnection { implicit connection =>
@@ -1149,7 +1149,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           val pageId = rs.getString("PAGE_ID")
           // Skip rating tags, for now: (as stated in the docs in Dao.scala)
           val action = _Action(rs, ratingTags = Map.empty.withDefaultValue(Nil))
-          val page = pagesById.getOrElseUpdate(pageId, Debate(pageId))
+          val page = pagesById.getOrElseUpdate(pageId, PageParts(pageId))
           val pageWithAction = page ++ (action::Nil)
           pagesById(pageId) = pageWithAction
           pageIdsAndActions ::= pageId -> action
@@ -2037,7 +2037,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   private def _insert[T <: PostActionDtoOld](pageId: String, actions: List[T])
         (implicit conn: js.Connection): List[T] = {
 
-    val numNewReplies = actions.filter(Page.isReply _).size
+    val numNewReplies = actions.filter(PageParts.isReply _).size
 
     val nextNewReplyId =
       if (numNewReplies == 0) -1
@@ -2059,7 +2059,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         nextNewIdAfterwards - numNewReplies
       }
 
-    val actionsWithIds = Page.assignIdsTo(actions, nextNewReplyId)
+    val actionsWithIds = PageParts.assignIdsTo(actions, nextNewReplyId)
     for (action <- actionsWithIds) {
       // Could optimize:  (but really *not* important!)
       // Use a CallableStatement and `insert into ... returning ...'
