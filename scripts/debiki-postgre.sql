@@ -106,8 +106,9 @@ DW1_PAGES -> DW1_PAGE_META
 
 TENANT.ID >= 3 chars?
 
-DW1_IDS_SIMPLE -> DW1_GUESTS
 DW1_IDS_OPENID -> DW1_IDENTITIES
+
+CDATI, PUBL_DATI etc => CREATED_AT, PUBLISHED_AT, etc
 
 Rename constraints to DW1_TENANTS: ... no, DW1_WEBSITES
     DW1_TNT_ID__C_NE DW1_TNT_ID__C_N0 DW1_TNT_NAME__C_NE
@@ -128,9 +129,10 @@ drop table DW1_EMAILS_OUT;
 drop table DW1_PAGE_RATINGS;
 drop table DW1_PAGE_ACTIONS;
 drop table DW1_PATHS;
+drop table DW1_POSTS;
 drop table DW1_PAGES;
 drop table DW1_LOGINS;
-drop table DW1_IDS_SIMPLE;
+drop table DW1_IDS_GUESTS;
 drop table DW1_IDS_OPENID;
 drop table DW1_USERS;
 drop table DW1_TENANT_HOSTS;
@@ -668,6 +670,104 @@ begin
 end;
 $$ language plpgsql;
 
+
+
+----- Posts
+
+-- This table is used when: 1) Rendering pages and posts (not yet though).
+-- 2) Showing site wide activity to admins and moderators.
+--
+-- A page consists of many posts: the title, body, and config post. Each
+-- comment is also a "post". A post is built by actions; they're stored in
+-- DW1_PAGE_ACTIONS. If you take all actions for a certain post, and apply
+-- them in order, then the end result should be the data in DW1_POSTS.
+-- By reversing the actions for a post, and applying them in
+-- reversed order to the data in DW1_POSTS, one can *undo* the actions.
+-- Fore info on each field in DW1_POSTS, see DW1_PAGE_ACTIONS, for now.
+-- The data in DW1_POSTS contains everything needed to render a post (one
+-- don't need to query DW1_ACTIONS for anything).
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- todo prod,dev done test:
+
+create table DW1_POSTS(
+  SITE_ID varchar(32) not null,
+  PAGE_ID varchar(32) not null,
+  POST_ID varchar(32) not null,
+  PARENT_POST_ID varchar(32) not null,
+  MARKUP varchar(30),
+  WHEERE varchar(150),
+  CREATED_AT timestamp not null,
+  APPROVED_AT timestamp,
+  EDITED_AT timestamp,
+  COLLAPSED varchar(20), -- Same as DW1_PAGE_ACTIONS.TYPE when like 'Collapse%'
+  DELETED_AT timestamp,
+
+  -- These PENDING_... are helpful when listing recent activity, and when
+  -- rendering pages, so a little icon can be shown if there are pending
+  -- edit suggestions, and if many people has suggested that a comment be
+  -- moved to another thread (show an airplane icon? :-)) for example.
+
+  -- ! Change to *counts* instead?
+
+  PENDING_EDIT_APP_ID varchar(32),
+  PENDING_EDIT_SUGGESTION_ID varchar(32),
+  PENDING_MOVE_ID varchar(32),
+  PENDING_COLLAPSE_ID varchar(32),
+  PENDING_DELETE_ID varchar(32),
+  PENDING_FLAG_ID varchar(32),
+  PENDING_FLAG_TYPE varchar(20), -- Same as DW1_PAGE_ACTIONS.TYPE when like Flag% ?
+
+  AUTHOR_NAME varchar(100),
+  AUTHOR_ID varchar(32),
+  LAST_EDITOR_NAME varchar(100),
+  LAST_EDITOR_ID varchar(32),
+
+  -- Will be an array of tuples?: [(flag, count), (flag2, count2), ...]
+  FLAGS varchar(100),
+  RATINGS varchar(100),
+  TEXT text,
+
+  constraint DW1_POSTS_SITE_PAGE_POST__P primary key (SITE_ID, PAGE_ID, POST_ID),
+  constraint DW1_POSTS_COLLAPSED__C_IN check (COLLAPSED in ('P', 'R', 'A'))
+);
+
+
+-- Flags are important — we first show all posts with unhandled flags...
+create index DW1_POSTS_PENDING_FLAG on DW1_POSTS (SITE_ID, PAGE_ID, POST_ID)
+  where PENDING_FLAG_ID is not null;
+
+-- ...Then all completely new posts...
+create index DW1_POSTS_NEW_PENDING_APPROVAL on DW1_POSTS (SITE_ID, PAGE_ID, POST_ID)
+  where APPROVED_AT is null;
+
+-- ...Then other things, like edits to approve...
+create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, PAGE_ID, POST_ID)
+  where
+    PENDING_EDIT_APP_ID is not null or
+    PENDING_MOVE_ID is not null or
+    PENDING_COLLAPSE_ID is not null or
+    PENDING_DELETE_ID is not null;
+
+-- ...Then, edit suggestions — they can be handled by the comment author
+-- as well (need not be a moderator).
+create index DW1_POSTS_PENDING_EDIT_SUGG on DW1_POSTS (SITE_ID, PAGE_ID, POST_ID)
+  where PENDING_EDIT_SUGGESTION_ID is not null;
+
+-- And last of all, posts with no review pending — sorted by time.
+create index DW1_POSTS_HANDLED on DW1_POSTS (
+    SITE_ID, CREATED_AT, PAGE_ID, POST_ID)
+  where
+    PENDING_FLAG_ID is null and
+    APPROVED_AT is not null and
+    PENDING_EDIT_APP_ID is null and
+    PENDING_MOVE_ID is null and
+    PENDING_COLLAPSE_ID is null and
+    PENDING_DELETE_ID is null;
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 
 ----- Actions

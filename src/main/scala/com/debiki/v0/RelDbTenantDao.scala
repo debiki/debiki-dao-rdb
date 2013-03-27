@@ -44,11 +44,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       require(page.tenantId == tenantId)
       // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
       _createPage(page)
-      val actionDtosWithIds = _insert(page.id, page.parts.actionDtos)
-      val actionsWithIds = page.parts.copy(actionDtos = actionDtosWithIds)
+      val (newParts, actionDtosWithIds) =
+        savePageActionsImpl(page.parts, page.parts.actionDtos)
       val newPageMeta = _loadPageMeta(page.id) getOrElse runErr(
         "DwE1RHK5", s"Found no meta for newly created page, id: ${page.id}")
-      page.copy(meta = newPageMeta, parts = actionsWithIds)
+      page.copy(meta = newPageMeta, parts = newParts)
     }
   }
 
@@ -872,14 +872,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     })
 
     result.values.toList
-  }
-
-
-  override def savePageActions[T <: PostActionDtoOld](pageGuid: String,
-                                  actions: List[T]): List[T] = {
-    db.transaction { implicit connection =>
-      _insert(pageGuid, actions)
-    }
   }
 
 
@@ -2039,9 +2031,26 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _insert[T <: PostActionDtoOld](pageId: String, actions: List[T])
-        (implicit conn: js.Connection): List[T] = {
+  override def savePageActions[T <: PostActionDtoOld](
+        pageParts: PageParts, actions: List[T]): (PageParts, List[T]) = {
+    db.transaction { implicit connection =>
+      savePageActionsImpl(pageParts, actions)
+    }
+  }
 
+
+  private def savePageActionsImpl[T <: PostActionDtoOld](
+        pageParts: PageParts, actions: List[T])(
+        implicit conn: js.Connection):  (PageParts, List[T]) = {
+    val actionsWithIds = insertActions(pageParts.pageId, actions)
+    val newParts = pageParts ++ actionsWithIds
+    insertUpdatePosts(newParts, actionsWithIds.map(_.postId).distinct)
+    (newParts, actionsWithIds)
+  }
+
+
+  private def insertActions[T <: PostActionDtoOld](pageId: String, actions: List[T])
+        (implicit conn: js.Connection): List[T] = {
     val numNewReplies = actions.filter(PageParts.isReply _).size
 
     val nextNewReplyId =
@@ -2165,6 +2174,127 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     }
 
     actionsWithIds
+  }
+
+
+  /** If a rating implies nearby posts are to be considered read,
+    * we need the actual PostActionDto's here, not only post ids — so we
+    * can update the read counts of all affected posts.
+    */
+  private def insertUpdatePosts(newParts: PageParts, postIds: List[String])
+        (implicit conn: js.Connection) {
+    for {
+      postId <- postIds
+      post = newParts.getPost(postId) getOrDie "DwE70Bf8"
+    } {
+      insertUpdatePost(post)
+    }
+  }
+
+
+  private def insertUpdatePost(post: Post)(implicit conn: js.Connection) {
+    // Ignore race conditions. The next time `post` is insert-overwritten,
+    // any inconsistency will be fixed?
+
+    // Note that the update and the insert specifies parameters in exactly
+    // the same order.
+
+    val updateSql = """
+      update DW1_POSTS set
+        PARENT_POST_ID = ?,
+        MARKUP = ?,
+        WHEERE = ?,
+        CREATED_AT = ?,
+        APPROVED_AT = ?,
+        EDITED_AT = ?,
+        COLLAPSED = ?,
+        DELETED_AT = ?,
+        PENDING_EDIT_APP_ID = ?,
+        PENDING_EDIT_SUGGESTION_ID = ?,
+        PENDING_MOVE_ID = ?,
+        PENDING_COLLAPSE_ID = ?,
+        PENDING_DELETE_ID = ?,
+        PENDING_FLAG_ID = ?,
+        PENDING_FLAG_TYPE = ?,
+        AUTHOR_NAME = ?,
+        AUTHOR_ID = ?,
+        LAST_EDITOR_NAME = ?,
+        LAST_EDITOR_ID = ?,
+        FLAGS = ?,
+        RATINGS = ?,
+        TEXT = ?
+      where SITE_ID = ? and PAGE_ID = ? and POST_ID = ?
+      """
+
+    val insertSql = """
+      insert into DW1_POSTS (
+        PARENT_POST_ID,
+        MARKUP,
+        WHEERE,
+        CREATED_AT,
+        APPROVED_AT,
+        EDITED_AT,
+        COLLAPSED,
+        DELETED_AT,
+        PENDING_EDIT_APP_ID,
+        PENDING_EDIT_SUGGESTION_ID,
+        PENDING_MOVE_ID,
+        PENDING_COLLAPSE_ID,
+        PENDING_DELETE_ID,
+        PENDING_FLAG_ID,
+        PENDING_FLAG_TYPE,
+        AUTHOR_NAME,
+        AUTHOR_ID,
+        LAST_EDITOR_NAME,
+        LAST_EDITOR_ID,
+        FLAGS,
+        RATINGS,
+        TEXT,
+        SITE_ID, PAGE_ID, POST_ID)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """
+
+    val collapsed: AnyRef =
+      if (post.isOnlyPostCollapsed) "P"
+      else if (post.areRepliesCollapsed) "R"
+      else if (post.isTreeCollapsed) "A"
+      else NullVarchar
+
+    val anyLastEditor = post.editsAppliedDescTime.headOption.map(_.user_!)
+
+    val values = List[AnyRef](
+      post.parentId,
+      post.markup,
+      post.where.orNullVarchar,
+      d2ts(post.creationDati),
+      o2ts(post.lastApprovalDati),
+      o2ts(post.lastEditApplied.flatMap(_.applicationDati)),
+      collapsed,
+      o2ts(post.deletionDati),
+      NullVarchar,  // for now ...
+      NullVarchar,
+      NullVarchar,
+      NullVarchar,
+      NullVarchar,
+      NullVarchar,
+      NullVarchar,
+      post.user_!.displayName,
+      post.userId,
+      anyLastEditor.map(_.displayName).orNullVarchar,
+      anyLastEditor.map(_.id).orNullVarchar,
+      NullVarchar, // post.flagsDescTime
+      NullVarchar, // ratings text
+      post.text,
+      siteId, post.page.pageId, post.id)
+
+    val numRowsChanged = db.update(updateSql, values)
+    if (numRowsChanged == 0) {
+      val numInserted = db.update(insertSql, values)
+      assErrIf(numInserted != 1, "DwE8W3Y9")
+    }
+    else {
+      assErrIf(numRowsChanged != 1, "DwE4IF01")
+    }
   }
 
 }
