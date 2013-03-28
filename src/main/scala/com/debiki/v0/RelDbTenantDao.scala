@@ -807,10 +807,13 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  private def _loadUser(userId: String): Option[User] = {
-    val usersByTenantAndId =  // SHOULD specify consumers
-       systemDaoSpi.loadUsers(Map(tenantId -> (userId::Nil)))
-    usersByTenantAndId.get((tenantId, userId))
+  private def _loadUser(userId: String): Option[User] = loadUsers(userId::Nil).headOption
+
+
+  private def loadUsers(userIds: List[String]): List[User] = {
+    val usersBySiteAndId =  // SHOULD specify consumers
+      systemDaoSpi.loadUsers(Map(siteId -> userIds))
+    usersBySiteAndId.values.toList
   }
 
 
@@ -977,6 +980,37 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         _loadPeoplePagesActionsNoRatingTags(sql, values)
 
     Map[String, PageParts](pagesById.toList: _*)
+  }
+
+
+  def loadPostsRecentlyActive(limit: Int, offset: Int): (List[Post], People) = {
+    db.withConnection { implicit connection =>
+      var statess: List[List[(String, PostState)]] = Nil
+      if (statess.length < limit) statess ::= loadPostStatesWithPendingFlags(limit, offset)
+      if (statess.length < limit) statess ::= loadPostStatesNewPendingApproval(limit, offset)
+      if (statess.length < limit) statess ::= loadPostStatesWithPendingEditsEtc(limit, offset)
+      if (statess.length < limit) statess ::= loadPostStatesWithEditSuggestions(limit, offset)
+      if (statess.length < limit) statess ::= loadPostStatesHandled(limit, offset)
+
+      val states = statess.flatten
+      val userIds = states.map(_._2.creationPostActionDto.userId)
+
+      val people = People(users = loadUsers(userIds))
+
+      val statesByPageId: Map[String, List[PostState]] =
+        states.groupBy(_._1).mapValues(_.map(_._2))
+
+      val pagesById: Map[String, PageParts] = for ((pageId, states) <- statesByPageId) yield {
+        pageId -> PageParts(pageId, people, postStates = states)
+      }
+
+      val posts = pagesById.values.flatMap(_.getAllPosts).toList
+
+      // SHOULD sort posts so flags appear first, then new posts pending approval, then
+      // pending edits, then edit suggestions, then old posts with nothing new.
+
+      (posts, people)
+    }
   }
 
 
@@ -2205,20 +2239,18 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         MARKUP = ?,
         WHEERE = ?,
         CREATED_AT = ?,
-        APPROVED_AT = ?,
+        APPROVAL = ?,
         EDITED_AT = ?,
         COLLAPSED = ?,
         DELETED_AT = ?,
-        PENDING_EDIT_APP_ID = ?,
-        PENDING_EDIT_SUGGESTION_ID = ?,
-        PENDING_MOVE_ID = ?,
-        PENDING_COLLAPSE_ID = ?,
-        PENDING_DELETE_ID = ?,
-        PENDING_FLAG_ID = ?,
-        PENDING_FLAG_TYPE = ?,
-        AUTHOR_NAME = ?,
+        NUM_PENDING_EDIT_APPS = ?,
+        NUM_PENDING_EDIT_SUGGESTIONS = ?,
+        NUM_PENDING_MOVES = ?,
+        NUM_PENDING_COLLAPSES = ?,
+        NUM_PENDING_DELETES = ?,
+        NUM_PENDING_FLAGS = ?,
+        NUM_HANDLED_FLAGS = ?,
         AUTHOR_ID = ?,
-        LAST_EDITOR_NAME = ?,
         LAST_EDITOR_ID = ?,
         FLAGS = ?,
         RATINGS = ?,
@@ -2232,26 +2264,24 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         MARKUP,
         WHEERE,
         CREATED_AT,
-        APPROVED_AT,
+        APPROVAL,
         EDITED_AT,
         COLLAPSED,
         DELETED_AT,
-        PENDING_EDIT_APP_ID,
-        PENDING_EDIT_SUGGESTION_ID,
-        PENDING_MOVE_ID,
-        PENDING_COLLAPSE_ID,
-        PENDING_DELETE_ID,
-        PENDING_FLAG_ID,
-        PENDING_FLAG_TYPE,
-        AUTHOR_NAME,
+        NUM_PENDING_EDIT_APPS,
+        NUM_PENDING_EDIT_SUGGESTIONS,
+        NUM_PENDING_MOVES,
+        NUM_PENDING_COLLAPSES,
+        NUM_PENDING_DELETES,
+        NUM_PENDING_FLAGS,
+        NUM_HANDLED_FLAGS,
         AUTHOR_ID,
-        LAST_EDITOR_NAME,
         LAST_EDITOR_ID,
         FLAGS,
         RATINGS,
         TEXT,
         SITE_ID, PAGE_ID, POST_ID)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
     val collapsed: AnyRef =
@@ -2267,20 +2297,18 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       post.markup,
       post.where.orNullVarchar,
       d2ts(post.creationDati),
-      o2ts(post.lastApprovalDati),
+      _toDbVal(post.lastApproval.flatMap(_.approval)),
       o2ts(post.lastEditApplied.flatMap(_.applicationDati)),
       collapsed,
       o2ts(post.deletionDati),
-      NullVarchar,  // for now ...
-      NullVarchar,
-      NullVarchar,
-      NullVarchar,
-      NullVarchar,
-      NullVarchar,
-      NullVarchar,
-      post.user_!.displayName,
+      post.numPendingEditApps.asInstanceOf[AnyRef],
+      post.numPendingEditSuggestions.asInstanceOf[AnyRef],
+      post.numPendingMoves.asInstanceOf[AnyRef],
+      post.numPendingCollapses.asInstanceOf[AnyRef],
+      post.numPendingDeletes.asInstanceOf[AnyRef],
+      post.numPendingFlags.asInstanceOf[AnyRef],
+      post.numHandledFlags.asInstanceOf[AnyRef],
       post.userId,
-      anyLastEditor.map(_.displayName).orNullVarchar,
       anyLastEditor.map(_.id).orNullVarchar,
       NullVarchar, // post.flagsDescTime
       NullVarchar, // ratings text
@@ -2296,6 +2324,126 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       assErrIf(numRowsChanged != 1, "DwE4IF01")
     }
   }
+
+
+  // Note: The `where` and `order by` clauses below must exactly match
+  // the indexes defined in the database (or there'll be full table scans I suppose).
+  // Therefore: Only edit the where tests below, by copy-pasting from
+  // debiki-postgre.sql (the indexes below `create table DW1_POSTS`).
+
+  private def loadPostStatesWithPendingFlags(
+        limit: Int, offset: Int)(implicit connection: js.Connection)
+        : List[(String, PostState)] =
+    loadPostStatesImpl(limit, offset,
+      whereTests =
+        "NUM_PENDING_FLAGS > 0")
+
+
+  private def loadPostStatesNewPendingApproval(
+        limit: Int, offset: Int)(implicit connection: js.Connection)
+        : List[(String, PostState)] =
+    loadPostStatesImpl(limit, offset,
+      whereTests = s"""
+        NUM_PENDING_FLAGS = 0 and
+        (APPROVAL is null or APPROVAL = 'P')
+        """)
+
+
+  private def loadPostStatesWithPendingEditsEtc(
+        limit: Int, offset: Int)(implicit connection: js.Connection)
+        : List[(String, PostState)] =
+    loadPostStatesImpl(limit, offset,
+      whereTests = s"""
+        NUM_PENDING_FLAGS = 0 and
+        APPROVAL in ('W', 'A', 'M') and (
+          NUM_PENDING_EDIT_APPS > 0 or
+          NUM_PENDING_MOVES > 0 or
+          NUM_PENDING_COLLAPSES > 0 or
+          NUM_PENDING_DELETES > 0)
+        """)
+
+
+  private def loadPostStatesWithEditSuggestions(
+        limit: Int, offset: Int)(implicit connection: js.Connection)
+        : List[(String, PostState)] =
+    loadPostStatesImpl(limit, offset,
+      whereTests = s"""
+        NUM_PENDING_FLAGS = 0 and
+        APPROVAL in ('W', 'A', 'M') and
+        NUM_PENDING_EDIT_APPS = 0 and
+        NUM_PENDING_MOVES = 0 and
+        NUM_PENDING_COLLAPSES = 0 and
+        NUM_PENDING_DELETES = 0 and
+        NUM_PENDING_EDIT_SUGGESTIONS > 0
+        """)
+
+
+  private def loadPostStatesHandled(
+        limit: Int, offset: Int)(implicit connection: js.Connection)
+        : List[(String, PostState)] =
+    loadPostStatesImpl(limit, offset,
+      whereTests = s"""
+        NUM_PENDING_FLAGS = 0 and
+        APPROVAL in ('W', 'A', 'M') and
+        NUM_PENDING_EDIT_APPS = 0 and
+        NUM_PENDING_MOVES = 0 and
+        NUM_PENDING_COLLAPSES = 0 and
+        NUM_PENDING_DELETES = 0 and
+        NUM_PENDING_EDIT_SUGGESTIONS = 0
+        """,
+      orderBy = Some("SITE_ID, CREATED_AT desc"))
+
+
+  private def loadPostStatesImpl(
+      limit: Int, offset: Int, whereTests: String, orderBy: Option[String] = None)(
+      implicit connection: js.Connection): List[(String, PostState)] = {
+
+    val orderByClause = orderBy.map("order by " + _) getOrElse ""
+    val sql = s"""
+      select * from DW1_POSTS
+      where SITE_ID = ? and $whereTests
+      $orderByClause limit $limit offset $offset
+      """
+
+    val values = List(siteId)
+    var result: List[(String, PostState)] = Nil
+
+    db.query(sql, values, rs => {
+      while (rs.next) {
+        val pageId = rs.getString("PAGE_ID")
+        result ::= (pageId, readPostState(rs))
+      }
+    })
+
+    result
+  }
+
+
+  private def readPostState(rs: js.ResultSet): PostState = {
+
+    val postActionDto = PostActionDto.forNewPost(
+      id = rs.getString("POST_ID"),
+      creationDati = ts2d(rs.getTimestamp("CREATED_AT")),
+      loginId = "?",
+      userId = rs.getString("AUTHOR_ID"),
+      newIp = None, // for now
+      parentPostId = rs.getString("PARENT_POST_ID"),
+      text = rs.getString("TEXT"),
+      markup = rs.getString("MARKUP"),
+      approval = _toAutoApproval(rs.getString("APPROVAL")),
+      where = Option(rs.getString("WHEERE")))
+
+    PostState(
+      postActionDto,
+      numPendingEditApps = rs.getInt("NUM_PENDING_EDIT_APPS"),
+      numPendingEditSuggestions = rs.getInt("NUM_PENDING_EDIT_SUGGESTIONS"),
+      numPendingMoves = rs.getInt("NUM_PENDING_MOVES"),
+      numPendingCollapses = rs.getInt("NUM_PENDING_COLLAPSES"),
+      numPendingDeletes = rs.getInt("NUM_PENDING_DELETES"),
+      numPendingFlags = rs.getInt("NUM_PENDING_FLAGS"),
+      numHandledFlags = rs.getInt("NUM_HANDLED_FLAGS"))
+  }
+
 
 }
 

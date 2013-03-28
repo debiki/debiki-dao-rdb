@@ -689,7 +689,7 @@ $$ language plpgsql;
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- todo prod,dev done test:
+-- todo prod, redo dev done test:
 
 create table DW1_POSTS(
   SITE_ID varchar(32) not null,
@@ -699,29 +699,30 @@ create table DW1_POSTS(
   MARKUP varchar(30),
   WHEERE varchar(150),
   CREATED_AT timestamp not null,
-  APPROVED_AT timestamp,
+  APPROVAL varchar(1), -- same as DW1_PAGE_ACTIONS.APPROVAL
   EDITED_AT timestamp,
   COLLAPSED varchar(20), -- Same as DW1_PAGE_ACTIONS.TYPE when like 'Collapse%'
   DELETED_AT timestamp,
 
-  -- These PENDING_... are helpful when listing recent activity, and when
+  -- These NUM_PENDING_... are helpful when listing recent activity, so posts
+  -- with many flags can be listed first. And when
   -- rendering pages, so a little icon can be shown if there are pending
   -- edit suggestions, and if many people has suggested that a comment be
   -- moved to another thread (show an airplane icon? :-)) for example.
 
-  -- ! Change to *counts* instead?
+  -- SHOULD change to: ?
+  --  NUM_EDITS_PENDING_REVIEW + NUM_EDITS_DONE_UNREVIEWED
+  --  NUM_MOVES_PENDING_REVIEW + NUM_MOVES_DONE_UNREVIEWED
+  --  NUM_DELETES_PENDING_REVIEW + NUM_DELETES_DONE_UNREVIEWED -- auto deleted if many flags
+  NUM_PENDING_EDIT_APPS int not null default 0,
+  NUM_PENDING_EDIT_SUGGESTIONS int not null default 0,
+  NUM_PENDING_MOVES int not null default 0,
+  NUM_PENDING_COLLAPSES int not null default 0,
+  NUM_PENDING_DELETES int not null default 0,
+  NUM_PENDING_FLAGS int not null default 0,
+  NUM_HANDLED_FLAGS int not null default 0,
 
-  PENDING_EDIT_APP_ID varchar(32),
-  PENDING_EDIT_SUGGESTION_ID varchar(32),
-  PENDING_MOVE_ID varchar(32),
-  PENDING_COLLAPSE_ID varchar(32),
-  PENDING_DELETE_ID varchar(32),
-  PENDING_FLAG_ID varchar(32),
-  PENDING_FLAG_TYPE varchar(20), -- Same as DW1_PAGE_ACTIONS.TYPE when like Flag% ?
-
-  AUTHOR_NAME varchar(100),
   AUTHOR_ID varchar(32),
-  LAST_EDITOR_NAME varchar(100),
   LAST_EDITOR_ID varchar(32),
 
   -- Will be an array of tuples?: [(flag, count), (flag2, count2), ...]
@@ -730,41 +731,56 @@ create table DW1_POSTS(
   TEXT text,
 
   constraint DW1_POSTS_SITE_PAGE_POST__P primary key (SITE_ID, PAGE_ID, POST_ID),
-  constraint DW1_POSTS_COLLAPSED__C_IN check (COLLAPSED in ('P', 'R', 'A'))
+  constraint DW1_POSTS_APPROVAL__C_IN check (APPROVAL in ('P', 'W', 'A', 'M')),
+  constraint DW1_POSTS_COLLAPSED__C_IN check (COLLAPSED in (
+        'CollapsePost', 'CollapseTree', 'CollapseReplies'))
 );
 
 
 -- Flags are important — we first show all posts with unhandled flags...
-create index DW1_POSTS_PENDING_FLAG on DW1_POSTS (SITE_ID, PAGE_ID, POST_ID)
-  where PENDING_FLAG_ID is not null;
+create index DW1_POSTS_PENDING_FLAGS on DW1_POSTS (SITE_ID)
+  where
+    NUM_PENDING_FLAGS > 0;
 
--- ...Then all completely new posts...
-create index DW1_POSTS_NEW_PENDING_APPROVAL on DW1_POSTS (SITE_ID, PAGE_ID, POST_ID)
-  where APPROVED_AT is null;
+-- ...Then all completely new posts that are either unapproved, or prel aproved...
+create index DW1_POSTS_PENDING_NEW on DW1_POSTS (SITE_ID)
+  where
+    NUM_PENDING_FLAGS = 0 and
+    (APPROVAL is null or APPROVAL = 'P');
 
 -- ...Then other things, like edits to approve...
-create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, PAGE_ID, POST_ID)
+create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID)
   where
-    PENDING_EDIT_APP_ID is not null or
-    PENDING_MOVE_ID is not null or
-    PENDING_COLLAPSE_ID is not null or
-    PENDING_DELETE_ID is not null;
+    NUM_PENDING_FLAGS = 0 and
+    APPROVAL in ('W', 'A', 'M') and (
+      NUM_PENDING_EDIT_APPS > 0 or
+      NUM_PENDING_MOVES > 0 or
+      NUM_PENDING_COLLAPSES > 0 or
+      NUM_PENDING_DELETES > 0);
 
 -- ...Then, edit suggestions — they can be handled by the comment author
 -- as well (need not be a moderator).
-create index DW1_POSTS_PENDING_EDIT_SUGG on DW1_POSTS (SITE_ID, PAGE_ID, POST_ID)
-  where PENDING_EDIT_SUGGESTION_ID is not null;
+create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID)
+  where
+    NUM_PENDING_FLAGS = 0 and
+    APPROVAL in ('W', 'A', 'M') and
+    NUM_PENDING_EDIT_APPS = 0 and
+    NUM_PENDING_MOVES = 0 and
+    NUM_PENDING_COLLAPSES = 0 and
+    NUM_PENDING_DELETES = 0 and
+    NUM_PENDING_EDIT_SUGGESTIONS > 0;
 
 -- And last of all, posts with no review pending — sorted by time.
-create index DW1_POSTS_HANDLED on DW1_POSTS (
-    SITE_ID, CREATED_AT, PAGE_ID, POST_ID)
+-- (Including new auto approved posts by well behaved users.)
+create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, CREATED_AT)
   where
-    PENDING_FLAG_ID is null and
-    APPROVED_AT is not null and
-    PENDING_EDIT_APP_ID is null and
-    PENDING_MOVE_ID is null and
-    PENDING_COLLAPSE_ID is null and
-    PENDING_DELETE_ID is null;
+    NUM_PENDING_FLAGS = 0 and
+    APPROVAL in ('W', 'A', 'M') and
+    NUM_PENDING_EDIT_APPS = 0 and
+    NUM_PENDING_MOVES = 0 and
+    NUM_PENDING_COLLAPSES = 0 and
+    NUM_PENDING_DELETES = 0 and
+    NUM_PENDING_EDIT_SUGGESTIONS = 0;
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
