@@ -986,10 +986,9 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   def loadPostsRecentlyActive(limit: Int, offset: Int): (List[Post], People) = {
     db.withConnection { implicit connection =>
       var statess: List[List[(String, PostState)]] = Nil
-      if (statess.length < limit) statess ::= loadPostStatesWithPendingFlags(limit, offset)
-      if (statess.length < limit) statess ::= loadPostStatesNewPendingApproval(limit, offset)
-      if (statess.length < limit) statess ::= loadPostStatesWithPendingEditsEtc(limit, offset)
-      if (statess.length < limit) statess ::= loadPostStatesWithEditSuggestions(limit, offset)
+      if (statess.length < limit) statess ::= loadPostStatesPendingFlags(limit, offset)
+      if (statess.length < limit) statess ::= loadPostStatesPendingApproval(limit, offset)
+      if (statess.length < limit) statess ::= loadPostStatesWithSuggestions(limit, offset)
       if (statess.length < limit) statess ::= loadPostStatesHandled(limit, offset)
 
       val states = statess.flatten
@@ -2240,14 +2239,19 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         WHEERE = ?,
         CREATED_AT = ?,
         APPROVAL = ?,
-        EDITED_AT = ?,
+        MODIFIED_AT = ?,
         COLLAPSED = ?,
         DELETED_AT = ?,
-        NUM_PENDING_EDIT_APPS = ?,
-        NUM_PENDING_EDIT_SUGGESTIONS = ?,
-        NUM_PENDING_MOVES = ?,
-        NUM_PENDING_COLLAPSES = ?,
-        NUM_PENDING_DELETES = ?,
+        NUM_EDIT_SUGGESTIONS = ?,
+        NUM_EDITS_APPLD_UNREVIEWED = ?,
+        NUM_EDITS_APPLD_PREL_APPROVED = ?,
+        NUM_EDITS_TO_REVIEW = ?,
+        NUM_COLLAPSE_SUGGESTIONS = ?,
+        NUM_COLLAPSES_TO_REVIEW = ?,
+        NUM_MOVE_SUGGESTIONS = ?,
+        NUM_MOVES_TO_REVIEW = ?,
+        NUM_DELETE_SUGGESTIONS = ?,
+        NUM_DELETES_TO_REVIEW = ?,
         NUM_PENDING_FLAGS = ?,
         NUM_HANDLED_FLAGS = ?,
         AUTHOR_ID = ?,
@@ -2265,14 +2269,19 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         WHEERE,
         CREATED_AT,
         APPROVAL,
-        EDITED_AT,
+        MODIFIED_AT,
         COLLAPSED,
         DELETED_AT,
-        NUM_PENDING_EDIT_APPS,
-        NUM_PENDING_EDIT_SUGGESTIONS,
-        NUM_PENDING_MOVES,
-        NUM_PENDING_COLLAPSES,
-        NUM_PENDING_DELETES,
+        NUM_EDIT_SUGGESTIONS,
+        NUM_EDITS_APPLD_UNREVIEWED,
+        NUM_EDITS_APPLD_PREL_APPROVED,
+        NUM_EDITS_TO_REVIEW,
+        NUM_COLLAPSE_SUGGESTIONS,
+        NUM_COLLAPSES_TO_REVIEW,
+        NUM_MOVE_SUGGESTIONS,
+        NUM_MOVES_TO_REVIEW,
+        NUM_DELETE_SUGGESTIONS,
+        NUM_DELETES_TO_REVIEW,
         NUM_PENDING_FLAGS,
         NUM_HANDLED_FLAGS,
         AUTHOR_ID,
@@ -2281,7 +2290,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         RATINGS,
         TEXT,
         SITE_ID, PAGE_ID, POST_ID)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
     val collapsed: AnyRef =
@@ -2298,14 +2308,19 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       post.where.orNullVarchar,
       d2ts(post.creationDati),
       _toDbVal(post.lastApproval.flatMap(_.approval)),
-      o2ts(post.lastEditApplied.flatMap(_.applicationDati)),
+      d2ts(post.modificationDati),
       collapsed,
       o2ts(post.deletionDati),
-      post.numPendingEditApps.asInstanceOf[AnyRef],
       post.numPendingEditSuggestions.asInstanceOf[AnyRef],
-      post.numPendingMoves.asInstanceOf[AnyRef],
-      post.numPendingCollapses.asInstanceOf[AnyRef],
-      post.numPendingDeletes.asInstanceOf[AnyRef],
+      post.numEditsAppliedUnreviewed.asInstanceOf[AnyRef],
+      post.numEditsAppldPrelApproved.asInstanceOf[AnyRef],
+      post.numEditsToReview.asInstanceOf[AnyRef],
+      post.numCollapseSuggestions.asInstanceOf[AnyRef],
+      post.numCollapsesToReview.asInstanceOf[AnyRef],
+      post.numMoveSuggestions.asInstanceOf[AnyRef],
+      post.numMovesToReview.asInstanceOf[AnyRef],
+      post.numDeleteSuggestions.asInstanceOf[AnyRef],
+      post.numDeletesToReview.asInstanceOf[AnyRef],
       post.numPendingFlags.asInstanceOf[AnyRef],
       post.numHandledFlags.asInstanceOf[AnyRef],
       post.userId,
@@ -2331,50 +2346,43 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   // Therefore: Only edit the where tests below, by copy-pasting from
   // debiki-postgre.sql (the indexes below `create table DW1_POSTS`).
 
-  private def loadPostStatesWithPendingFlags(
+  private def loadPostStatesPendingFlags(
         limit: Int, offset: Int)(implicit connection: js.Connection)
         : List[(String, PostState)] =
     loadPostStatesImpl(limit, offset,
-      whereTests =
-        "NUM_PENDING_FLAGS > 0")
+      whereTests = "NUM_PENDING_FLAGS > 0",
+      orderBy = Some("NUM_PENDING_FLAGS desc"))
 
 
-  private def loadPostStatesNewPendingApproval(
-        limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(String, PostState)] =
-    loadPostStatesImpl(limit, offset,
-      whereTests = s"""
-        NUM_PENDING_FLAGS = 0 and
-        (APPROVAL is null or APPROVAL = 'P')
-        """)
-
-
-  private def loadPostStatesWithPendingEditsEtc(
+  private def loadPostStatesPendingApproval(
         limit: Int, offset: Int)(implicit connection: js.Connection)
         : List[(String, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
-        NUM_PENDING_FLAGS = 0 and
-        APPROVAL in ('W', 'A', 'M') and (
-          NUM_PENDING_EDIT_APPS > 0 or
-          NUM_PENDING_MOVES > 0 or
-          NUM_PENDING_COLLAPSES > 0 or
-          NUM_PENDING_DELETES > 0)
+        NUM_PENDING_FLAGS = 0 and (
+          (APPROVAL is null or APPROVAL = 'P') or
+          NUM_EDITS_TO_REVIEW > 0 or
+          NUM_COLLAPSES_TO_REVIEW > 0 or
+          NUM_MOVES_TO_REVIEW > 0 or
+          NUM_DELETES_TO_REVIEW > 0)
         """)
 
 
-  private def loadPostStatesWithEditSuggestions(
+  private def loadPostStatesWithSuggestions(
         limit: Int, offset: Int)(implicit connection: js.Connection)
         : List[(String, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         NUM_PENDING_FLAGS = 0 and
         APPROVAL in ('W', 'A', 'M') and
-        NUM_PENDING_EDIT_APPS = 0 and
-        NUM_PENDING_MOVES = 0 and
-        NUM_PENDING_COLLAPSES = 0 and
-        NUM_PENDING_DELETES = 0 and
-        NUM_PENDING_EDIT_SUGGESTIONS > 0
+        NUM_EDITS_TO_REVIEW = 0 and
+        NUM_COLLAPSES_TO_REVIEW = 0 and
+        NUM_MOVES_TO_REVIEW = 0 and
+        NUM_DELETES_TO_REVIEW = 0 and (
+          NUM_EDIT_SUGGESTIONS > 0 or
+          NUM_COLLAPSE_SUGGESTIONS > 0 or
+          NUM_MOVE_SUGGESTIONS > 0 or
+          NUM_DELETE_SUGGESTIONS > 0)
         """)
 
 
@@ -2385,11 +2393,14 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       whereTests = s"""
         NUM_PENDING_FLAGS = 0 and
         APPROVAL in ('W', 'A', 'M') and
-        NUM_PENDING_EDIT_APPS = 0 and
-        NUM_PENDING_MOVES = 0 and
-        NUM_PENDING_COLLAPSES = 0 and
-        NUM_PENDING_DELETES = 0 and
-        NUM_PENDING_EDIT_SUGGESTIONS = 0
+        NUM_EDITS_TO_REVIEW = 0 and
+        NUM_COLLAPSES_TO_REVIEW = 0 and
+        NUM_MOVES_TO_REVIEW = 0 and
+        NUM_DELETES_TO_REVIEW = 0 and
+        NUM_EDIT_SUGGESTIONS = 0 and
+        NUM_COLLAPSE_SUGGESTIONS = 0 and
+        NUM_MOVE_SUGGESTIONS = 0 and
+        NUM_DELETE_SUGGESTIONS = 0
         """,
       orderBy = Some("SITE_ID, CREATED_AT desc"))
 
@@ -2435,11 +2446,17 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     PostState(
       postActionDto,
-      numPendingEditApps = rs.getInt("NUM_PENDING_EDIT_APPS"),
-      numPendingEditSuggestions = rs.getInt("NUM_PENDING_EDIT_SUGGESTIONS"),
-      numPendingMoves = rs.getInt("NUM_PENDING_MOVES"),
-      numPendingCollapses = rs.getInt("NUM_PENDING_COLLAPSES"),
-      numPendingDeletes = rs.getInt("NUM_PENDING_DELETES"),
+      modifiedAt = ts2d(rs.getTimestamp("MODIFIED_AT")),
+      numEditSuggestions = rs.getInt("NUM_EDIT_SUGGESTIONS"),
+      numEditsAppliedUnreviewed = rs.getInt("NUM_EDITS_APPLD_UNREVIEWED"),
+      numEditsAppldPrelApproved = rs.getInt("NUM_EDITS_APPLD_PREL_APPROVED"),
+      numEditsToReview = rs.getInt("NUM_EDITS_TO_REVIEW"),
+      numCollapseSuggestions = rs.getInt("NUM_COLLAPSE_SUGGESTIONS"),
+      numCollapsesToReview = rs.getInt("NUM_COLLAPSES_TO_REVIEW"),
+      numMoveSuggestions = rs.getInt("NUM_MOVE_SUGGESTIONS"),
+      numMovesToReview = rs.getInt("NUM_MOVES_TO_REVIEW"),
+      numDeleteSuggestions = rs.getInt("NUM_DELETE_SUGGESTIONS"),
+      numDeletesToReview = rs.getInt("NUM_DELETES_TO_REVIEW"),
       numPendingFlags = rs.getInt("NUM_PENDING_FLAGS"),
       numHandledFlags = rs.getInt("NUM_HANDLED_FLAGS"))
   }

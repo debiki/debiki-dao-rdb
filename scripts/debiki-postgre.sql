@@ -689,7 +689,7 @@ $$ language plpgsql;
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
--- todo prod, redo dev done test:
+-- todo prod, redo dev,test:
 
 create table DW1_POSTS(
   SITE_ID varchar(32) not null,
@@ -700,25 +700,34 @@ create table DW1_POSTS(
   WHEERE varchar(150),
   CREATED_AT timestamp not null,
   APPROVAL varchar(1), -- same as DW1_PAGE_ACTIONS.APPROVAL
-  EDITED_AT timestamp,
+  MODIFIED_AT timestamp,
   COLLAPSED varchar(20), -- Same as DW1_PAGE_ACTIONS.TYPE when like 'Collapse%'
   DELETED_AT timestamp,
 
-  -- These NUM_PENDING_... are helpful when listing recent activity, so posts
-  -- with many flags can be listed first. And when
-  -- rendering pages, so a little icon can be shown if there are pending
-  -- edit suggestions, and if many people has suggested that a comment be
-  -- moved to another thread (show an airplane icon? :-)) for example.
+  -- These NUM_*_SUGGESTIONS are used when rendering a page, so people can see
+  -- what other readers have suggested. For example, if people have suggested that
+  -- a comment be moved to another thread, an airplane icon could be shown? :-))
+  -- And a little icon could be shown if there are pending edit suggestions?
 
-  -- SHOULD change to: ?
-  --  NUM_EDITS_PENDING_REVIEW + NUM_EDITS_DONE_UNREVIEWED
-  --  NUM_MOVES_PENDING_REVIEW + NUM_MOVES_DONE_UNREVIEWED
-  --  NUM_DELETES_PENDING_REVIEW + NUM_DELETES_DONE_UNREVIEWED -- auto deleted if many flags
-  NUM_PENDING_EDIT_APPS int not null default 0,
-  NUM_PENDING_EDIT_SUGGESTIONS int not null default 0,
-  NUM_PENDING_MOVES int not null default 0,
-  NUM_PENDING_COLLAPSES int not null default 0,
-  NUM_PENDING_DELETES int not null default 0,
+  -- The NUM_*_TO_REVIEW are used to inform moderators about what things
+  -- there are to review. Some things pending review might have been preliminarily
+  -- approved (e.g. an edit of a seemingly benevolent user's own comment).
+
+
+  -- There are indexes that sort flagged posts first, then posts pending review,
+  -- then posts with edit suggestions, then other posts.
+
+  NUM_EDIT_SUGGESTIONS int not null default 0,
+  NUM_EDITS_APPLD_UNREVIEWED int not null default 0,
+  NUM_EDITS_APPLD_PREL_APPROVED int not null default 0,
+  -- Includes unreviewed edits + prel approved edits, + perhaps popular edit suggestions.
+  NUM_EDITS_TO_REVIEW int not null default 0,
+  NUM_COLLAPSE_SUGGESTIONS int not null default 0,
+  NUM_COLLAPSES_TO_REVIEW int not null default 0,
+  NUM_MOVE_SUGGESTIONS int not null default 0,
+  NUM_MOVES_TO_REVIEW int not null default 0,
+  NUM_DELETE_SUGGESTIONS int not null default 0,
+  NUM_DELETES_TO_REVIEW int not null default 0, -- should auto delete comments w/ many flags?
   NUM_PENDING_FLAGS int not null default 0,
   NUM_HANDLED_FLAGS int not null default 0,
 
@@ -738,49 +747,49 @@ create table DW1_POSTS(
 
 
 -- Flags are important — we first show all posts with unhandled flags...
-create index DW1_POSTS_PENDING_FLAGS on DW1_POSTS (SITE_ID)
+create index DW1_POSTS_PENDING_FLAGS on DW1_POSTS (SITE_ID, NUM_PENDING_FLAGS)
   where
     NUM_PENDING_FLAGS > 0;
 
--- ...Then all completely new posts that are either unapproved, or prel aproved...
-create index DW1_POSTS_PENDING_NEW on DW1_POSTS (SITE_ID)
+-- ...Then unapproved posts, or posts with changes in need of review (that is,
+-- edits not yet reviewed, or edits preliminarily approved by the computer)...
+create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, MODIFIED_AT)
   where
-    NUM_PENDING_FLAGS = 0 and
-    (APPROVAL is null or APPROVAL = 'P');
+    NUM_PENDING_FLAGS = 0 and (
+      (APPROVAL is null or APPROVAL = 'P') or
+      NUM_EDITS_TO_REVIEW > 0 or
+      NUM_COLLAPSES_TO_REVIEW > 0 or
+      NUM_MOVES_TO_REVIEW > 0 or
+      NUM_DELETES_TO_REVIEW > 0);
 
--- ...Then other things, like edits to approve...
-create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID)
-  where
-    NUM_PENDING_FLAGS = 0 and
-    APPROVAL in ('W', 'A', 'M') and (
-      NUM_PENDING_EDIT_APPS > 0 or
-      NUM_PENDING_MOVES > 0 or
-      NUM_PENDING_COLLAPSES > 0 or
-      NUM_PENDING_DELETES > 0);
-
--- ...Then, edit suggestions — they can be handled by the comment author
--- as well (need not be a moderator).
-create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID)
+-- ...Then things with pending suggestions...
+create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, MODIFIED_AT)
   where
     NUM_PENDING_FLAGS = 0 and
     APPROVAL in ('W', 'A', 'M') and
-    NUM_PENDING_EDIT_APPS = 0 and
-    NUM_PENDING_MOVES = 0 and
-    NUM_PENDING_COLLAPSES = 0 and
-    NUM_PENDING_DELETES = 0 and
-    NUM_PENDING_EDIT_SUGGESTIONS > 0;
+    NUM_EDITS_TO_REVIEW = 0 and
+    NUM_COLLAPSES_TO_REVIEW = 0 and
+    NUM_MOVES_TO_REVIEW = 0 and
+    NUM_DELETES_TO_REVIEW = 0 and (
+      NUM_EDIT_SUGGESTIONS > 0 or
+      NUM_COLLAPSE_SUGGESTIONS > 0 or
+      NUM_MOVE_SUGGESTIONS > 0 or
+      NUM_DELETE_SUGGESTIONS > 0);
 
--- And last of all, posts with no review pending — sorted by time.
+-- And last of all, posts with nothing to review, and no pending suggestionis.
 -- (Including new auto approved posts by well behaved users.)
-create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, CREATED_AT)
+create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, MODIFIED_AT)
   where
     NUM_PENDING_FLAGS = 0 and
     APPROVAL in ('W', 'A', 'M') and
-    NUM_PENDING_EDIT_APPS = 0 and
-    NUM_PENDING_MOVES = 0 and
-    NUM_PENDING_COLLAPSES = 0 and
-    NUM_PENDING_DELETES = 0 and
-    NUM_PENDING_EDIT_SUGGESTIONS = 0;
+    NUM_EDITS_TO_REVIEW = 0 and
+    NUM_COLLAPSES_TO_REVIEW = 0 and
+    NUM_MOVES_TO_REVIEW = 0 and
+    NUM_DELETES_TO_REVIEW = 0 and
+    NUM_EDIT_SUGGESTIONS = 0 and
+    NUM_COLLAPSE_SUGGESTIONS = 0 and
+    NUM_MOVE_SUGGESTIONS = 0 and
+    NUM_DELETE_SUGGESTIONS = 0;
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
