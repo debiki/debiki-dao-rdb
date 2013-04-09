@@ -2238,14 +2238,24 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         MARKUP = ?,
         WHEERE = ?,
         CREATED_AT = ?,
-        APPROVAL = ?,
-        MODIFIED_AT = ?,
+        LAST_ACTED_UPON_AT = ?,
+        LAST_REVIEWED_AT = ?,
+        LAST_AUTHLY_REVIEWED_AT = ?,
+        LAST_APPROVED_AT = ?,
+        LAST_APPROVAL_TYPE = ?,
+        LAST_PERMANENTLY_APPROVED_AT = ?,
+        LAST_MANUALLY_APPROVED_AT = ?,
+        AUTHOR_ID = ?,
+        LAST_EDIT_APPLIED_AT = ?,
+        LAST_EDIT_REVERTED_AT = ?,
+        LAST_EDITOR_ID = ?,
         COLLAPSED = ?,
         DELETED_AT = ?,
         NUM_EDIT_SUGGESTIONS = ?,
         NUM_EDITS_APPLD_UNREVIEWED = ?,
         NUM_EDITS_APPLD_PREL_APPROVED = ?,
         NUM_EDITS_TO_REVIEW = ?,
+        NUM_DISTINCT_EDITORS = ?,
         NUM_COLLAPSE_SUGGESTIONS = ?,
         NUM_COLLAPSES_TO_REVIEW = ?,
         NUM_MOVE_SUGGESTIONS = ?,
@@ -2254,13 +2264,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         NUM_DELETES_TO_REVIEW = ?,
         NUM_PENDING_FLAGS = ?,
         NUM_HANDLED_FLAGS = ?,
-        AUTHOR_ID = ?,
-        LAST_EDITOR_ID = ?,
         FLAGS = ?,
         RATINGS = ?,
-        TEXT = ?
+        APPROVED_TEXT = ?,
+        UNAPPROVED_TEXT_DIFF = ?
       where SITE_ID = ? and PAGE_ID = ? and POST_ID = ?
-      """
+                    """
 
     val insertSql = """
       insert into DW1_POSTS (
@@ -2268,14 +2277,24 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         MARKUP,
         WHEERE,
         CREATED_AT,
-        APPROVAL,
-        MODIFIED_AT,
+        LAST_ACTED_UPON_AT,
+        LAST_REVIEWED_AT,
+        LAST_AUTHLY_REVIEWED_AT,
+        LAST_APPROVED_AT,
+        LAST_APPROVAL_TYPE,
+        LAST_PERMANENTLY_APPROVED_AT,
+        LAST_MANUALLY_APPROVED_AT,
+        AUTHOR_ID,
+        LAST_EDIT_APPLIED_AT,
+        LAST_EDIT_REVERTED_AT,
+        LAST_EDITOR_ID,
         COLLAPSED,
         DELETED_AT,
         NUM_EDIT_SUGGESTIONS,
         NUM_EDITS_APPLD_UNREVIEWED,
         NUM_EDITS_APPLD_PREL_APPROVED,
         NUM_EDITS_TO_REVIEW,
+        NUM_DISTINCT_EDITORS,
         NUM_COLLAPSE_SUGGESTIONS,
         NUM_COLLAPSES_TO_REVIEW,
         NUM_MOVE_SUGGESTIONS,
@@ -2284,15 +2303,16 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         NUM_DELETES_TO_REVIEW,
         NUM_PENDING_FLAGS,
         NUM_HANDLED_FLAGS,
-        AUTHOR_ID,
-        LAST_EDITOR_ID,
         FLAGS,
         RATINGS,
-        TEXT,
+        APPROVED_TEXT,
+        UNAPPROVED_TEXT_DIFF,
         SITE_ID, PAGE_ID, POST_ID)
       values
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      """
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?)"""
 
     val collapsed: AnyRef =
       if (post.isOnlyPostCollapsed) "P"
@@ -2301,20 +2321,33 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       else NullVarchar
 
     val anyLastEditor = post.editsAppliedDescTime.headOption.map(_.user_!)
+    val anyUnapprovedTextDiff = post.unapprovedText map { unapprovedText =>
+      makePatch(from = post.approvedText.getOrElse(""), to = unapprovedText)
+    }
 
     val values = List[AnyRef](
       post.parentId,
       post.markup,
       post.where.orNullVarchar,
       d2ts(post.creationDati),
-      _toDbVal(post.lastApproval.flatMap(_.approval)),
-      d2ts(post.modificationDati),
+      d2ts(post.lastActedUponAt),
+      o2ts(post.lastReviewDati), // LAST_REVIEWED_AT
+      o2ts(post.lastAuthoritativeReviewDati), // LAST_AUTHLY_REVIEWED_AT
+      o2ts(post.lastApprovalDati), // LAST_APPROVED_AT
+      _toDbVal(post.lastApproval.flatMap(_.approval)), // LAST_APPROVAL_TYPE
+      o2ts(post.lastPermanentApprovalDati), // LAST_PERMANENTLY_APPROVED_AT
+      o2ts(post.lastManualApprovalDati), // LAST_MANUALLY_APPROVED_AT
+      post.userId,  // AUTHOR_ID
+      o2ts(post.lastEditAppliedAt), // LAST_EDIT_APPLIED_AT
+      o2ts(post.lastEditRevertedAt), // LAST_EDIT_REVERTED_AT
+      anyLastEditor.map(_.id).orNullVarchar, // LAST_EDITOR_ID
       collapsed,
       o2ts(post.deletionDati),
       post.numPendingEditSuggestions.asInstanceOf[AnyRef],
       post.numEditsAppliedUnreviewed.asInstanceOf[AnyRef],
       post.numEditsAppldPrelApproved.asInstanceOf[AnyRef],
       post.numEditsToReview.asInstanceOf[AnyRef],
+      post.numDistinctEditors.asInstanceOf[AnyRef],
       post.numCollapseSuggestions.asInstanceOf[AnyRef],
       post.numCollapsesToReview.asInstanceOf[AnyRef],
       post.numMoveSuggestions.asInstanceOf[AnyRef],
@@ -2323,11 +2356,10 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       post.numDeletesToReview.asInstanceOf[AnyRef],
       post.numPendingFlags.asInstanceOf[AnyRef],
       post.numHandledFlags.asInstanceOf[AnyRef],
-      post.userId,
-      anyLastEditor.map(_.id).orNullVarchar,
       NullVarchar, // post.flagsDescTime
       NullVarchar, // ratings text
-      post.text,
+      post.approvedText.orNullVarchar,
+      anyUnapprovedTextDiff.orNullVarchar,
       siteId, post.page.pageId, post.id)
 
     val numRowsChanged = db.update(updateSql, values)
@@ -2351,7 +2383,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         : List[(String, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = "NUM_PENDING_FLAGS > 0",
-      orderBy = Some("NUM_PENDING_FLAGS desc"))
+      orderBy = Some("SITE_ID, NUM_PENDING_FLAGS desc"))
 
 
   private def loadPostStatesPendingApproval(
@@ -2360,12 +2392,13 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         NUM_PENDING_FLAGS = 0 and (
-          (APPROVAL is null or APPROVAL = 'P') or
+          (LAST_APPROVAL_TYPE is null or LAST_APPROVAL_TYPE = 'P') or
           NUM_EDITS_TO_REVIEW > 0 or
           NUM_COLLAPSES_TO_REVIEW > 0 or
           NUM_MOVES_TO_REVIEW > 0 or
           NUM_DELETES_TO_REVIEW > 0)
-        """)
+        """,
+      orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
 
   private def loadPostStatesWithSuggestions(
@@ -2374,7 +2407,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         NUM_PENDING_FLAGS = 0 and
-        APPROVAL in ('W', 'A', 'M') and
+        LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
         NUM_EDITS_TO_REVIEW = 0 and
         NUM_COLLAPSES_TO_REVIEW = 0 and
         NUM_MOVES_TO_REVIEW = 0 and
@@ -2383,7 +2416,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           NUM_COLLAPSE_SUGGESTIONS > 0 or
           NUM_MOVE_SUGGESTIONS > 0 or
           NUM_DELETE_SUGGESTIONS > 0)
-        """)
+        """,
+      orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
 
   private def loadPostStatesHandled(
@@ -2392,7 +2426,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         NUM_PENDING_FLAGS = 0 and
-        APPROVAL in ('W', 'A', 'M') and
+        LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
         NUM_EDITS_TO_REVIEW = 0 and
         NUM_COLLAPSES_TO_REVIEW = 0 and
         NUM_MOVES_TO_REVIEW = 0 and
@@ -2402,7 +2436,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         NUM_MOVE_SUGGESTIONS = 0 and
         NUM_DELETE_SUGGESTIONS = 0
         """,
-      orderBy = Some("SITE_ID, CREATED_AT desc"))
+      orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
 
   private def loadPostStatesImpl(
@@ -2432,6 +2466,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
   private def readPostState(rs: js.ResultSet): PostState = {
 
+    val anyApprovedText = Option(rs.getString("APPROVED_TEXT"))
+    val anyUnapprovedTextDiff = Option(rs.getString("UNAPPROVED_TEXT_DIFF"))
+    val anyUnapprovedText = anyUnapprovedTextDiff map { patchText =>
+      applyPatch(patchText, to = anyApprovedText getOrElse "")
+    }
+
     val postActionDto = PostActionDto.forNewPost(
       id = rs.getString("POST_ID"),
       creationDati = ts2d(rs.getTimestamp("CREATED_AT")),
@@ -2439,18 +2479,30 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       userId = rs.getString("AUTHOR_ID"),
       newIp = None, // for now
       parentPostId = rs.getString("PARENT_POST_ID"),
-      text = rs.getString("TEXT"),
+      text = anyUnapprovedText getOrElse anyApprovedText.get,
       markup = rs.getString("MARKUP"),
-      approval = _toAutoApproval(rs.getString("APPROVAL")),
+      approval = _toAutoApproval(rs.getString("LAST_APPROVAL_TYPE")),
       where = Option(rs.getString("WHEERE")))
 
-    PostState(
+    new PostState(
       postActionDto,
-      modifiedAt = ts2d(rs.getTimestamp("MODIFIED_AT")),
+      lastActedUponAt = ts2d(rs.getTimestamp("LAST_ACTED_UPON_AT")),
+      lastReviewDati = ts2o(rs.getTimestamp("LAST_REVIEWED_AT")),
+      lastAuthoritativeReviewDati = ts2o(rs.getTimestamp("LAST_AUTHLY_REVIEWED_AT")),
+      lastApprovalDati = ts2o(rs.getTimestamp("LAST_APPROVED_AT")),
+      lastApprovedText = anyApprovedText,
+      lastPermanentApprovalDati = ts2o(rs.getTimestamp("LAST_PERMANENTLY_APPROVED_AT")),
+      lastManualApprovalDati = ts2o(rs.getTimestamp("LAST_MANUALLY_APPROVED_AT")),
+      lastEditAppliedAt = ts2o(rs.getTimestamp("LAST_EDIT_APPLIED_AT")),
+      lastEditRevertedAt = ts2o(rs.getTimestamp("LAST_EDIT_REVERTED_AT")),
+      lastEditorId = Option(rs.getString("LAST_EDITOR_ID")),
+      collapsed = parseCollapsingAction(rs.getString("COLLAPSED")),
+      deletedAt = ts2o(rs.getTimestamp("DELETED_AT")),
       numEditSuggestions = rs.getInt("NUM_EDIT_SUGGESTIONS"),
       numEditsAppliedUnreviewed = rs.getInt("NUM_EDITS_APPLD_UNREVIEWED"),
       numEditsAppldPrelApproved = rs.getInt("NUM_EDITS_APPLD_PREL_APPROVED"),
       numEditsToReview = rs.getInt("NUM_EDITS_TO_REVIEW"),
+      numDistinctEditors = rs.getInt("NUM_DISTINCT_EDITORS"),
       numCollapseSuggestions = rs.getInt("NUM_COLLAPSE_SUGGESTIONS"),
       numCollapsesToReview = rs.getInt("NUM_COLLAPSES_TO_REVIEW"),
       numMoveSuggestions = rs.getInt("NUM_MOVE_SUGGESTIONS"),

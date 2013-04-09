@@ -102,16 +102,28 @@ object RelDbUtil {
         assert((typee == "Rjct") == approval.isEmpty)
         ReviewPostAction(id = id, postId = postId, loginId = loginSno,
           userId = userId, newIp = newIp, ctime = time, approval = approval)
-      case "CloseTree" => buildAction(PostActionPayload.CloseTree)
-      case "CollapsePost" => buildAction(PostActionPayload.CollapsePost)
-      case "CollapseReplies" => buildAction(PostActionPayload.CollapseReplies)
-      case "CollapseTree" => buildAction(PostActionPayload.CollapseTree)
       case "Undo" => unimplemented
-      case _ =>
-        assErr("DwEY8k3B", s"Bad DW1_ACTIONS.TYPE: `$typee', details: $details")
+      case x =>
+        val anyHidingAction = parseCollapsingAction(x)
+        anyHidingAction match {
+          case Some(hidingPayload) =>
+            buildAction(hidingPayload)
+          case _ =>
+            assErr("DwEY8k3B", s"Bad DW1_ACTIONS.TYPE: `$typee', details: $details")
+        }
     }
     action
   }
+
+
+  def parseCollapsingAction(text: String): Option[PostActionPayload.CollapseSomething] =
+    Some(text match {
+      case "CloseTree" => PostActionPayload.CloseTree
+      case "CollapsePost" => PostActionPayload.CollapsePost
+      case "CollapseReplies" => PostActionPayload.CollapseReplies
+      case "CollapseTree" => PostActionPayload.CollapseTree
+      case _ => return None
+    })
 
 
   def _dummyUserIdFor(identityId: String) = "-"+ identityId

@@ -65,6 +65,10 @@ object RelDb {
   def ts2d(ts: js.Timestamp) =
      (ts eq null) ? (null: ju.Date) | (new ju.Date(ts.getTime))
 
+  /** Converts java.sql.Timestamp to Some(java.util.Date) or None if null. */
+  def ts2o(ts: js.Timestamp): Option[ju.Date] =
+    if (ts eq null) None else Some(new ju.Date(ts.getTime))
+
   def tOrNull(bool: Boolean) = if (bool) "T" else NullVarchar
 
   def isUniqueConstrViolation(sqlException: js.SQLException): Boolean = {

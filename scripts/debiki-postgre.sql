@@ -699,8 +699,20 @@ create table DW1_POSTS(
   MARKUP varchar(30),
   WHEERE varchar(150),
   CREATED_AT timestamp not null,
-  APPROVAL varchar(1), -- same as DW1_PAGE_ACTIONS.APPROVAL
-  MODIFIED_AT timestamp,
+  LAST_ACTED_UPON_AT timestamp,
+  LAST_REVIEWED_AT timestamp,
+  LAST_AUTHLY_REVIEWED_AT timestamp,
+  LAST_APPROVED_AT timestamp,
+  LAST_APPROVAL_TYPE varchar(1), -- same as DW1_PAGE_ACTIONS.APPROVAL
+  LAST_PERMANENTLY_APPROVED_AT timestamp,
+  LAST_MANUALLY_APPROVED_AT timestamp,
+
+  AUTHOR_ID varchar(32),
+
+  LAST_EDIT_APPLIED_AT timestamp,
+  LAST_EDIT_REVERTED_AT timestamp,
+  LAST_EDITOR_ID varchar(32),
+
   COLLAPSED varchar(20), -- Same as DW1_PAGE_ACTIONS.TYPE when like 'Collapse%'
   DELETED_AT timestamp,
 
@@ -708,12 +720,11 @@ create table DW1_POSTS(
   -- what other readers have suggested. For example, if people have suggested that
   -- a comment be moved to another thread, an airplane icon could be shown? :-))
   -- And a little icon could be shown if there are pending edit suggestions?
-
+  --
   -- The NUM_*_TO_REVIEW are used to inform moderators about what things
   -- there are to review. Some things pending review might have been preliminarily
   -- approved (e.g. an edit of a seemingly benevolent user's own comment).
-
-
+  --
   -- There are indexes that sort flagged posts first, then posts pending review,
   -- then posts with edit suggestions, then other posts.
 
@@ -722,6 +733,7 @@ create table DW1_POSTS(
   NUM_EDITS_APPLD_PREL_APPROVED int not null default 0,
   -- Includes unreviewed edits + prel approved edits, + perhaps popular edit suggestions.
   NUM_EDITS_TO_REVIEW int not null default 0,
+  NUM_DISTINCT_EDITORS int not null default 0,
   NUM_COLLAPSE_SUGGESTIONS int not null default 0,
   NUM_COLLAPSES_TO_REVIEW int not null default 0,
   NUM_MOVE_SUGGESTIONS int not null default 0,
@@ -731,42 +743,46 @@ create table DW1_POSTS(
   NUM_PENDING_FLAGS int not null default 0,
   NUM_HANDLED_FLAGS int not null default 0,
 
-  AUTHOR_ID varchar(32),
-  LAST_EDITOR_ID varchar(32),
-
   -- Will be an array of tuples?: [(flag, count), (flag2, count2), ...]
   FLAGS varchar(100),
   RATINGS varchar(100),
-  TEXT text,
+  APPROVED_TEXT text,
+  UNAPPROVED_TEXT_DIFF text,
 
   constraint DW1_POSTS_SITE_PAGE_POST__P primary key (SITE_ID, PAGE_ID, POST_ID),
-  constraint DW1_POSTS_APPROVAL__C_IN check (APPROVAL in ('P', 'W', 'A', 'M')),
+  constraint DW1_POSTS_APPROVAL__C_IN check (LAST_APPROVAL_TYPE in ('P', 'W', 'A', 'M')),
   constraint DW1_POSTS_COLLAPSED__C_IN check (COLLAPSED in (
         'CollapsePost', 'CollapseTree', 'CollapseReplies'))
 );
 
 
 -- Flags are important — we first show all posts with unhandled flags...
+-- (NOTE: If you edit this index, update the corresponding `where` test
+-- in RelDbTenantDao.loadPostStatesPendingFlags, or there'll be full table scans!)
 create index DW1_POSTS_PENDING_FLAGS on DW1_POSTS (SITE_ID, NUM_PENDING_FLAGS)
   where
     NUM_PENDING_FLAGS > 0;
 
 -- ...Then unapproved posts, or posts with changes in need of review (that is,
 -- edits not yet reviewed, or edits preliminarily approved by the computer)...
-create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, MODIFIED_AT)
+-- (NOTE: If you edit this index, update the corresponding `where` test
+-- in RelDbTenantDao.loadPostStatesPendingApproval.)
+create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
   where
     NUM_PENDING_FLAGS = 0 and (
-      (APPROVAL is null or APPROVAL = 'P') or
+      (LAST_APPROVAL_TYPE is null or LAST_APPROVAL_TYPE = 'P') or
       NUM_EDITS_TO_REVIEW > 0 or
       NUM_COLLAPSES_TO_REVIEW > 0 or
       NUM_MOVES_TO_REVIEW > 0 or
       NUM_DELETES_TO_REVIEW > 0);
 
 -- ...Then things with pending suggestions...
-create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, MODIFIED_AT)
+-- (NOTE: If you edit this index, update the corresponding `where` test
+-- in RelDbTenantDao.loadPostStatesWithSuggestions.)
+create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
   where
     NUM_PENDING_FLAGS = 0 and
-    APPROVAL in ('W', 'A', 'M') and
+    LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
     NUM_EDITS_TO_REVIEW = 0 and
     NUM_COLLAPSES_TO_REVIEW = 0 and
     NUM_MOVES_TO_REVIEW = 0 and
@@ -776,12 +792,14 @@ create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, MODIFIED_AT)
       NUM_MOVE_SUGGESTIONS > 0 or
       NUM_DELETE_SUGGESTIONS > 0);
 
--- And last of all, posts with nothing to review, and no pending suggestionis.
+-- And last of all, posts with nothing to review, and no pending suggestions.
 -- (Including new auto approved posts by well behaved users.)
-create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, MODIFIED_AT)
+-- (NOTE: If you edit this index, update the corresponding `where` test
+-- in RelDbTenantDao.loadPostStatesHandled.)
+create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
   where
     NUM_PENDING_FLAGS = 0 and
-    APPROVAL in ('W', 'A', 'M') and
+    LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
     NUM_EDITS_TO_REVIEW = 0 and
     NUM_COLLAPSES_TO_REVIEW = 0 and
     NUM_MOVES_TO_REVIEW = 0 and
