@@ -1011,10 +1011,34 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
       val posts = pagesById.values.flatMap(_.getAllPosts).toList
 
-      // SHOULD sort posts so flags appear first, then new posts pending approval, then
+      // Sort posts so flags appear first, then new posts pending approval, then
       // pending edits, then edit suggestions, then old posts with nothing new.
+      // The sort order must match the indexes used when loading posts — see the
+      // `loadPostStates...` invokations above.
 
-      (posts, people)
+      def sortFn(a: Post, b: Post): Boolean = {
+        if (a.numPendingFlags > b.numPendingFlags) return true
+        if (a.numPendingFlags < b.numPendingFlags) return false
+
+        val aIsPendingReview = !a.currentVersionPermReviewed
+        val bIsPendingReview = !b.currentVersionPermReviewed
+
+        if (aIsPendingReview && !bIsPendingReview) return true
+        if (!aIsPendingReview && bIsPendingReview) return false
+        if (aIsPendingReview && bIsPendingReview)
+          return a.lastActedUponAt.getTime > b.lastActedUponAt.getTime
+
+        if (a.numPendingEditSuggestions > 0 && b.numPendingEditSuggestions == 0)
+          return true
+        if (a.numPendingEditSuggestions == 0 && b.numPendingEditSuggestions > 0)
+          return false
+
+        a.lastActedUponAt.getTime > b.lastActedUponAt.getTime
+      }
+
+      val postsSorted = posts sortWith sortFn
+
+      (postsSorted, people)
     }
   }
 
