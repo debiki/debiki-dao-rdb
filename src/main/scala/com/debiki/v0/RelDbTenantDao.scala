@@ -44,10 +44,16 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       require(page.tenantId == tenantId)
       // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
       _createPage(page)
+
+      // Now, when saving actions, start with an empty page, or there'll be
+      // id clashes when savePageActionsImpl adds the saved actions to
+      // the page (since the title/body creation actions would already be present).
       val (newParts, actionDtosWithIds) =
-        savePageActionsImpl(page.parts, page.parts.actionDtos)
+        savePageActionsImpl(PageParts(page.id), page.parts.actionDtos)
+
       val newPageMeta = _loadPageMeta(page.id) getOrElse runErr(
         "DwE1RHK5", s"Found no meta for newly created page, id: ${page.id}")
+
       page.copy(meta = newPageMeta, parts = newParts)
     }
   }
