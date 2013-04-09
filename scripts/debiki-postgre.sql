@@ -118,6 +118,16 @@ DW1_LOGINS PK should include TENANT_ID
 DW1_NOTFS_PAGE_ACTIONS.TARGET_PGA --> TRIGGER_PGA, NOT NULL
     TARGET_USER_DISP_NAME --> TRIGGER_USER.., NOT NULL
 
+Remove DW1_NOTFS_PAGE_ACTIONS.PAGE_TITLE column — join with DW1_PAGES instead (since
+nowadays the title is cached in DW1_PAGES).
+Also remove cached _disp_name columns — join with DW1_GUESTS/_USERS (_ROLES) instead.
+
+
+? Use CHECK constraint for VARCHAR's, never use varchar(nnn) to restrict length to <= nnn, see:
+  http://dba.stackexchange.com/questions/20974/should-i-add-an-arbitrary-length-limit-to-varchar-columns
+
+Consider clustering data.
+
 */
 
 /*
