@@ -21,7 +21,7 @@ import collection.mutable.StringBuilder
 class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         val systemDaoSpi: RelDbSystemDbDao)
    extends TenantDbDao {
-  // COULD serialize access, per page?
+
 
   val MaxWebsitesPerIp = 6
 
@@ -41,20 +41,18 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
                                           // method used in all DAO modules!
     }
     db.transaction { implicit connection =>
-      require(page.tenantId == tenantId)
+      require(page.siteId == siteId)
       // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
       _createPage(page)
 
       // Now, when saving actions, start with an empty page, or there'll be
       // id clashes when savePageActionsImpl adds the saved actions to
       // the page (since the title/body creation actions would already be present).
-      val (newParts, actionDtosWithIds) =
-        savePageActionsImpl(PageParts(page.id), page.parts.actionDtos)
+      val emptyPage = PageNoPath(PageParts(page.id), page.meta)
+      val (newPageNoPath, actionDtosWithIds) =
+        savePageActionsImpl(emptyPage, page.parts.actionDtos)
 
-      val newPageMeta = _loadPageMeta(page.id) getOrElse runErr(
-        "DwE1RHK5", s"Found no meta for newly created page, id: ${page.id}")
-
-      page.copy(meta = newPageMeta, parts = newParts)
+      Page(newPageNoPath.meta, page.path, newPageNoPath.parts)
     }
   }
 
@@ -2095,20 +2093,34 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   override def savePageActions[T <: PostActionDtoOld](
-        pageParts: PageParts, actions: List[T]): (PageParts, List[T]) = {
+        page: PageNoPath, actions: List[T]): (PageNoPath, List[T]) = {
     db.transaction { implicit connection =>
-      savePageActionsImpl(pageParts, actions)
+      savePageActionsImpl(page, actions)
     }
   }
 
 
   private def savePageActionsImpl[T <: PostActionDtoOld](
-        pageParts: PageParts, actions: List[T])(
-        implicit conn: js.Connection):  (PageParts, List[T]) = {
-    val actionsWithIds = insertActions(pageParts.pageId, actions)
-    val newParts = pageParts ++ actionsWithIds
+        page: PageNoPath, actions: List[T])(
+        implicit conn: js.Connection):  (PageNoPath, List[T]) = {
+
+    // Save new actions.
+    val actionsWithIds = insertActions(page.id, actions)
+
+    // Notify users whose posts were affected (e.g. if someone got a new reply).
+    val notfs = NotfGenerator(page.parts, actionsWithIds).generateNotfs
+    saveNotfs(notfs)
+
+    // Update cached post states (e.g. the current text of a comment).
+    val newParts = page.parts ++ actionsWithIds
     insertUpdatePosts(newParts, actionsWithIds.map(_.postId).distinct)
-    (newParts, actionsWithIds)
+
+    // Update cached page meta (e.g. the page title).
+    val newMeta = PageMeta.forChangedPage(page.meta, newParts)
+    if (newMeta != page.meta)
+      updatePageMeta(newMeta, old = page.meta)
+
+    (PageNoPath(newParts, newMeta), actionsWithIds)
   }
 
 
