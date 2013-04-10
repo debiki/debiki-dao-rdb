@@ -48,7 +48,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       // Now, when saving actions, start with an empty page, or there'll be
       // id clashes when savePageActionsImpl adds the saved actions to
       // the page (since the title/body creation actions would already be present).
-      val emptyPage = PageNoPath(PageParts(page.id), page.meta)
+      val emptyPage = PageNoPath(PageParts(page.id), page.meta.copy(pageExists = true))
       val (newPageNoPath, actionDtosWithIds) =
         savePageActionsImpl(emptyPage, page.parts.actionDtos)
 
@@ -2118,7 +2118,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     // Update cached page meta (e.g. the page title).
     val newMeta = PageMeta.forChangedPage(page.meta, newParts)
     if (newMeta != page.meta)
-      updatePageMeta(newMeta, old = page.meta)
+      _updatePageMeta(newMeta, anyOld = Some(page.meta))
 
     (PageNoPath(newParts, newMeta), actionsWithIds)
   }
