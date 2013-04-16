@@ -118,9 +118,7 @@ object RelDbUtil {
 
   def parseCollapsingAction(text: String): Option[PostActionPayload.CollapseSomething] =
     Some(text match {
-      case "CloseTree" => PostActionPayload.CloseTree
       case "CollapsePost" => PostActionPayload.CollapsePost
-      case "CollapseReplies" => PostActionPayload.CollapseReplies
       case "CollapseTree" => PostActionPayload.CollapseTree
       case _ => return None
     })

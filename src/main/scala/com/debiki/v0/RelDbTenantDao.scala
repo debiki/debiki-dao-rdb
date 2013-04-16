@@ -2237,9 +2237,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
               db.update(insertIntoActions, commonVals:::List(
                 "Post", p.parentPostId, e2n(p.text), e2n(p.markup), e2n(p.where),
                 _toDbVal(p.approval), NullVarchar))
-            case PAP.CloseTree => insertSimpleValue("CloseTree")
             case PAP.CollapsePost => insertSimpleValue("CollapsePost")
-            case PAP.CollapseReplies => insertSimpleValue("CollapseReplies")
             case PAP.CollapseTree => insertSimpleValue("CollapseTree")
             case PAP.Undo(_) => unimplemented
           }

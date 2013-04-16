@@ -788,8 +788,7 @@ create table DW1_POSTS(
 
   constraint DW1_POSTS_SITE_PAGE_POST__P primary key (SITE_ID, PAGE_ID, POST_ID),
   constraint DW1_POSTS_APPROVAL__C_IN check (LAST_APPROVAL_TYPE in ('P', 'W', 'A', 'M')),
-  constraint DW1_POSTS_COLLAPSED__C_IN check (COLLAPSED in (
-        'CollapsePost', 'CollapseTree', 'CollapseReplies'))
+  constraint DW1_POSTS_COLLAPSED__C_IN check (COLLAPSED in ('CollapsePost', 'CollapseTree'))
 );
 
 
@@ -947,15 +946,21 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS__R__PAGES -- deprecated. Ix DW1_PACTIONS_PAGE_PAID__P
       foreign key (PAGE)
       references DW1_PAGES (SNO) deferrable,
+  ----- todo prod done test,dev:
+  -- update dw1_page_actions set type = 'CollapseTree' where type = 'CloseTree';
+  -- update dw1_page_actions set type = 'CollapseTree' where type = 'CollapseReplies';
+  -- alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
+  -- alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Edit', 'EditApp',
         'Aprv', 'Rjct',
         'Rating',
         'MoveTree',
-        'CloseTree', 'CollapsePost', 'CollapseTree', 'CollapseReplies',
+        'CollapsePost', 'CollapseTree',
         'DelPost', 'DelTree',
         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther',
-        'Undo')),
+        'Undo', 'VoteUp', 'VoteDown')),
+  ----------------
   -- There must be no action with id 0; let 0 mean nothing.
   constraint DW1_PACTIONS_PAID_NOT_0__C
       check (PAID <> '0'),
