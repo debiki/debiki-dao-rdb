@@ -744,12 +744,39 @@ create table DW1_POSTS(
   -- Includes unreviewed edits + prel approved edits, + perhaps popular edit suggestions.
   NUM_EDITS_TO_REVIEW int not null default 0,
   NUM_DISTINCT_EDITORS int not null default 0,
-  NUM_COLLAPSE_SUGGESTIONS int not null default 0,
+
+  NUM_OLD_COLLAPSE_POST_VOTES int not null default 0,
+  NUM_OLD_COLLAPSE_TREE_VOTES int not null default 0,
+  NUM_OLD_UNCOLLAPSE_POST_VOTES int not null default 0,
+  NUM_OLD_UNCOLLAPSE_TREE_VOTES int not null default 0,
+  NUM_PEND_COLLAPSE_POST_VOTES int not null default 0,
+  NUM_PEND_COLLAPSE_TREE_VOTES int not null default 0,
+  NUM_PEND_UNCOLLAPSE_POST_VOTES int not null default 0,
+  NUM_PEND_UNCOLLAPSE_TREE_VOTES int not null default 0,
+
   NUM_COLLAPSES_TO_REVIEW int not null default 0,
-  NUM_MOVE_SUGGESTIONS int not null default 0,
+  NUM_UNCOLLAPSES_TO_REVIEW int not null default 0,
+
+  NUM_OLD_MOVE_VOTES int not null default 0,
+  NUM_OLD_UNMOVE_VOTES int not null default 0,
+  NUM_PEND_MOVE_VOTES int not null default 0,
+  NUM_PEND_UNMOVE_VOTES int not null default 0,
+
   NUM_MOVES_TO_REVIEW int not null default 0,
-  NUM_DELETE_SUGGESTIONS int not null default 0,
+  NUM_UNMOVES_TO_REVIEW int not null default 0,
+
+  NUM_OLD_DELETE_POST_VOTES int not null default 0,
+  NUM_OLD_DELETE_TREE_VOTES int not null default 0,
+  NUM_OLD_UNDELETE_POST_VOTES int not null default 0,
+  NUM_OLD_UNDELETE_TREE_VOTES int not null default 0,
+  NUM_PEND_DELETE_POST_VOTES int not null default 0,
+  NUM_PEND_DELETE_TREE_VOTES int not null default 0,
+  NUM_PEND_UNDELETE_POST_VOTES int not null default 0,
+  NUM_PEND_UNDELETE_TREE_VOTES int not null default 0,
+
   NUM_DELETES_TO_REVIEW int not null default 0, -- should auto delete comments w/ many flags?
+  NUM_UNDELETES_TO_REVIEW int not null default 0,
+
   NUM_PENDING_FLAGS int not null default 0,
   NUM_HANDLED_FLAGS int not null default 0,
 
@@ -783,8 +810,11 @@ create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
       (LAST_APPROVAL_TYPE is null or LAST_APPROVAL_TYPE = 'P') or
       NUM_EDITS_TO_REVIEW > 0 or
       NUM_COLLAPSES_TO_REVIEW > 0 or
+      NUM_UNCOLLAPSES_TO_REVIEW > 0 or
       NUM_MOVES_TO_REVIEW > 0 or
-      NUM_DELETES_TO_REVIEW > 0);
+      NUM_UNMOVES_TO_REVIEW > 0 or
+      NUM_DELETES_TO_REVIEW > 0 or
+      NUM_UNDELETES_TO_REVIEW > 0);
 
 -- ...Then things with pending suggestions...
 -- (NOTE: If you edit this index, update the corresponding `where` test
@@ -795,12 +825,22 @@ create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, LAST_ACTED_UPON
     LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
     NUM_EDITS_TO_REVIEW = 0 and
     NUM_COLLAPSES_TO_REVIEW = 0 and
+    NUM_UNCOLLAPSES_TO_REVIEW = 0 and
     NUM_MOVES_TO_REVIEW = 0 and
-    NUM_DELETES_TO_REVIEW = 0 and (
+    NUM_UNMOVES_TO_REVIEW = 0 and
+    NUM_DELETES_TO_REVIEW = 0 and
+    NUM_UNDELETES_TO_REVIEW = 0 and (
       NUM_EDIT_SUGGESTIONS > 0 or
-      NUM_COLLAPSE_SUGGESTIONS > 0 or
-      NUM_MOVE_SUGGESTIONS > 0 or
-      NUM_DELETE_SUGGESTIONS > 0);
+      NUM_PEND_COLLAPSE_POST_VOTES > 0 or
+      NUM_PEND_COLLAPSE_TREE_VOTES > 0 or
+      NUM_PEND_UNCOLLAPSE_POST_VOTES > 0 or
+      NUM_PEND_UNCOLLAPSE_TREE_VOTES > 0 or
+      NUM_PEND_MOVE_VOTES > 0 or
+      NUM_PEND_UNMOVE_VOTES > 0 or
+      NUM_PEND_DELETE_POST_VOTES > 0 or
+      NUM_PEND_DELETE_TREE_VOTES > 0 or
+      NUM_PEND_UNDELETE_POST_VOTES > 0 or
+      NUM_PEND_UNDELETE_TREE_VOTES > 0);
 
 -- And last of all, posts with nothing to review, and no pending suggestions.
 -- (Including new auto approved posts by well behaved users.)
@@ -812,12 +852,22 @@ create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT
     LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
     NUM_EDITS_TO_REVIEW = 0 and
     NUM_COLLAPSES_TO_REVIEW = 0 and
+    NUM_UNCOLLAPSES_TO_REVIEW = 0 and
     NUM_MOVES_TO_REVIEW = 0 and
+    NUM_UNMOVES_TO_REVIEW = 0 and
     NUM_DELETES_TO_REVIEW = 0 and
+    NUM_UNDELETES_TO_REVIEW = 0 and
     NUM_EDIT_SUGGESTIONS = 0 and
-    NUM_COLLAPSE_SUGGESTIONS = 0 and
-    NUM_MOVE_SUGGESTIONS = 0 and
-    NUM_DELETE_SUGGESTIONS = 0;
+    NUM_PEND_COLLAPSE_POST_VOTES = 0 and
+    NUM_PEND_COLLAPSE_TREE_VOTES = 0 and
+    NUM_PEND_UNCOLLAPSE_POST_VOTES = 0 and
+    NUM_PEND_UNCOLLAPSE_TREE_VOTES = 0 and
+    NUM_PEND_MOVE_VOTES = 0 and
+    NUM_PEND_UNMOVE_VOTES = 0 and
+    NUM_PEND_DELETE_POST_VOTES = 0 and
+    NUM_PEND_DELETE_TREE_VOTES = 0 and
+    NUM_PEND_UNDELETE_POST_VOTES = 0 and
+    NUM_PEND_UNDELETE_TREE_VOTES = 0;
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------

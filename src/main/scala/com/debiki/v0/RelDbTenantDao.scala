@@ -2293,17 +2293,42 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         LAST_EDITOR_ID = ?,
         COLLAPSED = ?,
         DELETED_AT = ?,
+
         NUM_EDIT_SUGGESTIONS = ?,
         NUM_EDITS_APPLD_UNREVIEWED = ?,
         NUM_EDITS_APPLD_PREL_APPROVED = ?,
         NUM_EDITS_TO_REVIEW = ?,
         NUM_DISTINCT_EDITORS = ?,
-        NUM_COLLAPSE_SUGGESTIONS = ?,
+
+        NUM_OLD_COLLAPSE_POST_VOTES = ?,
+        NUM_OLD_COLLAPSE_TREE_VOTES = ?,
+        NUM_OLD_UNCOLLAPSE_POST_VOTES = ?,
+        NUM_OLD_UNCOLLAPSE_TREE_VOTES = ?,
+        NUM_PEND_COLLAPSE_POST_VOTES = ?,
+        NUM_PEND_COLLAPSE_TREE_VOTES = ?,
+        NUM_PEND_UNCOLLAPSE_POST_VOTES = ?,
+        NUM_PEND_UNCOLLAPSE_TREE_VOTES = ?,
         NUM_COLLAPSES_TO_REVIEW = ?,
-        NUM_MOVE_SUGGESTIONS = ?,
+        NUM_UNCOLLAPSES_TO_REVIEW = ?,
+
+        NUM_OLD_MOVE_VOTES = ?,
+        NUM_OLD_UNMOVE_VOTES = ?,
+        NUM_PEND_MOVE_VOTES = ?,
+        NUM_PEND_UNMOVE_VOTES = ?,
         NUM_MOVES_TO_REVIEW = ?,
-        NUM_DELETE_SUGGESTIONS = ?,
+        NUM_UNMOVES_TO_REVIEW = ?,
+
+        NUM_OLD_DELETE_POST_VOTES = ?,
+        NUM_OLD_DELETE_TREE_VOTES = ?,
+        NUM_OLD_UNDELETE_POST_VOTES = ?,
+        NUM_OLD_UNDELETE_TREE_VOTES = ?,
+        NUM_PEND_DELETE_POST_VOTES = ?,
+        NUM_PEND_DELETE_TREE_VOTES = ?,
+        NUM_PEND_UNDELETE_POST_VOTES = ?,
+        NUM_PEND_UNDELETE_TREE_VOTES = ?,
         NUM_DELETES_TO_REVIEW = ?,
+        NUM_UNDELETES_TO_REVIEW = ?,
+
         NUM_PENDING_FLAGS = ?,
         NUM_HANDLED_FLAGS = ?,
         FLAGS = ?,
@@ -2332,17 +2357,42 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         LAST_EDITOR_ID,
         COLLAPSED,
         DELETED_AT,
+
         NUM_EDIT_SUGGESTIONS,
         NUM_EDITS_APPLD_UNREVIEWED,
         NUM_EDITS_APPLD_PREL_APPROVED,
         NUM_EDITS_TO_REVIEW,
         NUM_DISTINCT_EDITORS,
-        NUM_COLLAPSE_SUGGESTIONS,
+
+        NUM_OLD_COLLAPSE_POST_VOTES,
+        NUM_OLD_COLLAPSE_TREE_VOTES,
+        NUM_OLD_UNCOLLAPSE_POST_VOTES,
+        NUM_OLD_UNCOLLAPSE_TREE_VOTES,
+        NUM_PEND_COLLAPSE_POST_VOTES,
+        NUM_PEND_COLLAPSE_TREE_VOTES,
+        NUM_PEND_UNCOLLAPSE_POST_VOTES,
+        NUM_PEND_UNCOLLAPSE_TREE_VOTES,
         NUM_COLLAPSES_TO_REVIEW,
-        NUM_MOVE_SUGGESTIONS,
+        NUM_UNCOLLAPSES_TO_REVIEW,
+
+        NUM_OLD_MOVE_VOTES,
+        NUM_OLD_UNMOVE_VOTES,
+        NUM_PEND_MOVE_VOTES,
+        NUM_PEND_UNMOVE_VOTES,
         NUM_MOVES_TO_REVIEW,
-        NUM_DELETE_SUGGESTIONS,
+        NUM_UNMOVES_TO_REVIEW,
+
+        NUM_OLD_DELETE_POST_VOTES,
+        NUM_OLD_DELETE_TREE_VOTES,
+        NUM_OLD_UNDELETE_POST_VOTES,
+        NUM_OLD_UNDELETE_TREE_VOTES,
+        NUM_PEND_DELETE_POST_VOTES,
+        NUM_PEND_DELETE_TREE_VOTES,
+        NUM_PEND_UNDELETE_POST_VOTES,
+        NUM_PEND_UNDELETE_TREE_VOTES,
         NUM_DELETES_TO_REVIEW,
+        NUM_UNDELETES_TO_REVIEW,
+
         NUM_PENDING_FLAGS,
         NUM_HANDLED_FLAGS,
         FLAGS,
@@ -2354,12 +2404,13 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?)"""
 
     val collapsed: AnyRef =
-      if (post.isOnlyPostCollapsed) "P"
-      else if (post.areRepliesCollapsed) "R"
-      else if (post.isTreeCollapsed) "A"
+      if (post.isTreeCollapsed) "CollapseTree"
+      else if (post.isPostCollapsed) "CollapsePost"
       else NullVarchar
 
     val anyLastEditor = post.editsAppliedDescTime.headOption.map(_.user_!)
@@ -2390,12 +2441,41 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       post.numEditsAppldPrelApproved.asInstanceOf[AnyRef],
       post.numEditsToReview.asInstanceOf[AnyRef],
       post.numDistinctEditors.asInstanceOf[AnyRef],
-      post.numCollapseSuggestions.asInstanceOf[AnyRef],
+
+      0.asInstanceOf[AnyRef], // post.numCollapsePostVotes.old,
+      0.asInstanceOf[AnyRef], // post.numCollapseTreeVotes.old,
+      0.asInstanceOf[AnyRef], // post.numCollapsePostVotes.undoOld,
+      0.asInstanceOf[AnyRef], // post.numCollapseTreeVotes.undoOld,
+
+      post.numCollapsePostVotesPending.asInstanceOf[AnyRef], // post.numCollapsePostVotes.pending,
+      post.numCollapseTreeVotesPending.asInstanceOf[AnyRef], // post.numCollapseTreeVotes.pending,
+      0.asInstanceOf[AnyRef], // post.numCollapsePostVotes.undoPending,
+      0.asInstanceOf[AnyRef], // post.numCollapseTreeVotes.undoPending,
+
       post.numCollapsesToReview.asInstanceOf[AnyRef],
-      post.numMoveSuggestions.asInstanceOf[AnyRef],
+      post.numUncollapsesToReview.asInstanceOf[AnyRef],
+
+      0.asInstanceOf[AnyRef], // post.numMoveVotes.old,
+      0.asInstanceOf[AnyRef], // post.numMoveVotes.undoOld,
+      post.numMoveVotesPending.asInstanceOf[AnyRef], // post.numMoveVotes.pending,
+      0.asInstanceOf[AnyRef], // post.numMoveVotes.undoPending,
+
       post.numMovesToReview.asInstanceOf[AnyRef],
-      post.numDeleteSuggestions.asInstanceOf[AnyRef],
+      post.numUnmovesToReview.asInstanceOf[AnyRef],
+
+      0.asInstanceOf[AnyRef], // post.numDeletePostVotes.old,
+      0.asInstanceOf[AnyRef], // post.numDeleteTreeVotes.old,
+      0.asInstanceOf[AnyRef], // post.numDeletePostVotes.undoOld,
+      0.asInstanceOf[AnyRef], // post.numDeleteTreeVotes.undoOld,
+
+      post.numDeletePostVotesPending.asInstanceOf[AnyRef], // post.numDeletePostVotes.pending,
+      post.numDeleteTreeVotesPending.asInstanceOf[AnyRef], // post.numDeleteTreeVotes.pending,
+      0.asInstanceOf[AnyRef], // post.numDeletePostVotes.undoPending,
+      0.asInstanceOf[AnyRef], // post.numDeleteTreeVotes.undoPending,
+
       post.numDeletesToReview.asInstanceOf[AnyRef],
+      post.numUndeletesToReview.asInstanceOf[AnyRef],
+
       post.numPendingFlags.asInstanceOf[AnyRef],
       post.numHandledFlags.asInstanceOf[AnyRef],
       NullVarchar, // post.flagsDescTime
@@ -2437,8 +2517,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           (LAST_APPROVAL_TYPE is null or LAST_APPROVAL_TYPE = 'P') or
           NUM_EDITS_TO_REVIEW > 0 or
           NUM_COLLAPSES_TO_REVIEW > 0 or
+          NUM_UNCOLLAPSES_TO_REVIEW > 0 or
           NUM_MOVES_TO_REVIEW > 0 or
-          NUM_DELETES_TO_REVIEW > 0)
+          NUM_UNMOVES_TO_REVIEW > 0 or
+          NUM_DELETES_TO_REVIEW > 0 or
+          NUM_UNDELETES_TO_REVIEW > 0)
         """,
       orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
@@ -2452,12 +2535,22 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
         NUM_EDITS_TO_REVIEW = 0 and
         NUM_COLLAPSES_TO_REVIEW = 0 and
+        NUM_UNCOLLAPSES_TO_REVIEW = 0 and
         NUM_MOVES_TO_REVIEW = 0 and
-        NUM_DELETES_TO_REVIEW = 0 and (
+        NUM_UNMOVES_TO_REVIEW = 0 and
+        NUM_DELETES_TO_REVIEW = 0 and
+        NUM_UNDELETES_TO_REVIEW = 0 and (
           NUM_EDIT_SUGGESTIONS > 0 or
-          NUM_COLLAPSE_SUGGESTIONS > 0 or
-          NUM_MOVE_SUGGESTIONS > 0 or
-          NUM_DELETE_SUGGESTIONS > 0)
+          NUM_PEND_COLLAPSE_POST_VOTES > 0 or
+          NUM_PEND_COLLAPSE_TREE_VOTES > 0 or
+          NUM_PEND_UNCOLLAPSE_POST_VOTES > 0 or
+          NUM_PEND_UNCOLLAPSE_TREE_VOTES > 0 or
+          NUM_PEND_MOVE_VOTES > 0 or
+          NUM_PEND_UNMOVE_VOTES > 0 or
+          NUM_PEND_DELETE_POST_VOTES > 0 or
+          NUM_PEND_DELETE_TREE_VOTES > 0 or
+          NUM_PEND_UNDELETE_POST_VOTES > 0 or
+          NUM_PEND_UNDELETE_TREE_VOTES > 0)
         """,
       orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
@@ -2471,12 +2564,22 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
         NUM_EDITS_TO_REVIEW = 0 and
         NUM_COLLAPSES_TO_REVIEW = 0 and
+        NUM_UNCOLLAPSES_TO_REVIEW = 0 and
         NUM_MOVES_TO_REVIEW = 0 and
+        NUM_UNMOVES_TO_REVIEW = 0 and
         NUM_DELETES_TO_REVIEW = 0 and
+        NUM_UNDELETES_TO_REVIEW = 0 and
         NUM_EDIT_SUGGESTIONS = 0 and
-        NUM_COLLAPSE_SUGGESTIONS = 0 and
-        NUM_MOVE_SUGGESTIONS = 0 and
-        NUM_DELETE_SUGGESTIONS = 0
+        NUM_PEND_COLLAPSE_POST_VOTES = 0 and
+        NUM_PEND_COLLAPSE_TREE_VOTES = 0 and
+        NUM_PEND_UNCOLLAPSE_POST_VOTES = 0 and
+        NUM_PEND_UNCOLLAPSE_TREE_VOTES = 0 and
+        NUM_PEND_MOVE_VOTES = 0 and
+        NUM_PEND_UNMOVE_VOTES = 0 and
+        NUM_PEND_DELETE_POST_VOTES = 0 and
+        NUM_PEND_DELETE_TREE_VOTES = 0 and
+        NUM_PEND_UNDELETE_POST_VOTES = 0 and
+        NUM_PEND_UNDELETE_TREE_VOTES = 0
         """,
       orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
@@ -2545,12 +2648,37 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       numEditsAppldPrelApproved = rs.getInt("NUM_EDITS_APPLD_PREL_APPROVED"),
       numEditsToReview = rs.getInt("NUM_EDITS_TO_REVIEW"),
       numDistinctEditors = rs.getInt("NUM_DISTINCT_EDITORS"),
-      numCollapseSuggestions = rs.getInt("NUM_COLLAPSE_SUGGESTIONS"),
+      numCollapsePostVotes = PostVoteState(
+        pending = rs.getInt("NUM_PEND_COLLAPSE_POST_VOTES"),
+        old = rs.getInt("NUM_OLD_COLLAPSE_POST_VOTES"),
+        undoPending = rs.getInt("NUM_PEND_UNCOLLAPSE_POST_VOTES"),
+        undoOld = rs.getInt("NUM_OLD_UNCOLLAPSE_POST_VOTES")),
+      numCollapseTreeVotes = PostVoteState(
+        pending = rs.getInt("NUM_PEND_COLLAPSE_TREE_VOTES"),
+        old = rs.getInt("NUM_OLD_COLLAPSE_TREE_VOTES"),
+        undoPending = rs.getInt("NUM_PEND_UNCOLLAPSE_TREE_VOTES"),
+        undoOld = rs.getInt("NUM_OLD_UNCOLLAPSE_TREE_VOTES")),
       numCollapsesToReview = rs.getInt("NUM_COLLAPSES_TO_REVIEW"),
-      numMoveSuggestions = rs.getInt("NUM_MOVE_SUGGESTIONS"),
+      numUncollapsesToReview = rs.getInt("NUM_UNCOLLAPSES_TO_REVIEW"),
+      numMoveVotes = PostVoteState(
+        pending = rs.getInt("NUM_PEND_MOVE_VOTES"),
+        old = rs.getInt("NUM_OLD_MOVE_VOTES"),
+        undoPending = rs.getInt("NUM_PEND_UNMOVE_VOTES"),
+        undoOld = rs.getInt("NUM_OLD_UNMOVE_VOTES")),
       numMovesToReview = rs.getInt("NUM_MOVES_TO_REVIEW"),
-      numDeleteSuggestions = rs.getInt("NUM_DELETE_SUGGESTIONS"),
+      numUnmovesToReview = rs.getInt("NUM_UNMOVES_TO_REVIEW"),
+      numDeletePostVotes = PostVoteState(
+        pending = rs.getInt("NUM_PEND_DELETE_POST_VOTES"),
+        old = rs.getInt("NUM_OLD_DELETE_POST_VOTES"),
+        undoPending = rs.getInt("NUM_PEND_UNDELETE_POST_VOTES"),
+        undoOld = rs.getInt("NUM_OLD_UNDELETE_POST_VOTES")),
+      numDeleteTreeVotes = PostVoteState(
+        pending = rs.getInt("NUM_PEND_DELETE_TREE_VOTES"),
+        old = rs.getInt("NUM_OLD_DELETE_TREE_VOTES"),
+        undoPending = rs.getInt("NUM_PEND_UNDELETE_TREE_VOTES"),
+        undoOld = rs.getInt("NUM_OLD_UNDELETE_TREE_VOTES")),
       numDeletesToReview = rs.getInt("NUM_DELETES_TO_REVIEW"),
+      numUndeletesToReview = rs.getInt("NUM_UNDELETES_TO_REVIEW"),
       numPendingFlags = rs.getInt("NUM_PENDING_FLAGS"),
       numHandledFlags = rs.getInt("NUM_HANDLED_FLAGS"))
   }
