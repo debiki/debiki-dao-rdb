@@ -723,8 +723,10 @@ create table DW1_POSTS(
   LAST_EDIT_REVERTED_AT timestamp,
   LAST_EDITOR_ID varchar(32),
 
-  COLLAPSED varchar(20), -- Same as DW1_PAGE_ACTIONS.TYPE when like 'Collapse%'
-  DELETED_AT timestamp,
+  POST_COLLAPSED_AT timestamp,
+  TREE_COLLAPSED_AT timestamp,
+  POST_DELETED_AT timestamp,
+  TREE_DELETED_AT timestamp,
 
   -- These NUM_*_SUGGESTIONS are used when rendering a page, so people can see
   -- what other readers have suggested. For example, if people have suggested that
@@ -738,47 +740,45 @@ create table DW1_POSTS(
   -- There are indexes that sort flagged posts first, then posts pending review,
   -- then posts with edit suggestions, then other posts.
 
-  NUM_EDIT_SUGGESTIONS int not null default 0,
-  NUM_EDITS_APPLD_UNREVIEWED int not null default 0,
-  NUM_EDITS_APPLD_PREL_APPROVED int not null default 0,
+  NUM_EDIT_SUGGESTIONS smallint not null default 0,
+  NUM_EDITS_APPLD_UNREVIEWED smallint not null default 0,
+  NUM_EDITS_APPLD_PREL_APPROVED smallint not null default 0,
   -- Includes unreviewed edits + prel approved edits, + perhaps popular edit suggestions.
-  NUM_EDITS_TO_REVIEW int not null default 0,
-  NUM_DISTINCT_EDITORS int not null default 0,
+  NUM_EDITS_TO_REVIEW smallint not null default 0,
+  NUM_DISTINCT_EDITORS smallint not null default 0,
 
-  NUM_OLD_COLLAPSE_POST_VOTES int not null default 0,
-  NUM_OLD_COLLAPSE_TREE_VOTES int not null default 0,
-  NUM_OLD_UNCOLLAPSE_POST_VOTES int not null default 0,
-  NUM_OLD_UNCOLLAPSE_TREE_VOTES int not null default 0,
-  NUM_PEND_COLLAPSE_POST_VOTES int not null default 0,
-  NUM_PEND_COLLAPSE_TREE_VOTES int not null default 0,
-  NUM_PEND_UNCOLLAPSE_POST_VOTES int not null default 0,
-  NUM_PEND_UNCOLLAPSE_TREE_VOTES int not null default 0,
+  -- Number of votes to collapse this post — if it is not collapsed already.
+  -- If it *is* collapsed already, however, then this is the number of pro votes
+  -- that were cast and resulted in it ending up collapsed. _CON is the number
+  -- of votes against. (con = contra.)
+  NUM_COLLAPSE_POST_VOTES_PRO smallint not null default 0,
+  NUM_COLLAPSE_POST_VOTES_CON smallint not null default 0,
+  NUM_UNCOLLAPSE_POST_VOTES_PRO smallint not null default 0,
+  NUM_UNCOLLAPSE_POST_VOTES_CON smallint not null default 0,
 
-  NUM_COLLAPSES_TO_REVIEW int not null default 0,
-  NUM_UNCOLLAPSES_TO_REVIEW int not null default 0,
+  NUM_COLLAPSE_TREE_VOTES_PRO smallint not null default 0,
+  NUM_COLLAPSE_TREE_VOTES_CON smallint not null default 0,
+  NUM_UNCOLLAPSE_TREE_VOTES_PRO smallint not null default 0,
+  NUM_UNCOLLAPSE_TREE_VOTES_CON smallint not null default 0,
 
-  NUM_OLD_MOVE_VOTES int not null default 0,
-  NUM_OLD_UNMOVE_VOTES int not null default 0,
-  NUM_PEND_MOVE_VOTES int not null default 0,
-  NUM_PEND_UNMOVE_VOTES int not null default 0,
+  NUM_COLLAPSES_TO_REVIEW smallint not null default 0,
+  NUM_UNCOLLAPSES_TO_REVIEW smallint not null default 0,
 
-  NUM_MOVES_TO_REVIEW int not null default 0,
-  NUM_UNMOVES_TO_REVIEW int not null default 0,
+  NUM_DELETE_POST_VOTES_PRO smallint not null default 0,
+  NUM_DELETE_POST_VOTES_CON smallint not null default 0,
+  NUM_UNDELETE_POST_VOTES_PRO smallint not null default 0,
+  NUM_UNDELETE_POST_VOTES_CON smallint not null default 0,
 
-  NUM_OLD_DELETE_POST_VOTES int not null default 0,
-  NUM_OLD_DELETE_TREE_VOTES int not null default 0,
-  NUM_OLD_UNDELETE_POST_VOTES int not null default 0,
-  NUM_OLD_UNDELETE_TREE_VOTES int not null default 0,
-  NUM_PEND_DELETE_POST_VOTES int not null default 0,
-  NUM_PEND_DELETE_TREE_VOTES int not null default 0,
-  NUM_PEND_UNDELETE_POST_VOTES int not null default 0,
-  NUM_PEND_UNDELETE_TREE_VOTES int not null default 0,
+  NUM_DELETE_TREE_VOTES_PRO smallint not null default 0,
+  NUM_DELETE_TREE_VOTES_CON smallint not null default 0,
+  NUM_UNDELETE_TREE_VOTES_PRO smallint not null default 0,
+  NUM_UNDELETE_TREE_VOTES_CON smallint not null default 0,
 
-  NUM_DELETES_TO_REVIEW int not null default 0, -- should auto delete comments w/ many flags?
-  NUM_UNDELETES_TO_REVIEW int not null default 0,
+  NUM_DELETES_TO_REVIEW smallint not null default 0, -- should auto delete if too many flags?
+  NUM_UNDELETES_TO_REVIEW smallint not null default 0,
 
-  NUM_PENDING_FLAGS int not null default 0,
-  NUM_HANDLED_FLAGS int not null default 0,
+  NUM_PENDING_FLAGS smallint not null default 0,
+  NUM_HANDLED_FLAGS smallint not null default 0,
 
   -- Will be an array of tuples?: [(flag, count), (flag2, count2), ...]
   FLAGS varchar(100),
@@ -787,8 +787,7 @@ create table DW1_POSTS(
   UNAPPROVED_TEXT_DIFF text,
 
   constraint DW1_POSTS_SITE_PAGE_POST__P primary key (SITE_ID, PAGE_ID, POST_ID),
-  constraint DW1_POSTS_APPROVAL__C_IN check (LAST_APPROVAL_TYPE in ('P', 'W', 'A', 'M')),
-  constraint DW1_POSTS_COLLAPSED__C_IN check (COLLAPSED in ('CollapsePost', 'CollapseTree'))
+  constraint DW1_POSTS_APPROVAL__C_IN check (LAST_APPROVAL_TYPE in ('P', 'W', 'A', 'M'))
 );
 
 
@@ -810,8 +809,6 @@ create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
       NUM_EDITS_TO_REVIEW > 0 or
       NUM_COLLAPSES_TO_REVIEW > 0 or
       NUM_UNCOLLAPSES_TO_REVIEW > 0 or
-      NUM_MOVES_TO_REVIEW > 0 or
-      NUM_UNMOVES_TO_REVIEW > 0 or
       NUM_DELETES_TO_REVIEW > 0 or
       NUM_UNDELETES_TO_REVIEW > 0);
 
@@ -825,21 +822,17 @@ create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, LAST_ACTED_UPON
     NUM_EDITS_TO_REVIEW = 0 and
     NUM_COLLAPSES_TO_REVIEW = 0 and
     NUM_UNCOLLAPSES_TO_REVIEW = 0 and
-    NUM_MOVES_TO_REVIEW = 0 and
-    NUM_UNMOVES_TO_REVIEW = 0 and
     NUM_DELETES_TO_REVIEW = 0 and
     NUM_UNDELETES_TO_REVIEW = 0 and (
       NUM_EDIT_SUGGESTIONS > 0 or
-      NUM_PEND_COLLAPSE_POST_VOTES > 0 or
-      NUM_PEND_COLLAPSE_TREE_VOTES > 0 or
-      NUM_PEND_UNCOLLAPSE_POST_VOTES > 0 or
-      NUM_PEND_UNCOLLAPSE_TREE_VOTES > 0 or
-      NUM_PEND_MOVE_VOTES > 0 or
-      NUM_PEND_UNMOVE_VOTES > 0 or
-      NUM_PEND_DELETE_POST_VOTES > 0 or
-      NUM_PEND_DELETE_TREE_VOTES > 0 or
-      NUM_PEND_UNDELETE_POST_VOTES > 0 or
-      NUM_PEND_UNDELETE_TREE_VOTES > 0);
+      (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
+      (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
+      (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
+      (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
+      (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
+      (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
+      (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
+      (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
 
 -- And last of all, posts with nothing to review, and no pending suggestions.
 -- (Including new auto approved posts by well behaved users.)
@@ -852,21 +845,19 @@ create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT
     NUM_EDITS_TO_REVIEW = 0 and
     NUM_COLLAPSES_TO_REVIEW = 0 and
     NUM_UNCOLLAPSES_TO_REVIEW = 0 and
-    NUM_MOVES_TO_REVIEW = 0 and
-    NUM_UNMOVES_TO_REVIEW = 0 and
     NUM_DELETES_TO_REVIEW = 0 and
     NUM_UNDELETES_TO_REVIEW = 0 and
     NUM_EDIT_SUGGESTIONS = 0 and
-    NUM_PEND_COLLAPSE_POST_VOTES = 0 and
-    NUM_PEND_COLLAPSE_TREE_VOTES = 0 and
-    NUM_PEND_UNCOLLAPSE_POST_VOTES = 0 and
-    NUM_PEND_UNCOLLAPSE_TREE_VOTES = 0 and
-    NUM_PEND_MOVE_VOTES = 0 and
-    NUM_PEND_UNMOVE_VOTES = 0 and
-    NUM_PEND_DELETE_POST_VOTES = 0 and
-    NUM_PEND_DELETE_TREE_VOTES = 0 and
-    NUM_PEND_UNDELETE_POST_VOTES = 0 and
-    NUM_PEND_UNDELETE_TREE_VOTES = 0;
+    (NUM_COLLAPSE_POST_VOTES_PRO = 0   and POST_COLLAPSED_AT is null) and
+    (NUM_UNCOLLAPSE_POST_VOTES_PRO = 0 and POST_COLLAPSED_AT is not null) and
+    (NUM_COLLAPSE_TREE_VOTES_PRO = 0   and TREE_COLLAPSED_AT is null) and
+    (NUM_UNCOLLAPSE_TREE_VOTES_PRO = 0 and TREE_COLLAPSED_AT is not null) and
+    (NUM_DELETE_POST_VOTES_PRO = 0     and POST_DELETED_AT is null) and
+    (NUM_UNDELETE_POST_VOTES_PRO = 0   and POST_DELETED_AT is not null) and
+    (NUM_DELETE_TREE_VOTES_PRO = 0     and TREE_DELETED_AT is null) and
+    (NUM_UNDELETE_TREE_VOTES_PRO = 0   and TREE_DELETED_AT is not null);
+
+
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------

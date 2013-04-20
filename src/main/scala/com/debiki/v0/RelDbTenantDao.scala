@@ -2289,8 +2289,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         LAST_EDIT_APPLIED_AT = ?,
         LAST_EDIT_REVERTED_AT = ?,
         LAST_EDITOR_ID = ?,
-        COLLAPSED = ?,
-        DELETED_AT = ?,
+
+        POST_COLLAPSED_AT = ?,
+        TREE_COLLAPSED_AT = ?,
+        POST_DELETED_AT = ?,
+        TREE_DELETED_AT = ?,
 
         NUM_EDIT_SUGGESTIONS = ?,
         NUM_EDITS_APPLD_UNREVIEWED = ?,
@@ -2298,32 +2301,25 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         NUM_EDITS_TO_REVIEW = ?,
         NUM_DISTINCT_EDITORS = ?,
 
-        NUM_OLD_COLLAPSE_POST_VOTES = ?,
-        NUM_OLD_COLLAPSE_TREE_VOTES = ?,
-        NUM_OLD_UNCOLLAPSE_POST_VOTES = ?,
-        NUM_OLD_UNCOLLAPSE_TREE_VOTES = ?,
-        NUM_PEND_COLLAPSE_POST_VOTES = ?,
-        NUM_PEND_COLLAPSE_TREE_VOTES = ?,
-        NUM_PEND_UNCOLLAPSE_POST_VOTES = ?,
-        NUM_PEND_UNCOLLAPSE_TREE_VOTES = ?,
+        NUM_COLLAPSE_POST_VOTES_PRO = ?,
+        NUM_COLLAPSE_POST_VOTES_CON = ?,
+        NUM_UNCOLLAPSE_POST_VOTES_PRO = ?,
+        NUM_UNCOLLAPSE_POST_VOTES_CON = ?,
+        NUM_COLLAPSE_TREE_VOTES_PRO = ?,
+        NUM_COLLAPSE_TREE_VOTES_CON = ?,
+        NUM_UNCOLLAPSE_TREE_VOTES_PRO = ?,
+        NUM_UNCOLLAPSE_TREE_VOTES_CON = ?,
         NUM_COLLAPSES_TO_REVIEW = ?,
         NUM_UNCOLLAPSES_TO_REVIEW = ?,
 
-        NUM_OLD_MOVE_VOTES = ?,
-        NUM_OLD_UNMOVE_VOTES = ?,
-        NUM_PEND_MOVE_VOTES = ?,
-        NUM_PEND_UNMOVE_VOTES = ?,
-        NUM_MOVES_TO_REVIEW = ?,
-        NUM_UNMOVES_TO_REVIEW = ?,
-
-        NUM_OLD_DELETE_POST_VOTES = ?,
-        NUM_OLD_DELETE_TREE_VOTES = ?,
-        NUM_OLD_UNDELETE_POST_VOTES = ?,
-        NUM_OLD_UNDELETE_TREE_VOTES = ?,
-        NUM_PEND_DELETE_POST_VOTES = ?,
-        NUM_PEND_DELETE_TREE_VOTES = ?,
-        NUM_PEND_UNDELETE_POST_VOTES = ?,
-        NUM_PEND_UNDELETE_TREE_VOTES = ?,
+        NUM_DELETE_POST_VOTES_PRO = ?,
+        NUM_DELETE_POST_VOTES_CON = ?,
+        NUM_UNDELETE_POST_VOTES_PRO = ?,
+        NUM_UNDELETE_POST_VOTES_CON = ?,
+        NUM_DELETE_TREE_VOTES_PRO = ?,
+        NUM_DELETE_TREE_VOTES_CON = ?,
+        NUM_UNDELETE_TREE_VOTES_PRO = ?,
+        NUM_UNDELETE_TREE_VOTES_CON = ?,
         NUM_DELETES_TO_REVIEW = ?,
         NUM_UNDELETES_TO_REVIEW = ?,
 
@@ -2333,8 +2329,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         RATINGS = ?,
         APPROVED_TEXT = ?,
         UNAPPROVED_TEXT_DIFF = ?
-      where SITE_ID = ? and PAGE_ID = ? and POST_ID = ?
-                    """
+      where SITE_ID = ? and PAGE_ID = ? and POST_ID = ?"""
 
     val insertSql = """
       insert into DW1_POSTS (
@@ -2353,8 +2348,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         LAST_EDIT_APPLIED_AT,
         LAST_EDIT_REVERTED_AT,
         LAST_EDITOR_ID,
-        COLLAPSED,
-        DELETED_AT,
+
+        POST_COLLAPSED_AT,
+        TREE_COLLAPSED_AT,
+        POST_DELETED_AT,
+        TREE_DELETED_AT,
 
         NUM_EDIT_SUGGESTIONS,
         NUM_EDITS_APPLD_UNREVIEWED,
@@ -2362,32 +2360,25 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         NUM_EDITS_TO_REVIEW,
         NUM_DISTINCT_EDITORS,
 
-        NUM_OLD_COLLAPSE_POST_VOTES,
-        NUM_OLD_COLLAPSE_TREE_VOTES,
-        NUM_OLD_UNCOLLAPSE_POST_VOTES,
-        NUM_OLD_UNCOLLAPSE_TREE_VOTES,
-        NUM_PEND_COLLAPSE_POST_VOTES,
-        NUM_PEND_COLLAPSE_TREE_VOTES,
-        NUM_PEND_UNCOLLAPSE_POST_VOTES,
-        NUM_PEND_UNCOLLAPSE_TREE_VOTES,
+        NUM_COLLAPSE_POST_VOTES_PRO,
+        NUM_COLLAPSE_POST_VOTES_CON,
+        NUM_UNCOLLAPSE_POST_VOTES_PRO,
+        NUM_UNCOLLAPSE_POST_VOTES_CON,
+        NUM_COLLAPSE_TREE_VOTES_PRO,
+        NUM_COLLAPSE_TREE_VOTES_CON,
+        NUM_UNCOLLAPSE_TREE_VOTES_PRO,
+        NUM_UNCOLLAPSE_TREE_VOTES_CON,
         NUM_COLLAPSES_TO_REVIEW,
         NUM_UNCOLLAPSES_TO_REVIEW,
 
-        NUM_OLD_MOVE_VOTES,
-        NUM_OLD_UNMOVE_VOTES,
-        NUM_PEND_MOVE_VOTES,
-        NUM_PEND_UNMOVE_VOTES,
-        NUM_MOVES_TO_REVIEW,
-        NUM_UNMOVES_TO_REVIEW,
-
-        NUM_OLD_DELETE_POST_VOTES,
-        NUM_OLD_DELETE_TREE_VOTES,
-        NUM_OLD_UNDELETE_POST_VOTES,
-        NUM_OLD_UNDELETE_TREE_VOTES,
-        NUM_PEND_DELETE_POST_VOTES,
-        NUM_PEND_DELETE_TREE_VOTES,
-        NUM_PEND_UNDELETE_POST_VOTES,
-        NUM_PEND_UNDELETE_TREE_VOTES,
+        NUM_DELETE_POST_VOTES_PRO,
+        NUM_DELETE_POST_VOTES_CON,
+        NUM_UNDELETE_POST_VOTES_PRO,
+        NUM_UNDELETE_POST_VOTES_CON,
+        NUM_DELETE_TREE_VOTES_PRO,
+        NUM_DELETE_TREE_VOTES_CON,
+        NUM_UNDELETE_TREE_VOTES_PRO,
+        NUM_UNDELETE_TREE_VOTES_CON,
         NUM_DELETES_TO_REVIEW,
         NUM_UNDELETES_TO_REVIEW,
 
@@ -2404,7 +2395,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?, ?, ?)"""
+         ?, ?, ?)"""
 
     val collapsed: AnyRef =
       if (post.isTreeCollapsed) "CollapseTree"
@@ -2432,44 +2423,40 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       o2ts(post.lastEditAppliedAt), // LAST_EDIT_APPLIED_AT
       o2ts(post.lastEditRevertedAt), // LAST_EDIT_REVERTED_AT
       anyLastEditor.map(_.id).orNullVarchar, // LAST_EDITOR_ID
-      collapsed,
-      o2ts(post.deletionDati),
+
+      o2ts(post.postCollapsedAt),
+      o2ts(post.treeCollapsedAt),
+      o2ts(post.postDeletedAt),
+      o2ts(post.treeDeletedAt),
+
       post.numPendingEditSuggestions.asInstanceOf[AnyRef],
       post.numEditsAppliedUnreviewed.asInstanceOf[AnyRef],
       post.numEditsAppldPrelApproved.asInstanceOf[AnyRef],
       post.numEditsToReview.asInstanceOf[AnyRef],
       post.numDistinctEditors.asInstanceOf[AnyRef],
 
-      0.asInstanceOf[AnyRef], // post.numCollapsePostVotes.old,
-      0.asInstanceOf[AnyRef], // post.numCollapseTreeVotes.old,
-      0.asInstanceOf[AnyRef], // post.numCollapsePostVotes.undoOld,
-      0.asInstanceOf[AnyRef], // post.numCollapseTreeVotes.undoOld,
+      post.numCollapsePostVotesPro.asInstanceOf[AnyRef],
+      post.numCollapsePostVotesCon.asInstanceOf[AnyRef],
+      post.numUncollapsePostVotesPro.asInstanceOf[AnyRef],
+      post.numUncollapsePostVotesCon.asInstanceOf[AnyRef],
 
-      post.numCollapsePostVotesPending.asInstanceOf[AnyRef], // post.numCollapsePostVotes.pending,
-      post.numCollapseTreeVotesPending.asInstanceOf[AnyRef], // post.numCollapseTreeVotes.pending,
-      0.asInstanceOf[AnyRef], // post.numCollapsePostVotes.undoPending,
-      0.asInstanceOf[AnyRef], // post.numCollapseTreeVotes.undoPending,
+      post.numCollapseTreeVotesPro.asInstanceOf[AnyRef],
+      post.numCollapseTreeVotesCon.asInstanceOf[AnyRef],
+      post.numUncollapseTreeVotesPro.asInstanceOf[AnyRef],
+      post.numUncollapseTreeVotesCon.asInstanceOf[AnyRef],
 
       post.numCollapsesToReview.asInstanceOf[AnyRef],
       post.numUncollapsesToReview.asInstanceOf[AnyRef],
 
-      0.asInstanceOf[AnyRef], // post.numMoveVotes.old,
-      0.asInstanceOf[AnyRef], // post.numMoveVotes.undoOld,
-      post.numMoveVotesPending.asInstanceOf[AnyRef], // post.numMoveVotes.pending,
-      0.asInstanceOf[AnyRef], // post.numMoveVotes.undoPending,
+      post.numDeletePostVotesPro.asInstanceOf[AnyRef],
+      post.numDeletePostVotesCon.asInstanceOf[AnyRef],
+      post.numUndeletePostVotesPro.asInstanceOf[AnyRef],
+      post.numUndeletePostVotesCon.asInstanceOf[AnyRef],
 
-      post.numMovesToReview.asInstanceOf[AnyRef],
-      post.numUnmovesToReview.asInstanceOf[AnyRef],
-
-      0.asInstanceOf[AnyRef], // post.numDeletePostVotes.old,
-      0.asInstanceOf[AnyRef], // post.numDeleteTreeVotes.old,
-      0.asInstanceOf[AnyRef], // post.numDeletePostVotes.undoOld,
-      0.asInstanceOf[AnyRef], // post.numDeleteTreeVotes.undoOld,
-
-      post.numDeletePostVotesPending.asInstanceOf[AnyRef], // post.numDeletePostVotes.pending,
-      post.numDeleteTreeVotesPending.asInstanceOf[AnyRef], // post.numDeleteTreeVotes.pending,
-      0.asInstanceOf[AnyRef], // post.numDeletePostVotes.undoPending,
-      0.asInstanceOf[AnyRef], // post.numDeleteTreeVotes.undoPending,
+      post.numDeleteTreeVotesPro.asInstanceOf[AnyRef],
+      post.numDeleteTreeVotesCon.asInstanceOf[AnyRef],
+      post.numUndeleteTreeVotesPro.asInstanceOf[AnyRef],
+      post.numUndeleteTreeVotesCon.asInstanceOf[AnyRef],
 
       post.numDeletesToReview.asInstanceOf[AnyRef],
       post.numUndeletesToReview.asInstanceOf[AnyRef],
@@ -2516,8 +2503,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           NUM_EDITS_TO_REVIEW > 0 or
           NUM_COLLAPSES_TO_REVIEW > 0 or
           NUM_UNCOLLAPSES_TO_REVIEW > 0 or
-          NUM_MOVES_TO_REVIEW > 0 or
-          NUM_UNMOVES_TO_REVIEW > 0 or
           NUM_DELETES_TO_REVIEW > 0 or
           NUM_UNDELETES_TO_REVIEW > 0)
         """,
@@ -2534,21 +2519,17 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         NUM_EDITS_TO_REVIEW = 0 and
         NUM_COLLAPSES_TO_REVIEW = 0 and
         NUM_UNCOLLAPSES_TO_REVIEW = 0 and
-        NUM_MOVES_TO_REVIEW = 0 and
-        NUM_UNMOVES_TO_REVIEW = 0 and
         NUM_DELETES_TO_REVIEW = 0 and
         NUM_UNDELETES_TO_REVIEW = 0 and (
           NUM_EDIT_SUGGESTIONS > 0 or
-          NUM_PEND_COLLAPSE_POST_VOTES > 0 or
-          NUM_PEND_COLLAPSE_TREE_VOTES > 0 or
-          NUM_PEND_UNCOLLAPSE_POST_VOTES > 0 or
-          NUM_PEND_UNCOLLAPSE_TREE_VOTES > 0 or
-          NUM_PEND_MOVE_VOTES > 0 or
-          NUM_PEND_UNMOVE_VOTES > 0 or
-          NUM_PEND_DELETE_POST_VOTES > 0 or
-          NUM_PEND_DELETE_TREE_VOTES > 0 or
-          NUM_PEND_UNDELETE_POST_VOTES > 0 or
-          NUM_PEND_UNDELETE_TREE_VOTES > 0)
+          (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
+          (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
+          (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
+          (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
+          (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
+          (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
+          (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
+          (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null))
         """,
       orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
@@ -2563,21 +2544,17 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         NUM_EDITS_TO_REVIEW = 0 and
         NUM_COLLAPSES_TO_REVIEW = 0 and
         NUM_UNCOLLAPSES_TO_REVIEW = 0 and
-        NUM_MOVES_TO_REVIEW = 0 and
-        NUM_UNMOVES_TO_REVIEW = 0 and
         NUM_DELETES_TO_REVIEW = 0 and
         NUM_UNDELETES_TO_REVIEW = 0 and
         NUM_EDIT_SUGGESTIONS = 0 and
-        NUM_PEND_COLLAPSE_POST_VOTES = 0 and
-        NUM_PEND_COLLAPSE_TREE_VOTES = 0 and
-        NUM_PEND_UNCOLLAPSE_POST_VOTES = 0 and
-        NUM_PEND_UNCOLLAPSE_TREE_VOTES = 0 and
-        NUM_PEND_MOVE_VOTES = 0 and
-        NUM_PEND_UNMOVE_VOTES = 0 and
-        NUM_PEND_DELETE_POST_VOTES = 0 and
-        NUM_PEND_DELETE_TREE_VOTES = 0 and
-        NUM_PEND_UNDELETE_POST_VOTES = 0 and
-        NUM_PEND_UNDELETE_TREE_VOTES = 0
+        (NUM_COLLAPSE_POST_VOTES_PRO = 0   and POST_COLLAPSED_AT is null) and
+        (NUM_UNCOLLAPSE_POST_VOTES_PRO = 0 and POST_COLLAPSED_AT is not null) and
+        (NUM_COLLAPSE_TREE_VOTES_PRO = 0   and TREE_COLLAPSED_AT is null) and
+        (NUM_UNCOLLAPSE_TREE_VOTES_PRO = 0 and TREE_COLLAPSED_AT is not null) and
+        (NUM_DELETE_POST_VOTES_PRO = 0     and POST_DELETED_AT is null) and
+        (NUM_UNDELETE_POST_VOTES_PRO = 0   and POST_DELETED_AT is not null) and
+        (NUM_DELETE_TREE_VOTES_PRO = 0     and TREE_DELETED_AT is null) and
+        (NUM_UNDELETE_TREE_VOTES_PRO = 0   and TREE_DELETED_AT is not null)
         """,
       orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
@@ -2639,42 +2616,37 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       lastEditAppliedAt = ts2o(rs.getTimestamp("LAST_EDIT_APPLIED_AT")),
       lastEditRevertedAt = ts2o(rs.getTimestamp("LAST_EDIT_REVERTED_AT")),
       lastEditorId = Option(rs.getString("LAST_EDITOR_ID")),
-      collapsed = parseCollapsingAction(rs.getString("COLLAPSED")),
-      deletedAt = ts2o(rs.getTimestamp("DELETED_AT")),
+      postCollapsedAt = ts2o(rs.getTimestamp("POST_COLLAPSED_AT")),
+      treeCollapsedAt = ts2o(rs.getTimestamp("TREE_COLLAPSED_AT")),
+      postDeletedAt = ts2o(rs.getTimestamp("POST_DELETED_AT")),
+      treeDeletedAt = ts2o(rs.getTimestamp("TREE_DELETED_AT")),
       numEditSuggestions = rs.getInt("NUM_EDIT_SUGGESTIONS"),
       numEditsAppliedUnreviewed = rs.getInt("NUM_EDITS_APPLD_UNREVIEWED"),
       numEditsAppldPrelApproved = rs.getInt("NUM_EDITS_APPLD_PREL_APPROVED"),
       numEditsToReview = rs.getInt("NUM_EDITS_TO_REVIEW"),
       numDistinctEditors = rs.getInt("NUM_DISTINCT_EDITORS"),
       numCollapsePostVotes = PostVoteState(
-        pending = rs.getInt("NUM_PEND_COLLAPSE_POST_VOTES"),
-        old = rs.getInt("NUM_OLD_COLLAPSE_POST_VOTES"),
-        undoPending = rs.getInt("NUM_PEND_UNCOLLAPSE_POST_VOTES"),
-        undoOld = rs.getInt("NUM_OLD_UNCOLLAPSE_POST_VOTES")),
+        pro = rs.getInt("NUM_COLLAPSE_POST_VOTES_PRO"),
+        con = rs.getInt("NUM_COLLAPSE_POST_VOTES_CON"),
+        undoPro = rs.getInt("NUM_UNCOLLAPSE_POST_VOTES_PRO"),
+        undoCon = rs.getInt("NUM_UNCOLLAPSE_POST_VOTES_CON")),
       numCollapseTreeVotes = PostVoteState(
-        pending = rs.getInt("NUM_PEND_COLLAPSE_TREE_VOTES"),
-        old = rs.getInt("NUM_OLD_COLLAPSE_TREE_VOTES"),
-        undoPending = rs.getInt("NUM_PEND_UNCOLLAPSE_TREE_VOTES"),
-        undoOld = rs.getInt("NUM_OLD_UNCOLLAPSE_TREE_VOTES")),
+        pro = rs.getInt("NUM_COLLAPSE_TREE_VOTES_PRO"),
+        con = rs.getInt("NUM_COLLAPSE_TREE_VOTES_CON"),
+        undoPro = rs.getInt("NUM_UNCOLLAPSE_TREE_VOTES_PRO"),
+        undoCon = rs.getInt("NUM_UNCOLLAPSE_TREE_VOTES_CON")),
       numCollapsesToReview = rs.getInt("NUM_COLLAPSES_TO_REVIEW"),
       numUncollapsesToReview = rs.getInt("NUM_UNCOLLAPSES_TO_REVIEW"),
-      numMoveVotes = PostVoteState(
-        pending = rs.getInt("NUM_PEND_MOVE_VOTES"),
-        old = rs.getInt("NUM_OLD_MOVE_VOTES"),
-        undoPending = rs.getInt("NUM_PEND_UNMOVE_VOTES"),
-        undoOld = rs.getInt("NUM_OLD_UNMOVE_VOTES")),
-      numMovesToReview = rs.getInt("NUM_MOVES_TO_REVIEW"),
-      numUnmovesToReview = rs.getInt("NUM_UNMOVES_TO_REVIEW"),
       numDeletePostVotes = PostVoteState(
-        pending = rs.getInt("NUM_PEND_DELETE_POST_VOTES"),
-        old = rs.getInt("NUM_OLD_DELETE_POST_VOTES"),
-        undoPending = rs.getInt("NUM_PEND_UNDELETE_POST_VOTES"),
-        undoOld = rs.getInt("NUM_OLD_UNDELETE_POST_VOTES")),
+        pro = rs.getInt("NUM_DELETE_POST_VOTES_PRO"),
+        con = rs.getInt("NUM_DELETE_POST_VOTES_CON"),
+        undoPro = rs.getInt("NUM_UNDELETE_POST_VOTES_PRO"),
+        undoCon = rs.getInt("NUM_UNDELETE_POST_VOTES_CON")),
       numDeleteTreeVotes = PostVoteState(
-        pending = rs.getInt("NUM_PEND_DELETE_TREE_VOTES"),
-        old = rs.getInt("NUM_OLD_DELETE_TREE_VOTES"),
-        undoPending = rs.getInt("NUM_PEND_UNDELETE_TREE_VOTES"),
-        undoOld = rs.getInt("NUM_OLD_UNDELETE_TREE_VOTES")),
+        pro = rs.getInt("NUM_DELETE_TREE_VOTES_PRO"),
+        con = rs.getInt("NUM_DELETE_TREE_VOTES_CON"),
+        undoPro = rs.getInt("NUM_UNDELETE_TREE_VOTES_PRO"),
+        undoCon = rs.getInt("NUM_UNDELETE_TREE_VOTES_CON")),
       numDeletesToReview = rs.getInt("NUM_DELETES_TO_REVIEW"),
       numUndeletesToReview = rs.getInt("NUM_UNDELETES_TO_REVIEW"),
       numPendingFlags = rs.getInt("NUM_PENDING_FLAGS"),
