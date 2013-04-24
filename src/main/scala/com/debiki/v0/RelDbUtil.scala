@@ -57,7 +57,7 @@ object RelDbUtil {
     val editAutoApplied = rs.getString("AUTO_APPLICATION") == "A"
 
     def buildAction(payload: PostActionPayload) =
-      PostActionDto(id, time, payload, postId = relpa, loginId = loginSno,
+      PostActionDto(id, time, payload, postId = postId, loginId = loginSno,
         userId = userId, newIp = newIp)
 
     def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
