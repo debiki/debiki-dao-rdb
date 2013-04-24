@@ -2208,11 +2208,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             "Flag" + f.reason,
             NullVarchar, e2n(f.details), NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
-        case r: ReviewPostAction =>
-          val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
-          db.update(insertIntoActions, commonVals:::List(
-            tyype, NullVarchar, NullVarchar, NullVarchar, NullVarchar,
-            _toDbVal(r.approval), NullVarchar))
         case a: PostActionDto[_] =>
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
@@ -2230,6 +2225,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
               db.update(insertIntoActions, commonVals:::List(
                 "Edit", NullVarchar, e2n(e.text), e2n(e.newMarkup), NullVarchar,
                 _toDbVal(e.approval), autoAppliedDbVal))
+            case r: PAP.ReviewPost =>
+              val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
+              db.update(insertIntoActions, commonVals:::List(
+                tyype, NullVarchar, NullVarchar, NullVarchar, NullVarchar,
+                _toDbVal(r.approval), NullVarchar))
             case PAP.CollapsePost => insertSimpleValue("CollapsePost")
             case PAP.CollapseTree => insertSimpleValue("CollapseTree")
             case PAP.DeletePost => insertSimpleValue("DelPost")

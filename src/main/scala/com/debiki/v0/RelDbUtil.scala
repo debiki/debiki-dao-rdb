@@ -94,8 +94,7 @@ object RelDbUtil {
         buildAction(PAP.DeleteTree)
       case "Aprv" | "Rjct" =>
         assert((typee == "Rjct") == approval.isEmpty)
-        ReviewPostAction(id = id, postId = postId, loginId = loginSno,
-          userId = userId, newIp = newIp, ctime = time, approval = approval)
+        buildAction(PAP.ReviewPost(approval))
       case "Undo" => unimplemented
       case x =>
         val anyHidingAction = parseCollapsingAction(x)
