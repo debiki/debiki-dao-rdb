@@ -76,10 +76,8 @@ object RelDbUtil {
         new Rating(id = id, postId = postId, ctime = time,
           loginId = loginSno, userId = userId, newIp = newIp, tags = tags)
       case "Edit" =>
-        new Edit(id = id, postId = postId, ctime = time,
-          loginId = loginSno, userId = userId, newIp = newIp, text = n2e(text_?),
-          newMarkup = Option(markup_?),
-          approval = approval, autoApplied = editAutoApplied)
+        buildAction(PAP.EditPost(n2e(text_?), newMarkup = Option(markup_?),
+          autoApplied = editAutoApplied, approval = approval))
       case "EditApp" =>
         new EditApp(id = id, editId = relpa, postId = postId, ctime = time,
           loginId = loginSno, userId = userId, newIp = newIp,
@@ -90,14 +88,10 @@ object RelDbUtil {
         val reason = FlagReason withName reasonStr
         Flag(id = id, postId = postId, loginId = loginSno, userId = userId, newIp = newIp,
           ctime = time, reason = reason, details = n2e(text_?))
-      case delete if delete startsWith "Del" =>
-        val wholeTree = delete match {
-          case "DelTree" => true
-          case "DelPost" => false
-          case x => assErr("DwE0912k22")
-        }
-        Delete(id = id, postId = postId, loginId = loginSno, userId = userId,
-          newIp = newIp, ctime = time, wholeTree = wholeTree, reason = n2e(text_?))
+      case "DelPost" =>
+        buildAction(PAP.DeletePost)
+      case "DelTree" =>
+        buildAction(PAP.DeleteTree)
       case "Aprv" | "Rjct" =>
         assert((typee == "Rjct") == approval.isEmpty)
         ReviewPostAction(id = id, postId = postId, loginId = loginSno,

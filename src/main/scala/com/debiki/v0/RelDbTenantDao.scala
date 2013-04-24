@@ -2198,13 +2198,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             insert into DW1_PAGE_RATINGS(TENANT, PAGE_ID, PAID, TAG)
             values (?, ?, ?, ?)
             """, r.tags.map(t => List(tenantId, pageId, r.id, t)))
-        case e: Edit =>
-          val autoAppliedDbVal =
-             if (e.autoApplied) "A" else NullVarchar
-          db.update(insertIntoActions, commonVals:::List(
-            "Edit",
-            NullVarchar, e2n(e.text), e2n(e.newMarkup), NullVarchar,
-            _toDbVal(e.approval), autoAppliedDbVal))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
             "EditApp",
@@ -2214,11 +2207,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           db.update(insertIntoActions, commonVals:::List(
             "Flag" + f.reason,
             NullVarchar, e2n(f.details), NullVarchar, NullVarchar,
-            NullVarchar, NullVarchar))
-        case d: Delete =>
-          db.update(insertIntoActions, commonVals:::List(
-            "Del" + (if (d.wholeTree) "Tree" else "Post"),
-            NullVarchar, e2n(d.reason), NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
         case r: ReviewPostAction =>
           val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
@@ -2237,9 +2225,17 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
               db.update(insertIntoActions, commonVals:::List(
                 "Post", p.parentPostId, e2n(p.text), e2n(p.markup), e2n(p.where),
                 _toDbVal(p.approval), NullVarchar))
+            case e: PAP.EditPost =>
+              val autoAppliedDbVal = if (e.autoApplied) "A" else NullVarchar
+              db.update(insertIntoActions, commonVals:::List(
+                "Edit", NullVarchar, e2n(e.text), e2n(e.newMarkup), NullVarchar,
+                _toDbVal(e.approval), autoAppliedDbVal))
             case PAP.CollapsePost => insertSimpleValue("CollapsePost")
             case PAP.CollapseTree => insertSimpleValue("CollapseTree")
+            case PAP.DeletePost => insertSimpleValue("DelPost")
+            case PAP.DeleteTree => insertSimpleValue("DelTree")
             case PAP.Undo(_) => unimplemented
+            case PAP.Delete(_) => unimplemented // there's no DW1_PAGE_ACTIONS.TYPE?
           }
         case x => unimplemented(
           "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
