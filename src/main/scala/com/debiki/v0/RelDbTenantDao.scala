@@ -1656,21 +1656,39 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
-  def configRole(loginId: String, ctime: ju.Date,
-                 roleId: String, emailNotfPrefs: EmailNotfPrefs) {
+  def configRole(loginId: String, ctime: ju.Date, roleId: String,
+        emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean]) {
     // Currently auditing not implemented for the roles/users table,
     // so loginId and ctime aren't used.
     require(!roleId.startsWith("-") && !roleId.startsWith("?"))
+
+    var changes = StringBuilder.newBuilder
+    var newValues: List[AnyRef] = Nil
+
+    emailNotfPrefs foreach { prefs =>
+      // Don't overwrite notifications-'F'orbidden-forever flag.
+      changes ++= """EMAIL_NOTFS = case
+          when EMAIL_NOTFS is null or EMAIL_NOTFS <> 'F' then ?
+          else EMAIL_NOTFS
+        end"""
+      newValues ::= _toFlag(prefs)
+    }
+
+    isAdmin foreach { isAdmin =>
+      if (changes.nonEmpty) changes ++= ", "
+      changes ++= "SUPERADMIN = ?"
+      newValues ::= (if (isAdmin) "T" else NullVarchar)
+    }
+
+    if (newValues.isEmpty)
+      return
+
     db.transaction { implicit connection =>
-      db.update("""
-          update DW1_USERS
-          set EMAIL_NOTFS = ?
-          where TENANT = ? and SNO = ? and
-              (EMAIL_NOTFS is null or EMAIL_NOTFS <> 'F')
-          """,
-          List(_toFlag(emailNotfPrefs), tenantId, roleId))
+      val sql = s"update DW1_USERS set $changes where TENANT = ? and SNO = ?"
+      db.update(sql, newValues.reverse ::: List(tenantId, roleId))
     }
   }
+
 
   def configIdtySimple(loginId: String, ctime: ju.Date,
                        emailAddr: String, emailNotfPrefs: EmailNotfPrefs) {
