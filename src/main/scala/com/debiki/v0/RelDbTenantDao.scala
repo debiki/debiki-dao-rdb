@@ -1496,6 +1496,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
   def saveNotfs(notfs: Seq[NotfOfPageAction]) {
     db.transaction { implicit connection =>
+      saveNotfsImpl(notfs)(connection)
+    }
+  }
+
+
+  private def saveNotfsImpl(notfs: Seq[NotfOfPageAction])(implicit connection: js.Connection) {
       val valss: List[List[AnyRef]] = for (notf <- notfs.toList) yield List(
         tenantId, notf.ctime, notf.pageId, notf.pageTitle take 80,
         notf.recipientIdtySmplId.orNullVarchar,
@@ -1522,7 +1528,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
             ?, ?, ?,
             ?, ?)
         """, valss)
-    }
   }
 
 
@@ -2127,7 +2132,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     // Notify users whose posts were affected (e.g. if someone got a new reply).
     val notfs = NotfGenerator(page.parts, actionsWithIds).generateNotfs
-    saveNotfs(notfs)
+    saveNotfsImpl(notfs)(conn)
 
     // Update cached post states (e.g. the current text of a comment).
     val newParts = page.parts ++ actionsWithIds
