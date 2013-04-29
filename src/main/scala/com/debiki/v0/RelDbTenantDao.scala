@@ -1515,10 +1515,13 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       createPage = mayCreatePage,
       editPage = isWiki,
       // Authenticated users can edit others' comments.
+      //  — no, disable this for now, seems too dangerous.
+      //    Instead I should perhaps have the AutoApprover check the user's
+      //    past actions, and only sometimes automatically approve edits.
       // (In the future, the reputation system (not implemented) will make
       // them lose this ability should they misuse it.)
       editAnyReply =
-            isWiki || reqInfo.user.map(_.isAuthenticated) == Some(true)
+            isWiki // || reqInfo.user.map(_.isAuthenticated) == Some(true)
     )
   }
 
