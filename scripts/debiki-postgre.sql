@@ -847,17 +847,16 @@ create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT
     NUM_UNCOLLAPSES_TO_REVIEW = 0 and
     NUM_DELETES_TO_REVIEW = 0 and
     NUM_UNDELETES_TO_REVIEW = 0 and
-    NUM_EDIT_SUGGESTIONS = 0 and
-    (NUM_COLLAPSE_POST_VOTES_PRO = 0   and POST_COLLAPSED_AT is null) and
-    (NUM_UNCOLLAPSE_POST_VOTES_PRO = 0 and POST_COLLAPSED_AT is not null) and
-    (NUM_COLLAPSE_TREE_VOTES_PRO = 0   and TREE_COLLAPSED_AT is null) and
-    (NUM_UNCOLLAPSE_TREE_VOTES_PRO = 0 and TREE_COLLAPSED_AT is not null) and
-    (NUM_DELETE_POST_VOTES_PRO = 0     and POST_DELETED_AT is null) and
-    (NUM_UNDELETE_POST_VOTES_PRO = 0   and POST_DELETED_AT is not null) and
-    (NUM_DELETE_TREE_VOTES_PRO = 0     and TREE_DELETED_AT is null) and
-    (NUM_UNDELETE_TREE_VOTES_PRO = 0   and TREE_DELETED_AT is not null);
-
-
+    NUM_EDIT_SUGGESTIONS = 0 and not (
+      NUM_EDIT_SUGGESTIONS > 0 or
+      (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
+      (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
+      (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
+      (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
+      (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
+      (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
+      (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
+      (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
