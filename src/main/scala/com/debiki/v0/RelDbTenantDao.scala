@@ -32,7 +32,36 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   def db = systemDaoSpi.db
 
 
+  /** Some SQL operations might cause harmless errors, then we try again.
+    *
+    * One harmless error: Generating random ids and one happens to clash with
+    * an existing id. Simply try again with another id.
+    * Another harmless error (except w.r.t. performance) is certain deadlocks.
+    * See the implementation of savePageActions() for details, and also:
+    * see: http://www.postgresql.org/message-id/1078934613.17553.66.camel@coppola.ecircle.de
+    * and: < http://postgresql.1045698.n5.nabble.com/
+    *         Foreign-Keys-and-Deadlocks-tp4962572p4967236.html >
+    */
+  private def tryManyTimes[T](numTimes: Int)(sqlBlock: => T): T = {
+    for (i <- 2 to numTimes) {
+      try {
+        return sqlBlock
+      }
+      catch {
+        case ex: js.SQLException =>
+          // log.warning(...
+          println(s"SQLException caught but I will try again: $ex")
+      }
+    }
+    // Don't catch exceptions during very last attempt.
+    sqlBlock
+  }
+
+
   def createPage(pagePerhapsId: Page): Page = {
+    // Could wrap this whole function in `tryManyTimes { ... }` because the id
+    // might clash with an already existing id? (The ids in use are fairly short,
+    // currently, because they're sometimes shown in the url)
     var page = if (pagePerhapsId.hasIdAssigned) {
       // Fine, a valid new page id has been assigned somewhere else?
       pagePerhapsId
@@ -2117,8 +2146,18 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
   override def savePageActions[T <: PostActionDtoOld](
         page: PageNoPath, actions: List[T]): (PageNoPath, List[T]) = {
-    db.transaction { implicit connection =>
-      savePageActionsImpl(page, actions)
+    // Try many times, because harmless deadlocks might abort the first attempt.
+    // Example: Editing a row with a foreign key to table R result in a shared lock
+    // on the referenced row in table R — so if two sessions A and B insert rows for
+    // the same page into DW1_PAGE_ACTIONS and then update DW1_PAGES aftewards,
+    // the update statement from session A blocks on the shared lock that
+    // B holds on the DW1_PAGES row, and then session B blocks on the exclusive
+    // lock on the DW1_PAGES row that A's update statement is trying to grab.
+    // An E2E test that fails without `tryManyTimes` here is `EditActivitySpec`.
+    tryManyTimes(2) {
+      db.transaction { implicit connection =>
+        savePageActionsImpl(page, actions)
+      }
     }
   }
 
