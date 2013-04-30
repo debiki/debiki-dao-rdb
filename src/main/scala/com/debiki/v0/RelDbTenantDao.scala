@@ -2477,7 +2477,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       o2ts(post.lastReviewDati), // LAST_REVIEWED_AT
       o2ts(post.lastAuthoritativeReviewDati), // LAST_AUTHLY_REVIEWED_AT
       o2ts(post.lastApprovalDati), // LAST_APPROVED_AT
-      _toDbVal(post.lastApproval.flatMap(_.approval)), // LAST_APPROVAL_TYPE
+      _toDbVal(post.lastApprovalType), // LAST_APPROVAL_TYPE
       o2ts(post.lastPermanentApprovalDati), // LAST_PERMANENTLY_APPROVED_AT
       o2ts(post.lastManualApprovalDati), // LAST_MANUALLY_APPROVED_AT
       post.userId,  // AUTHOR_ID
