@@ -535,9 +535,9 @@ class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao {
           pageTitle = rs.getString("PAGE_TITLE"),
           pageId = rs.getString("PAGE_ID"),
           eventType = NotfOfPageAction.Type.PersonalReply,  // for now
-          eventActionId = rs.getString("EVENT_PGA"),
-          triggerActionId = rs.getString("TARGET_PGA"),
-          recipientActionId = rs.getString("RCPT_PGA"),
+          eventActionId = rs.getInt("EVENT_PGA").toString,
+          triggerActionId = rs.getInt("TARGET_PGA").toString,
+          recipientActionId = rs.getInt("RCPT_PGA").toString,
           recipientUserDispName = rs.getString("RCPT_USER_DISP_NAME"),
           eventUserDispName = rs.getString("EVENT_USER_DISP_NAME"),
           triggerUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")),

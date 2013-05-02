@@ -704,8 +704,8 @@ $$ language plpgsql;
 create table DW1_POSTS(
   SITE_ID varchar(32) not null,
   PAGE_ID varchar(32) not null,
-  POST_ID varchar(32) not null,
-  PARENT_POST_ID varchar(32) not null,
+  POST_ID int not null,
+  PARENT_POST_ID int not null,
   MARKUP varchar(30),
   WHEERE varchar(150),
   CREATED_AT timestamp not null,
@@ -871,15 +871,15 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   PAGE varchar(32), -- deprecated, no longer written to
   TENANT varchar(32)  not null,
   PAGE_ID varchar(32)  not null,
-  POST_ID varchar(32)  not null,  -- the post that this action affects
-  PAID varchar(32)     not null,  -- page action id  COULD rename to ID
+  POST_ID int  not null,  -- the post that this action affects
+  PAID int     not null,  -- page action id  COULD rename to ID
   -- Null means the action was created by the system.
   LOGIN varchar(32),  -- COULD rename to LOGIN_ID
   ROLE_ID varchar(32),
   GUEST_ID varchar(32),
   TIME timestamp       not null,  -- COULD rename to CTIME
   TYPE varchar(20)     not null,
-  RELPA varchar(32),  -- related page action, COULD rename to TARGET_ACTION_ID
+  RELPA int,  -- related page action, COULD rename to TARGET_ACTION_ID
                        -- and Null would mean the target is POST_ID.
   -- (consider this carefully before doing anything!)
   -- The most recent action applied to RELPA,
@@ -1063,7 +1063,7 @@ create table DW1_PAGE_RATINGS(  -- abbreviated ARTS? PRATINGS deprctd.
   TENANT varchar(32) not null,
   PAGE_ID varchar(32) not null,
   PAGE varchar(32), -- deprecated, no longer written to
-  PAID varchar(32),
+  PAID int,
   TAG varchar(30) not null,
   -- (will be dropped: done@test)
   constraint DW1_ARTS__P primary key (TENANT, PAGE_ID, PAID, TAG),
@@ -1137,16 +1137,16 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   -- — which could be the reply itself, in case it's written by an admin
   -- and hence auto approved.
   EVENT_TYPE varchar(20) not null,
-  EVENT_PGA varchar(32) not null,
+  EVENT_PGA int not null,
   ----- todo prod,dev,test:
   -- alter table DW1_NOTFS_PAGE_ACTIONS alter column TARGET_PGA set not null;
   -----
-  TARGET_PGA varchar(32) not null, -- COULD rename to TRIGGER_PGA?
+  TARGET_PGA int not null, -- COULD rename to TRIGGER_PGA?
   -- The page action that is the reason that the recipient is to be notified.
   -- For example, if a user has written a comment, with id X,
   -- then RCPT_PGA could be = X, and EVENT_PGA could be the id of a reply
   -- to X.
-  RCPT_PGA varchar(32) not null,
+  RCPT_PGA int not null,
   ----- Related user names
   RCPT_USER_DISP_NAME varchar(100) not null,
   EVENT_USER_DISP_NAME varchar(100) not null,

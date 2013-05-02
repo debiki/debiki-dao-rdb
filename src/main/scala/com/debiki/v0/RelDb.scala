@@ -15,6 +15,7 @@ object RelDb {
 
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
+  val NullInt = Null(js.Types.INTEGER)
   val NullTimestamp = Null(js.Types.TIMESTAMP)
 
   /**

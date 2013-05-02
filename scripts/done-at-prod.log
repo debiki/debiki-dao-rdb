@@ -1380,4 +1380,113 @@ In dev db, there are *many* such DelPost:s -- I'll simply delete them all.
 
 }}}
 
+{{{ TODO @ prod:
+
+egrep -Ir '0t|0b|0c' client/ app/ modules/debiki-*/src/ | grep -v 'client/vendor/jquery-1.7.2.min.js'
+After:
+egrep -Ir '0t|0b|0c|65501|65502|65503' client/ app/ modules/debiki-*/src/ | grep -v 'client/vendor/jquery-1.7.2.min.js'
+
+
+Re hex-->int conversion, see  http://stackoverflow.com/a/8316731/694469
+
+1:
+
+CREATE OR REPLACE FUNCTION hex_to_int(hexval varchar) RETURNS integer AS $$
+DECLARE
+    result  int;
+BEGIN
+    EXECUTE 'SELECT x''' || hexval || '''::int' INTO result;
+    RETURN result;
+END;
+$$ LANGUAGE 'plpgsql' IMMUTABLE STRICT;
+
+
+CREATE OR REPLACE FUNCTION string_id_to_int(string_id varchar) RETURNS varchar AS $$
+DECLARE
+    result  int;
+BEGIN
+    SELECT 
+      case
+        when string_id ~ '^[0-9]+$' then string_id
+        else case string_id
+          when '0t' then '65501'
+          when '0b' then '65502'
+          when '0c' then '65503'
+          -- I used `7` in test & dev though, but shorter ids = better, I hope 5 will do:
+          else '' || substring('' || hex_to_int(substring(md5(string_id) from 1 for 7)) from 1 for 5)
+        end
+      end
+      INTO result;
+    RETURN result;
+END;
+$$ LANGUAGE 'plpgsql' IMMUTABLE STRICT;
+
+
+
+2:
+-- works :-)  @dev ------------
+\set AUTOCOMMIT off
+SET CONSTRAINTS ALL DEFERRED;
+
+update dw1_page_ratings set
+  paid = string_id_to_int(paid);
+
+update dw1_page_actions set
+  post_id = string_id_to_int(post_id),
+  paid = string_id_to_int(paid),
+  relpa = string_id_to_int(relpa);
+
+update DW1_POSTS set
+  post_id = string_id_to_int(post_id),
+  parent_post_id = string_id_to_int(parent_post_id);
+
+update DW1_NOTFS_PAGE_ACTIONS set
+  EVENT_PGA = string_id_to_int(EVENT_PGA),
+  TARGET_PGA = string_id_to_int(TARGET_PGA),
+  RCPT_PGA = string_id_to_int(RCPT_PGA);
+-------------------------------
+
+-- 3:
+------
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS__R__PGAS;
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_MAGIC_ID_PARENTS__C;
+alter table DW1_PAGE_RATINGS drop constraint DW1_ARTS__R__PGAS;
+
+
+alter table DW1_POSTS alter column POST_ID type INT using cast(POST_ID as int);
+alter table DW1_POSTS alter column PARENT_POST_ID type INT using cast(PARENT_POST_ID as int);
+
+alter table DW1_NOTFS_PAGE_ACTIONS alter column EVENT_PGA type INT using cast(event_pga as int);
+alter table DW1_NOTFS_PAGE_ACTIONS alter column TARGET_PGA type INT using cast(target_pga as int);
+alter table DW1_NOTFS_PAGE_ACTIONS alter column RCPT_PGA type INT using cast(rcpt_pga as int);
+
+alter table DW1_PAGE_RATINGS alter column PAID type INT using cast(PAID as int);
+
+alter table DW1_PAGE_ACTIONS alter column POST_ID type INT using cast(POST_ID as int);
+alter table DW1_PAGE_ACTIONS alter column PAID type INT using cast(PAID as int);
+alter table DW1_PAGE_ACTIONS alter column RELPA type INT using cast(RELPA as int);
+
+alter table DW1_PAGE_ACTIONS add
+ constraint DW1_PGAS__R__PGAS
+     foreign key (TENANT, PAGE_ID, RELPA) -- no ix! no dels/upds in prnt tbl
+                       -- and no joins (loading whole page at once instead)
+     references DW1_PAGE_ACTIONS (TENANT, PAGE_ID, PAID) deferrable;
+
+alter table DW1_PAGE_ACTIONS add
+  constraint DW1_PGAS_MAGIC_ID_PARENTS__C
+      check (RELPA = case
+      when PAID = 65501 then 65501
+      when PAID = 65502 then 65502
+      when PAID = 65503 then 65503
+      else RELPA end);
+
+alter table DW1_PAGE_RATINGS add
+  constraint DW1_ARTS__R__PGAS  -- ix primary key
+      foreign key (TENANT, PAGE_ID, PAID)
+      references DW1_PAGE_ACTIONS(TENANT, PAGE_ID, PAID) deferrable;
+
+
+
+}}}
+
 (See harmless TODO above)

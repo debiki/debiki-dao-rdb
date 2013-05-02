@@ -35,8 +35,8 @@ object RelDbUtil {
 
   def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
         : PostActionDtoOld = {
-    val postId = rs.getString("POST_ID")
-    val id = rs.getString("PAID")
+    val postId = rs.getInt("POST_ID").toString
+    val id = rs.getInt("PAID").toString
     val (loginSno, userId) = {
       // No login/identity/user is stored for the hardcoded system user.
       val loginIdOrNull = rs.getString("LOGIN")
@@ -48,7 +48,7 @@ object RelDbUtil {
     }
     val time = ts2d(rs.getTimestamp("TIME"))
     val typee = rs.getString("TYPE")
-    val relpa = rs.getString("RELPA")
+    val relpa = rs.getInt("RELPA").toString
     val text_? = rs.getString("TEXT")
     val markup_? = rs.getString("MARKUP")
     val where_? = rs.getString("WHEERE")
