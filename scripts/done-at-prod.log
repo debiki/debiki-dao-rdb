@@ -1488,5 +1488,10 @@ alter table DW1_PAGE_RATINGS add
 
 
 }}}
+{{{ TODO @ prod:
+
+update DW1_PAGES set NEXT_REPLY_ID = NEXT_REPLY_ID + 1;
+
+}}}
 
 (See harmless TODO above)
