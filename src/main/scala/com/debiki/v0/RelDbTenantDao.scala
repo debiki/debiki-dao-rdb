@@ -938,21 +938,21 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     val (identities, users) = _loadIdtysAndUsers(onPageWithId = pageId)
 
     // Load rating tags.
-    val ratingTags: mut.HashMap[String, List[String]] = db.queryAtnms("""
+    val ratingTags: mut.HashMap[ActionId, List[String]] = db.queryAtnms("""
         select a.PAID, r.TAG from DW1_PAGE_ACTIONS a, DW1_PAGE_RATINGS r
         where a.TYPE = 'Rating' and a.TENANT = ? and a.PAGE_ID = ?
           and r.TENANT = a.TENANT and r.PAGE_ID = a.PAGE_ID and r.PAID = a.PAID
         order by a.PAID
         """,
       List(tenantId, pageId), rs => {
-        val map = mut.HashMap[String, List[String]]()
+        val map = mut.HashMap[ActionId, List[String]]()
         var tags = List[String]()
-        var curPaid = ""  // current page action id
+        var curPaid = PageParts.NoId  // current page action id
 
         while (rs.next) {
-          val paid = rs.getInt("PAID").toString;
-          val tag = rs.getString("TAG");
-          if (curPaid isEmpty) curPaid = paid
+          val paid = rs.getInt("PAID")
+          val tag = rs.getString("TAG")
+          if (curPaid == PageParts.NoId) curPaid = paid
           if (paid == curPaid) tags ::= tag
           else {
             // All tags found for the rating with _ACTIONS.PAID = curPaid.
@@ -1538,9 +1538,10 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         tenantId, notf.ctime, notf.pageId, notf.pageTitle take 80,
         notf.recipientIdtySmplId.orNullVarchar,
         notf.recipientRoleId.orNullVarchar,
-        notf.eventType.toString, notf.eventActionId.toInt.asInstanceOf[AnyRef],
-        notf.triggerActionId.toInt.asInstanceOf[AnyRef],
-        notf.recipientActionId.toInt.asInstanceOf[AnyRef],
+        notf.eventType.toString,
+        notf.eventActionId.asAnyRef,
+        notf.triggerActionId.asAnyRef,
+        notf.recipientActionId.asAnyRef,
         notf.recipientUserDispName, notf.eventUserDispName,
         notf.triggerUserDispName.orNullVarchar,
         if (notf.emailPending) "P" else NullVarchar,
@@ -1571,8 +1572,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     val valss: List[List[AnyRef]] =
       for (notf <- notfs.toList) yield List(
          emailId.orNullVarchar, debug.orNullVarchar,
-         tenantId, notf.pageId, notf.eventActionId.toInt.asInstanceOf[AnyRef],
-         notf.recipientActionId.toInt.asInstanceOf[AnyRef])
+         tenantId, notf.pageId, notf.eventActionId.asAnyRef,
+         notf.recipientActionId.asAnyRef)
 
     db.batchUpdate("""
       update DW1_NOTFS_PAGE_ACTIONS
@@ -2250,8 +2251,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         roleIdNullForSystem,
         tenantId,
         pageId,
-        action.postId.toInt.asInstanceOf[AnyRef],
-        action.id.toInt.asInstanceOf[AnyRef],
+        action.postId.asAnyRef,
+        action.id.asAnyRef,
         d2ts(action.ctime))
 
       action match {
@@ -2263,10 +2264,10 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
           db.batchUpdate("""
             insert into DW1_PAGE_RATINGS(TENANT, PAGE_ID, PAID, TAG)
             values (?, ?, ?, ?)
-            """, r.tags.map(t => List(tenantId, pageId, r.id.toInt.asInstanceOf[AnyRef], t)))
+            """, r.tags.map(t => List(tenantId, pageId, r.id.asAnyRef, t)))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
-            "EditApp", a.editId.toInt.asInstanceOf[AnyRef], e2n(a.result),
+            "EditApp", a.editId.asAnyRef, e2n(a.result),
             NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
@@ -2276,14 +2277,14 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         case a: PostActionDto[_] =>
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
-              tyype, a.postId.toInt.asInstanceOf[AnyRef], NullVarchar, NullVarchar, NullVarchar,
+              tyype, a.postId.asAnyRef, NullVarchar, NullVarchar, NullVarchar,
               NullVarchar, NullVarchar))
 
           val PAP = PostActionPayload
           a.payload match {
             case p: PAP.CreatePost =>
               db.update(insertIntoActions, commonVals:::List(
-                "Post", p.parentPostId.toInt.asInstanceOf[AnyRef], e2n(p.text), e2n(p.markup),
+                "Post", p.parentPostId.asAnyRef, e2n(p.text), e2n(p.markup),
                 e2n(p.where), _toDbVal(p.approval), NullVarchar))
             case e: PAP.EditPost =>
               val autoAppliedDbVal = if (e.autoApplied) "A" else NullVarchar
@@ -2315,7 +2316,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     * we need the actual PostActionDto's here, not only post ids — so we
     * can update the read counts of all affected posts.
     */
-  private def insertUpdatePosts(newParts: PageParts, postIds: List[String])
+  private def insertUpdatePosts(newParts: PageParts, postIds: List[ActionId])
         (implicit conn: js.Connection) {
     for {
       postId <- postIds
@@ -2469,7 +2470,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     }
 
     val values = List[AnyRef](
-      post.parentId.toInt.asInstanceOf[AnyRef],
+      post.parentId.asAnyRef,
       post.markup,
       post.where.orNullVarchar,
       d2ts(post.creationDati),
@@ -2528,7 +2529,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       NullVarchar, // ratings text
       post.approvedText.orNullVarchar,
       anyUnapprovedTextDiff.orNullVarchar,
-      siteId, post.page.pageId, post.id.toInt.asInstanceOf[AnyRef])
+      siteId, post.page.pageId, post.id.asAnyRef)
 
     val numRowsChanged = db.update(updateSql, values)
     if (numRowsChanged == 0) {
@@ -2655,12 +2656,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     }
 
     val postActionDto = PostActionDto.forNewPost(
-      id = rs.getInt("POST_ID").toString,
+      id = rs.getInt("POST_ID"),
       creationDati = ts2d(rs.getTimestamp("CREATED_AT")),
       loginId = "?",
       userId = rs.getString("AUTHOR_ID"),
       newIp = None, // for now
-      parentPostId = rs.getInt("PARENT_POST_ID").toString,
+      parentPostId = rs.getInt("PARENT_POST_ID"),
       text = anyUnapprovedText getOrElse anyApprovedText.get,
       markup = rs.getString("MARKUP"),
       approval = _toAutoApproval(rs.getString("LAST_APPROVAL_TYPE")),

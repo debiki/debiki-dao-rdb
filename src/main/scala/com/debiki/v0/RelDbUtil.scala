@@ -33,10 +33,10 @@ object RelDbUtil {
      "a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP, " +
      "a.APPROVAL, a.AUTO_APPLICATION"
 
-  def _Action(rs: js.ResultSet, ratingTags: col.Map[String, List[String]])
+  def _Action(rs: js.ResultSet, ratingTags: col.Map[ActionId, List[String]])
         : PostActionDtoOld = {
-    val postId = rs.getInt("POST_ID").toString
-    val id = rs.getInt("PAID").toString
+    val postId = rs.getInt("POST_ID")
+    val id = rs.getInt("PAID")
     val (loginSno, userId) = {
       // No login/identity/user is stored for the hardcoded system user.
       val loginIdOrNull = rs.getString("LOGIN")
@@ -48,7 +48,7 @@ object RelDbUtil {
     }
     val time = ts2d(rs.getTimestamp("TIME"))
     val typee = rs.getString("TYPE")
-    val relpa = rs.getInt("RELPA").toString
+    val relpa = rs.getInt("RELPA")
     val text_? = rs.getString("TEXT")
     val markup_? = rs.getString("MARKUP")
     val where_? = rs.getString("WHEERE")
@@ -62,7 +62,7 @@ object RelDbUtil {
 
     def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
       target: ${Option(relpa)}, login id: $loginSno, user id: $userId"""
-    assErrIf(postId eq null, "DwE5YQ08", s"POST_ID is null, details: $details")
+    assErrIf(postId <= 0, "DwE5YQ08", s"POST_ID is <= 0, details: $details")
 
     // (This whole match-case will go away when I unify all types
     // into CreatePostAction?)  ...

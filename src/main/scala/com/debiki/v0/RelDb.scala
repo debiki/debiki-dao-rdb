@@ -29,6 +29,12 @@ object RelDb {
   implicit def pimpOptionWithNullVarchar(opt: Option[String]) =
     new StringOptionPimpedWithNullVarchar(opt)
 
+  /** Useful when converting Int:s to AnyRef, which the JDBC driver wants. */
+  implicit class AnyAsAnyRef(a: Any) {
+    def asAnyRef = a.asInstanceOf[AnyRef]
+  }
+
+
   /** Converts null to the empty string ("Null To Empty"). */
   def n2e(s: String) = if (s eq null) "" else s
 
