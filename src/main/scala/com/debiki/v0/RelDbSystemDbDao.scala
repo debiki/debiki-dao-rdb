@@ -118,6 +118,33 @@ class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao {
   }
 
 
+  def checkInstallationStatus(): InstallationStatus = {
+    // If there is any single owner, there should be an owner for the very
+    // first site, because the very first owner created is the very
+    // first site's owner.
+
+    val sql = """
+      select
+        (select count(*) from DW1_TENANTS) num_sites,
+        (select count(*) from DW1_USERS where IS_OWNER = 'T') num_owners
+      """
+
+    db.queryAtnms(sql, Nil, rs => {
+      rs.next()
+      val numSites = rs.getInt("num_sites")
+      val numOwners = rs.getInt("num_owners")
+
+      if (numSites == 0)
+        return InstallationStatus.CreateFirstSite
+
+      if (numOwners == 0)
+        return InstallationStatus.CreateFirstSiteAdmin
+
+      InstallationStatus.AllDone
+    })
+  }
+
+
   def createTenant(name: String): Tenant = {
     db.transaction { implicit connection =>
       val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
