@@ -66,7 +66,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       // Fine, a valid new page id has been assigned somewhere else?
       pagePerhapsId
     } else {
-      pagePerhapsId.copyWithNewId(nextRandomString)  // COULD ensure same
+      pagePerhapsId.copyWithNewId(nextRandomPageId)  // COULD ensure same
                                           // method used in all DAO modules!
     }
     db.transaction { implicit connection =>
