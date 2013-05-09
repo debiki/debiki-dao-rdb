@@ -59,6 +59,13 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   def createPage(pagePerhapsId: Page): Page = {
+    db.transaction { implicit connection =>
+      createPageImpl(pagePerhapsId)(connection)
+    }
+  }
+
+
+  def createPageImpl(pagePerhapsId: Page)(connection: js.Connection): Page = {
     // Could wrap this whole function in `tryManyTimes { ... }` because the id
     // might clash with an already existing id? (The ids in use are fairly short,
     // currently, because they're sometimes shown in the url)
@@ -69,20 +76,19 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       pagePerhapsId.copyWithNewId(nextRandomPageId)  // COULD ensure same
                                           // method used in all DAO modules!
     }
-    db.transaction { implicit connection =>
-      require(page.siteId == siteId)
-      // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
-      _createPage(page)
 
-      // Now, when saving actions, start with an empty page, or there'll be
-      // id clashes when savePageActionsImpl adds the saved actions to
-      // the page (since the title/body creation actions would already be present).
-      val emptyPage = PageNoPath(PageParts(page.id), page.meta.copy(pageExists = true))
-      val (newPageNoPath, actionDtosWithIds) =
-        savePageActionsImpl(emptyPage, page.parts.actionDtos)
+    require(page.siteId == siteId)
+    // SHOULD throw a recognizable exception on e.g. dupl page slug violation.
+    _createPage(page)(connection)
 
-      Page(newPageNoPath.meta, page.path, newPageNoPath.parts)
-    }
+    // Now, when saving actions, start with an empty page, or there'll be
+    // id clashes when savePageActionsImpl adds the saved actions to
+    // the page (since the title/body creation actions would already be present).
+    val emptyPage = PageNoPath(PageParts(page.id), page.meta.copy(pageExists = true))
+    val (newPageNoPath, actionDtosWithIds) =
+      savePageActionsImpl(emptyPage, page.parts.actionDtos)(connection)
+
+    Page(newPageNoPath.meta, page.path, newPageNoPath.parts)
   }
 
 
@@ -1259,6 +1265,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   }
 
 
+  // ? Should replace this function with a call to CreateSiteSystemDaoMixin.createSiteImpl ?
+  // And do everything in the same transaction!
   def createWebsite(name: String, address: String, ownerIp: String,
         ownerLoginId: String, ownerIdentity: IdentityOpenId, ownerRole: User)
         : Option[(Tenant, User)] = {
