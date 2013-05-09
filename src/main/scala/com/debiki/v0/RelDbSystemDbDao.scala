@@ -145,17 +145,44 @@ class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao {
   }
 
 
-  def createTenant(name: String): Tenant = {
+  /** Is different from RelDbTenantDao._createTenant() in that it doesn't fill in
+    * any CREATOR_... columns, because the database should be empty and there is then
+    * no creator to refer to.
+    */
+  def createFirstSite(name: String, address: String, https: TenantHost.HttpsInfo): Tenant = {
     db.transaction { implicit connection =>
-      val tenantId = db.nextSeqNo("DW1_TENANTS_ID").toString
+      val siteId: String = db.nextSeqNo("DW1_TENANTS_ID").toString
       db.update("""
         insert into DW1_TENANTS (ID, NAME)
         values (?, ?)
-        """, List[AnyRef](tenantId, name))
-      Tenant(id = tenantId, name = name, creatorIp = "",
+        """, List[AnyRef](siteId, name))
+      val siteHost = TenantHost(address, TenantHost.RoleCanonical, https)
+      insertTenantHost(siteId, siteHost)(connection)
+
+      Tenant(siteId, name = name, creatorIp = "",
          creatorTenantId = "", creatorLoginId = "",
-         creatorRoleId = "", hosts = Nil)
+         creatorRoleId = "", hosts = siteHost::Nil)
     }
+  }
+
+
+  def insertTenantHost(tenantId: String, host: TenantHost)(connection:  js.Connection) = {
+    val cncl = host.role match {
+      case TenantHost.RoleCanonical => "C"
+      case TenantHost.RoleRedirect => "R"
+      case TenantHost.RoleLink => "L"
+      case TenantHost.RoleDuplicate => "D"
+    }
+    val https = host.https match {
+      case TenantHost.HttpsRequired => "R"
+      case TenantHost.HttpsAllowed => "A"
+      case TenantHost.HttpsNone => "N"
+    }
+    val sql = """
+      insert into DW1_TENANT_HOSTS (TENANT, HOST, CANONICAL, HTTPS)
+      values (?, ?, ?, ?)
+      """
+    db.update(sql, List(tenantId, host.address, cncl, https))(connection)
   }
 
 

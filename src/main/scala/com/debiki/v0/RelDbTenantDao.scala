@@ -1273,10 +1273,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
            creatorLoginId = ownerLoginId, creatorRoleId = ownerRole.id,
            hosts = Nil)
         val newTenant = _createTenant(newTenantNoId)
-
-        val newHost = TenantHost(address, TenantHost.RoleCanonical,
-          TenantHost.HttpsNone)
-        val newHostCount = _insertTenantHost(newTenant.id, newHost)
+        val newHost = TenantHost(address, TenantHost.RoleCanonical, TenantHost.HttpsNone)
+        val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
         assErrIf(newHostCount != 1, "DwE09KRF3")
         val ownerRoleAtNewWebsite = _insertUser(newTenant.id,
           ownerRole.copy(id = "?",
@@ -1325,28 +1323,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
   def addTenantHost(host: TenantHost) = {
     db.transaction { implicit connection =>
-      _insertTenantHost(tenantId, host)
+      systemDaoSpi.insertTenantHost(tenantId, host)(connection)
     }
-  }
-
-
-  private def _insertTenantHost(tenantId: String, host: TenantHost)
-        (implicit connection:  js.Connection) = {
-    val cncl = host.role match {
-      case TenantHost.RoleCanonical => "C"
-      case TenantHost.RoleRedirect => "R"
-      case TenantHost.RoleLink => "L"
-      case TenantHost.RoleDuplicate => "D"
-    }
-    val https = host.https match {
-      case TenantHost.HttpsRequired => "R"
-      case TenantHost.HttpsAllowed => "A"
-      case TenantHost.HttpsNone => "N"
-    }
-    db.update("""
-        insert into DW1_TENANT_HOSTS (TENANT, HOST, CANONICAL, HTTPS)
-        values (?, ?, ?, ?)
-        """, List(tenantId, host.address, cncl, https))
   }
 
 
