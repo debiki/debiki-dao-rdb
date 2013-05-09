@@ -1696,7 +1696,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
 
   def configRole(loginId: String, ctime: ju.Date, roleId: String,
-        emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean]) {
+        emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean],
+        isOwner: Option[Boolean]) {
     // Currently auditing not implemented for the roles/users table,
     // so loginId and ctime aren't used.
     require(!roleId.startsWith("-") && !roleId.startsWith("?"))
@@ -1717,6 +1718,12 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       if (changes.nonEmpty) changes ++= ", "
       changes ++= "SUPERADMIN = ?"
       newValues ::= (if (isAdmin) "T" else NullVarchar)
+    }
+
+    isOwner foreach { isOwner =>
+      if (changes.nonEmpty) changes ++= ", "
+      changes ++= "IS_OWNER = ?"
+      newValues ::= (if (isOwner) "T" else NullVarchar)
     }
 
     if (newValues.isEmpty)
