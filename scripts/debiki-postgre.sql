@@ -1,5 +1,14 @@
 /*
 
+This is a sketch of the database structure. The real structure is defined by the
+evolutions/1.sql, 2.sql, 3.sql etcetera scripts, and to view the real structure,
+you need to connect to an actual database and have a look at it.
+
+This sketch is however up-to-date (I think) and it is currently what I look at
+when writing database related code, and where I add documentation and intentions
+and other notes.
+
+
 *** Read this ***
 
 CAPITALIZE table, column and constraint names but use lowercase for SQL
