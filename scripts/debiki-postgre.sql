@@ -376,7 +376,6 @@ create table DW1_IDS_SIMPLE(  -- abbreviated IDSMPL
   constraint DW1_IDSSIMPLE_SNO_NOT_0__C check (SNO <> '0')
 );
 
--- todo prod done test,dev:
 create table DW1_GUESTS(
   SITE_ID varchar(32) not null,
   ID varchar(32) not null,
@@ -389,12 +388,6 @@ create table DW1_GUESTS(
   constraint DW1_GUESTS__U unique (SITE_ID, NAME, EMAIL_ADDR, LOCATION, URL)
 );
 
--- todo prod done test,dev:
-insert into DW1_GUESTS(SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
-  select distinct l.TENANT, i.SNO, i.NAME, i.EMAIL, i.LOCATION, i.WEBSITE
-  from DW1_LOGINS l left join DW1_IDS_SIMPLE i
-  on l.ID_SNO = i.SNO
-  where l.ID_TYPE = 'Simple';
 
 -- todo prod done test,dev: (do this later, after some week?)
 -- drop table DW1_IDS_SIMPLE;
@@ -697,10 +690,6 @@ $$ language plpgsql;
 -- The data in DW1_POSTS contains everything needed to render a post (one
 -- don't need to query DW1_ACTIONS for anything).
 
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
--- todo prod, redo dev,test:
-
 create table DW1_POSTS(
   SITE_ID varchar(32) not null,
   PAGE_ID varchar(32) not null,
@@ -858,8 +847,6 @@ create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT
       (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
       (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
 
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
 
 
 ----- Actions
@@ -923,24 +910,15 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PACTIONS__R__LOGINS  -- ix DW1_PACTIONS_LOGIN
       foreign key (LOGIN)
       references DW1_LOGINS (SNO) deferrable,
- ------ todo prod done test,dev:
-  alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS__R__GUESTS;
-  alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS__R__GUESTS  -- ix DW1_PGAS_TNT_GUESTID
       foreign key (TENANT, GUEST_ID)
       references DW1_GUESTS (SITE_ID, ID) deferrable,
- ------
   constraint DW1_PGAS__R__ROLES  -- ix DW1_PGAS_TNT_ROLEID
       foreign key (TENANT, ROLE_ID)
       references DW1_USERS (TENANT, SNO) deferrable,
   constraint DW1_PACTIONS__R__PAGES -- deprecated. Ix DW1_PACTIONS_PAGE_PAID__P
       foreign key (PAGE)
       references DW1_PAGES (SNO) deferrable,
-  ----- todo prod done test,dev:
-  -- update dw1_page_actions set type = 'CollapseTree' where type = 'CloseTree';
-  -- update dw1_page_actions set type = 'CollapseTree' where type = 'CollapseReplies';
-  -- alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
-  -- alter table DW1_PAGE_ACTIONS add
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Edit', 'EditApp',
         'Aprv', 'Rjct',
@@ -950,7 +928,6 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
         'DelPost', 'DelTree',
         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther',
         'Undo', 'VoteUp', 'VoteDown')),
-  ----------------
   -- There must be no action with id 0; let 0 mean nothing.
   constraint DW1_PACTIONS_PAID_NOT_0__C
       check (PAID <> '0'),
@@ -1048,9 +1025,6 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_ACTIONPATH__C
 -- updated at the end of the session.
 create index DW1_PACTIONS_LOGIN on DW1_PAGE_ACTIONS(LOGIN);
 
------ todo prod done test,dev:
-drop index DW1_PGAS_GUESTID;
-------
 create index DW1_PGAS_TNT_GUESTID on DW1_PAGE_ACTIONS(TENANT, GUEST_ID);
 create index DW1_PGAS_TNT_ROLEID on DW1_PAGE_ACTIONS(TENANT, ROLE_ID);
 
@@ -1187,12 +1161,9 @@ create table DW1_NOTFS_PAGE_ACTIONS(   -- abbreviated NTFPGA
   constraint DW1_NTFPGA__R__RLS  -- e.g. ix DW1_NTFPGA_TNT_ROLE_CTIME
       foreign key (TENANT, RCPT_ROLE_ID)
       references DW1_USERS (TENANT, SNO) deferrable,
-  --------
-  -- todo prod done test,dev: alter table DW1_NOTFS_PAGE_ACTIONS add
   constraint DW1_NTFPGA__R__GUESTS  -- e.g. ix DW1_NTFPGA_TNT_IDSMPL_CTIME
       foreign key (TENANT, RCPT_ID_SIMPLE)
       references DW1_GUESTS (SITE_ID, ID) deferrable,
-  --------
   -- Ensure exactly one of ROLE and ID_SIMPLE is specified.
   constraint DW1_NTFPGA_IDSMPL_ROLE__C check (
       (RCPT_ROLE_ID is null) <> (RCPT_ID_SIMPLE is null)),

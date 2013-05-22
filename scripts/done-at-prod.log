@@ -1379,8 +1379,7 @@ In dev db, there are *many* such DelPost:s -- I'll simply delete them all.
 
 
 }}}
-
-{{{ TODO @ prod:
+{{{ done @ prod, see 2013-05-22 section below.
 
 egrep -Ir '0t|0b|0c' client/ app/ modules/debiki-*/src/ | grep -v 'client/vendor/jquery-1.7.2.min.js'
 After:
@@ -1490,10 +1489,525 @@ alter table DW1_PAGE_RATINGS add
 commit;
 
 }}}
-{{{ TODO @ prod:
+{{{ done @ prod, see 2013-05-22 section below
 
 update DW1_PAGES set NEXT_REPLY_ID = NEXT_REPLY_ID + 1;
 
 }}}
+{{{1 2013-05-22 Convert IDs to Ints, add DW1_POSTS and DW1_GUESTS
 
+07:51:31 324 ~/me-dev/debiki/all/debiki-app-play-2.1[master*]$ . s/tunnel-55432-11danny-5432-pgsql.src 
+07:53:28 325 ~/me-dev/debiki/all/debiki-app-play-2.1[master*]$ s/psql-debiki_prod-tunnel.sh 
++ psql -h 127.0.0.1 -p 55432 debiki_prod debiki_prod
+Password for user debiki_prod: 
+psql (9.1.9, server 9.1.3)
+SSL connection (cipher: DHE-RSA-AES256-SHA, bits: 256)
+Type "help" for help.
+
+debiki_prod=> 
+debiki_prod=> CREATE OR REPLACE FUNCTION hex_to_int(hexval varchar) RETURNS integer AS $$
+debiki_prod$> DECLARE
+debiki_prod$>     result  int;
+debiki_prod$> BEGIN
+debiki_prod$>     EXECUTE 'SELECT x''' || hexval || '''::int' INTO result;
+debiki_prod$>     RETURN result;
+debiki_prod$> END;
+debiki_prod$> $$ LANGUAGE 'plpgsql' IMMUTABLE STRICT;
+CREATE FUNCTION
+debiki_prod=> CREATE OR REPLACE FUNCTION string_id_to_int(string_id varchar) RETURNS varchar AS $$
+debiki_prod$> DECLARE
+debiki_prod$>     result  int;
+debiki_prod$> BEGIN
+debiki_prod$>     SELECT 
+debiki_prod$>       case
+debiki_prod$>         when string_id ~ '^[0-9]+$' then string_id
+debiki_prod$>         else case string_id
+debiki_prod$>           when '0t' then '65501'
+debiki_prod$>           when '0b' then '65502'
+debiki_prod$>           when '0c' then '65503'
+debiki_prod$>           -- I used `7` in test & dev though, but shorter ids = better, I hope 5 will do:
+debiki_prod$>           else '' || substring('' || hex_to_int(substring(md5(string_id) from 1 for 7)) from 1 for 6)
+debiki_prod$>         end
+debiki_prod$>       end
+debiki_prod$>       INTO result;
+debiki_prod$>     RETURN result;
+debiki_prod$> END;
+debiki_prod$> $$ LANGUAGE 'plpgsql' IMMUTABLE STRICT;
+CREATE FUNCTION
+debiki_prod=> 
+debiki_prod=> \set AUTOCOMMIT off
+debiki_prod=> SET CONSTRAINTS ALL DEFERRED;
+SET CONSTRAINTS
+debiki_prod=> 
+debiki_prod=> update dw1_page_ratings set
+debiki_prod->   paid = string_id_to_int(paid);
+UPDATE 507
+debiki_prod=> update dw1_page_actions set
+debiki_prod->   post_id = string_id_to_int(post_id),
+debiki_prod->   paid = string_id_to_int(paid),
+debiki_prod->   relpa = string_id_to_int(relpa);
+UPDATE 3350
+debiki_prod=> update DW1_NOTFS_PAGE_ACTIONS set
+debiki_prod->   EVENT_PGA = string_id_to_int(EVENT_PGA),
+debiki_prod->   TARGET_PGA = string_id_to_int(TARGET_PGA),
+debiki_prod->   RCPT_PGA = string_id_to_int(RCPT_PGA);
+UPDATE 288
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS__R__PGAS;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_MAGIC_ID_PARENTS__C;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_RATINGS drop constraint DW1_ARTS__R__PGAS;
+ALTER TABLE
+debiki_prod=> alter table DW1_NOTFS_PAGE_ACTIONS alter column EVENT_PGA type INT using cast(event_pga as int);
+ALTER TABLE
+debiki_prod=> alter table DW1_NOTFS_PAGE_ACTIONS alter column TARGET_PGA type INT using cast(target_pga as int);
+ALTER TABLE
+debiki_prod=> alter table DW1_NOTFS_PAGE_ACTIONS alter column RCPT_PGA type INT using cast(rcpt_pga as int);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_RATINGS alter column PAID type INT using cast(PAID as int);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS alter column POST_ID type INT using cast(POST_ID as int);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS alter column PAID type INT using cast(PAID as int);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS alter column RELPA type INT using cast(RELPA as int);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->  constraint DW1_PGAS__R__PGAS
+debiki_prod->      foreign key (TENANT, PAGE_ID, RELPA) -- no ix! no dels/upds in prnt tbl
+debiki_prod->                        -- and no joins (loading whole page at once instead)
+debiki_prod->      references DW1_PAGE_ACTIONS (TENANT, PAGE_ID, PAID) deferrable;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_MAGIC_ID_PARENTS__C
+debiki_prod->       check (RELPA = case
+debiki_prod(>       when PAID = 65501 then 65501
+debiki_prod(>       when PAID = 65502 then 65502
+debiki_prod(>       when PAID = 65503 then 65503
+debiki_prod(>       else RELPA end);
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_RATINGS add
+debiki_prod->   constraint DW1_ARTS__R__PGAS  -- ix primary key
+debiki_prod->       foreign key (TENANT, PAGE_ID, PAID)
+debiki_prod->       references DW1_PAGE_ACTIONS(TENANT, PAGE_ID, PAID) deferrable;
+ALTER TABLE
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> update DW1_PAGES set NEXT_REPLY_ID = NEXT_REPLY_ID + 1;
+UPDATE 155
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> 
+debiki_prod=> ------
+{{{ A mistake that I rolled back.
+debiki_prod=> create table DW1_GUESTS(
+debiki_prod(>   SITE_ID varchar(32) not null,
+debiki_prod(>   ID varchar(32) not null,
+debiki_prod(>   NAME varchar(100) not null,
+debiki_prod(>   -- COULD require like '%@%.%' and update all existing data ... hmm.
+debiki_prod(>   EMAIL_ADDR varchar(100) not null,
+debiki_prod(>   LOCATION varchar(100) not null,
+debiki_prod(>   URL varchar(100) not null,
+debiki_prod(>   constraint DW1_GUESTS_SITE_ID__P primary key (SITE_ID, ID),
+debiki_prod(>   constraint DW1_GUESTS__U unique (SITE_ID, NAME, EMAIL_ADDR, LOCATION, URL)
+debiki_prod(> );
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "dw1_guests_site_id__p" for table "dw1_guests"
+NOTICE:  CREATE TABLE / UNIQUE will create implicit index "dw1_guests__u" for table "dw1_guests"
+CREATE TABLE
+debiki_prod=> 
+debiki_prod=> insert into DW1_GUESTS(SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
+debiki_prod->   select distinct l.TENANT, i.SNO, i.NAME, i.EMAIL, i.LOCATION, i.WEBSITE
+debiki_prod->   from DW1_LOGINS l left join DW1_IDS_SIMPLE i
+debiki_prod->   on l.ID_SNO = i.SNO
+debiki_prod->   where l.ID_TYPE = 'Simple';
+INSERT 0 213
+debiki_prod=> 
+debiki_prod=> 
+debiki_prod=> create table DW1_POSTS(
+debiki_prod(>   SITE_ID varchar(32) not null,
+debiki_prod(>   PAGE_ID varchar(32) not null,
+debiki_prod(>   POST_ID int not null,
+debiki_prod(>   PARENT_POST_ID int not null,
+debiki_prod(>   MARKUP varchar(30),
+debiki_prod(>   WHEERE varchar(150),
+debiki_prod(>   CREATED_AT timestamp not null,
+debiki_prod(>   LAST_ACTED_UPON_AT timestamp,
+debiki_prod(>   LAST_REVIEWED_AT timestamp,
+debiki_prod(>   LAST_AUTHLY_REVIEWED_AT timestamp,
+debiki_prod(>   LAST_APPROVED_AT timestamp,
+debiki_prod(>   LAST_APPROVAL_TYPE varchar(1), -- same as DW1_PAGE_ACTIONS.APPROVAL
+debiki_prod(>   LAST_PERMANENTLY_APPROVED_AT timestamp,
+debiki_prod(>   LAST_MANUALLY_APPROVED_AT timestamp,
+debiki_prod(> 
+debiki_prod(>   AUTHOR_ID varchar(32),
+debiki_prod(> 
+debiki_prod(>   LAST_EDIT_APPLIED_AT timestamp,
+debiki_prod(>   LAST_EDIT_REVERTED_AT timestamp,
+debiki_prod(>   LAST_EDITOR_ID varchar(32),
+debiki_prod(> 
+debiki_prod(>   POST_COLLAPSED_AT timestamp,
+debiki_prod(>   TREE_COLLAPSED_AT timestamp,
+debiki_prod(>   POST_DELETED_AT timestamp,
+debiki_prod(>   TREE_DELETED_AT timestamp,
+debiki_prod(> 
+debiki_prod(>   -- These NUM_*_SUGGESTIONS are used when rendering a page, so people can see
+debiki_prod(>   -- what other readers have suggested. For example, if people have suggested that
+debiki_prod(>   -- a comment be moved to another thread, an airplane icon could be shown? :-))
+debiki_prod(>   -- And a little icon could be shown if there are pending edit suggestions?
+debiki_prod(>   --
+debiki_prod(>   -- The NUM_*_TO_REVIEW are used to inform moderators about what things
+debiki_prod(>   -- there are to review. Some things pending review might have been preliminarily
+debiki_prod(>   -- approved (e.g. an edit of a seemingly benevolent user's own comment).
+debiki_prod(>   --
+debiki_prod(>   -- There are indexes that sort flagged posts first, then posts pending review,
+debiki_prod(>   -- then posts with edit suggestions, then other posts.
+debiki_prod(> 
+debiki_prod(>   NUM_EDIT_SUGGESTIONS smallint not null default 0,
+debiki_prod(>   NUM_EDITS_APPLD_UNREVIEWED smallint not null default 0,
+debiki_prod(>   NUM_EDITS_APPLD_PREL_APPROVED smallint not null default 0,
+debiki_prod(>   -- Includes unreviewed edits + prel approved edits, + perhaps popular edit suggestions.
+debiki_prod(>   NUM_EDITS_TO_REVIEW smallint not null default 0,
+debiki_prod(>   NUM_DISTINCT_EDITORS smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   -- Number of votes to collapse this post — if it is not collapsed already.
+debiki_prod(>   -- If it *is* collapsed already, however, then this is the number of pro votes
+debiki_prod(>   -- that were cast and resulted in it ending up collapsed. _CON is the number
+debiki_prod(>   -- of votes against. (con = contra.)
+debiki_prod(>   NUM_COLLAPSE_POST_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_COLLAPSE_POST_VOTES_CON smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSE_POST_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSE_POST_VOTES_CON smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_COLLAPSE_TREE_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_COLLAPSE_TREE_VOTES_CON smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSE_TREE_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSE_TREE_VOTES_CON smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_COLLAPSES_TO_REVIEW smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSES_TO_REVIEW smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_DELETE_POST_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_DELETE_POST_VOTES_CON smallint not null default 0,
+debiki_prod(>   NUM_UNDELETE_POST_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_UNDELETE_POST_VOTES_CON smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_DELETE_TREE_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_DELETE_TREE_VOTES_CON smallint not null default 0,
+debiki_prod(>   NUM_UNDELETE_TREE_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_UNDELETE_TREE_VOTES_CON smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_DELETES_TO_REVIEW smallint not null default 0, -- should auto delete if too many flags?
+debiki_prod(>   NUM_UNDELETES_TO_REVIEW smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_PENDING_FLAGS smallint not null default 0,
+debiki_prod(>   NUM_HANDLED_FLAGS smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   -- Will be an array of tuples?: [(flag, count), (flag2, count2), ...]
+debiki_prod(>   FLAGS varchar(100),
+debiki_prod(>   RATINGS varchar(100),
+debiki_prod(>   APPROVED_TEXT text,
+debiki_prod(>   UNAPPROVED_TEXT_DIFF text,
+debiki_prod(> 
+debiki_prod(>   constraint DW1_POSTS_SITE_PAGE_POST__P primary key (SITE_ID, PAGE_ID, POST_ID),
+debiki_prod(>   constraint DW1_POSTS_APPROVAL__C_IN check (LAST_APPROVAL_TYPE in ('P', 'W', 'A', 'M'))
+debiki_prod(> );
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "dw1_posts_site_page_post__p" for table "dw1_posts"
+CREATE TABLE
+debiki_prod=> -- Flags are important — we first show all posts with unhandled flags...
+debiki_prod=> -- (NOTE: If you edit this index, update the corresponding `where` test
+debiki_prod=> -- in RelDbTenantDao.loadPostStatesPendingFlags, or there'll be full table scans!)
+debiki_prod=> create index DW1_POSTS_PENDING_FLAGS on DW1_POSTS (SITE_ID, NUM_PENDING_FLAGS)
+debiki_prod->   where
+debiki_prod->     NUM_PENDING_FLAGS > 0;
+CREATE INDEX
+debiki_prod=> create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
+debiki_prod->   where
+debiki_prod->     NUM_PENDING_FLAGS = 0 and (
+debiki_prod(>       (LAST_APPROVAL_TYPE is null or LAST_APPROVAL_TYPE = 'P') or
+debiki_prod(>       NUM_EDITS_TO_REVIEW > 0 or
+debiki_prod(>       NUM_COLLAPSES_TO_REVIEW > 0 or
+debiki_prod(>       NUM_UNCOLLAPSES_TO_REVIEW > 0 or
+debiki_prod(>       NUM_DELETES_TO_REVIEW > 0 or
+debiki_prod(>       NUM_UNDELETES_TO_REVIEW > 0);
+CREATE INDEX
+debiki_prod=> create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
+debiki_prod->   where
+debiki_prod->     NUM_PENDING_FLAGS = 0 and
+debiki_prod->     LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
+debiki_prod->     NUM_EDITS_TO_REVIEW = 0 and
+debiki_prod->     NUM_COLLAPSES_TO_REVIEW = 0 and
+debiki_prod->     NUM_UNCOLLAPSES_TO_REVIEW = 0 and
+debiki_prod->     NUM_DELETES_TO_REVIEW = 0 and
+debiki_prod->     NUM_UNDELETES_TO_REVIEW = 0 and (
+debiki_prod(>       NUM_EDIT_SUGGESTIONS > 0 or
+debiki_prod(>       (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
+debiki_prod(>       (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
+debiki_prod(>       (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
+debiki_prod(>       (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
+debiki_prod(>       (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
+debiki_prod(>       (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
+debiki_prod(>       (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
+debiki_prod(>       (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
+CREATE INDEX
+debiki_prod=> create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
+debiki_prod->   where
+debiki_prod->     NUM_PENDING_FLAGS = 0 and
+debiki_prod->     LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
+debiki_prod->     NUM_EDITS_TO_REVIEW = 0 and
+debiki_prod->     NUM_COLLAPSES_TO_REVIEW = 0 and
+debiki_prod->     NUM_UNCOLLAPSES_TO_REVIEW = 0 and
+debiki_prod->     NUM_DELETES_TO_REVIEW = 0 and
+debiki_prod->     NUM_UNDELETES_TO_REVIEW = 0 and
+debiki_prod->     NUM_EDIT_SUGGESTIONS = 0 and not (
+debiki_prod(>       NUM_EDIT_SUGGESTIONS > 0 or
+debiki_prod(>       (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
+debiki_prod(>       (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
+debiki_prod(>       (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
+debiki_prod(>       (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
+debiki_prod(>       (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
+debiki_prod(>       (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
+debiki_prod(>       (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
+debiki_prod(>       (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
+CREATE INDEX
+debiki_prod=>   alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS__R__GUESTS;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS__R__GUESTS  -- ix DW1_PGAS_TNT_GUESTID
+debiki_prod->       foreign key (TENANT, GUEST_ID)
+debiki_prod->       references DW1_GUESTS (SITE_ID, ID) deferrable;
+ALTER TABLE
+debiki_prod=> update dw1_page_actions set type = 'CollapseTree' where type = 'CloseTree';
+UPDATE 0
+debiki_prod=> update dw1_page_actions set type = 'CollapseTree' where type = 'CollapseReplies';
+UPDATE 0
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
+debiki_prod(>         'Post', 'Edit', 'EditApp',
+debiki_prod(>         'Aprv', 'Rjct',
+debiki_prod(>         'Rating',
+debiki_prod(>         'MoveTree',
+debiki_prod(>         'CollapsePost', 'CollapseTree',
+debiki_prod(>         'DelPost', 'DelTree',
+debiki_prod(>         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther',
+debiki_prod(>         'Undo', 'VoteUp', 'VoteDown'));
+ALTER TABLE
+debiki_prod=> drop index DW1_PGAS_GUESTID;
+DROP INDEX
+debiki_prod=> 
+debiki_prod=> constraint DW1_NTFPGA__R__GUESTS  -- e.g. ix DW1_NTFPGA_TNT_IDSMPL_CTIME
+debiki_prod->       foreign key (TENANT, RCPT_ID_SIMPLE)
+debiki_prod->       references DW1_GUESTS (SITE_ID, ID) deferrable;
+ERROR:  syntax error at or near "constraint"
+LINE 1: constraint DW1_NTFPGA__R__GUESTS  
+        ^
+debiki_prod=> ------ CRAP!
+debiki_prod=> rollback;
+ROLLBACK
+}}}
+debiki_prod=> 
+debiki_prod=> 
+debiki_prod=> create table DW1_GUESTS(
+debiki_prod(>   SITE_ID varchar(32) not null,
+debiki_prod(>   ID varchar(32) not null,
+debiki_prod(>   NAME varchar(100) not null,
+debiki_prod(>   -- COULD require like '%@%.%' and update all existing data ... hmm.
+debiki_prod(>   EMAIL_ADDR varchar(100) not null,
+debiki_prod(>   LOCATION varchar(100) not null,
+debiki_prod(>   URL varchar(100) not null,
+debiki_prod(>   constraint DW1_GUESTS_SITE_ID__P primary key (SITE_ID, ID),
+debiki_prod(>   constraint DW1_GUESTS__U unique (SITE_ID, NAME, EMAIL_ADDR, LOCATION, URL)
+debiki_prod(> );
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "dw1_guests_site_id__p" for table "dw1_guests"
+NOTICE:  CREATE TABLE / UNIQUE will create implicit index "dw1_guests__u" for table "dw1_guests"
+CREATE TABLE
+debiki_prod=> insert into DW1_GUESTS(SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
+debiki_prod->   select distinct l.TENANT, i.SNO, i.NAME, i.EMAIL, i.LOCATION, i.WEBSITE
+debiki_prod->   from DW1_LOGINS l left join DW1_IDS_SIMPLE i
+debiki_prod->   on l.ID_SNO = i.SNO
+debiki_prod->   where l.ID_TYPE = 'Simple';
+INSERT 0 213
+debiki_prod=> create table DW1_POSTS(
+debiki_prod(>   SITE_ID varchar(32) not null,
+debiki_prod(>   PAGE_ID varchar(32) not null,
+debiki_prod(>   POST_ID int not null,
+debiki_prod(>   PARENT_POST_ID int not null,
+debiki_prod(>   MARKUP varchar(30),
+debiki_prod(>   WHEERE varchar(150),
+debiki_prod(>   CREATED_AT timestamp not null,
+debiki_prod(>   LAST_ACTED_UPON_AT timestamp,
+debiki_prod(>   LAST_REVIEWED_AT timestamp,
+debiki_prod(>   LAST_AUTHLY_REVIEWED_AT timestamp,
+debiki_prod(>   LAST_APPROVED_AT timestamp,
+debiki_prod(>   LAST_APPROVAL_TYPE varchar(1), -- same as DW1_PAGE_ACTIONS.APPROVAL
+debiki_prod(>   LAST_PERMANENTLY_APPROVED_AT timestamp,
+debiki_prod(>   LAST_MANUALLY_APPROVED_AT timestamp,
+debiki_prod(> 
+debiki_prod(>   AUTHOR_ID varchar(32),
+debiki_prod(> 
+debiki_prod(>   LAST_EDIT_APPLIED_AT timestamp,
+debiki_prod(>   LAST_EDIT_REVERTED_AT timestamp,
+debiki_prod(>   LAST_EDITOR_ID varchar(32),
+debiki_prod(> 
+debiki_prod(>   POST_COLLAPSED_AT timestamp,
+debiki_prod(>   TREE_COLLAPSED_AT timestamp,
+debiki_prod(>   POST_DELETED_AT timestamp,
+debiki_prod(>   TREE_DELETED_AT timestamp,
+debiki_prod(> 
+debiki_prod(>   -- These NUM_*_SUGGESTIONS are used when rendering a page, so people can see
+debiki_prod(>   -- what other readers have suggested. For example, if people have suggested that
+debiki_prod(>   -- a comment be moved to another thread, an airplane icon could be shown? :-))
+debiki_prod(>   -- And a little icon could be shown if there are pending edit suggestions?
+debiki_prod(>   --
+debiki_prod(>   -- The NUM_*_TO_REVIEW are used to inform moderators about what things
+debiki_prod(>   -- there are to review. Some things pending review might have been preliminarily
+debiki_prod(>   -- approved (e.g. an edit of a seemingly benevolent user's own comment).
+debiki_prod(>   --
+debiki_prod(>   -- There are indexes that sort flagged posts first, then posts pending review,
+debiki_prod(>   -- then posts with edit suggestions, then other posts.
+debiki_prod(> 
+debiki_prod(>   NUM_EDIT_SUGGESTIONS smallint not null default 0,
+debiki_prod(>   NUM_EDITS_APPLD_UNREVIEWED smallint not null default 0,
+debiki_prod(>   NUM_EDITS_APPLD_PREL_APPROVED smallint not null default 0,
+debiki_prod(>   -- Includes unreviewed edits + prel approved edits, + perhaps popular edit suggestions.
+debiki_prod(>   NUM_EDITS_TO_REVIEW smallint not null default 0,
+debiki_prod(>   NUM_DISTINCT_EDITORS smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   -- Number of votes to collapse this post — if it is not collapsed already.
+debiki_prod(>   -- If it *is* collapsed already, however, then this is the number of pro votes
+debiki_prod(>   -- that were cast and resulted in it ending up collapsed. _CON is the number
+debiki_prod(>   -- of votes against. (con = contra.)
+debiki_prod(>   NUM_COLLAPSE_POST_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_COLLAPSE_POST_VOTES_CON smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSE_POST_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSE_POST_VOTES_CON smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_COLLAPSE_TREE_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_COLLAPSE_TREE_VOTES_CON smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSE_TREE_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSE_TREE_VOTES_CON smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_COLLAPSES_TO_REVIEW smallint not null default 0,
+debiki_prod(>   NUM_UNCOLLAPSES_TO_REVIEW smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_DELETE_POST_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_DELETE_POST_VOTES_CON smallint not null default 0,
+debiki_prod(>   NUM_UNDELETE_POST_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_UNDELETE_POST_VOTES_CON smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_DELETE_TREE_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_DELETE_TREE_VOTES_CON smallint not null default 0,
+debiki_prod(>   NUM_UNDELETE_TREE_VOTES_PRO smallint not null default 0,
+debiki_prod(>   NUM_UNDELETE_TREE_VOTES_CON smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_DELETES_TO_REVIEW smallint not null default 0, -- should auto delete if too many flags?
+debiki_prod(>   NUM_UNDELETES_TO_REVIEW smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   NUM_PENDING_FLAGS smallint not null default 0,
+debiki_prod(>   NUM_HANDLED_FLAGS smallint not null default 0,
+debiki_prod(> 
+debiki_prod(>   -- Will be an array of tuples?: [(flag, count), (flag2, count2), ...]
+debiki_prod(>   FLAGS varchar(100),
+debiki_prod(>   RATINGS varchar(100),
+debiki_prod(>   APPROVED_TEXT text,
+debiki_prod(>   UNAPPROVED_TEXT_DIFF text,
+debiki_prod(> 
+debiki_prod(>   constraint DW1_POSTS_SITE_PAGE_POST__P primary key (SITE_ID, PAGE_ID, POST_ID),
+debiki_prod(>   constraint DW1_POSTS_APPROVAL__C_IN check (LAST_APPROVAL_TYPE in ('P', 'W', 'A', 'M'))
+debiki_prod(> );
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "dw1_posts_site_page_post__p" for table "dw1_posts"
+CREATE TABLE
+debiki_prod=> create index DW1_POSTS_PENDING_FLAGS on DW1_POSTS (SITE_ID, NUM_PENDING_FLAGS)
+debiki_prod->   where
+debiki_prod->     NUM_PENDING_FLAGS > 0;
+CREATE INDEX
+debiki_prod=> create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
+debiki_prod->   where
+debiki_prod->     NUM_PENDING_FLAGS = 0 and (
+debiki_prod(>       (LAST_APPROVAL_TYPE is null or LAST_APPROVAL_TYPE = 'P') or
+debiki_prod(>       NUM_EDITS_TO_REVIEW > 0 or
+debiki_prod(>       NUM_COLLAPSES_TO_REVIEW > 0 or
+debiki_prod(>       NUM_UNCOLLAPSES_TO_REVIEW > 0 or
+debiki_prod(>       NUM_DELETES_TO_REVIEW > 0 or
+debiki_prod(>       NUM_UNDELETES_TO_REVIEW > 0);
+CREATE INDEX
+debiki_prod=> create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
+debiki_prod->   where
+debiki_prod->     NUM_PENDING_FLAGS = 0 and
+debiki_prod->     LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
+debiki_prod->     NUM_EDITS_TO_REVIEW = 0 and
+debiki_prod->     NUM_COLLAPSES_TO_REVIEW = 0 and
+debiki_prod->     NUM_UNCOLLAPSES_TO_REVIEW = 0 and
+debiki_prod->     NUM_DELETES_TO_REVIEW = 0 and
+debiki_prod->     NUM_UNDELETES_TO_REVIEW = 0 and (
+debiki_prod(>       NUM_EDIT_SUGGESTIONS > 0 or
+debiki_prod(>       (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
+debiki_prod(>       (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
+debiki_prod(>       (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
+debiki_prod(>       (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
+debiki_prod(>       (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
+debiki_prod(>       (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
+debiki_prod(>       (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
+debiki_prod(>       (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
+CREATE INDEX
+debiki_prod=> create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
+debiki_prod->   where
+debiki_prod->     NUM_PENDING_FLAGS = 0 and
+debiki_prod->     LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
+debiki_prod->     NUM_EDITS_TO_REVIEW = 0 and
+debiki_prod->     NUM_COLLAPSES_TO_REVIEW = 0 and
+debiki_prod->     NUM_UNCOLLAPSES_TO_REVIEW = 0 and
+debiki_prod->     NUM_DELETES_TO_REVIEW = 0 and
+debiki_prod->     NUM_UNDELETES_TO_REVIEW = 0 and
+debiki_prod->     NUM_EDIT_SUGGESTIONS = 0 and not (
+debiki_prod(>       NUM_EDIT_SUGGESTIONS > 0 or
+debiki_prod(>       (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
+debiki_prod(>       (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
+debiki_prod(>       (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
+debiki_prod(>       (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
+debiki_prod(>       (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
+debiki_prod(>       (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
+debiki_prod(>       (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
+debiki_prod(>       (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
+CREATE INDEX
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS__R__GUESTS;
+ALTER TABLE
+debiki_prod=>   alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS__R__GUESTS  -- ix DW1_PGAS_TNT_GUESTID
+debiki_prod->       foreign key (TENANT, GUEST_ID)
+debiki_prod->       references DW1_GUESTS (SITE_ID, ID) deferrable;
+ALTER TABLE
+debiki_prod=> update dw1_page_actions set type = 'CollapseTree' where type = 'CloseTree';
+UPDATE 0
+debiki_prod=> update dw1_page_actions set type = 'CollapseTree' where type = 'CollapseReplies';
+UPDATE 0
+debiki_prod=> alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
+ALTER TABLE
+debiki_prod=> alter table DW1_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
+debiki_prod(>         'Post', 'Edit', 'EditApp',
+debiki_prod(>         'Aprv', 'Rjct',
+debiki_prod(>         'Rating',
+debiki_prod(>         'MoveTree',
+debiki_prod(>         'CollapsePost', 'CollapseTree',
+debiki_prod(>         'DelPost', 'DelTree',
+debiki_prod(>         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther',
+debiki_prod(>         'Undo', 'VoteUp', 'VoteDown'));
+ALTER TABLE
+debiki_prod=> drop index DW1_PGAS_GUESTID;
+DROP INDEX
+debiki_prod=> alter table DW1_NOTFS_PAGE_ACTIONS add
+debiki_prod->   constraint DW1_NTFPGA__R__GUESTS  -- e.g. ix DW1_NTFPGA_TNT_IDSMPL_CTIME
+debiki_prod->       foreign key (TENANT, RCPT_ID_SIMPLE)
+debiki_prod->       references DW1_GUESTS (SITE_ID, ID) deferrable;
+ALTER TABLE
+debiki_prod=> commit;
+COMMIT
+debiki_prod=> \q
+
+
+}}}1
 (See harmless TODO above)
