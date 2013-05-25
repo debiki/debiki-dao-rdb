@@ -5,20 +5,13 @@
 package com.debiki.v0
 
 import Prelude._
-
-/*
-All tables in these test schemas are cleared before each test:
-
-DEBIKI_TEST_0
-DEBIKI_TEST_0_0_2_EMPTY
-DEBIKI_TEST_0_0_2_DATA
-
-Password (for all users): "auto-dropped"
-*/
+import com.typesafe.config.{ConfigFactory, Config}
 
 
 /**
  * The test suite. Actual tests are defined in parent class DbDaoTckTest.
+ *
+ * Tables in the test schema are cleared before each test.
  */
 class RelDbDaoTckSpec extends tck.DbDaoTckTest(ReDbDaoTckTest)
 
@@ -34,36 +27,22 @@ class RelDbTestContext(
 object ReDbDaoTckTest extends tck.TestContextBuilder {
 
   override def buildTestContext(what: tck.DbDaoTckTest.What, version: String) = {
-    import tck.DbDaoTckTest._
 
-    // Connect.
-    //val connStr = "jdbc:postgresql://192.168.0.123:5432/debiki"
-    val server = "192.168.0.123"
-    val port = "5432"
-    val database = "debiki"
-    val schema = (version, what) match {
-      // DO NOT CHANGE schema name. The schema is PURGED before each test!
-      case ("0", EmptySchema) => "DEBIKI_TEST_0"
-      // DO NOT CHANGE schema name. All tables are EMPTIED before each test!
-      case ("0.0.2", EmptyTables) => "debiki_test_0_0_2_empty"
-      case ("0.0.2", TablesWithData) => "DEBIKI_TEST_0_0_2_DATA"
-      case _ => assErr("Broken test suite")
-    }
+    // Connect to test database. (Load config settings from src/test/resources/application.conf.)
+    val config: Config = ConfigFactory.load()
+    val server = config.getString("test.debiki.pgsql.server")
+    val port = config.getString("test.debiki.pgsql.port")
+    val database = config.getString("test.debiki.pgsql.database")
+    val user = config.getString("test.debiki.pgsql.user")
+    val password = config.getString("test.debiki.pgsql.password")
 
     val db = new RelDb(server = server, port = port, database = database,
-       user = schema, password = "auto-dropped")
+       user = user, password = password)
 
     val daoFactory = new RelDbDaoFactory(db)
 
     // Prepare schema.
-    (version, what) match {
-      case ("0", EmptySchema) =>
-        unimplemented // db.updateAtnms(RelDbTestSql.PurgeSchema)
-      case ("0.0.2", EmptyTables) =>
-        daoFactory.systemDbDao.emptyDatabase()
-        case ("0.0.2", TablesWithData) =>
-        case _ => assErr("Broken test suite")
-      }
+    daoFactory.systemDbDao.emptyDatabase()
 
     // A simple quota charger, which never throws any OverQuotaException.
     val kindQuotaCharger = new QuotaCharger {

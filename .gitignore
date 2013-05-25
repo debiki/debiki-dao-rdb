@@ -1,3 +1,7 @@
+# Optional local test database connection string config (which should not be
+# checked in).
+src/test/resources/application-local.conf
+
 scratch.txt
 scratch/
 
