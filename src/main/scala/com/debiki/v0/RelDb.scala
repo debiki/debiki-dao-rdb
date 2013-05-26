@@ -96,11 +96,7 @@ class RelDb(val server: String,
 
   import RelDb._
 
-  /*info("Connecting to PostgreSQL,"+  LOG
-     "\n  server: "+ server +
-     "\n  port:"+ port +
-     "\n  database: "+ database +
-     "\n  user: "+ user)  */
+  println(s"Connecting to PostgreSQL server: $server:$port, database: $database, user: $user")
 
   jl.Class.forName("org.postgresql.Driver")
 
