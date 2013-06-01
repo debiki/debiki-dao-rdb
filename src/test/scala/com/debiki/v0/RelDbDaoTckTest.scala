@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2012 Kaj Magnus Lindberg (born 1979)
+ * Copyright (c) 2012-2013 Kaj Magnus Lindberg (born 1979)
  */
 
 package com.debiki.v0
@@ -57,34 +57,3 @@ object ReDbDaoTckTest extends tck.TestContextBuilder {
 }
 
 
-object OracleTestSql {
-  val PurgeSchema = """
-declare
-  cursor c_constraints is
-    select 'alter table '||table_name||' drop constraint '||
-            constraint_name stmt
-    from user_constraints;
-  cursor c_tables is
-    select 'drop table '|| table_name stmt
-    from user_tables;
-  cursor c_all is
-    select 'drop '||object_type||' '|| object_name stmt
-            -- || DECODE(OBJECT_TYPE,'TABLE',' CASCADE CONSTRAINTS;',';') stmt
-    from user_objects;
-begin
-  for x in c_constraints loop
-    execute immediate x.stmt;
-  end loop;
-  for x in c_tables loop
-    execute immediate x.stmt;
-  end loop;
-  for x in c_all loop
-    execute immediate x.stmt;
-  end loop;
-  -- execute immediate 'purge recyclebin'; -- drops som weird `LOB' objects.
-     -- ^ Perhaps better skip this, in case I one day
-     -- specify wrong schema to purge?
-end;
-  """
-}
-// vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
