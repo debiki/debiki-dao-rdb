@@ -100,20 +100,13 @@ object RelDb {
 }
 
 
-class RelDb(val server: String,
-               val port: String,
-               val database: String,
-               val user: String,
-               val password: String
-){
+class RelDb(val dataSource: jxs.DataSource){
 
   import RelDb._
 
-  println(s"Connecting to PostgreSQL server: $server:$port, database: $database, user: $user")
-
-  jl.Class.forName("org.postgresql.Driver")
-
-  val daSo: jxs.DataSource = {
+  // I don't know how Play Framework has configured the data source.
+  // Here's some old docs on how it could be configured, for good performance:
+  /*
     // (Oracle docs: -----------
     // Implicit statement & connection cache examples:
     // <http://download.oracle.com/docs/cd/E11882_01/java.112/e16548/
@@ -171,26 +164,26 @@ class RelDb(val server: String,
     //ds.setImplicitCachingEnabled(true)  // prepared statement caching
     //ds.setConnectionCachingEnabled(true)
     //ds.setConnectionCacheProperties(props)
+  */
 
-    // Test the data source.
+  // Test the data source.
+  {
     val conn: js.Connection = try {
-      ds.getConnection()
+      dataSource.getConnection()
     } catch {
       case e: Exception => {
-        error("Error connecting to `"+ server +"' port `"+ port +
-            "' database `"+ database +"' as user `"+ user +"'")
+        error("Got a broken database connection source.")
         throw e
       }
     }
     conn.close()
-    ds
   }
 
 
   def close() {
     // Results in PostgreSQL complaining that "DataSource has been closed",
     // also when you open another one (!) with a different name.
-    //daSo.asInstanceOf[pg.ds.PGPoolingDataSource].close()
+    //dataSource.asInstanceOf[pg.ds.PGPoolingDataSource].close()
   }
 
 
@@ -412,7 +405,7 @@ class RelDb(val server: String,
   }
 
   private def _getConnection(): js.Connection = {
-    val conn: js.Connection = daSo.getConnection()
+    val conn: js.Connection = dataSource.getConnection()
     if (conn ne null) conn.setAutoCommit(false)
     conn
   }
