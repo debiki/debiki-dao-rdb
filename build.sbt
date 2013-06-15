@@ -16,7 +16,16 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "0.9.26" % "test",
   "org.specs2" %% "specs2" % "1.14" % "test",
   // For loading test database connection info.
-  "com.typesafe" % "config" % "1.0.1" % "test"
+  "com.typesafe" % "config" % "1.0.1" % "test",
+  // A data source:
+  ("com.jolbox" % "bonecp" % "0.7.1.RELEASE" % "test" notTransitive())
+    .exclude("com.google.guava", "guava")
+    .exclude("org.slf4j", "slf4j-api")
+  // These 2 lines below might be useful, if in the future I ever make debiki-dao-rdb
+  // itself apply evolutions to the db schema. Then a Play app is needed, and
+  // Play's JDBC module.
+  //"play" %% "play" % "2.1.1" % "test"
+  //"play" %% "play-jdbc" % "2.1.1" % "test"
 )
 
 

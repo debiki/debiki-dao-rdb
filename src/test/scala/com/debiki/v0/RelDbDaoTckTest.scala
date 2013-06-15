@@ -18,6 +18,7 @@
 package com.debiki.v0
 
 import Prelude._
+import com.jolbox.bonecp.BoneCPDataSource
 import com.typesafe.config.{ConfigFactory, Config}
 
 
@@ -41,17 +42,20 @@ object ReDbDaoTckTest extends tck.TestContextBuilder {
 
   override def buildTestContext(what: tck.DbDaoTckTest.What, version: String) = {
 
-    // Connect to test database. (Load config settings from src/test/resources/application.conf.)
+    // Connect to test database.
+    // (Load config settings from src/test/resources/application.conf, and from
+    // <debiki-site-seed-repo>/conf-local/test-db.conf, included (softlinked) via
+    // above application.conf.)
     val config: Config = ConfigFactory.load()
-    val server = config.getString("test.debiki.pgsql.server")
-    val port = config.getString("test.debiki.pgsql.port")
-    val database = config.getString("test.debiki.pgsql.database")
-    val user = config.getString("test.debiki.pgsql.user")
-    val password = config.getString("test.debiki.pgsql.password")
 
-    val db = new RelDb(server = server, port = port, database = database,
-       user = user, password = password)
+    val driverName = config.getString("db.test.driver")
+    Class.forName(driverName);	// load driver
+    val ds = new BoneCPDataSource()
+    ds.setJdbcUrl(config.getString("db.test.url"))
+    ds.setUsername(config.getString("db.test.user"))
+    ds.setPassword(config.getString("db.test.password"))
 
+    val db = new RelDb(ds)
     val daoFactory = new RelDbDaoFactory(db)
 
     // Prepare schema.
