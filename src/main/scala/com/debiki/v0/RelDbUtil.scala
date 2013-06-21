@@ -300,6 +300,8 @@ object RelDbUtil {
 
   def _toDbVal(approval: Option[Approval]): AnyRef = approval match {
     case None => NullVarchar
+    // Temporary approvals are for one HTTP request only and must not be saved.
+    case Some(Approval.Temporary) => assErr("DwE25Kf0", "Got an Approval.Temporary")
     case Some(Approval.Preliminary) => "P"
     case Some(Approval.WellBehavedUser) => "W"
     case Some(Approval.AuthoritativeUser) => "A"
