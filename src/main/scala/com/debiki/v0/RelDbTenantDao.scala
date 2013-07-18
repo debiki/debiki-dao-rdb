@@ -33,7 +33,7 @@ import collection.mutable.StringBuilder
 
 class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
         val systemDaoSpi: RelDbSystemDbDao)
-   extends TenantDbDao {
+   extends TenantDbDao with FullTextSearchSiteDaoMixin {
 
 
   val MaxWebsitesPerIp = 6
@@ -2193,6 +2193,11 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     if (newMeta != page.meta)
       _updatePageMeta(newMeta, anyOld = Some(page.meta))
 
+    // Index the posts for full text search as soon as possible.
+    // fullTextSearchIndexer.indexNewPostsSoon() — later, for now, do it in
+    // `insertUpdatePosts` instead!
+
+
     (PageNoPath(newParts, newMeta), actionsWithIds)
   }
 
@@ -2328,6 +2333,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       postId <- postIds
       post = newParts.getPost(postId) getOrDie "DwE70Bf8"
     } {
+      fullTextSearchIndexPost(post)
       insertUpdatePost(post)
     }
   }

@@ -20,7 +20,9 @@ libraryDependencies ++= Seq(
   // A data source:
   ("com.jolbox" % "bonecp" % "0.7.1.RELEASE" % "test" notTransitive())
     .exclude("com.google.guava", "guava")
-    .exclude("org.slf4j", "slf4j-api")
+    .exclude("org.slf4j", "slf4j-api"),
+  // Full text search engine:
+  "org.elasticsearch" % "elasticsearch" % "0.90.2"
   // These 2 lines below might be useful, if in the future I ever make debiki-dao-rdb
   // itself apply evolutions to the db schema. Then a Play app is needed, and
   // Play's JDBC module.
