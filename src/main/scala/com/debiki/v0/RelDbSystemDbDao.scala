@@ -25,15 +25,16 @@ import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
 import scala.collection.{mutable => mut}
-import RelDb.pimpOptionWithNullVarchar
+import RelDb._
 import RelDbUtil._
 import collection.mutable.StringBuilder
 
 
-class RelDbSystemDbDao(val db: RelDb) extends SystemDbDao with CreateSiteSystemDaoMixin {
-  // COULD serialize access, per page?
+class RelDbSystemDbDao(
+  val db: RelDb,
+  val fullTextSearchIndexer: FullTextSearchIndexer)
+  extends SystemDbDao with CreateSiteSystemDaoMixin {
 
-  import RelDb._
 
   def close() { db.close() }
 

@@ -19,49 +19,18 @@ package com.debiki.v0
 
 import java.{util => ju}
 import org.{elasticsearch => es}
-import FullTextSearchSiteDaoMixin._
+import FullTextSearchIndexer._
 import Prelude._
-
-
-
-object FullTextSearchSiteDaoMixin {
-
-
-  // This'll do for now. (Make configurable, later)
-  private val DefaultDataDir = "target/elasticsearch-data"
-
-  private val node = {
-    val settingsBuilder = es.common.settings.ImmutableSettings.settingsBuilder()
-    settingsBuilder.put("path.data", DefaultDataDir)
-    settingsBuilder.put("node.name", "DebikiElasticSearchNode")
-    settingsBuilder.put("http.enabled", true)
-    settingsBuilder.put("http.port", 9200)
-    val nodeBuilder = es.node.NodeBuilder.nodeBuilder()
-    val node = nodeBuilder.settings(settingsBuilder.build()).data(true).local(false)
-      .clusterName("DebikiElasticSearchCluster").build().start()
-    node
-  }
-
-  private val client = node.client()
-
-
-  // TODO Call on server shutdown
-  private def stopSearchDb() {
-    node.close()
-    client.close()
-  }
-
-
-  private def elasticSearchIdFor(post: Post) = post.page.id + "." + post.id
-
-}
 
 
 
 trait FullTextSearchSiteDaoMixin {
   self: RelDbTenantDbDao =>
 
-  protected val indexName = s"site-$siteId"
+  private def client = self.fullTextSearchIndexer.client
+
+  private val indexName = FullTextSearchIndexer.indexName(siteId)
+
 
   // Tips:
   //  blog.trifork.com/2012/09/13/elasticsearch-beyond-big-data-running-elasticsearch-embedded/
@@ -83,6 +52,7 @@ trait FullTextSearchSiteDaoMixin {
   }
 
 
+  /*
   protected def createIndex(siteId: String) {
     val request: es.action.admin.indices.create.CreateIndexRequest =
       es.client.Requests.createIndexRequest(siteId)
@@ -94,19 +64,6 @@ trait FullTextSearchSiteDaoMixin {
 
     //client.prepareIndex(s"site-$siteId", "type")
     //client.prepareIndex("esa", "activityStream", id).setSource(json).execute().actionGet()
-  }
-
-
-  protected def fullTextSearchIndexPost(post: Post) {
-    val indexRequest: es.action.index.IndexRequest = es.client.Requests.indexRequest(indexName)
-        .`type`("post")
-        .id(elasticSearchIdFor(post))
-        .source(post.toJsonString)
-    val indexResponse: es.action.index.IndexResponse = client.index(indexRequest).actionGet()
-    System.out.println("Index response version:\n" + indexResponse.getVersion)
-  }
+  }*/
 
 }
-
-
-

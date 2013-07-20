@@ -31,9 +31,10 @@ import RelDbUtil._
 import collection.mutable.StringBuilder
 
 
-class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
-        val systemDaoSpi: RelDbSystemDbDao)
-   extends TenantDbDao with FullTextSearchSiteDaoMixin {
+class RelDbTenantDbDao(
+  val quotaConsumers: QuotaConsumers,
+  val systemDaoSpi: RelDbSystemDbDao)
+  extends TenantDbDao with FullTextSearchSiteDaoMixin {
 
 
   val MaxWebsitesPerIp = 6
@@ -43,6 +44,8 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
   def tenantId = quotaConsumers.tenantId
 
   def db = systemDaoSpi.db
+
+  def fullTextSearchIndexer = systemDaoSpi.fullTextSearchIndexer
 
 
   /** Some SQL operations might cause harmless errors, then we try again.
@@ -2186,7 +2189,19 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
 
     // Update cached post states (e.g. the current text of a comment).
     val newParts = page.parts ++ actionsWithIds
-    insertUpdatePosts(newParts, actionsWithIds.map(_.postId).distinct)
+    val postIds = actionsWithIds.map(_.postId).distinct
+    val posts =
+      for (postId <- postIds)
+      yield newParts.getPost(postId) getOrDie "DwE70Bf8"
+
+    // Weird comment: (we already have the PostActionDto's here!?)
+    // If a rating implies nearby posts are to be considered read,
+    // we need the actual PostActionDto's here, not only post ids — so we
+    // can update the read counts of all affected posts.
+    posts foreach { post =>
+      insertUpdatePost(post)(conn)
+    }
+
 
     // Update cached page meta (e.g. the page title).
     val newMeta = PageMeta.forChangedPage(page.meta, newParts)
@@ -2194,9 +2209,7 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
       _updatePageMeta(newMeta, anyOld = Some(page.meta))
 
     // Index the posts for full text search as soon as possible.
-    // fullTextSearchIndexer.indexNewPostsSoon() — later, for now, do it in
-    // `insertUpdatePosts` instead!
-
+    fullTextSearchIndexer.indexNewPostsSoon(posts, siteId)
 
     (PageNoPath(newParts, newMeta), actionsWithIds)
   }
@@ -2320,22 +2333,6 @@ class RelDbTenantDbDao(val quotaConsumers: QuotaConsumers,
     }
 
     actionsWithIds
-  }
-
-
-  /** If a rating implies nearby posts are to be considered read,
-    * we need the actual PostActionDto's here, not only post ids — so we
-    * can update the read counts of all affected posts.
-    */
-  private def insertUpdatePosts(newParts: PageParts, postIds: List[ActionId])
-        (implicit conn: js.Connection) {
-    for {
-      postId <- postIds
-      post = newParts.getPost(postId) getOrDie "DwE70Bf8"
-    } {
-      fullTextSearchIndexPost(post)
-      insertUpdatePost(post)
-    }
   }
 
 

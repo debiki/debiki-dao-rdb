@@ -18,14 +18,27 @@
 package com.debiki.v0
 
 
+/** Constructs per site data access objects, and one global.
+  */
 class RelDbDaoFactory(val db: RelDb) extends DbDaoFactory {
 
-  val systemDbDao = new RelDbSystemDbDao(db)
+
+  private val fullTextSearchIndexer = new FullTextSearchIndexer(this)
+
+  val systemDbDao = new RelDbSystemDbDao(db, fullTextSearchIndexer)
+
 
   def newTenantDbDao(quotaConsumers: QuotaConsumers): TenantDbDao =
     new RelDbTenantDbDao(quotaConsumers, systemDbDao)
 
+
+  /** Stops any background services started by this factory,
+    * e.g. a full text search indexer.
+    */
+  def shutdown() {
+    fullTextSearchIndexer.shutdown()
+  }
+
 }
 
-// vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
 
