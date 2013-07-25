@@ -99,7 +99,6 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
       .id(elasticSearchIdFor(post))
       .source(post.toJsonString)
     val indexResponse: es.action.index.IndexResponse = client.index(indexRequest).actionGet()
-    System.out.println("Index response version:\n" + indexResponse.getVersion)
   }
 
 }

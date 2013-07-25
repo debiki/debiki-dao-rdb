@@ -104,7 +104,7 @@ class RelDbTenantDbDao(
     val (newPageNoPath, actionDtosWithIds) =
       savePageActionsImpl(emptyPage, page.parts.actionDtos)(connection)
 
-    Page(newPageNoPath.meta, page.path, newPageNoPath.parts)
+    Page(newPageNoPath.meta, page.path, page.ancestorIdsParentFirst, newPageNoPath.parts)
   }
 
 
@@ -187,6 +187,66 @@ class RelDbTenantDbDao(
       anyOld.flatMap(_.parentPageId) foreach { updateParentPageChildCount(_, -1) }
       newMeta.parentPageId foreach { updateParentPageChildCount(_, +1) }
     }
+  }
+
+
+  override def loadAncestorIdsParentFirst(pageId: PageId): List[PageId] = {
+    db.withConnection { connection =>
+      loadAncestorIdsParentFirstImpl(pageId)(connection)
+    }
+  }
+
+
+  private def loadAncestorIdsParentFirstImpl(pageId: PageId)(connection: js.Connection)
+        : List[PageId] = {
+    batchLoadAncestorIdsParentFirst(pageId::Nil)(connection).get(pageId) getOrElse Nil
+  }
+
+
+  private def batchLoadAncestorIdsParentFirst(pageIds: List[PageId])(connection: js.Connection)
+      : collection.Map[PageId, List[PageId]] = {
+    val pageIdList = makeInListFor(pageIds)
+
+    val sql = s"""
+      with recursive ancestor_page_ids(child_id, parent_id, tenant, path, cycle) as (
+          select
+            guid::varchar child_id,
+            parent_page_id::varchar parent_id,
+            tenant,
+            -- `|| ''` needed otherwise conversion to varchar[] doesn't work, weird
+            array[guid || '']::varchar[],
+            false
+          from dw1_pages where tenant = ? and guid in ($pageIdList)
+        union all
+          select
+            guid::varchar child_id,
+            parent_page_id::varchar parent_id,
+            dw1_pages.tenant,
+            path || guid,
+            parent_page_id = any(path) -- aborts if cycle, don't know if works (never tested)
+          from dw1_pages join ancestor_page_ids
+          on dw1_pages.guid = ancestor_page_ids.parent_id and
+             dw1_pages.tenant = ancestor_page_ids.tenant
+          where not cycle
+      )
+      select path from ancestor_page_ids
+      order by array_length(path, 1) desc
+      limit 1"""  // BUG! cannot `limit 1` when batch loading! Therefore:
+
+    if (pageIds.size > 1) unimplemented("Loding ancestor ids for > 1 page") // see comment above
+
+    val result = mut.Map[PageId, List[PageId]]()
+    db.transaction { implicit connection =>
+      db.query(sql, siteId :: pageIds, rs => {
+        if (!rs.next())
+          return Map.empty
+
+        val sqlArray: java.sql.Array = rs.getArray("path")
+        val pageIdPathSelfFirst = sqlArray.getArray.asInstanceOf[Array[String]].toList
+        result += pageIdPathSelfFirst.head -> pageIdPathSelfFirst.tail
+      })
+    }
+    result
   }
 
 
@@ -1366,8 +1426,7 @@ class RelDbTenantDbDao(
     includeStatuses: List[PageStatus],
     sortBy: PageSortOrder,
     limit: Int,
-    offset: Int
-  ): Seq[(PagePath, PageMeta)] = {
+    offset: Int): Seq[PagePathAndMeta] = {
 
     require(1 <= limit)
     require(offset == 0)  // for now
@@ -1408,22 +1467,30 @@ class RelDbTenantDbDao(
         $orderByStr
         limit $limit"""
 
-    var items = List[(PagePath, PageMeta)]()
+    var items = List[PagePathAndMeta]()
 
-    db.queryAtnms(sql, values, rs => {
+    db.withConnection { implicit connection =>
+     db.query(sql, values, rs => {
       while (rs.next) {
         val pagePath = _PagePath(rs, tenantId)
         val pageMeta = _PageMeta(rs, pagePath.pageId.get)
-        items ::= pagePath -> pageMeta
+
+        // This might be too inefficient if there are many pages:
+        // (But need load ancestor ids, for access control — some ancestor page might
+        // be private. COULD rewrite and use batchLoadAncestorIdsParentFirst() instead.
+        val ancestorIds = loadAncestorIdsParentFirstImpl(pageMeta.pageId)(connection)
+
+        items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
       }
-    })
+     })
+    }
     items.reverse
   }
 
 
   def listChildPages(parentPageId: String, sortBy: PageSortOrder,
         limit: Int, offset: Int, filterPageRole: Option[PageRole] = None)
-        : Seq[(PagePath, PageMeta)] = {
+        : Seq[PagePathAndMeta] = {
 
     require(1 <= limit)
     require(offset == 0)  // for now
@@ -1456,15 +1523,19 @@ class RelDbTenantDbDao(
         """+ orderByStr +"""
         limit """+ limit
 
-    var items = List[(PagePath, PageMeta)]()
+    var items = List[PagePathAndMeta]()
 
-    db.queryAtnms(sql, values, rs => {
-      while (rs.next) {
-        val pagePath = _PagePath(rs, tenantId)
-        val pageMeta = _PageMeta(rs, pagePath.pageId.get)
-        items ::= pagePath -> pageMeta
-      }
-    })
+    db.withConnection { implicit connection =>
+      val parentsAncestors = loadAncestorIdsParentFirstImpl(parentPageId)(connection)
+      val ancestorIds = parentPageId :: parentsAncestors
+      db.query(sql, values, rs => {
+        while (rs.next) {
+          val pagePath = _PagePath(rs, tenantId)
+          val pageMeta = _PageMeta(rs, pagePath.pageId.get)
+          items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
+        }
+      })
+    }
     items.reverse
   }
 
