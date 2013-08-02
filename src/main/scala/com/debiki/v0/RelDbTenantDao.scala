@@ -100,7 +100,8 @@ class RelDbTenantDbDao(
     // Now, when saving actions, start with an empty page, or there'll be
     // id clashes when savePageActionsImpl adds the saved actions to
     // the page (since the title/body creation actions would already be present).
-    val emptyPage = PageNoPath(PageParts(page.id), page.meta.copy(pageExists = true))
+    val emptyPage = PageNoPath(PageParts(page.id), page.ancestorIdsParentFirst,
+      page.meta.copy(pageExists = true))
     val (newPageNoPath, actionDtosWithIds) =
       savePageActionsImpl(emptyPage, page.parts.actionDtos)(connection)
 
@@ -2282,7 +2283,7 @@ class RelDbTenantDbDao(
     // Index the posts for full text search as soon as possible.
     fullTextSearchIndexer.indexNewPostsSoon(page, posts, siteId)
 
-    (PageNoPath(newParts, newMeta), actionsWithIds)
+    (PageNoPath(newParts, page.ancestorIdsParentFirst, newMeta), actionsWithIds)
   }
 
 
