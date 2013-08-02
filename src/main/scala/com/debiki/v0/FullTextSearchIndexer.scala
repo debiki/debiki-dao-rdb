@@ -19,6 +19,8 @@ package com.debiki.v0
 
 import java.{util => ju}
 import org.{elasticsearch => es}
+import play.{api => p}
+import play.api.libs.json._
 import FullTextSearchIndexer._
 import Prelude._
 
@@ -26,10 +28,10 @@ import Prelude._
 private[v0]
 object FullTextSearchIndexer {
 
-  def elasticSearchIdFor(post: Post) = post.page.id + "." + post.id
 
-
-  /** A per site index, for most things in that site.
+  /** For now, use one index for allsites. In the future, if one single site
+    * grows unfathomably popular, it can be migrated to its own index. So do include
+    * the site name in the index (but don't use it, right now).
     *
     * Include a version number in the index name. See:
     *   http://www.elasticsearch.org/blog/changing-mapping-with-zero-downtime/
@@ -38,7 +40,15 @@ object FullTextSearchIndexer {
     * to use the new version of the index.
     */
   def indexName(siteId: String) =
-    s"site_${siteId}_v0"
+    s"sites_v0"
+    // but if the site has its own index:  s"site_${siteId}_v0"  ?
+
+
+  val ElasticSearchPostTypeName = "post"
+
+
+  def elasticSearchIdFor(siteId: String, post: Post) =
+    s"$siteId:${post.page.id}:${post.id}"
 
 }
 
@@ -87,18 +97,46 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
 
   /** Currently indexes each post directly.
     */
-  def indexNewPostsSoon(posts: Seq[Post], siteId: String) {
-    posts foreach { fullTextSearchIndexPost(_, siteId) }
+  def indexNewPostsSoon(page: PageNoPath, posts: Seq[Post], siteId: String) {
+    posts foreach { fullTextSearchIndexPost(page, _, siteId) }
   }
 
 
-  private def fullTextSearchIndexPost(post: Post, siteId: String) {
+  private def fullTextSearchIndexPost(page: PageNoPath, post: Post, siteId: String) {
+    val json = makeSearchEngineJsonFor(post, page, siteId)
+    val idString = elasticSearchIdFor(siteId, post)
     val indexRequest: es.action.index.IndexRequest =
       es.client.Requests.indexRequest(indexName(siteId))
-      .`type`("post")
-      .id(elasticSearchIdFor(post))
-      .source(post.toJsonString)
-    val indexResponse: es.action.index.IndexResponse = client.index(indexRequest).actionGet()
+      .`type`(ElasticSearchPostTypeName)
+      .id(idString)
+      //.opType(es.action.index.IndexRequest.OpType.CREATE)
+      //.version(...)
+      .source(json.toString)
+      .routing(siteId) // this is faster than extracting `siteId` from JSON source: needn't parse.
+
+    client.index(indexRequest, new es.action.ActionListener[es.action.index.IndexResponse] {
+      def onResponse(response: es.action.index.IndexResponse) {
+        p.Logger.debug("Indexed: " + idString)
+      }
+      def onFailure(throwable: Throwable) {
+        p.Logger.warn(i"Error when indexing: $idString", throwable)
+      }
+    })
+  }
+
+
+  private def makeSearchEngineJsonFor(post: Post, page: PageNoPath, siteId: String): JsValue = {
+    var sectionPageIds = page.ancestorIdsParentFirst
+    if (page.meta.pageRole.childRole.isDefined) {
+      // Since this page can have child pages, consider it a section (e.g. a blog,
+      // forum, subforum or a wiki).
+      sectionPageIds ::= page.id
+    }
+
+    var json = post.toJson
+    json += "sectionPageIds" -> Json.toJson(sectionPageIds)
+    json += "siteId" -> JsString(siteId)
+    json
   }
 
 }

@@ -2280,7 +2280,7 @@ class RelDbTenantDbDao(
       _updatePageMeta(newMeta, anyOld = Some(page.meta))
 
     // Index the posts for full text search as soon as possible.
-    fullTextSearchIndexer.indexNewPostsSoon(posts, siteId)
+    fullTextSearchIndexer.indexNewPostsSoon(page, posts, siteId)
 
     (PageNoPath(newParts, newMeta), actionsWithIds)
   }

@@ -19,6 +19,7 @@ package com.debiki.v0
 
 import java.{util => ju}
 import org.{elasticsearch => es}
+import org.elasticsearch.index.{query => eiq}
 import FullTextSearchIndexer._
 import Prelude._
 
@@ -40,14 +41,34 @@ trait FullTextSearchSiteDaoMixin {
 
 
   def fullTextSearch(phrase: String, anyRootPageId: Option[String]): FullTextSearchResult = {
-    val queryBuilder = es.index.query.QueryBuilders.queryString(phrase).field("lastApprovedText")
-    val searchRequestBuilder = client.prepareSearch(indexName).setQuery(queryBuilder)
-    val response: es.action.search.SearchResponse = searchRequestBuilder.execute().actionGet()
+
+    // Filter by site id.
+    val filterBuilder = eiq.FilterBuilders.prefixFilter("_id", siteId + ":")
+
+    // Full-text-search the most recently approved text, for each post.
+    // (Don't search the current text, because it might not have been approved and isn't
+    // shown, by default. Also, it might be stored in compact diff format, and is
+    // not indexed, and thus really not searchable anyway.)
+    val queryBuilder = eiq.QueryBuilders.queryString(phrase).field("lastApprovedText")
+
+    val filteredQueryBuilder: eiq.FilteredQueryBuilder =
+      eiq.QueryBuilders.filteredQuery(queryBuilder,  filterBuilder)
+
+    val searchRequestBuilder =
+      client.prepareSearch(indexName)
+        .setRouting(siteId)
+        .setQuery(filteredQueryBuilder)
+
+    val response: es.action.search.SearchResponse =
+      searchRequestBuilder.execute().actionGet()
+
     val hits = for (hit: es.search.SearchHit <- response.getHits.getHits) yield {
       val jsonString = hit.getSourceAsString
-      val post = Post.fromJsonString(jsonString)
+      val json = play.api.libs.json.Json.parse(jsonString)
+      val post = Post.fromJson(json)
       FullTextSearchHit(post)
     }
+
     FullTextSearchResult(hits)
   }
 
