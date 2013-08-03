@@ -42,8 +42,14 @@ trait FullTextSearchSiteDaoMixin {
 
   def fullTextSearch(phrase: String, anyRootPageId: Option[String]): FullTextSearchResult = {
 
-    // Filter by site id.
-    val filterBuilder = eiq.FilterBuilders.prefixFilter("_id", siteId + ":")
+    // Filter by site id and perhaps section id.
+    val siteIdFilter = eiq.FilterBuilders.termFilter(JsonKeys.SiteId, siteId)
+    val filterToUse = anyRootPageId match {
+      case None => siteIdFilter
+      case Some(sectionId) =>
+        val sectionIdFilter = eiq.FilterBuilders.termFilter(JsonKeys.SectionPageIds, sectionId)
+        eiq.FilterBuilders.andFilter().add(siteIdFilter).add(sectionIdFilter)
+    }
 
     // Full-text-search the most recently approved text, for each post.
     // (Don't search the current text, because it might not have been approved and isn't
@@ -52,7 +58,7 @@ trait FullTextSearchSiteDaoMixin {
     val queryBuilder = eiq.QueryBuilders.queryString(phrase).field("lastApprovedText")
 
     val filteredQueryBuilder: eiq.FilteredQueryBuilder =
-      eiq.QueryBuilders.filteredQuery(queryBuilder,  filterBuilder)
+      eiq.QueryBuilders.filteredQuery(queryBuilder,  filterToUse)
 
     val searchRequestBuilder =
       client.prepareSearch(indexName)

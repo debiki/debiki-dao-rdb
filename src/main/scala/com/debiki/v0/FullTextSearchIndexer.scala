@@ -50,7 +50,14 @@ object FullTextSearchIndexer {
   def elasticSearchIdFor(siteId: String, post: Post) =
     s"$siteId:${post.page.id}:${post.id}"
 
+
+  object JsonKeys {
+    val SiteId = "siteId"
+    val SectionPageIds = "sectionPageIds"
+  }
+
 }
+
 
 
 private[v0]
@@ -134,8 +141,8 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
     }
 
     var json = post.toJson
-    json += "sectionPageIds" -> Json.toJson(sectionPageIds)
-    json += "siteId" -> JsString(siteId)
+    json += JsonKeys.SectionPageIds -> Json.toJson(sectionPageIds)
+    json += JsonKeys.SiteId -> JsString(siteId)
     json
   }
 
