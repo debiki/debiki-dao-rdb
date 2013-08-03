@@ -18,8 +18,11 @@
 package com.debiki.v0
 
 import java.{util => ju}
-import org.{elasticsearch => es}
+import org.elasticsearch.{search => es}
+import org.elasticsearch.{action => ea}
+import org.elasticsearch.action.{search => eas}
 import org.elasticsearch.index.{query => eiq}
+import scala.concurrent.{Future, Promise}
 import FullTextSearchIndexer._
 import Prelude._
 
@@ -40,7 +43,8 @@ trait FullTextSearchSiteDaoMixin {
   // because I'll generate indexes asynchronously?
 
 
-  def fullTextSearch(phrase: String, anyRootPageId: Option[String]): FullTextSearchResult = {
+  def fullTextSearch(phrase: String, anyRootPageId: Option[String])
+        : Future[FullTextSearchResult] = {
 
     // Filter by site id and perhaps section id.
     val siteIdFilter = eiq.FilterBuilders.termFilter(JsonKeys.SiteId, siteId)
@@ -65,10 +69,26 @@ trait FullTextSearchSiteDaoMixin {
         .setRouting(siteId)
         .setQuery(filteredQueryBuilder)
 
-    val response: es.action.search.SearchResponse =
-      searchRequestBuilder.execute().actionGet()
+    val futureJavaResponse: ea.ListenableActionFuture[eas.SearchResponse] =
+      searchRequestBuilder.execute()
 
-    val hits = for (hit: es.search.SearchHit <- response.getHits.getHits) yield {
+    val resultPromise = Promise[FullTextSearchResult]
+
+    futureJavaResponse.addListener(new ea.ActionListener[eas.SearchResponse] {
+      def onResponse(response: eas.SearchResponse) {
+        resultPromise.success(buildSearchResults(response))
+      }
+      def onFailure(t: Throwable) {
+        resultPromise.failure(t)
+      }
+    })
+
+    resultPromise.future
+  }
+
+
+  private def buildSearchResults(response: eas.SearchResponse): FullTextSearchResult = {
+    val hits = for (hit: es.SearchHit <- response.getHits.getHits) yield {
       val jsonString = hit.getSourceAsString
       val json = play.api.libs.json.Json.parse(jsonString)
       val post = Post.fromJson(json)
