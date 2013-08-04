@@ -88,14 +88,31 @@ trait FullTextSearchSiteDaoMixin {
 
 
   private def buildSearchResults(response: eas.SearchResponse): FullTextSearchResult = {
-    val hits = for (hit: es.SearchHit <- response.getHits.getHits) yield {
+    var pageIds = Set[PageId]()
+    var authorIds = Set[String]()
+
+    val jsonAndElasticSearchHits = for (hit: es.SearchHit <- response.getHits.getHits) yield {
       val jsonString = hit.getSourceAsString
       val json = play.api.libs.json.Json.parse(jsonString)
-      val post = Post.fromJson(json)
-      FullTextSearchHit(post)
+      val pageId = (json \ "pageId").as[PageId]
+      val authorId = (json \ "userId").as[String]
+      pageIds += pageId
+      authorIds += authorId
+      (json, hit)
     }
 
-    FullTextSearchResult(hits)
+    val pageMetaByPageId = loadPageMetas(pageIds.toList)
+    // ... Could also load author names ...
+
+    val hits = for ((json, hit) <- jsonAndElasticSearchHits) yield {
+      import scala.collection.JavaConverters._
+      //val highlights: Map[String, esh.HighlightField] = hit.getHighlightFields.asScala
+      //val wrappedHighlights = highlights map { new ElasticSearchHighlights(_) }
+      val post = Post.fromJson(json)
+      FullTextSearchHit(post, hit.getScore) //, wrappedHighlights)
+    }
+
+    FullTextSearchResult(hits, pageMetaByPageId)
   }
 
 
