@@ -109,23 +109,35 @@ class RelDbTenantDbDao(
   }
 
 
-  def loadPageMeta(pageId: String): Option[PageMeta] = {
-    db.withConnection { _loadPageMeta(pageId)(_) }
+  def loadPageMeta(pageId: PageId): Option[PageMeta] = {
+    loadPageMetas(pageId::Nil) get pageId
   }
 
 
-  private def _loadPageMeta(pageId: String)
-        (implicit connection: js.Connection): Option[PageMeta] = {
-    val values = List(tenantId, pageId)
+  def loadPageMetas(pageIds: Seq[PageId]): Map[PageId, PageMeta] = {
+    if (pageIds.isEmpty) return Map.empty
+    db.withConnection { loadPageMetaImpl(pageIds)(_) }
+  }
+
+
+  private def loadPageMetaImpl(pageIds: Seq[PageId])(connection: js.Connection)
+        : Map[PageId, PageMeta] = {
+    assErrIf(pageIds.isEmpty, "DwE84KF0")
+    val values = tenantId :: pageIds.toList
     val sql = s"""
-        select ${_PageMetaSelectListItems}
+        select g.GUID, ${_PageMetaSelectListItems}
         from DW1_PAGES g
-        where g.TENANT = ? and g.GUID = ?
+        where g.TENANT = ? and g.GUID in (${ makeInListFor(pageIds) })
         """
+    var metaByPageId = Map[PageId, PageMeta]()
     db.query(sql, values, rs => {
-      if (rs.next) Some(_PageMeta(rs, pageId = pageId))
-      else None
-    })
+      while (rs.next) {
+        val pageId = rs.getString("GUID")
+        val meta = _PageMeta(rs, pageId = pageId)
+        metaByPageId += pageId -> meta
+      }
+    })(connection)
+    metaByPageId
   }
 
 
