@@ -21,7 +21,9 @@ import java.{util => ju}
 import org.elasticsearch.{search => es}
 import org.elasticsearch.{action => ea}
 import org.elasticsearch.action.{search => eas}
+import org.elasticsearch.common.{text => ect}
 import org.elasticsearch.index.{query => eiq}
+import org.elasticsearch.search.{highlight => esh}
 import scala.concurrent.{Future, Promise}
 import FullTextSearchIndexer._
 import Prelude._
@@ -34,6 +36,12 @@ trait FullTextSearchSiteDaoMixin {
   private def client = self.fullTextSearchIndexer.client
 
   private val indexName = FullTextSearchIndexer.indexName(siteId)
+
+  private val LastApprovedTextField = "lastApprovedText"
+  private val PageIdField = "pageId"
+  private val UserIdField = "userId"
+  private val HighlightPreTag = "<mark>"
+  private val HighlightPostTag = "</mark>"
 
 
   // Tips:
@@ -59,7 +67,7 @@ trait FullTextSearchSiteDaoMixin {
     // (Don't search the current text, because it might not have been approved and isn't
     // shown, by default. Also, it might be stored in compact diff format, and is
     // not indexed, and thus really not searchable anyway.)
-    val queryBuilder = eiq.QueryBuilders.queryString(phrase).field("lastApprovedText")
+    val queryBuilder = eiq.QueryBuilders.queryString(phrase).field(LastApprovedTextField)
 
     val filteredQueryBuilder: eiq.FilteredQueryBuilder =
       eiq.QueryBuilders.filteredQuery(queryBuilder,  filterToUse)
@@ -68,6 +76,9 @@ trait FullTextSearchSiteDaoMixin {
       client.prepareSearch(indexName)
         .setRouting(siteId)
         .setQuery(filteredQueryBuilder)
+        .addHighlightedField(LastApprovedTextField)
+        .setHighlighterPreTags(HighlightPreTag)
+        .setHighlighterPostTags(HighlightPostTag)
 
     val futureJavaResponse: ea.ListenableActionFuture[eas.SearchResponse] =
       searchRequestBuilder.execute()
@@ -94,8 +105,8 @@ trait FullTextSearchSiteDaoMixin {
     val jsonAndElasticSearchHits = for (hit: es.SearchHit <- response.getHits.getHits) yield {
       val jsonString = hit.getSourceAsString
       val json = play.api.libs.json.Json.parse(jsonString)
-      val pageId = (json \ "pageId").as[PageId]
-      val authorId = (json \ "userId").as[String]
+      val pageId = (json \ PageIdField).as[PageId]
+      val authorId = (json \ UserIdField).as[String]
       pageIds += pageId
       authorIds += authorId
       (json, hit)
@@ -105,15 +116,16 @@ trait FullTextSearchSiteDaoMixin {
     // ... Could also load author names ...
 
     val hits = for ((json, hit) <- jsonAndElasticSearchHits) yield {
-      import scala.collection.JavaConverters._
-      //val highlights: Map[String, esh.HighlightField] = hit.getHighlightFields.asScala
-      //val wrappedHighlights = highlights map { new ElasticSearchHighlights(_) }
+      val highlightField: esh.HighlightField = hit.getHighlightFields.get(LastApprovedTextField)
+      val highlightFragments: List[ect.Text] = highlightField.getFragments.toList
+      val highlightedHtmlStr = highlightFragments.map(_.toString)
       val post = Post.fromJson(json)
-      FullTextSearchHit(post, hit.getScore) //, wrappedHighlights)
+      FullTextSearchHit(post, hit.getScore, highlightedHtmlStr)
     }
 
     FullTextSearchResult(hits, pageMetaByPageId)
   }
+
 
 
   /*
