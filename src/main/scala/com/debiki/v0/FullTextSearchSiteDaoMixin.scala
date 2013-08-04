@@ -26,7 +26,22 @@ import org.elasticsearch.index.{query => eiq}
 import org.elasticsearch.search.{highlight => esh}
 import scala.concurrent.{Future, Promise}
 import FullTextSearchIndexer._
+import FullTextSearchSiteDaoMixin._
 import Prelude._
+
+
+
+object FullTextSearchSiteDaoMixin {
+
+  private val LastApprovedTextField = "lastApprovedText"
+  private val PageIdField = "pageId"
+  private val UserIdField = "userId"
+  private val HighlightPreMark = "_EsHit1_Kh09BfZwQ4_"
+  private val HighlightPostMark = "_EsTih1_Kh09BfZwQ4_"
+  private val HighlightPreTag = "<mark>"
+  private val HighlightPostTag = "</mark>"
+
+}
 
 
 
@@ -36,13 +51,6 @@ trait FullTextSearchSiteDaoMixin {
   private def client = self.fullTextSearchIndexer.client
 
   private val indexName = FullTextSearchIndexer.indexName(siteId)
-
-  private val LastApprovedTextField = "lastApprovedText"
-  private val PageIdField = "pageId"
-  private val UserIdField = "userId"
-  private val HighlightPreTag = "<mark>"
-  private val HighlightPostTag = "</mark>"
-
 
   // Tips:
   //  blog.trifork.com/2012/09/13/elasticsearch-beyond-big-data-running-elasticsearch-embedded/
@@ -77,8 +85,8 @@ trait FullTextSearchSiteDaoMixin {
         .setRouting(siteId)
         .setQuery(filteredQueryBuilder)
         .addHighlightedField(LastApprovedTextField)
-        .setHighlighterPreTags(HighlightPreTag)
-        .setHighlighterPostTags(HighlightPostTag)
+        .setHighlighterPreTags(HighlightPreMark)
+        .setHighlighterPostTags(HighlightPostMark)
 
     val futureJavaResponse: ea.ListenableActionFuture[eas.SearchResponse] =
       searchRequestBuilder.execute()
@@ -117,10 +125,13 @@ trait FullTextSearchSiteDaoMixin {
 
     val hits = for ((json, hit) <- jsonAndElasticSearchHits) yield {
       val highlightField: esh.HighlightField = hit.getHighlightFields.get(LastApprovedTextField)
-      val highlightFragments: List[ect.Text] = highlightField.getFragments.toList
-      val highlightedHtmlStr = highlightFragments.map(_.toString)
+      val htmlTextAndMarks: List[String] = highlightField.getFragments.toList.map(_.toString)
+      val textAndMarks = htmlTextAndMarks.map(org.jsoup.Jsoup.parse(_).text())
+      val textAndHtmlMarks = textAndMarks.map(
+          _.replaceAllLiterally(HighlightPreMark, HighlightPreTag)
+            .replaceAllLiterally(HighlightPostMark, HighlightPostTag))
       val post = Post.fromJson(json)
-      FullTextSearchHit(post, hit.getScore, highlightedHtmlStr)
+      FullTextSearchHit(post, hit.getScore, safeHighlightsHtml = textAndHtmlMarks)
     }
 
     FullTextSearchResult(hits, pageMetaByPageId)

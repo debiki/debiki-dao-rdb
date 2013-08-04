@@ -21,6 +21,8 @@ libraryDependencies ++= Seq(
   ("com.jolbox" % "bonecp" % "0.7.1.RELEASE" % "test" notTransitive())
     .exclude("com.google.guava", "guava")
     .exclude("org.slf4j", "slf4j-api"),
+  // Jsoup removes HTML tags from a string.
+  "org.jsoup" % "jsoup" % "1.7.2",
   // Full text search engine:
   "org.elasticsearch" % "elasticsearch" % "0.90.2"
   // These 2 lines below might be useful, if in the future I ever make debiki-dao-rdb
