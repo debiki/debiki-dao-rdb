@@ -62,6 +62,9 @@ trait FullTextSearchSiteDaoMixin {
   def fullTextSearch(phrase: String, anyRootPageId: Option[String])
         : Future[FullTextSearchResult] = {
 
+    if (phrase.isEmpty)
+      return Promise.successful(FullTextSearchResult.empty).future
+
     // Filter by site id and perhaps section id.
     val siteIdFilter = eiq.FilterBuilders.termFilter(JsonKeys.SiteId, siteId)
     val filterToUse = anyRootPageId match {
