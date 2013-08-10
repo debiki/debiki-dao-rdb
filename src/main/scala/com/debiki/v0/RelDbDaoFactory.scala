@@ -39,6 +39,13 @@ class RelDbDaoFactory(val db: RelDb) extends DbDaoFactory {
     fullTextSearchIndexer.shutdown()
   }
 
+  override def debugWaitUntilSearchEngineStarted() {
+    fullTextSearchIndexer.debugWaitUntilSearchEngineStarted()
+  }
+
+  override def debugRefreshSearchEngineIndexer() {
+    fullTextSearchIndexer.debugRefreshIndexes()
+  }
 }
 
 

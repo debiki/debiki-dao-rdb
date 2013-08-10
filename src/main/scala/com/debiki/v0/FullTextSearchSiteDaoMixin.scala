@@ -140,20 +140,4 @@ trait FullTextSearchSiteDaoMixin {
     FullTextSearchResult(hits, pageMetaByPageId)
   }
 
-
-
-  /*
-  protected def createIndex(siteId: String) {
-    val request: es.action.admin.indices.create.CreateIndexRequest =
-      es.client.Requests.createIndexRequest(siteId)
-      // .settings(yourSettings)
-      // .mapping(yourMapping);
-
-    val response: es.action.admin.indices.create.CreateIndexResponse =
-      client.admin().indices().create(request).actionGet()
-
-    //client.prepareIndex(s"site-$siteId", "type")
-    //client.prepareIndex("esa", "activityStream", id).setSource(json).execute().actionGet()
-  }*/
-
 }
