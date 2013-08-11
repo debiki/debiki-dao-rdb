@@ -17,10 +17,12 @@
 
 package com.debiki.v0
 
+import akka.actor.ActorSystem
+
 
 /** Constructs per site data access objects, and one global.
   */
-class RelDbDaoFactory(val db: RelDb) extends DbDaoFactory {
+class RelDbDaoFactory(val db: RelDb, val actorSystem: ActorSystem) extends DbDaoFactory {
 
 
   private val fullTextSearchIndexer = new FullTextSearchIndexer(this)

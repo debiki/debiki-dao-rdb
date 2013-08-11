@@ -17,9 +17,10 @@
 
 package com.debiki.v0
 
-import Prelude._
+import akka.actor.ActorSystem
 import com.jolbox.bonecp.BoneCPDataSource
 import com.typesafe.config.{ConfigFactory, Config}
+import Prelude._
 
 
 /**
@@ -56,7 +57,7 @@ object ReDbDaoTckTest extends tck.TestContextBuilder {
     ds.setPassword(config.getString("db.test.password"))
 
     val db = new RelDb(ds)
-    val daoFactory = new RelDbDaoFactory(db)
+    val daoFactory = new RelDbDaoFactory(db, ActorSystem("TestActorSystem"))
 
     // Prepare schema.
     daoFactory.systemDbDao.emptyDatabase()

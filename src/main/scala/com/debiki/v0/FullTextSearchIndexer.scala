@@ -17,11 +17,16 @@
 
 package com.debiki.v0
 
+import akka.actor._
+import akka.pattern.{ask, gracefulStop}
+import akka.util.Timeout
 import java.{util => ju}
 import org.{elasticsearch => es}
 import play.{api => p}
 import play.api.libs.json._
 import scala.util.control.NonFatal
+import scala.concurrent.Await
+import scala.concurrent.duration._
 import FullTextSearchIndexer._
 import Prelude._
 
@@ -30,11 +35,15 @@ import Prelude._
 private[v0]
 class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
 
-  private def systemDao = relDbDaoFactory.systemDbDao
+  private implicit val actorSystem = relDbDaoFactory.actorSystem
+  private implicit val executionContext = actorSystem.dispatcher
 
   // This'll do for now. (Make configurable, later)
   private val DefaultDataDir = "target/elasticsearch-data"
 
+  private val IndexPendingPostsDelay = 90 seconds
+  private val IndexPendingPostsInterval = 30 seconds
+  private val ShutdownTimeout = 10 seconds
 
   val node = {
     val settingsBuilder = es.common.settings.ImmutableSettings.settingsBuilder()
@@ -47,6 +56,10 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
       .clusterName("DebikiElasticSearchCluster").build().start()
     node
   }
+
+
+  private val indexingActorRef = relDbDaoFactory.actorSystem.actorOf(
+    Props(new IndexingActor(client, relDbDaoFactory)), name = "IndexingActor")
 
 
   startupAsynchronously()
@@ -66,60 +79,34 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
   def client = node.client
 
 
-  /** Starts the search engine, asynchronously. */
+  /** Starts the search engine, asynchronously:
+    * - Creates an index, if absent.
+    * - Schedules periodic indexing of posts that need to be indexed.
+    */
   def startupAsynchronously() {
     createIndexAndMappinigsIfAbsent()
+    actorSystem.scheduler.schedule(
+      IndexPendingPostsDelay, IndexPendingPostsInterval, indexingActorRef, IndexPendingPosts)
   }
 
 
   def shutdown() {
-    client.close()
-    node.close()
+    p.Logger.info("Stopping IndexingActor...")
+    gracefulStop(indexingActorRef, ShutdownTimeout) onComplete { result =>
+      if (result.isFailure) {
+        p.Logger.warn("Error stopping IndexingActor", result.failed.get)
+      }
+      p.Logger.info("Shutting down ElasticSearch client...")
+      client.close()
+      node.close()
+    }
   }
 
 
   /** Currently indexes each post directly.
     */
   def indexNewPostsSoon(page: PageNoPath, posts: Seq[Post], siteId: String) {
-    posts foreach { fullTextSearchIndexPost(page, _, siteId) }
-  }
-
-
-  private def fullTextSearchIndexPost(page: PageNoPath, post: Post, siteId: String) {
-    val json = makeSearchEngineJsonFor(post, page, siteId)
-    val idString = elasticSearchIdFor(siteId, post)
-    val indexRequest: es.action.index.IndexRequest =
-      es.client.Requests.indexRequest(indexName(siteId))
-      .`type`(ElasticSearchPostTypeName)
-      .id(idString)
-      //.opType(es.action.index.IndexRequest.OpType.CREATE)
-      //.version(...)
-      .source(json.toString)
-      .routing(siteId) // this is faster than extracting `siteId` from JSON source: needn't parse.
-
-    client.index(indexRequest, new es.action.ActionListener[es.action.index.IndexResponse] {
-      def onResponse(response: es.action.index.IndexResponse) {
-        p.Logger.debug("Indexed: " + idString)
-      }
-      def onFailure(throwable: Throwable) {
-        p.Logger.warn(i"Error when indexing: $idString", throwable)
-      }
-    })
-  }
-
-
-  private def makeSearchEngineJsonFor(post: Post, page: PageNoPath, siteId: String): JsValue = {
-    var sectionPageIds = page.ancestorIdsParentFirst
-    if (page.meta.pageRole.childRole.isDefined) {
-      // Since this page can have child pages, consider it a section (e.g. a blog,
-      // forum, subforum or a wiki).
-      sectionPageIds ::= page.id
-    }
-
-    var json = post.toJson
-    json += JsonKeys.SectionPageIds -> Json.toJson(sectionPageIds)
-    json += JsonKeys.SiteId -> JsString(siteId)
-    json
+    indexingActorRef ! PostsToIndex(siteId, page, posts)
   }
 
 
@@ -160,8 +147,90 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
     * Intended for test suite code only.
     */
   def debugRefreshIndexes() {
+    Await.result(
+      ask(indexingActorRef, ReplyWhenDoneIndexing)(Timeout(999 seconds)),
+      atMost = 999 seconds)
+
     val refreshRequest = es.client.Requests.refreshRequest(IndexV0Name)
     client.admin.indices.refresh(refreshRequest).actionGet()
+  }
+
+}
+
+
+
+private[v0] case object ReplyWhenDoneIndexing
+private[v0] case object IndexPendingPosts
+private[v0] case class PostsToIndex(siteId: String, page: PageNoPath, posts: Seq[Post])
+
+
+
+/** An Akka actor that indexes newly created or edited posts, and also periodically
+  * scans the database (checks DW1_POSTS.INDEXED_VERSION) for posts that have not
+  * yet been indexed (for example because the server crashed, or because the
+  * ElasticSearch index has been changed and everything needs to be reindexed).
+  */
+private[v0] class IndexingActor(
+  private val client: es.client.Client,
+  private val relDbDaoFactory: RelDbDaoFactory) extends Actor {
+
+  private def systemDao = relDbDaoFactory.systemDbDao
+
+
+  def receive = {
+    case IndexPendingPosts =>
+      p.Logger.info("Got a message: IndexPendingPosts")
+      // val postsToIndex = systemDao.findPostsNotYetIndexed(limit = 10)
+      // indexPosts(postsToIndex)
+    case postsToIndex: PostsToIndex =>
+      indexPosts(postsToIndex)
+    case ReplyWhenDoneIndexing =>
+      sender ! "Done indexing."
+  }
+
+
+  private def indexPosts(postsToIndex: PostsToIndex) {
+    postsToIndex.posts foreach { post =>
+      indexPost(post, postsToIndex.page, postsToIndex.siteId)
+    }
+  }
+
+
+  private def indexPost(post: Post, page: PageNoPath, siteId: String) {
+    val json = makeJsonToIndex(post, page, siteId)
+    val idString = elasticSearchIdFor(siteId, post)
+    val indexRequest: es.action.index.IndexRequest =
+      es.client.Requests.indexRequest(indexName(siteId))
+        .`type`(ElasticSearchPostTypeName)
+        .id(idString)
+        //.opType(es.action.index.IndexRequest.OpType.CREATE)
+        //.version(...)
+        .source(json.toString)
+        .routing(siteId) // this is faster than extracting `siteId` from JSON source: needn't parse.
+
+    client.index(indexRequest, new es.action.ActionListener[es.action.index.IndexResponse] {
+      def onResponse(response: es.action.index.IndexResponse) {
+        p.Logger.debug("Indexed: " + idString)
+      }
+      def onFailure(throwable: Throwable) {
+        p.Logger.warn(i"Error when indexing: $idString", throwable)
+      }
+    })
+  }
+
+
+  private def makeJsonToIndex(post: Post, page: PageNoPath, siteId: String): JsValue = {
+    var sectionPageIds = page.ancestorIdsParentFirst
+    if (page.meta.pageRole.childRole.isDefined) {
+      // Since this page can have child pages, consider it a section (e.g. a blog,
+      // forum, subforum or a wiki).
+      sectionPageIds ::= page.id
+    }
+
+    var json = post.toJson
+    json += JsonKeys.SectionPageIds -> Json.toJson(sectionPageIds)
+    json += JsonKeys.SiteId -> JsString(siteId)
+    json
   }
 
 }
