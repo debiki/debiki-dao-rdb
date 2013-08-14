@@ -15,12 +15,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.debiki.v0
+package com.debiki.dao.rdb
 
+import com.debiki.core._
+import com.debiki.core.Prelude._
+import com.debiki.tck
 import akka.actor.ActorSystem
 import com.jolbox.bonecp.BoneCPDataSource
 import com.typesafe.config.{ConfigFactory, Config}
-import Prelude._
 
 
 /**
@@ -28,20 +30,20 @@ import Prelude._
  *
  * Tables in the test schema are cleared before each test.
  */
-class RelDbDaoTckSpec extends tck.DbDaoTckTest(ReDbDaoTckTest)
+class RelDbDaoTckSpec extends tck.dao.DbDaoTckTest(ReDbDaoTckTest)
 
 
 
 class RelDbTestContext(
   override val dbDaoFactory: DbDaoFactory,
   override val quotaManager: QuotaCharger)
-  extends tck.TestContext
+  extends tck.dao.TestContext
 
 
 
-object ReDbDaoTckTest extends tck.TestContextBuilder {
+object ReDbDaoTckTest extends tck.dao.TestContextBuilder {
 
-  override def buildTestContext(what: tck.DbDaoTckTest.What, version: String) = {
+  override def buildTestContext(what: tck.dao.DbDaoTckTest.What, version: String) = {
 
     // Connect to test database.
     // (Load config settings from src/test/resources/application.conf, and from

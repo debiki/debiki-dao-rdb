@@ -15,10 +15,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.debiki.v0
+package com.debiki.dao.rdb
 
 import _root_.java.{util => ju, io => jio}
-import _root_.com.debiki.v0.Prelude._
+import _root_.com.debiki.core.Prelude._
 import java.{sql => js, lang => jl}
 import javax.{sql => jxs}
 import org.{postgresql => pg}

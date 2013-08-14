@@ -15,20 +15,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.debiki.v0
+package com.debiki.dao.rdb
 
-import com.debiki.v0.PagePath._
-import com.debiki.v0.DbDao._
-import com.debiki.v0.EmailNotfPrefs.EmailNotfPrefs
+import com.debiki.core._
+import com.debiki.core.PagePath._
+import com.debiki.core.DbDao._
+import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
+import com.debiki.core.Prelude._
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
-import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
 import scala.{collection => col}
 import scala.collection.{mutable => mut}
+import scala.collection.mutable.StringBuilder
 import RelDb._
 import RelDbUtil._
-import collection.mutable.StringBuilder
 
 
 class RelDbSystemDbDao(val daoFactory: RelDbDaoFactory)

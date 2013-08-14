@@ -15,11 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.debiki.v0
+package com.debiki.dao.rdb
 
 import akka.actor._
 import akka.pattern.{ask, gracefulStop}
 import akka.util.Timeout
+import com.debiki.core._
 import java.{util => ju}
 import org.{elasticsearch => es}
 import org.elasticsearch.action.ActionListener
@@ -32,7 +33,7 @@ import FullTextSearchIndexer._
 import Prelude._
 
 
-private[v0]
+private[rdb]
 class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
 
   private implicit val actorSystem = relDbDaoFactory.actorSystem
@@ -196,9 +197,9 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
 
 
 
-private[v0] case object ReplyWhenDoneIndexing
-private[v0] case object IndexPendingPosts
-private[v0] case class PostsToIndex(siteId: String, page: PageNoPath, posts: Vector[Post])
+private[rdb] case object ReplyWhenDoneIndexing
+private[rdb] case object IndexPendingPosts
+private[rdb] case class PostsToIndex(siteId: String, page: PageNoPath, posts: Vector[Post])
 
 
 
@@ -207,7 +208,7 @@ private[v0] case class PostsToIndex(siteId: String, page: PageNoPath, posts: Vec
   * yet been indexed (for example because the server crashed, or because the
   * ElasticSearch index has been changed and everything needs to be reindexed).
   */
-private[v0] class IndexingActor(
+private[rdb] class IndexingActor(
   private val client: es.client.Client,
   private val relDbDaoFactory: RelDbDaoFactory) extends Actor {
 
@@ -294,7 +295,7 @@ private[v0] class IndexingActor(
 
 
 
-private[v0]
+private[rdb]
 object FullTextSearchIndexer {
 
 

@@ -15,8 +15,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.debiki.v0
+package com.debiki.dao.rdb
 
+import com.debiki.core._
 import akka.actor.ActorSystem
 
 

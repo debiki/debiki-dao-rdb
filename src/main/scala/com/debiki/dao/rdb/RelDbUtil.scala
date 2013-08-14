@@ -15,10 +15,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.debiki.v0
+package com.debiki.dao.rdb
 
-import com.debiki.v0.EmailNotfPrefs.EmailNotfPrefs
-import _root_.com.debiki.v0.Prelude._
+import com.debiki.core._
+import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
+import com.debiki.core.Prelude._
 import java.{sql => js}
 import scala.{collection => col}
 import RelDb._

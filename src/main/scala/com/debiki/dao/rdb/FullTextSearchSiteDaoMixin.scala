@@ -15,8 +15,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.debiki.v0
+package com.debiki.dao.rdb
 
+import com.debiki.core._
+import com.debiki.core.Prelude._
 import java.{util => ju}
 import org.elasticsearch.{search => es}
 import org.elasticsearch.{action => ea}
@@ -27,7 +29,6 @@ import org.elasticsearch.search.{highlight => esh}
 import scala.concurrent.{Future, Promise}
 import FullTextSearchIndexer._
 import FullTextSearchSiteDaoMixin._
-import Prelude._
 
 
 
