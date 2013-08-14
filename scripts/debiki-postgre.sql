@@ -907,6 +907,14 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- (When you edit a post of yours, the edit is automatically applied.)
   AUTO_APPLICATION varchar(1),
   NEW_IP varchar(39), -- null, unless differs from DW1_LOGINS.START_IP
+
+  -- For optimistic concurrency control, when updating other databases (ElasticSearch).
+  --VERSION int,
+
+  -- Which ElasticSearch index this post has been indexed into.
+  -- For examlpe, 123 means index sites_v123.
+  INDEX_VERSION int,
+
  constraint DW1_PGAS_TNT_PGID_ID__P
      primary key (TENANT, PAGE_ID, PAID);
  constraint DW1_PGAS_TNT_PGID__R__PAGES -- ix: PK
@@ -950,6 +958,7 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- A body, title or config post is always of type 'Post'.
   constraint DW1_PGAS_MAGIC_ID_TYPES__C
       check (TYPE = case when PAID in ('0t', '0b', '0c') then 'Post' else TYPE end),
+  constraint DW1_PGAS_INDEXVER_TYPE__C check (INDEX_VERSION is null or TYPE = 'Post'),
  constraint DW1_PGAS_LOGIN_GUEST_ROLE__C check(
     (LOGIN is null and GUEST_ID is null and ROLE_ID is null) -- it's the system user
      or (LOGIN is not null and (GUEST_ID is null) <> (ROLE_ID is null))),
@@ -980,6 +989,10 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
     end)
 );
   -- Cannot create an index organized table -- not available in Postgre SQL.
+
+
+create index DW1_PGAS_INDEXVERSION on DW1_PAGE_ACTIONS(INDEX_VERSION, TENANT)
+  where TYPE = 'Post';
 
 
 -- Did later:
