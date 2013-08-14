@@ -105,14 +105,20 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
 
 
   def shutdown() {
+    // When developing: It's rather important to shut down ElasticSearch,
+    // otherwise ElasticSearch will continue running in the background,
+    // preventing a new development server from starting up properly. So don't
+    // wait for the IndexingActor to stop, before stopping ElasticSearch.
+    // This means that some things might not be indexed — the server will
+    // index them in the background, the next time it starts.
+    p.Logger.info("Closing the ElasticSearch node...")
+    client.close()
+    node.close()
     p.Logger.info("Stopping IndexingActor...")
     gracefulStop(indexingActorRef, ShutdownTimeout) onComplete { result =>
       if (result.isFailure) {
-        p.Logger.warn("Error stopping IndexingActor", result.failed.get)
+        p.Logger.warn("Error stopping IndexingActor [DwE78fZ03]", result.failed.get)
       }
-      p.Logger.info("Shutting down ElasticSearch client...")
-      client.close()
-      node.close()
     }
   }
 
