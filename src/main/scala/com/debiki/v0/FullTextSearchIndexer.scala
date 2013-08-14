@@ -22,6 +22,7 @@ import akka.pattern.{ask, gracefulStop}
 import akka.util.Timeout
 import java.{util => ju}
 import org.{elasticsearch => es}
+import org.elasticsearch.action.ActionListener
 import play.{api => p}
 import play.api.libs.json._
 import scala.util.control.NonFatal
@@ -29,7 +30,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import FullTextSearchIndexer._
 import Prelude._
-
 
 
 private[v0]
@@ -41,9 +41,12 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
   // This'll do for now. (Make configurable, later)
   private val DefaultDataDir = "target/elasticsearch-data"
 
-  private val IndexPendingPostsDelay = 90 seconds
-  private val IndexPendingPostsInterval = 30 seconds
-  private val ShutdownTimeout = 10 seconds
+  private def isTest = relDbDaoFactory.isTest
+
+  private val IndexPendingPostsDelay    = (if (isTest) 3 else 30) seconds
+  private val IndexPendingPostsInterval = (if (isTest) 1 else 10) seconds
+  private val ShutdownTimeout           = (if (isTest) 1 else 10) seconds
+
 
   val node = {
     val settingsBuilder = es.common.settings.ImmutableSettings.settingsBuilder()
@@ -52,9 +55,20 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
     settingsBuilder.put("http.enabled", true)
     settingsBuilder.put("http.port", 9200)
     val nodeBuilder = es.node.NodeBuilder.nodeBuilder()
-    val node = nodeBuilder.settings(settingsBuilder.build()).data(true).local(false)
-      .clusterName("DebikiElasticSearchCluster").build().start()
-    node
+      .settings(settingsBuilder.build())
+      .data(true)
+      .local(false)
+      .clusterName("DebikiElasticSearchCluster")
+    try {
+      val node = nodeBuilder.build()
+      node.start()
+    }
+    catch {
+      case ex: java.nio.channels.OverlappingFileLockException =>
+        p.Logger.error(o"""Error starting ElasticSearch: a previous ElasticSearch process
+          has not been terminated, and has locked ElasticSearch's files. [DwE52Kf0]""")
+        throw ex
+    }
   }
 
 
@@ -85,8 +99,8 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
     */
   def startupAsynchronously() {
     createIndexAndMappinigsIfAbsent()
-    actorSystem.scheduler.schedule(
-      IndexPendingPostsDelay, IndexPendingPostsInterval, indexingActorRef, IndexPendingPosts)
+    actorSystem.scheduler.schedule(initialDelay = IndexPendingPostsDelay,
+      interval = IndexPendingPostsInterval, indexingActorRef, IndexPendingPosts)
   }
 
 
@@ -106,20 +120,19 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
   /** Currently indexes each post directly.
     */
   def indexNewPostsSoon(page: PageNoPath, posts: Seq[Post], siteId: String) {
-    indexingActorRef ! PostsToIndex(siteId, page, posts)
+    indexingActorRef ! PostsToIndex(siteId, page, posts.toVector)
   }
 
 
   /** The index can be deleted like so:  curl -XDELETE localhost:9200/sites_v0
     * But don't do that in any production environment of course.
     */
-  private def createIndexAndMappinigsIfAbsent() {
+  def createIndexAndMappinigsIfAbsent() {
     import es.action.admin.indices.create.CreateIndexResponse
-    import es.action.ActionListener
 
-    val createIndexRequest = es.client.Requests.createIndexRequest(IndexV0Name)
-      .settings(IndexV0Settings)
-      .mapping(IndexV0PostMappingName, IndexV0PostMappingDefinition)
+    val createIndexRequest = es.client.Requests.createIndexRequest(IndexName)
+      .settings(IndexSettings)
+      .mapping(PostMappingName, PostMappingDefinition)
 
     client.admin().indices().create(createIndexRequest, new ActionListener[CreateIndexResponse] {
       def onResponse(response: CreateIndexResponse) {
@@ -135,11 +148,29 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
   }
 
 
+  def debugDeleteIndexAndMappings() {
+    val deleteRequest = es.client.Requests.deleteIndexRequest(IndexName)
+    try {
+      client.admin.indices.delete(deleteRequest).actionGet()
+    }
+    catch {
+      case _: org.elasticsearch.indices.IndexMissingException => // ignore
+    }
+  }
+
+
   /** Waits for the ElasticSearch cluster to start. (Since I've specified 2 shards, it enters
     * yellow status only, not green status, since there's one ElasticSearch node only (not 2).)
     */
    def debugWaitUntilSearchEngineStarted() {
-    client.admin().cluster().prepareHealth().setWaitForYellowStatus().execute().actionGet()
+    import es.action.admin.cluster.{health => h}
+    val response: h.ClusterHealthResponse =
+      client.admin.cluster.prepareHealth().setWaitForYellowStatus().execute().actionGet()
+    val green = response.getStatus == h.ClusterHealthStatus.GREEN
+    val yellow = response.getStatus == h.ClusterHealthStatus.YELLOW
+    if (!green && !yellow) {
+      runErr("DwE74b0f3", s"Bad ElasticSearch status: ${response.getStatus}")
+    }
   }
 
 
@@ -151,7 +182,7 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
       ask(indexingActorRef, ReplyWhenDoneIndexing)(Timeout(999 seconds)),
       atMost = 999 seconds)
 
-    val refreshRequest = es.client.Requests.refreshRequest(IndexV0Name)
+    val refreshRequest = es.client.Requests.refreshRequest(IndexName)
     client.admin.indices.refresh(refreshRequest).actionGet()
   }
 
@@ -161,7 +192,7 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
 
 private[v0] case object ReplyWhenDoneIndexing
 private[v0] case object IndexPendingPosts
-private[v0] case class PostsToIndex(siteId: String, page: PageNoPath, posts: Seq[Post])
+private[v0] case class PostsToIndex(siteId: String, page: PageNoPath, posts: Vector[Post])
 
 
 
@@ -174,20 +205,29 @@ private[v0] class IndexingActor(
   private val client: es.client.Client,
   private val relDbDaoFactory: RelDbDaoFactory) extends Actor {
 
-  private def systemDao = relDbDaoFactory.systemDbDao
+  private def systemDao: RelDbSystemDbDao = relDbDaoFactory.systemDbDao
+
+  // For now, don't index all pending posts. That'd result in my Amazon EC2 instance
+  // grinding to a halt, when the hypervisor steals all time becaues it uses too much CPU?
+  private val MaxPostsToIndexAtOnce = 50
 
 
   def receive = {
-    case IndexPendingPosts =>
-      p.Logger.info("Got a message: IndexPendingPosts")
-      // val postsToIndex = systemDao.findPostsNotYetIndexed(limit = 10)
-      // indexPosts(postsToIndex)
-    case postsToIndex: PostsToIndex =>
-      indexPosts(postsToIndex)
-    case ReplyWhenDoneIndexing =>
-      sender ! "Done indexing."
+    case IndexPendingPosts => loadAndIndexPendingPosts()
+    case postsToIndex: PostsToIndex => indexPosts(postsToIndex)
+    case ReplyWhenDoneIndexing => sender ! "Done indexing."
   }
 
+
+  private def loadAndIndexPendingPosts() {
+    val chunksOfPostsToIndex: Seq[PostsToIndex] =
+      systemDao.findPostsNotYetIndexed(
+        currentIndexVersion = FullTextSearchIndexer.IndexVersion, limit = MaxPostsToIndexAtOnce)
+
+    chunksOfPostsToIndex foreach { postsToIndex =>
+      indexPosts(postsToIndex)
+    }
+  }
 
   private def indexPosts(postsToIndex: PostsToIndex) {
     postsToIndex.posts foreach { post =>
@@ -201,16 +241,27 @@ private[v0] class IndexingActor(
     val idString = elasticSearchIdFor(siteId, post)
     val indexRequest: es.action.index.IndexRequest =
       es.client.Requests.indexRequest(indexName(siteId))
-        .`type`(ElasticSearchPostTypeName)
+        .`type`(PostMappingName)
         .id(idString)
         //.opType(es.action.index.IndexRequest.OpType.CREATE)
         //.version(...)
         .source(json.toString)
         .routing(siteId) // this is faster than extracting `siteId` from JSON source: needn't parse.
 
+    // BUG: Race condition: What if the post is changed just after it was indexed,
+    // but before `rememberIsIndexed` below is called!
+    // Then it'll seem as if the post has been properly indexed, although it has not!
+    // Fix this by clarifying which version of the post was actually indexed. Something
+    // like optimistic concurrency? — But don't fix that right now, it's a minor issue?
+
     client.index(indexRequest, new es.action.ActionListener[es.action.index.IndexResponse] {
       def onResponse(response: es.action.index.IndexResponse) {
         p.Logger.debug("Indexed: " + idString)
+        // BUG: Race condition if the post is changed *here*. (See comment above.)
+        // And, please note: this isn't the actor's thread. This is some thread
+        // "controlled" by ElasticSearch.
+        val dao = relDbDaoFactory.newTenantDbDao(QuotaConsumers(siteId))
+        dao.rememberPostsAreIndexed(IndexVersion, PagePostId(page.id, post.id))
       }
       def onFailure(throwable: Throwable) {
         p.Logger.warn(i"Error when indexing: $idString", throwable)
@@ -252,17 +303,21 @@ object FullTextSearchIndexer {
     * to use the new version of the index.
     */
   def indexName(siteId: String) =
-    IndexV0Name
+    IndexName
   // but if the site has its own index:  s"site_${siteId}_v0"  ?
 
-  val IndexV0Name = s"sites_v0"
+  val IndexVersion = 1
+  val IndexName = s"sites_v$IndexVersion"
 
 
-  val ElasticSearchPostTypeName = "post"
+  val PostMappingName = "post"
 
 
-  def elasticSearchIdFor(siteId: String, post: Post) =
-    s"$siteId:${post.page.id}:${post.id}"
+  def elasticSearchIdFor(siteId: String, post: Post): String =
+    elasticSearchIdFor(siteId, pageId = post.page.id, postId = post.id)
+
+  def elasticSearchIdFor(siteId: String, pageId: PageId, postId: PostId): String =
+    s"$siteId:$pageId:$postId"
 
 
   object JsonKeys {
@@ -276,16 +331,13 @@ object FullTextSearchIndexer {
     * Over allocate shards ("user based data flow", and in Debiki's case, each user is a website).
     * We'll use routing to direct all traffic for a certain site to a single shard always.
     */
-  val IndexV0Settings = i"""{
+  val IndexSettings = i"""{
     |  "number_of_shards": 100,
     |  "number_of_replicas": 1
     |}"""
 
 
-  val IndexV0PostMappingName = "post"
-
-
-  val IndexV0PostMappingDefinition = i"""{
+  val PostMappingDefinition = i"""{
     |"post": {
     |  "properties": {
     |    "siteId":                       {"type": "string", "index": "not_analyzed"},

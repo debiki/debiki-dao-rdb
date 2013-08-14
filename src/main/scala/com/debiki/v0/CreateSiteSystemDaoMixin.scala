@@ -51,8 +51,9 @@ trait CreateSiteSystemDaoMixin {
       val siteHost = TenantHost(siteData.address, TenantHost.RoleCanonical, siteData.https)
       insertTenantHost(siteId, siteHost)(connection)
 
-      val newWebsiteDao = new RelDbTenantDbDao(
-        QuotaConsumers(tenantId = siteId, ip = anyOwnerIp, roleId = None), self)
+      val newWebsiteDao = self.daoFactory.newTenantDbDao(
+        QuotaConsumers(tenantId = siteId, ip = anyOwnerIp, roleId = None))
+
 
       // Could send an email, see AppCreateWebsite.createWebsite() in project debiki-server.
 

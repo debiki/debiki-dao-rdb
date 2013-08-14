@@ -22,16 +22,19 @@ import akka.actor.ActorSystem
 
 /** Constructs per site data access objects, and one global.
   */
-class RelDbDaoFactory(val db: RelDb, val actorSystem: ActorSystem) extends DbDaoFactory {
+class RelDbDaoFactory(
+  val db: RelDb,
+  val actorSystem: ActorSystem,
+  val isTest: Boolean = false) extends DbDaoFactory {
 
 
-  private val fullTextSearchIndexer = new FullTextSearchIndexer(this)
+  val fullTextSearchIndexer = new FullTextSearchIndexer(this)
 
-  val systemDbDao = new RelDbSystemDbDao(db, fullTextSearchIndexer)
+  val systemDbDao = new RelDbSystemDbDao(this)
 
 
-  def newTenantDbDao(quotaConsumers: QuotaConsumers): TenantDbDao =
-    new RelDbTenantDbDao(quotaConsumers, systemDbDao)
+  def newTenantDbDao(quotaConsumers: QuotaConsumers) =
+    new RelDbTenantDbDao(quotaConsumers, this)
 
 
   /** Stops any background services started by this factory,

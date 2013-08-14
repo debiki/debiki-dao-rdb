@@ -24,23 +24,27 @@ import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.v0.Prelude._
 import java.{sql => js}
+import scala.{collection => col}
 import scala.collection.{mutable => mut}
 import RelDb._
 import RelDbUtil._
 import collection.mutable.StringBuilder
 
 
-class RelDbSystemDbDao(
-  val db: RelDb,
-  val fullTextSearchIndexer: FullTextSearchIndexer)
+class RelDbSystemDbDao(val daoFactory: RelDbDaoFactory)
   extends SystemDbDao with CreateSiteSystemDaoMixin {
 
+  def db = daoFactory.db
 
   def close() { db.close() }
 
-  def checkRepoVersion() = Some("0.0.2")
+  def checkRepoVersion() = unimplemented
 
-  def secretSalt(): String = "9KsAyFqw_"
+  def secretSalt(): String = unimplemented
+
+  def newSiteDao(siteId: SiteId): RelDbTenantDbDao =
+    daoFactory.newTenantDbDao(QuotaConsumers(siteId))
+
 
   // private [this dao package]
   def loadUsers(userIdsByTenant: Map[String, List[String]])
@@ -594,6 +598,99 @@ class RelDbSystemDbDao(
       loadUsers(userIdsByTenant)
 
     NotfsToMail(notfsByTenant, usersByTenantAndId)
+  }
+
+
+  def findPostsNotYetIndexed(currentIndexVersion: Int, limit: Int): Seq[PostsToIndex] = {
+    db.withConnection { connection =>
+      findPostsNotYetIndexedImpl(currentIndexVersion, limit)(connection)
+    }
+  }
+
+
+  private def findPostsNotYetIndexedImpl(currentIndexVersion: Int, limit: Int)(
+        connection: js.Connection): Seq[PostsToIndex] = {
+
+    // First load ids of posts to index, then load pages and posts.
+    //
+    // (We need to load metadata on each page, actually, because
+    // when indexing a post, we want to know the page-id-path to the page
+    // to which the post belongs, so we can index this page-id-path,
+    // because then we can restrict the search to a subsection of the site
+    // (namely below a certain page id).)
+
+    val postIdsByPageBySite = loadIdsOfPostsToIndex(currentIndexVersion, limit)(connection)
+    loadPostsToIndex(postIdsByPageBySite)(connection)
+  }
+
+
+  private def loadIdsOfPostsToIndex(
+        currentIndexVersion: Int, limit: Int)(connection: js.Connection)
+        : col.Map[SiteId, col.Map[PageId, col.Seq[PostId]]] = {
+
+    val postIdsByPageBySite = mut.Map[SiteId, mut.Map[PageId, mut.ArrayBuffer[PostId]]]()
+
+    // `currentIndexVersion` shouldn't change until server restarted.
+    val sql = s"""
+      select TENANT, PAGE_ID, POST_ID from DW1_PAGE_ACTIONS
+      where TYPE = 'Post' and INDEX_VERSION <> $currentIndexVersion
+      order by TENANT, PAGE_ID
+      limit $limit
+      """
+
+    db.query(sql, Nil, rs => {
+      while (rs.next) {
+        val siteId = rs.getString("TENANT")
+        val pageId = rs.getString("PAGE_ID")
+        val postId = rs.getInt("POST_ID")
+        if (postIdsByPageBySite.get(siteId).isEmpty) {
+          postIdsByPageBySite(siteId) = mut.Map[PageId, mut.ArrayBuffer[PostId]]()
+        }
+        if (postIdsByPageBySite(siteId).get(pageId).isEmpty) {
+          postIdsByPageBySite(siteId)(pageId) = mut.ArrayBuffer[PostId]()
+        }
+        postIdsByPageBySite(siteId)(pageId) += postId
+      }
+    })(connection)
+
+    postIdsByPageBySite
+  }
+
+
+  private def loadPostsToIndex(
+        postIdsByPageBySite: col.Map[SiteId, col.Map[PageId, col.Seq[PostId]]])(
+        connection: js.Connection): Vector[PostsToIndex] = {
+
+    var chunksOfPostsToIndex = Vector[PostsToIndex]()
+
+    for ((siteId, postIdsByPage) <- postIdsByPageBySite.iterator) {
+      val siteDao: RelDbTenantDbDao = newSiteDao(siteId)
+      val pageIds = postIdsByPage.keySet.toList
+      val ancestorIdsByPageId: col.Map[PageId, List[PageId]] =
+        siteDao.batchLoadAncestorIdsParentFirst(pageIds)(connection)
+      val metaByPageId: Map[PageId, PageMeta] = siteDao.loadPageMetaImpl(pageIds)(connection)
+
+      // This is really inefficient, but load the whole page. Then all
+      // posts that we are to index will also be loaded.
+      // — This works even if the posts have not yet been inserted into DW1_POSTS
+      // (which is currently the case).
+      // COULD try to load an up-to-date version from DW1_POSTS first (so the
+      // history of each post needn't be loaded too).
+      val pageParts: List[PageParts] = pageIds.flatMap(siteDao.loadPage(_).toList)
+
+      for {
+        (pageId, postIds) <- postIdsByPage.iterator
+        parts <- pageParts.find(_.pageId == pageId)
+        meta <- metaByPageId.get(pageId)
+        ancestorIds <- ancestorIdsByPageId.get(pageId)
+      } {
+        val pageNoPath = PageNoPath(parts, ancestorIds, meta)
+        val posts = postIds.flatMap(parts.getPost(_))
+        chunksOfPostsToIndex :+= PostsToIndex(siteId, pageNoPath, posts.toVector)
+      }
+    }
+
+    chunksOfPostsToIndex
   }
 
 

@@ -57,9 +57,11 @@ object ReDbDaoTckTest extends tck.TestContextBuilder {
     ds.setPassword(config.getString("db.test.password"))
 
     val db = new RelDb(ds)
-    val daoFactory = new RelDbDaoFactory(db, ActorSystem("TestActorSystem"))
+    val daoFactory = new RelDbDaoFactory(db, ActorSystem("TestActorSystem"), isTest = true)
 
-    // Prepare schema.
+    // Prepare schema and search index.
+    daoFactory.fullTextSearchIndexer.debugDeleteIndexAndMappings()
+    daoFactory.fullTextSearchIndexer.createIndexAndMappinigsIfAbsent()
     daoFactory.systemDbDao.emptyDatabase()
 
     // A simple quota charger, which never throws any OverQuotaException.

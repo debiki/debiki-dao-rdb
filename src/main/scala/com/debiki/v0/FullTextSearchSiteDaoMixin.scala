@@ -109,6 +109,22 @@ trait FullTextSearchSiteDaoMixin {
   }
 
 
+  def debugUnindexPosts(pageAndPostIds: PagePostId*) {
+    // Mark posts as unindexed in DW1_PAGE_ACTIONS before deleting them from
+    // ElasticSearch, in case the server crashes.
+
+    rememberPostsAreIndexed(indexedVersion = 0, pageAndPostIds: _*)
+
+    for (PagePostId(pageId, postId) <- pageAndPostIds) {
+      val id = elasticSearchIdFor(siteId, pageId = pageId, postId = postId)
+      client.prepareDelete(IndexName, PostMappingName, id)
+        .setRouting(siteId)
+        .execute()
+        .actionGet()
+    }
+  }
+
+
   private def buildSearchResults(response: eas.SearchResponse): FullTextSearchResult = {
     var pageIds = Set[PageId]()
     var authorIds = Set[String]()

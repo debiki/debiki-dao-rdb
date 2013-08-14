@@ -33,19 +33,20 @@ import collection.mutable.StringBuilder
 
 class RelDbTenantDbDao(
   val quotaConsumers: QuotaConsumers,
-  val systemDaoSpi: RelDbSystemDbDao)
+  val daoFactory: RelDbDaoFactory)
   extends TenantDbDao with FullTextSearchSiteDaoMixin {
 
 
   val MaxWebsitesPerIp = 6
 
   def siteId = quotaConsumers.tenantId
-
-  def tenantId = quotaConsumers.tenantId
+  def tenantId = siteId
 
   def db = systemDaoSpi.db
 
-  def fullTextSearchIndexer = systemDaoSpi.fullTextSearchIndexer
+  def systemDaoSpi = daoFactory.systemDbDao
+
+  def fullTextSearchIndexer = daoFactory.fullTextSearchIndexer
 
 
   /** Some SQL operations might cause harmless errors, then we try again.
@@ -120,7 +121,7 @@ class RelDbTenantDbDao(
   }
 
 
-  private def loadPageMetaImpl(pageIds: Seq[PageId])(connection: js.Connection)
+  def loadPageMetaImpl(pageIds: Seq[PageId])(connection: js.Connection)
         : Map[PageId, PageMeta] = {
     assErrIf(pageIds.isEmpty, "DwE84KF0")
     val values = tenantId :: pageIds.toList
@@ -216,7 +217,7 @@ class RelDbTenantDbDao(
   }
 
 
-  private def batchLoadAncestorIdsParentFirst(pageIds: List[PageId])(connection: js.Connection)
+  def batchLoadAncestorIdsParentFirst(pageIds: List[PageId])(connection: js.Connection)
       : collection.Map[PageId, List[PageId]] = {
     val pageIdList = makeInListFor(pageIds)
 
@@ -244,19 +245,34 @@ class RelDbTenantDbDao(
       )
       select path from ancestor_page_ids
       order by array_length(path, 1) desc
-      limit 1"""  // BUG! cannot `limit 1` when batch loading! Therefore:
+      """
 
-    if (pageIds.size > 1) unimplemented("Loding ancestor ids for > 1 page") // see comment above
+    // If asking for ids for many pages, e.g. 2 pages, the result migth look like this:
+    //  path
+    //  -------------------
+    //  {61bg6,1f4q9,51484}
+    //  {1f4q9,51484}
+    //  {61bg6,1f4q9}
+    //  {1f4q9}
+    //  {61bg6}
+    // if asking for ancestors of page 1f4q9 and 61bg6.
+    // I don't know if it's possible to group by the first element in an array,
+    // and keep only the longest array in each group? Instead, for now,
+    // for each page, simply use the longest path found.
 
     val result = mut.Map[PageId, List[PageId]]()
     db.transaction { implicit connection =>
       db.query(sql, siteId :: pageIds, rs => {
-        if (!rs.next())
-          return Map.empty
-
-        val sqlArray: java.sql.Array = rs.getArray("path")
-        val pageIdPathSelfFirst = sqlArray.getArray.asInstanceOf[Array[String]].toList
-        result += pageIdPathSelfFirst.head -> pageIdPathSelfFirst.tail
+        while (rs.next()) {
+          val sqlArray: java.sql.Array = rs.getArray("path")
+          val pageIdPathSelfFirst = sqlArray.getArray.asInstanceOf[Array[String]].toList
+          val pageId::ancestorIds = pageIdPathSelfFirst
+          // Update `result` if we found longest list of ancestors thus far, for pageId.
+          val lengthOfStoredPath = result.get(pageId).map(_.length) getOrElse -1
+          if (lengthOfStoredPath < ancestorIds.length) {
+            result(pageId) = ancestorIds
+          }
+        }
       })
     }
     result
@@ -1108,6 +1124,15 @@ class RelDbTenantDbDao(
         _loadPeoplePagesActionsNoRatingTags(sql, values)
 
     Map[String, PageParts](pagesById.toList: _*)
+  }
+
+
+  def loadCachedPostsById(postIdsByPageId: Map[PageId, Seq[PostId]])(connection: js.Connection)
+        : Map[PageId, PageParts] = {
+    /* val postStatesByPageId: Map[PageId, Seq[PostState]] =
+      loadPostStatesById(postIdsByPageId)(connection)
+      */
+    unimplemented
   }
 
 
@@ -2420,6 +2445,25 @@ class RelDbTenantDbDao(
   }
 
 
+  def rememberPostsAreIndexed(indexedVersion: Int, pageAndPostIds: PagePostId*) {
+    val pagesAndPostsClause =
+      pageAndPostIds.map(_ => "(PAGE_ID = ? and PAID = ?)").mkString(" or ")
+
+    val sql = s"""
+      update DW1_PAGE_ACTIONS set INDEX_VERSION = ?
+      where TENANT = ?
+        and ($pagesAndPostsClause)
+        and TYPE = 'Post'
+      """
+
+    val values = indexedVersion :: siteId ::
+      pageAndPostIds.toList.flatMap(x => List(x.pageId, x.postId))
+
+    val numPostsUpdated = db.updateAtnms(sql, values.asInstanceOf[List[AnyRef]])
+    assert(numPostsUpdated <= pageAndPostIds.length)
+  }
+
+
   private def insertUpdatePost(post: Post)(implicit conn: js.Connection) {
     // Ignore race conditions. The next time `post` is insert-overwritten,
     // any inconsistency will be fixed?
@@ -2740,6 +2784,41 @@ class RelDbTenantDbDao(
   }
 
 
+  private def loadPostStatesById(postIdsByPageId: Map[PageId, Seq[PostId]])(
+        implicit connection: js.Connection): Map[PageId, Seq[PostState]] = {
+    unimplemented /*
+    var values = Vector[AnyRef](siteId)
+
+    val pagePostIdsClauseList =
+      for ((pageId, postIds) <- postIdsByPageId)
+      yield {
+        values :+= pageId
+        values ++= postIds
+        val postIdClauses = postIds.map(_ => "POST_ID = ?").mkString(" or ")
+        s"(PAGE_ID = ? and ($postIdClauses))"
+      }
+
+    val pagePostIdsClauseStr = pagePostIdsClauseList.mkString(" or ")
+
+    val sql = s"""
+      select * from DW1_POSTS
+      where SITE_ID = ? and ($pagePostIdsClauseStr)
+      order by SITE_ID, PAGE_ID
+      """
+
+    --- Wrong result type! ---
+    var result: List[(PageId, PostState)] = Nil
+    db.query(sql, values.toList, rs => {
+      while (rs.next) {
+        val pageId = rs.getString("PAGE_ID")
+        result ::= (pageId, readPostState(rs))
+      }
+    })
+    result
+    */
+  }
+
+
   private def readPostState(rs: js.ResultSet): PostState = {
 
     val anyApprovedText = Option(rs.getString("APPROVED_TEXT"))
@@ -2812,5 +2891,5 @@ class RelDbTenantDbDao(
 
 }
 
-// vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
+
 
