@@ -52,7 +52,7 @@ trait CreateSiteSystemDaoMixin {
       val siteHost = TenantHost(siteData.address, TenantHost.RoleCanonical, siteData.https)
       insertTenantHost(siteId, siteHost)(connection)
 
-      val newWebsiteDao = self.daoFactory.newTenantDbDao(
+      val newWebsiteDao = self.daoFactory.newSiteDbDao(
         QuotaConsumers(tenantId = siteId, ip = anyOwnerIp, roleId = None))
 
 

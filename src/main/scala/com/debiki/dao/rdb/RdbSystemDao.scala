@@ -44,7 +44,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   def secretSalt(): String = unimplemented
 
   def newSiteDao(siteId: SiteId): RdbSiteDao =
-    daoFactory.newTenantDbDao(QuotaConsumers(siteId))
+    daoFactory.newSiteDbDao(QuotaConsumers(siteId))
 
 
   // private [this dao package]
@@ -586,7 +586,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           emailId = Option(rs.getString("EMAIL_SENT")),
           debug = Option(rs.getString("DEBUG")))
 
-        // Add notf to the list of all notifications for tenantId.
+        // Add notf to the list of all notifications for siteId.
         val notfsForTenant: List[NotfOfPageAction] = notfsByTenant(tenantId)
         notfsByTenant = notfsByTenant + (tenantId -> (notf::notfsForTenant))
       }

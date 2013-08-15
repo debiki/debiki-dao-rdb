@@ -35,13 +35,12 @@ import RdbUtil._
 class RdbSiteDao(
   val quotaConsumers: QuotaConsumers,
   val daoFactory: RdbDaoFactory)
-  extends TenantDbDao with FullTextSearchSiteDaoMixin {
+  extends SiteDbDao with FullTextSearchSiteDaoMixin {
 
 
   val MaxWebsitesPerIp = 6
 
   def siteId = quotaConsumers.tenantId
-  def tenantId = siteId
 
   def db = systemDaoSpi.db
 
@@ -125,7 +124,7 @@ class RdbSiteDao(
   def loadPageMetaImpl(pageIds: Seq[PageId])(connection: js.Connection)
         : Map[PageId, PageMeta] = {
     assErrIf(pageIds.isEmpty, "DwE84KF0")
-    val values = tenantId :: pageIds.toList
+    val values = siteId :: pageIds.toList
     val sql = s"""
         select g.GUID, ${_PageMetaSelectListItems}
         from DW1_PAGES g
@@ -167,7 +166,7 @@ class RdbSiteDao(
       newMeta.cachedNumRepliesVisible.asInstanceOf[AnyRef],
       o2ts(newMeta.cachedLastVisiblePostDati),
       newMeta.cachedNumChildPages.asInstanceOf[AnyRef],
-      tenantId,
+      siteId,
       newMeta.pageId,
       _pageRoleToSql(newMeta.pageRole))
     val sql = s"""
@@ -193,7 +192,7 @@ class RdbSiteDao(
 
     if (numChangedRows == 0)
       throw DbDao.PageNotFoundByIdAndRoleException(
-        tenantId, newMeta.pageId, newMeta.pageRole)
+        siteId, newMeta.pageId, newMeta.pageRole)
     if (2 <= numChangedRows)
       assErr("DwE4Ikf1")
 
@@ -312,7 +311,7 @@ class RdbSiteDao(
       set PARENT_FOLDER = REGEXP_REPLACE(PARENT_FOLDER, ?, ?)
       where TENANT = ?
         and PAGE_ID in (""" + makeInListFor(pageIds) + ")"
-    val values = fromFolderEscaped :: toFolder :: tenantId :: pageIds.toList
+    val values = fromFolderEscaped :: toFolder :: siteId :: pageIds.toList
 
     db.update(sql, values)
     */
@@ -353,7 +352,7 @@ class RdbSiteDao(
               // Don't bind identityType, that'd only make it harder for
               // the optimizer.
               identityType +"', ?, ?, ?)",
-          List(loginSno.asInstanceOf[AnyRef], tenantId,
+          List(loginSno.asInstanceOf[AnyRef], siteId,
               e2n(login.prevLoginId),  // UNTESTED unless empty
               login.identityId, login.ip, login.date))
       login
@@ -471,7 +470,7 @@ class RdbSiteDao(
           val userNoId =  User(id = "?", displayName = idty.displayName,
              email = idty.email, emailNotfPrefs = EmailNotfPrefs.Unspecified,
              country = "", website = "", isAdmin = false, isOwner = false)
-          val userWithId = _insertUser(tenantId, userNoId)
+          val userWithId = _insertUser(siteId, userNoId)
           userWithId
       }
 
@@ -490,7 +489,7 @@ class RdbSiteDao(
 
       val identity = (identityInDb, loginReq.identity) match {
         case (None, newNoId: IdentityOpenId) =>
-          _insertIdentity(tenantId, newNoId.copy(userId = user.id))
+          _insertIdentity(siteId, newNoId.copy(userId = user.id))
         case (Some(old: IdentityOpenId), newNoId: IdentityOpenId) =>
           val nev = newNoId.copy(id = old.id, userId = user.id)
           if (nev != old) {
@@ -567,7 +566,7 @@ class RdbSiteDao(
         e2d(identity.oidOpLocalId), e2d(identity.oidRealm),
         e2d(identity.oidEndpoint), e2d(identity.oidVersion),
         e2d(identity.firstName), e2d(identity.email), e2d(identity.country),
-        identity.id, tenantId))
+        identity.id, siteId))
   }
 
 
@@ -624,7 +623,7 @@ class RdbSiteDao(
     var logins = List[Login]()
 
     db.queryAtnms(selectList + fromWhereClause,
-        tenantId :: pageOrLoginIds, rs => {
+        siteId :: pageOrLoginIds, rs => {
       while (rs.next) {
         val loginId = rs.getString("LOGIN_SNO")
         val prevLogin = Option(rs.getString("PREV_LOGIN"))
@@ -696,7 +695,7 @@ class RdbSiteDao(
     val (whereClause, bindVals) = (identityOpt, loginOpt) match {
       case (None, Some(login: Login)) =>
         ("""where i.TENANT = ? and i.SNO = ?""",
-           List(tenantId, login.identityId))
+           List(siteId, login.identityId))
 
       case (Some(oid: IdentityOpenId), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
@@ -721,7 +720,7 @@ class RdbSiteDao(
         }
         ("""where i.TENANT = ?
             and """+ claimedIdOrEmailCheck +"""
-          """, List(tenantId, idOrEmail))
+          """, List(siteId, idOrEmail))
 
       case _ => assErr("DwE98239k2a2")
     }
@@ -760,7 +759,7 @@ class RdbSiteDao(
 
   def loadIdtyAndUser(forLoginId: String): Option[(Identity, User)] = {
     def loginInfo = "login id "+ safed(forLoginId) +
-          ", tenant "+ safed(tenantId)
+          ", tenant "+ safed(siteId)
 
     _loadIdtysAndUsers(forLoginIds = forLoginId::Nil) match {
       case (List(i: Identity), List(u: User)) => Some(i, u)
@@ -812,13 +811,13 @@ class RdbSiteDao(
           select ID_SNO, ID_TYPE
               from DW1_LOGINS
               where  TENANT = ? and SNO in ("""+ makeInListFor(loginIds) +""")
-          """, tenantId :: loginIds)
+          """, siteId :: loginIds)
       case (pageId, null) => ("""
           select distinct l.ID_SNO, l.ID_TYPE
               from DW1_PAGE_ACTIONS a, DW1_LOGINS l
               where a.PAGE_ID = ? and a.TENANT = ?
                 and a.LOGIN = l.SNO and a.TENANT = l.TENANT
-          """, List(pageId, tenantId))
+          """, List(pageId, siteId))
       case (x, y) => assErr(
         "DwE33Zb7", s"Mismatch: (${classNameOf(x)}, ${classNameOf(y)})")
     }
@@ -1026,7 +1025,7 @@ class RdbSiteDao(
   override def loadPage(pageGuid: String, tenantId: Option[String] = None)
         : Option[PageParts] =
     _loadPageAnyTenant(
-      tenantId = tenantId getOrElse this.tenantId,
+      tenantId = tenantId getOrElse this.siteId,
       pageId = pageGuid)
 
 
@@ -1116,7 +1115,7 @@ class RdbSiteDao(
           a.type in (
               'Post', 'Edit', 'EditApp', 'Rjct', 'Aprv', 'DelPost', 'DelTree'))"""
 
-    val values = tenantId :: pageIds.toList
+    val values = siteId :: pageIds.toList
 
     val (
       people: People,
@@ -1200,10 +1199,10 @@ class RdbSiteDao(
 
       val (loginIdsWhereSql, loginIdsWhereValues) =
         if (fromIp isDefined)
-          ("l.LOGIN_IP = ? and l.TENANT = ?", List(fromIp.get, tenantId))
+          ("l.LOGIN_IP = ? and l.TENANT = ?", List(fromIp.get, siteId))
         else
           ("l.ID_SNO = ? and l.ID_TYPE = 'OpenID' and l.TENANT = ?",
-             List(byIdentity.get, tenantId))
+             List(byIdentity.get, siteId))
 
       // For now, don't select posts only. We're probably interested in
       // all actions by this user, e.g also his/her ratings, to find
@@ -1249,7 +1248,7 @@ class RdbSiteDao(
         order by a.TIME desc
         limit """+ limit
 
-      lazy val foldersAndTreesValues = tenantId :: pathRangeValues
+      lazy val foldersAndTreesValues = siteId :: pathRangeValues
 
       lazy val pageIdsQuery = """
         select a.TENANT, a.PAGE_ID, a.PAID, a.POST_ID
@@ -1261,7 +1260,7 @@ class RdbSiteDao(
         order by a.TIME desc
         limit """+ limit
 
-      lazy val pageIdsValues = tenantId :: pathRanges.pageIds.toList
+      lazy val pageIdsValues = siteId :: pathRanges.pageIds.toList
 
       val (sql, values) = {
         import pathRanges._
@@ -1375,7 +1374,7 @@ class RdbSiteDao(
 
 
   def loadTenant(): Tenant = {
-    systemDaoSpi.loadTenants(List(tenantId)).head
+    systemDaoSpi.loadTenants(List(siteId)).head
     // Should tax quotaConsumer with 2 db IO requests: tenant + tenant hosts.
   }
 
@@ -1392,7 +1391,7 @@ class RdbSiteDao(
           throw TooManySitesCreatedException(ownerIp)
 
         val newTenantNoId = Tenant(id = "?", name = name,
-           creatorIp = ownerIp, creatorTenantId = tenantId,
+           creatorIp = ownerIp, creatorTenantId = siteId,
            creatorLoginId = ownerLoginId, creatorRoleId = ownerRole.id,
            hosts = Nil)
         val newTenant = _createTenant(newTenantNoId)
@@ -1446,7 +1445,7 @@ class RdbSiteDao(
 
   def addTenantHost(host: TenantHost) = {
     db.transaction { implicit connection =>
-      systemDaoSpi.insertTenantHost(tenantId, host)(connection)
+      systemDaoSpi.insertTenantHost(siteId, host)(connection)
     }
   }
 
@@ -1490,7 +1489,7 @@ class RdbSiteDao(
       if (includeStatuses.contains(PageStatus.Draft)) "true"
       else "g.PUBL_DATI is not null"
 
-    val values = tenantId :: pageRangeValues
+    val values = siteId :: pageRangeValues
     val sql = s"""
         select t.PARENT_FOLDER,
             t.PAGE_ID,
@@ -1511,7 +1510,7 @@ class RdbSiteDao(
     db.withConnection { implicit connection =>
      db.query(sql, values, rs => {
       while (rs.next) {
-        val pagePath = _PagePath(rs, tenantId)
+        val pagePath = _PagePath(rs, siteId)
         val pageMeta = _PageMeta(rs, pagePath.pageId.get)
 
         // This might be too inefficient if there are many pages:
@@ -1539,7 +1538,7 @@ class RdbSiteDao(
       case _ => unimplemented("sorting by anything but page publ dati")
     }
 
-    var values: List[AnyRef] = tenantId :: parentPageId :: Nil
+    var values: List[AnyRef] = siteId :: parentPageId :: Nil
 
     val pageRoleTestAnd = filterPageRole match {
       case Some(pageRole) =>
@@ -1569,7 +1568,7 @@ class RdbSiteDao(
       val ancestorIds = parentPageId :: parentsAncestors
       db.query(sql, values, rs => {
         while (rs.next) {
-          val pagePath = _PagePath(rs, tenantId)
+          val pagePath = _PagePath(rs, siteId)
           val pageMeta = _PageMeta(rs, pagePath.pageId.get)
           items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
         }
@@ -1647,7 +1646,7 @@ class RdbSiteDao(
 
   private def saveNotfsImpl(notfs: Seq[NotfOfPageAction])(implicit connection: js.Connection) {
       val valss: List[List[AnyRef]] = for (notf <- notfs.toList) yield List(
-        tenantId, notf.ctime, notf.pageId, notf.pageTitle take 80,
+        siteId, notf.ctime, notf.pageId, notf.pageTitle take 80,
         notf.recipientIdtySmplId.orNullVarchar,
         notf.recipientRoleId.orNullVarchar,
         notf.eventType.toString,
@@ -1684,7 +1683,7 @@ class RdbSiteDao(
     val valss: List[List[AnyRef]] =
       for (notf <- notfs.toList) yield List(
          emailId.orNullVarchar, debug.orNullVarchar,
-         tenantId, notf.pageId, notf.eventActionId.asAnyRef,
+         siteId, notf.pageId, notf.eventActionId.asAnyRef,
          notf.recipientActionId.asAnyRef)
 
     db.batchUpdate("""
@@ -1699,16 +1698,16 @@ class RdbSiteDao(
   def loadNotfsForRole(userId: String): Seq[NotfOfPageAction] = {
     val numToLoad = 50 // for now
     val notfsToMail = systemDaoSpi.loadNotfsImpl(   // SHOULD specify consumers
-       numToLoad, Some(tenantId), userIdOpt = Some(userId))
+       numToLoad, Some(siteId), userIdOpt = Some(userId))
     // All loaded notifications are to userId only.
-    notfsToMail.notfsByTenant(tenantId)
+    notfsToMail.notfsByTenant(siteId)
   }
 
 
   def loadNotfByEmailId(emailId: String): Option[NotfOfPageAction] = {
     val notfsToMail =   // SHOULD specify consumers
-       systemDaoSpi.loadNotfsImpl(1, Some(tenantId), emailIdOpt = Some(emailId))
-    val notfs = notfsToMail.notfsByTenant(tenantId)
+       systemDaoSpi.loadNotfsImpl(1, Some(siteId), emailIdOpt = Some(emailId))
+    val notfs = notfsToMail.notfsByTenant(siteId)
     assert(notfs.length <= 1)
     notfs.headOption
   }
@@ -1744,7 +1743,7 @@ class RdbSiteDao(
     require(email.sentOn isEmpty)
 
     val vals = List(
-      tenantId, email.id, email.sentTo, email.subject, email.bodyHtmlText)
+      siteId, email.id, email.sentTo, email.subject, email.bodyHtmlText)
 
     db.update("""
       insert into DW1_EMAILS_OUT(
@@ -1768,7 +1767,7 @@ class RdbSiteDao(
       val vals = List(
         sentOn, email.providerEmailId.orNullVarchar,
         failureType, email.failureText.orNullVarchar, failureTime,
-        tenantId, email.id)
+        siteId, email.id)
 
       db.update("""
         update DW1_EMAILS_OUT
@@ -1787,7 +1786,7 @@ class RdbSiteDao(
       from DW1_EMAILS_OUT
       where TENANT = ? and ID = ?
       """
-    val emailOpt = db.queryAtnms(query, List(tenantId, emailId), rs => {
+    val emailOpt = db.queryAtnms(query, List(siteId, emailId), rs => {
       var allEmails = List[Email]()
       while (rs.next) {
         val email = Email(
@@ -1843,7 +1842,7 @@ class RdbSiteDao(
 
     db.transaction { implicit connection =>
       val sql = s"update DW1_USERS set $changes where TENANT = ? and SNO = ?"
-      db.update(sql, newValues.reverse ::: List(tenantId, roleId))
+      db.update(sql, newValues.reverse ::: List(siteId, roleId))
     }
   }
 
@@ -1861,7 +1860,7 @@ class RdbSiteDao(
           where TENANT = ? and EMAIL = ? and VERSION = 'C'
             and EMAIL_NOTFS != 'F'
           """,
-          List(tenantId, emailAddr))
+          List(siteId, emailAddr))
 
       // Create a new row with the desired email notification setting.
       // Or, for now, fail and throw some SQLException if EMAIL_NOTFS is 'F'
@@ -1872,7 +1871,7 @@ class RdbSiteDao(
               TENANT, LOGIN, CTIME, VERSION, EMAIL, EMAIL_NOTFS)
           values (?, ?, ?, 'C', ?, ?)
           """,
-          List(tenantId, loginId, d2ts(ctime), emailAddr,
+          List(siteId, loginId, d2ts(ctime), emailAddr,
               _toFlag(emailNotfPrefs)))
     }
   }
@@ -1896,7 +1895,7 @@ class RdbSiteDao(
         : List[PagePath] = {
 
     val andOnlyCanonical = if (loadRedirects) "" else "and CANONICAL = 'C'"
-    val values = List(tenantId, pageId)
+    val values = List(siteId, pageId)
     val sql = s"""
       select PARENT_FOLDER, SHOW_ID, PAGE_SLUG,
         -- For debug assertions:
@@ -1918,7 +1917,7 @@ class RdbSiteDao(
         assert(canonicalDati.getTime > debugLastCanonicalDati.getTime)
         debugLastCanonicalDati = canonicalDati
 
-        pagePaths ::= _PagePath(rs, tenantId, pageId = Some(Some(pageId)))
+        pagePaths ::= _PagePath(rs, siteId, pageId = Some(Some(pageId)))
       }
       assert(debugLastIsCanonical || pagePaths.isEmpty)
     })
@@ -2184,11 +2183,11 @@ class RdbSiteDao(
         (implicit conn: js.Connection): PagePath = {
 
     // Verify new path is legal.
-    PagePath.checkPath(tenantId = tenantId, pageId = Some(pageId),
+    PagePath.checkPath(tenantId = siteId, pageId = Some(pageId),
       folder = newFolder getOrElse "/", pageSlug = newSlug getOrElse "")
 
     val currentPath: PagePath = lookupPagePathImpl(pageId) getOrElse (
-          throw PageNotFoundByIdException(tenantId, pageId))
+          throw PageNotFoundByIdException(siteId, pageId))
 
     val newPath = {
       var path = currentPath
@@ -2232,7 +2231,7 @@ class RdbSiteDao(
     //    because then that page would no longer be reachable).
 
     def changeExistingPathsToRedirects(pageId: String) {
-      val vals = List(tenantId, pageId)
+      val vals = List(siteId, pageId)
       val stmt = """
         update DW1_PAGE_PATHS
         set CANONICAL = 'R'
@@ -2240,13 +2239,13 @@ class RdbSiteDao(
         """
       val numRowsChanged = db.update(stmt, vals)
       if (numRowsChanged == 0)
-        throw PageNotFoundByIdException(tenantId, pageId, details = Some(
+        throw PageNotFoundByIdException(siteId, pageId, details = Some(
           "It seems all paths to the page were deleted moments ago"))
     }
 
     def deleteAnyExistingRedirectFrom(newPath: PagePath) {
       val showPageId = newPath.showId ? "T" | "F"
-      var vals = List(tenantId, newPath.folder, e2d(newPath.pageSlug), showPageId)
+      var vals = List(siteId, newPath.folder, e2d(newPath.pageSlug), showPageId)
       var stmt = """
         delete from DW1_PAGE_PATHS
         where TENANT = ? and PARENT_FOLDER = ? and PAGE_SLUG = ?
@@ -2383,7 +2382,7 @@ class RdbSiteDao(
         loginIdNullForSystem,
         action.anyGuestId.orNullVarchar,
         roleIdNullForSystem,
-        tenantId,
+        siteId,
         pageId,
         action.postId.asAnyRef,
         action.id.asAnyRef,
@@ -2398,7 +2397,7 @@ class RdbSiteDao(
           db.batchUpdate("""
             insert into DW1_PAGE_RATINGS(TENANT, PAGE_ID, PAID, TAG)
             values (?, ?, ?, ?)
-            """, r.tags.map(t => List(tenantId, pageId, r.id.asAnyRef, t)))
+            """, r.tags.map(t => List(siteId, pageId, r.id.asAnyRef, t)))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
             "EditApp", a.editId.asAnyRef, e2n(a.result),

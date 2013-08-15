@@ -34,7 +34,7 @@ class RdbDaoFactory(
   val systemDbDao = new RdbSystemDao(this)
 
 
-  def newTenantDbDao(quotaConsumers: QuotaConsumers) =
+  def newSiteDbDao(quotaConsumers: QuotaConsumers) =
     new RdbSiteDao(quotaConsumers, this)
 
 
