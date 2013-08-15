@@ -28,8 +28,8 @@ import java.{sql => js}
 import scala.{collection => col}
 import scala.collection.{mutable => mut}
 import scala.collection.mutable.StringBuilder
-import RelDb._
-import RelDbUtil._
+import Rdb._
+import RdbUtil._
 
 
 class RdbSystemDao(val daoFactory: RdbDaoFactory)

@@ -24,7 +24,7 @@ import akka.actor.ActorSystem
 /** Constructs per site data access objects, and one global.
   */
 class RdbDaoFactory(
-  val db: RelDb,
+  val db: Rdb,
   val actorSystem: ActorSystem,
   val isTest: Boolean = false) extends DbDaoFactory {
 

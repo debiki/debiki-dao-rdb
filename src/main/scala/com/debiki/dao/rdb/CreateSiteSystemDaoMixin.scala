@@ -26,8 +26,8 @@ import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
 import scala.collection.{mutable => mut}
-import RelDb.pimpOptionWithNullVarchar
-import RelDbUtil._
+import Rdb.pimpOptionWithNullVarchar
+import RdbUtil._
 import collection.mutable.StringBuilder
 
 

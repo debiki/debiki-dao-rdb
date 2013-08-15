@@ -22,10 +22,10 @@ import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.Prelude._
 import java.{sql => js}
 import scala.{collection => col}
-import RelDb._
+import Rdb._
 
 
-object RelDbUtil {
+object RdbUtil {
 
 
   /**

@@ -28,8 +28,8 @@ import java.{sql => js}
 import scala.collection.{mutable => mut}
 import scala.collection.mutable.StringBuilder
 import DbDao._
-import RelDb._
-import RelDbUtil._
+import Rdb._
+import RdbUtil._
 
 
 class RdbSiteDao(
@@ -1343,7 +1343,7 @@ class RdbSiteDao(
    * Loads People, Pages (Debate:s) and Actions given an SQL statement
    * that selects:
    *   DW1_PAGE_ACTIONS.PAGE_ID and
-   *   RelDbUtil.ActionSelectListItems.
+   *   RdbUtil.ActionSelectListItems.
    */
   private def _loadPeoplePagesActionsNoRatingTags(
         sql: String, values: List[AnyRef])

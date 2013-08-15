@@ -24,7 +24,7 @@ import javax.{sql => jxs}
 import org.{postgresql => pg}
 
 
-object RelDb {
+object Rdb {
 
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
@@ -100,9 +100,9 @@ object RelDb {
 }
 
 
-class RelDb(val dataSource: jxs.DataSource){
+class Rdb(val dataSource: jxs.DataSource){
 
-  import RelDb._
+  import Rdb._
 
   // I don't know how Play Framework has configured the data source.
   // Here's some old docs on how it could be configured, for good performance:

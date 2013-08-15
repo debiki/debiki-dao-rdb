@@ -30,18 +30,18 @@ import com.typesafe.config.{ConfigFactory, Config}
  *
  * Tables in the test schema are cleared before each test.
  */
-class RelDbDaoTckSpec extends tck.dao.DbDaoTckTest(ReDbDaoTckTest)
+class RdbDaoSpec extends tck.dao.DbDaoTckTest(RdbDaoTest)
 
 
 
-class RelDbTestContext(
+class RdbTestContext(
   override val dbDaoFactory: DbDaoFactory,
   override val quotaManager: QuotaCharger)
   extends tck.dao.TestContext
 
 
 
-object ReDbDaoTckTest extends tck.dao.TestContextBuilder {
+object RdbDaoTest extends tck.dao.TestContextBuilder {
 
   override def buildTestContext(what: tck.dao.DbDaoTckTest.What, version: String) = {
 
@@ -58,7 +58,7 @@ object ReDbDaoTckTest extends tck.dao.TestContextBuilder {
     ds.setUsername(config.getString("db.test.user"))
     ds.setPassword(config.getString("db.test.password"))
 
-    val db = new RelDb(ds)
+    val db = new Rdb(ds)
     val daoFactory = new RdbDaoFactory(db, ActorSystem("TestActorSystem"), isTest = true)
 
     // Prepare schema and search index.
@@ -74,7 +74,7 @@ object ReDbDaoTckTest extends tck.dao.TestContextBuilder {
             resourceUse: ResourceUse, mayPilfer: Boolean) { }
     }
 
-    new RelDbTestContext(daoFactory, kindQuotaCharger)
+    new RdbTestContext(daoFactory, kindQuotaCharger)
   }
 }
 
