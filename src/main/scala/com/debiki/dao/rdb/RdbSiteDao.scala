@@ -32,9 +32,9 @@ import RelDb._
 import RelDbUtil._
 
 
-class RelDbTenantDbDao(
+class RdbSiteDao(
   val quotaConsumers: QuotaConsumers,
-  val daoFactory: RelDbDaoFactory)
+  val daoFactory: RdbDaoFactory)
   extends TenantDbDao with FullTextSearchSiteDaoMixin {
 
 

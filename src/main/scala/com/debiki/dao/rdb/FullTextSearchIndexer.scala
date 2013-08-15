@@ -34,7 +34,7 @@ import Prelude._
 
 
 private[rdb]
-class FullTextSearchIndexer(private val relDbDaoFactory: RelDbDaoFactory) {
+class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
 
   private implicit val actorSystem = relDbDaoFactory.actorSystem
   private implicit val executionContext = actorSystem.dispatcher
@@ -210,9 +210,9 @@ private[rdb] case class PostsToIndex(siteId: String, page: PageNoPath, posts: Ve
   */
 private[rdb] class IndexingActor(
   private val client: es.client.Client,
-  private val relDbDaoFactory: RelDbDaoFactory) extends Actor {
+  private val relDbDaoFactory: RdbDaoFactory) extends Actor {
 
-  private def systemDao: RelDbSystemDbDao = relDbDaoFactory.systemDbDao
+  private def systemDao: RdbSystemDao = relDbDaoFactory.systemDbDao
 
   // For now, don't index all pending posts. That'd result in my Amazon EC2 instance
   // grinding to a halt, when the hypervisor steals all time becaues it uses too much CPU?

@@ -32,7 +32,7 @@ import RelDb._
 import RelDbUtil._
 
 
-class RelDbSystemDbDao(val daoFactory: RelDbDaoFactory)
+class RdbSystemDao(val daoFactory: RdbDaoFactory)
   extends SystemDbDao with CreateSiteSystemDaoMixin {
 
   def db = daoFactory.db
@@ -43,7 +43,7 @@ class RelDbSystemDbDao(val daoFactory: RelDbDaoFactory)
 
   def secretSalt(): String = unimplemented
 
-  def newSiteDao(siteId: SiteId): RelDbTenantDbDao =
+  def newSiteDao(siteId: SiteId): RdbSiteDao =
     daoFactory.newTenantDbDao(QuotaConsumers(siteId))
 
 
@@ -665,7 +665,7 @@ class RelDbSystemDbDao(val daoFactory: RelDbDaoFactory)
     var chunksOfPostsToIndex = Vector[PostsToIndex]()
 
     for ((siteId, postIdsByPage) <- postIdsByPageBySite.iterator) {
-      val siteDao: RelDbTenantDbDao = newSiteDao(siteId)
+      val siteDao: RdbSiteDao = newSiteDao(siteId)
       val pageIds = postIdsByPage.keySet.toList
       val ancestorIdsByPageId: col.Map[PageId, List[PageId]] =
         siteDao.batchLoadAncestorIdsParentFirst(pageIds)(connection)

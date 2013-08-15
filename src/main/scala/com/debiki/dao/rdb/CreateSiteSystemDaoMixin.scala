@@ -32,7 +32,7 @@ import collection.mutable.StringBuilder
 
 
 trait CreateSiteSystemDaoMixin {
-  self: RelDbSystemDbDao =>
+  self: RdbSystemDao =>
 
 
   def createSiteImpl(siteData: FirstSiteData): Tenant = {

@@ -47,7 +47,7 @@ object FullTextSearchSiteDaoMixin {
 
 
 trait FullTextSearchSiteDaoMixin {
-  self: RelDbTenantDbDao =>
+  self: RdbSiteDao =>
 
   private def client = self.fullTextSearchIndexer.client
 
