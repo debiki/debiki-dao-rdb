@@ -46,7 +46,7 @@ object FullTextSearchSiteDaoMixin {
 
 
 
-trait FullTextSearchSiteDaoMixin {
+trait FullTextSearchSiteDaoMixin extends SiteDbDao {
   self: RdbSiteDao =>
 
   private def client = self.fullTextSearchIndexer.client
