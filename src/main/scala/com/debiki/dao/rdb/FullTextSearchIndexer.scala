@@ -50,6 +50,7 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
 
 
   val node = {
+    p.Logger.info("Starting ElasticSearch node...")
     val settingsBuilder = es.common.settings.ImmutableSettings.settingsBuilder()
     settingsBuilder.put("path.data", DefaultDataDir)
     settingsBuilder.put("node.name", "DebikiElasticSearchNode")
@@ -134,34 +135,49 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
   /** The index can be deleted like so:  curl -XDELETE localhost:9200/sites_v0
     * But don't do that in any production environment of course.
     */
-  def createIndexAndMappinigsIfAbsent() {
+  def createIndexAndMappinigsIfAbsent(asynchronously: Boolean = true) {
     import es.action.admin.indices.create.CreateIndexResponse
 
     val createIndexRequest = es.client.Requests.createIndexRequest(IndexName)
       .settings(IndexSettings)
       .mapping(PostMappingName, PostMappingDefinition)
 
+    val promise = scala.concurrent.Promise[Any]()
+
     client.admin().indices().create(createIndexRequest, new ActionListener[CreateIndexResponse] {
       def onResponse(response: CreateIndexResponse) {
         p.Logger.info("Created ElasticSearch index and mapping.")
+        promise.success(0)
       }
-      def onFailure(t: Throwable): Unit = t match {
-        case _: es.indices.IndexAlreadyExistsException =>
-          p.Logger.info("ElasticSearch index has already been created, fine.")
-        case NonFatal(error) =>
-          p.Logger.warn("Error trying to create ElasticSearch index [DwE84dKf0]", error)
+      def onFailure(t: Throwable): Unit = {
+        t match {
+          case _: es.indices.IndexAlreadyExistsException =>
+            p.Logger.info("ElasticSearch index has already been created, fine.")
+            promise.success(0)
+          case t: Throwable =>
+            p.Logger.warn("Error trying to create ElasticSearch index [DwE84dKf0]", t)
+            promise.failure(t)
+        }
       }
     })
+
+    if (!asynchronously)
+      scala.concurrent.Await.result(promise.future, 60 seconds)
   }
 
 
   def debugDeleteIndexAndMappings() {
     val deleteRequest = es.client.Requests.deleteIndexRequest(IndexName)
     try {
-      client.admin.indices.delete(deleteRequest).actionGet()
+      val response = client.admin.indices.delete(deleteRequest).actionGet()
+      if (response.isAcknowledged)
+        p.Logger.info("Deleted the ElasticSearch index.")
+      else
+        p.Logger.warn("ElasticSearch index deletion request not acknowledged? What does that mean?")
     }
     catch {
       case _: org.elasticsearch.indices.IndexMissingException => // ignore
+      case NonFatal(ex) => p.Logger.warn("Error deleting ElasticSearch index [DwE5Hf39]:", ex)
     }
   }
 

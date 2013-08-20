@@ -63,7 +63,7 @@ object RdbDaoTest extends tck.dao.TestContextBuilder {
 
     // Prepare schema and search index.
     daoFactory.fullTextSearchIndexer.debugDeleteIndexAndMappings()
-    daoFactory.fullTextSearchIndexer.createIndexAndMappinigsIfAbsent()
+    daoFactory.fullTextSearchIndexer.createIndexAndMappinigsIfAbsent(asynchronously = false)
     daoFactory.systemDbDao.emptyDatabase()
 
     // A simple quota charger, which never throws any OverQuotaException.
