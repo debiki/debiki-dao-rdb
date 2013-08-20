@@ -164,7 +164,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  /** Is different from RelDbTenantDao._createTenant() in that it doesn't fill in
+  /** Is different from RdbSiteDao._createTenant() in that it doesn't fill in
     * any CREATOR_... columns, because the database should be empty and there is then
     * no creator to refer to.
     */
