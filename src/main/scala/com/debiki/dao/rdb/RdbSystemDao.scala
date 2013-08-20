@@ -696,6 +696,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   override def emptyDatabase() {
+    require(daoFactory.isTest)
     db.transaction { implicit connection =>
 
       // There are foreign keys from DW1_TENANTS to other tables, and
