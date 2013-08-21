@@ -353,11 +353,28 @@ object FullTextSearchIndexer {
     *
     * Over allocate shards ("user based data flow", and in Debiki's case, each user is a website).
     * We'll use routing to direct all traffic for a certain site to a single shard always.
+    *
+    * About ElasticSearch's Snowball analyzer: "[it] uses the standard tokenizer,
+    * with standard filter, lowercase filter, stop filter, and snowball filter",
+    * see: http://www.elasticsearch.org/guide/reference/index-modules/analysis/snowball-analyzer/
+    * Use such an analyzer, but add the html_strip char filter.
     */
-  val IndexSettings = i"""{
-    |  "number_of_shards": 100,
-    |  "number_of_replicas": 1
-    |}"""
+  val IndexSettings = i"""
+    |number_of_shards: 100
+    |number_of_replicas: 1
+    |analysis:
+    |  analyzer:
+    |    HtmlSnowball:
+    |      type: custom
+    |      tokenizer: standard
+    |      filter: [standard, lowercase, stop, snowball]
+    |      char_filter: [HtmlStrip]
+    |  char_filter :
+    |    HtmlStrip :
+    |      type : html_strip
+    |#     escaped_tags : [xxx, yyy]  -- what's this?
+    |#     read_ahead : 1024        -- what's this?
+    |"""
 
 
   val PostMappingDefinition = i"""{
@@ -380,7 +397,7 @@ object FullTextSearchIndexer {
     |    "lastReviewDati":               {"type": "date"},
     |    "lastAuthoritativeReviewDati":  {"type": "date"},
     |    "lastApprovalDati":             {"type": "date"},
-    |    "lastApprovedText":             {"type": "string", "analyzer": "snowball"},
+    |    "lastApprovedText":             {"type": "string", "analyzer": "HtmlSnowball"},
     |    "lastPermanentApprovalDati":    {"type": "date"},
     |    "lastManualApprovalDati":       {"type": "date"},
     |    "lastEditAppliedAt":            {"type": "date"},
