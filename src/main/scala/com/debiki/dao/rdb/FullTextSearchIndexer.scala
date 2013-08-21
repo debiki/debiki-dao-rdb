@@ -78,7 +78,7 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
     Props(new IndexingActor(client, relDbDaoFactory)), name = "IndexingActor")
 
 
-  startupAsynchronously()
+  startup()
 
 
   /** It's thread safe, see:
@@ -95,11 +95,11 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
   def client = node.client
 
 
-  /** Starts the search engine, asynchronously:
+  /** Starts the search engine:
     * - Creates an index, if absent.
     * - Schedules periodic indexing of posts that need to be indexed.
     */
-  def startupAsynchronously() {
+  def startup() {
     createIndexAndMappinigsIfAbsent()
     actorSystem.scheduler.schedule(initialDelay = IndexPendingPostsDelay,
       interval = IndexPendingPostsInterval, indexingActorRef, IndexPendingPosts)
@@ -135,34 +135,28 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
   /** The index can be deleted like so:  curl -XDELETE localhost:9200/sites_v0
     * But don't do that in any production environment of course.
     */
-  def createIndexAndMappinigsIfAbsent(asynchronously: Boolean = true) {
+  def createIndexAndMappinigsIfAbsent() {
     import es.action.admin.indices.create.CreateIndexResponse
 
     val createIndexRequest = es.client.Requests.createIndexRequest(IndexName)
       .settings(IndexSettings)
       .mapping(PostMappingName, PostMappingDefinition)
 
-    val promise = scala.concurrent.Promise[Any]()
-
-    client.admin().indices().create(createIndexRequest, new ActionListener[CreateIndexResponse] {
-      def onResponse(response: CreateIndexResponse) {
+    try {
+      val response: CreateIndexResponse =
+        client.admin().indices().create(createIndexRequest).actionGet()
+      if (response.isAcknowledged)
         p.Logger.info("Created ElasticSearch index and mapping.")
-        promise.success(0)
-      }
-      def onFailure(t: Throwable): Unit = {
-        t match {
-          case _: es.indices.IndexAlreadyExistsException =>
-            p.Logger.info("ElasticSearch index has already been created, fine.")
-            promise.success(0)
-          case t: Throwable =>
-            p.Logger.warn("Error trying to create ElasticSearch index [DwE84dKf0]", t)
-            promise.failure(t)
-        }
-      }
-    })
-
-    if (!asynchronously)
-      scala.concurrent.Await.result(promise.future, 60 seconds)
+      else
+        p.Logger.warn("ElasticSearch index creation request not acknowledged? What does that mean?")
+    }
+    catch {
+      case _: es.indices.IndexAlreadyExistsException =>
+        p.Logger.info("ElasticSearch index has already been created, fine.")
+      case NonFatal(error) =>
+        p.Logger.warn("Error trying to create ElasticSearch index [DwE84dKf0]", error)
+        throw error
+    }
   }
 
 
