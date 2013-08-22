@@ -17,8 +17,8 @@
 
 package com.debiki.dao.rdb
 
-import com.debiki.core._
 import akka.actor.ActorSystem
+import com.debiki.core._
 
 
 /** Constructs per site data access objects, and one global.
@@ -26,6 +26,7 @@ import akka.actor.ActorSystem
 class RdbDaoFactory(
   val db: Rdb,
   val actorSystem: ActorSystem,
+  val fullTextSearchDbDataPath: Option[String],
   val isTest: Boolean = false) extends DbDaoFactory {
 
 

@@ -39,8 +39,10 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
   private implicit val actorSystem = relDbDaoFactory.actorSystem
   private implicit val executionContext = actorSystem.dispatcher
 
-  // This'll do for now. (Make configurable, later)
-  private val DefaultDataDir = "target/elasticsearch-data"
+  private val DefaultDataPath = "target/elasticsearch-data"
+
+  private val dataPath =
+    relDbDaoFactory.fullTextSearchDbDataPath getOrElse DefaultDataPath
 
   private def isTest = relDbDaoFactory.isTest
 
@@ -52,7 +54,7 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
   val node = {
     p.Logger.info("Starting ElasticSearch node...")
     val settingsBuilder = es.common.settings.ImmutableSettings.settingsBuilder()
-    settingsBuilder.put("path.data", DefaultDataDir)
+    settingsBuilder.put("path.data", dataPath)
     settingsBuilder.put("node.name", "DebikiElasticSearchNode")
     settingsBuilder.put("http.enabled", true)
     settingsBuilder.put("http.port", 9200)
