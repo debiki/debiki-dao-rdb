@@ -110,6 +110,7 @@ object RdbUtil {
         assert((typee == "Rjct") == approval.isEmpty)
         buildAction(PAP.ReviewPost(approval))
       case "Undo" => unimplemented
+      case "CloseTree" => buildAction(PostActionPayload.CloseTree)
       case x =>
         val anyHidingAction = parseCollapsingAction(x)
         anyHidingAction match {

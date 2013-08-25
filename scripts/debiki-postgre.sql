@@ -723,6 +723,7 @@ create table DW1_POSTS(
 
   POST_COLLAPSED_AT timestamp,
   TREE_COLLAPSED_AT timestamp,
+  TREE_CLOSED_AT timestamp,
   POST_DELETED_AT timestamp,
   TREE_DELETED_AT timestamp,
 

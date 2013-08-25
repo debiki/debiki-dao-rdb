@@ -2431,6 +2431,7 @@ class RdbSiteDao(
                 _toDbVal(r.approval), NullVarchar))
             case PAP.CollapsePost => insertSimpleValue("CollapsePost")
             case PAP.CollapseTree => insertSimpleValue("CollapseTree")
+            case PAP.CloseTree => insertSimpleValue("CloseTree")
             case PAP.DeletePost => insertSimpleValue("DelPost")
             case PAP.DeleteTree => insertSimpleValue("DelTree")
             case PAP.Undo(_) => unimplemented
@@ -2491,6 +2492,7 @@ class RdbSiteDao(
 
         POST_COLLAPSED_AT = ?,
         TREE_COLLAPSED_AT = ?,
+        TREE_CLOSED_AT = ?,
         POST_DELETED_AT = ?,
         TREE_DELETED_AT = ?,
 
@@ -2550,6 +2552,7 @@ class RdbSiteDao(
 
         POST_COLLAPSED_AT,
         TREE_COLLAPSED_AT,
+        TREE_CLOSED_AT,
         POST_DELETED_AT,
         TREE_DELETED_AT,
 
@@ -2594,7 +2597,7 @@ class RdbSiteDao(
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         ?, ?, ?)"""
+         ?, ?, ?, ?)"""
 
     val collapsed: AnyRef =
       if (post.isTreeCollapsed) "CollapseTree"
@@ -2625,6 +2628,7 @@ class RdbSiteDao(
 
       o2ts(post.postCollapsedAt),
       o2ts(post.treeCollapsedAt),
+      o2ts(post.treeClosedAt),
       o2ts(post.postDeletedAt),
       o2ts(post.treeDeletedAt),
 
@@ -2853,6 +2857,7 @@ class RdbSiteDao(
       lastEditorId = Option(rs.getString("LAST_EDITOR_ID")),
       postCollapsedAt = ts2o(rs.getTimestamp("POST_COLLAPSED_AT")),
       treeCollapsedAt = ts2o(rs.getTimestamp("TREE_COLLAPSED_AT")),
+      treeClosedAt = ts2o(rs.getTimestamp("TREE_CLOSED_AT")),
       postDeletedAt = ts2o(rs.getTimestamp("POST_DELETED_AT")),
       treeDeletedAt = ts2o(rs.getTimestamp("TREE_DELETED_AT")),
       numEditSuggestions = rs.getInt("NUM_EDIT_SUGGESTIONS"),
