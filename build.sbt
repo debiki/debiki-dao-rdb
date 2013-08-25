@@ -28,8 +28,8 @@ libraryDependencies ++= Seq(
   // These 2 lines below might be useful, if in the future I ever make debiki-dao-rdb
   // itself apply evolutions to the db schema. Then a Play app is needed, and
   // Play's JDBC module.
-  //"play" %% "play" % "2.1.1" % "test"
-  //"play" %% "play-jdbc" % "2.1.1" % "test"
+  //"play" %% "play" % "2.1.3" % "test"
+  //"play" %% "play-jdbc" % "2.1.3" % "test"
 )
 
 
