@@ -356,7 +356,7 @@ object FullTextSearchIndexer {
     * Use such an analyzer, but add the html_strip char filter.
     */
   val IndexSettings = i"""
-    |number_of_shards: 100
+    |number_of_shards: 5
     |number_of_replicas: 1
     |analysis:
     |  analyzer:
