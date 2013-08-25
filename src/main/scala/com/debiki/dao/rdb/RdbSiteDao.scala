@@ -32,6 +32,12 @@ import Rdb._
 import RdbUtil._
 
 
+/** A relational database Data Access Object, for a specific website.
+  *
+  * Could/should split it into many smaller mixins, like
+  * FullTextSearchSiteDaoMixin. But not very important, because
+  * it doesn't have any mutable state.
+  */
 class RdbSiteDao(
   val quotaConsumers: QuotaConsumers,
   val daoFactory: RdbDaoFactory)
