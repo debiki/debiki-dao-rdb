@@ -2324,7 +2324,8 @@ class RdbSiteDao(
       _updatePageMeta(newMeta, anyOld = Some(page.meta))
 
     // Index the posts for full text search as soon as possible.
-    fullTextSearchIndexer.indexNewPostsSoon(page, posts, siteId)
+    if (!daoFactory.fastStartSkipSearch)
+      fullTextSearchIndexer.indexNewPostsSoon(page, posts, siteId)
 
     (PageNoPath(newParts, page.ancestorIdsParentFirst, newMeta), actionsWithIds)
   }

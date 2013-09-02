@@ -27,10 +27,20 @@ class RdbDaoFactory(
   val db: Rdb,
   val actorSystem: ActorSystem,
   val fullTextSearchDbDataPath: Option[String],
-  val isTest: Boolean = false) extends DbDaoFactory {
+  val isTest: Boolean = false,
+  val fastStartSkipSearch: Boolean = false) extends DbDaoFactory {
 
 
-  val fullTextSearchIndexer = new FullTextSearchIndexer(this)
+  def fullTextSearchIndexer =
+    if (fastStartSkipSearch)
+      sys.error("Search disabled, please check your Java -D...=... startup flags")
+    else
+      _fullTextSearchIndexer
+
+  private val _fullTextSearchIndexer =
+    if (fastStartSkipSearch) null
+    else new FullTextSearchIndexer(this)
+
 
   val systemDbDao = new RdbSystemDao(this)
 
@@ -43,7 +53,7 @@ class RdbDaoFactory(
     * e.g. a full text search indexer.
     */
   def shutdown() {
-    fullTextSearchIndexer.shutdown()
+    if (!fastStartSkipSearch) fullTextSearchIndexer.shutdown()
   }
 
   override def debugWaitUntilSearchEngineStarted() {
