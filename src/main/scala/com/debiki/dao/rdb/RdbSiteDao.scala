@@ -2368,12 +2368,12 @@ class RdbSiteDao(
           insert into DW1_PAGE_ACTIONS(
             LOGIN, GUEST_ID, ROLE_ID,
             TENANT, PAGE_ID, POST_ID, PAID, TIME,
-            TYPE, RELPA, TEXT, MARKUP, WHEERE,
+            TYPE, RELPA, TEXT, LONG_VALUE, MARKUP, WHEERE,
             APPROVAL, AUTO_APPLICATION)
           values (?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
-            ?, ?)"""
+            ?, ?, ?)"""
 
       // There's no login (or identity or user) stored for the system user,
       // so don't try to reference it via DW1_PAGE_ACTIONS.LOGIN_ID.
@@ -2399,7 +2399,7 @@ class RdbSiteDao(
         case r: Rating =>
           db.update(insertIntoActions, commonVals:::List(
             "Rating", NullInt,
-            NullVarchar, NullVarchar, NullVarchar,
+            NullVarchar, NullInt, NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
           db.batchUpdate("""
             insert into DW1_PAGE_RATINGS(TENANT, PAGE_ID, PAID, TAG)
@@ -2407,35 +2407,40 @@ class RdbSiteDao(
             """, r.tags.map(t => List(siteId, pageId, r.id.asAnyRef, t)))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
-            "EditApp", a.editId.asAnyRef, e2n(a.result),
+            "EditApp", a.editId.asAnyRef, e2n(a.result), NullInt,
             NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
             "Flag" + f.reason,
-            NullInt, e2n(f.details), NullVarchar, NullVarchar,
+            NullInt, e2n(f.details), NullInt, NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
         case a: PostActionDto[_] =>
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
-              tyype, a.postId.asAnyRef, NullVarchar, NullVarchar, NullVarchar,
+              tyype, a.postId.asAnyRef, NullVarchar, NullInt, NullVarchar, NullVarchar,
               NullVarchar, NullVarchar))
 
           val PAP = PostActionPayload
           a.payload match {
             case p: PAP.CreatePost =>
               db.update(insertIntoActions, commonVals:::List(
-                "Post", p.parentPostId.asAnyRef, e2n(p.text), e2n(p.markup),
+                "Post", p.parentPostId.asAnyRef, e2n(p.text), NullInt, e2n(p.markup),
                 e2n(p.where), _toDbVal(p.approval), NullVarchar))
             case e: PAP.EditPost =>
               val autoAppliedDbVal = if (e.autoApplied) "A" else NullVarchar
               db.update(insertIntoActions, commonVals:::List(
-                "Edit", NullInt, e2n(e.text), e2n(e.newMarkup), NullVarchar,
+                "Edit", NullInt, e2n(e.text), NullInt, e2n(e.newMarkup), NullVarchar,
                 _toDbVal(e.approval), autoAppliedDbVal))
             case r: PAP.ReviewPost =>
               val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
               db.update(insertIntoActions, commonVals:::List(
-                tyype, NullInt, NullVarchar, NullVarchar, NullVarchar,
+                tyype, NullInt, NullVarchar, NullInt, NullVarchar, NullVarchar,
                 _toDbVal(r.approval), NullVarchar))
+            case p: PAP.PinPostAtPosition =>
+              db.update(insertIntoActions, commonVals:::List(
+                "PinAtPos", NullInt, NullVarchar, p.position.asAnyRef,
+                NullVarchar, NullVarchar, NullVarchar, NullVarchar))
+
             case PAP.CollapsePost => insertSimpleValue("CollapsePost")
             case PAP.CollapseTree => insertSimpleValue("CollapseTree")
             case PAP.CloseTree => insertSimpleValue("CloseTree")
@@ -2497,6 +2502,7 @@ class RdbSiteDao(
         LAST_EDIT_REVERTED_AT = ?,
         LAST_EDITOR_ID = ?,
 
+        PINNED_POSITION = ?,
         POST_COLLAPSED_AT = ?,
         TREE_COLLAPSED_AT = ?,
         TREE_CLOSED_AT = ?,
@@ -2557,6 +2563,7 @@ class RdbSiteDao(
         LAST_EDIT_REVERTED_AT,
         LAST_EDITOR_ID,
 
+        PINNED_POSITION,
         POST_COLLAPSED_AT,
         TREE_COLLAPSED_AT,
         TREE_CLOSED_AT,
@@ -2604,7 +2611,7 @@ class RdbSiteDao(
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?)"""
+         ?, ?, ?, ?, ?)"""
 
     val collapsed: AnyRef =
       if (post.isTreeCollapsed) "CollapseTree"
@@ -2633,6 +2640,7 @@ class RdbSiteDao(
       o2ts(post.lastEditRevertedAt), // LAST_EDIT_REVERTED_AT
       anyLastEditor.map(_.id).orNullVarchar, // LAST_EDITOR_ID
 
+      post.pinnedPosition.orNullInt,
       o2ts(post.postCollapsedAt),
       o2ts(post.treeCollapsedAt),
       o2ts(post.treeClosedAt),
@@ -2862,6 +2870,7 @@ class RdbSiteDao(
       lastEditAppliedAt = ts2o(rs.getTimestamp("LAST_EDIT_APPLIED_AT")),
       lastEditRevertedAt = ts2o(rs.getTimestamp("LAST_EDIT_REVERTED_AT")),
       lastEditorId = Option(rs.getString("LAST_EDITOR_ID")),
+      pinnedPosition = Option(rs.getInt("PINNED_POSITION")),
       postCollapsedAt = ts2o(rs.getTimestamp("POST_COLLAPSED_AT")),
       treeCollapsedAt = ts2o(rs.getTimestamp("TREE_COLLAPSED_AT")),
       treeClosedAt = ts2o(rs.getTimestamp("TREE_CLOSED_AT")),

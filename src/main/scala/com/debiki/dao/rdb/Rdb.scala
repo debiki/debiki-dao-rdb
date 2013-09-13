@@ -42,6 +42,10 @@ object Rdb {
   implicit def pimpOptionWithNullVarchar(opt: Option[String]) =
     new StringOptionPimpedWithNullVarchar(opt)
 
+  implicit class PimpOptionWithNullInt(opt: Option[Int]) {
+    def orNullInt: AnyRef = opt.map(_.asInstanceOf[Integer]).getOrElse(NullInt)
+  }
+
   /** Useful when converting Int:s to AnyRef, which the JDBC driver wants. */
   implicit class AnyAsAnyRef(a: Any) {
     def asAnyRef = a.asInstanceOf[AnyRef]

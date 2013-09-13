@@ -44,7 +44,7 @@ object RdbUtil {
 
   def ActionSelectListItems =
     "a.POST_ID, a.PAID, a.LOGIN, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
-     "a.TEXT, a.MARKUP, a.WHEERE, a.NEW_IP, " +
+     "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.NEW_IP, " +
      "a.APPROVAL, a.AUTO_APPLICATION"
 
   def _Action(rs: js.ResultSet, ratingTags: col.Map[ActionId, List[String]])
@@ -66,6 +66,7 @@ object RdbUtil {
     val text_? = rs.getString("TEXT")
     val markup_? = rs.getString("MARKUP")
     val where_? = rs.getString("WHEERE")
+    val longValue_? = rs.getLong("LONG_VALUE")
     val newIp = Option(rs.getString("NEW_IP"))
     val approval = _toAutoApproval(rs.getString("APPROVAL"))
     val editAutoApplied = rs.getString("AUTO_APPLICATION") == "A"
@@ -111,6 +112,8 @@ object RdbUtil {
         buildAction(PAP.ReviewPost(approval))
       case "Undo" => unimplemented
       case "CloseTree" => buildAction(PostActionPayload.CloseTree)
+      case "PinAtPos" =>
+        buildAction(PAP.PinPostAtPosition(longValue_?.toInt))
       case x =>
         val anyHidingAction = parseCollapsingAction(x)
         anyHidingAction match {
