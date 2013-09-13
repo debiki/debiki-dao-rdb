@@ -59,7 +59,8 @@ object RdbDaoTest extends tck.dao.TestContextBuilder {
     ds.setPassword(config.getString("db.test.password"))
 
     val db = new Rdb(ds)
-    val daoFactory = new RdbDaoFactory(db, ActorSystem("TestActorSystem"), isTest = true)
+    val daoFactory = new RdbDaoFactory(db, ActorSystem("TestActorSystem"),
+      fullTextSearchDbDataPath = Some("target/elasticsearch-data"), isTest = true)
 
     // Prepare schema and search index.
     daoFactory.fullTextSearchIndexer.debugDeleteIndexAndMappings()
