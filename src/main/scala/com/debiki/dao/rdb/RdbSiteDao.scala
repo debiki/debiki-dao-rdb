@@ -1584,7 +1584,7 @@ class RdbSiteDao(
   }
 
 
-  def loadPermsOnPage(reqInfo: RequestInfo): PermsOnPage = {
+  def loadPermsOnPage(reqInfo: PermsOnPageQuery): PermsOnPage = {
     // Currently all permissions are actually hardcoded in this function.
     // (There's no permissions db table.)
 
