@@ -1626,6 +1626,12 @@ class RdbSiteDao(
       else false
     }
 
+    val isPageAuthor =
+      (for (user <- reqInfo.user; pageMeta <- reqInfo.pageMeta) yield {
+        user.id == pageMeta.cachedAuthorUserId
+      }) getOrElse false
+
+
     val isWiki = reqInfo.pagePath.folder == "/wiki/"
 
     PermsOnPage.Wiki.copy(
@@ -1637,9 +1643,8 @@ class RdbSiteDao(
       //    past actions, and only sometimes automatically approve edits.
       // (In the future, the reputation system (not implemented) will make
       // them lose this ability should they misuse it.)
-      editAnyReply =
-            isWiki // || reqInfo.user.map(_.isAuthenticated) == Some(true)
-    )
+      editAnyReply = isWiki, // || reqInfo.user.map(_.isAuthenticated) == Some(true)
+      pinReplies = isWiki || isPageAuthor)
   }
 
 
