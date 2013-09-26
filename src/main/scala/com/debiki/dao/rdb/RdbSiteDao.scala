@@ -1229,9 +1229,8 @@ class RdbSiteDao(
         -- Load actions that affected [an action by login id]
         -- (e.g. edits, flags, approvals).
           or (
-          a.TYPE <> 'Post' and -- skip replies
           a.TYPE <> 'Rating' and -- skip ratings
-          a.RELPA = actionIds.PAID)"""
+          a.POST_ID = actionIds.POST_ID)"""
 
       (sql, loginIdsWhereValues, whereClause)
     }
