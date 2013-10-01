@@ -1633,7 +1633,9 @@ class RdbSiteDao(
 
     val isWiki = reqInfo.pagePath.folder == "/wiki/"
 
-    PermsOnPage.Wiki.copy(
+    PermsOnPage.None.copy(
+      accessPage = true,
+      editUnauReply = true,
       createPage = mayCreatePage,
       editPage = isWiki,
       // Authenticated users can edit others' comments.
