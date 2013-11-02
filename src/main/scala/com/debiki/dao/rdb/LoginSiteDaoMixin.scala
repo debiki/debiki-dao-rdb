@@ -39,68 +39,22 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
 
   override def saveLogin(loginReq: LoginRequest): LoginGrant = {
-
-    // Assigns an id to `loginNoId', saves it and returns it (with id).
-    def _saveLogin(loginNoId: Login, identityWithId: Identity)
-                  (implicit connection: js.Connection): Login = {
-      // Create a new _LOGINS row, pointing to identityWithId.
-      val loginSno = db.nextSeqNo("DW1_LOGINS_SNO")
-      val login = loginNoId.copy(id = loginSno.toString,
-        identityId = identityWithId.id)
-      val identityType = identityWithId match {
-        case _: IdentitySimple => "Simple"
-        case _: IdentityOpenId => "OpenID"
-        case _: IdentityEmailId => "EmailID"
-        case _ => assErr("DwE3k2r21K5")
-      }
-      db.update("""
-          insert into DW1_LOGINS(
-              SNO, TENANT, PREV_LOGIN, ID_TYPE, ID_SNO,
-              LOGIN_IP, LOGIN_TIME)
-          values (?, ?, ?,
-              '"""+
-        // Don't bind identityType, that'd only make it harder for
-        // the optimizer.
-        identityType +"', ?, ?, ?)",
-        List(loginSno.asInstanceOf[AnyRef], siteId,
-          e2n(login.prevLoginId),  // UNTESTED unless empty
-          login.identityId, login.ip, login.date))
-      login
+    val loginGrant = loginReq.identity match {
+      case guestIdentity: IdentitySimple => loginGuest(loginReq.login, guestIdentity)
+      case emailIdentity: IdentityEmailId => loginWithEmailId(loginReq.login, emailIdentity.id)
+      case _ => loginOpenId(loginReq)
     }
+    loginGrant
+  }
 
-    def _loginWithEmailId(emailId: String): LoginGrant = {
-      val (email: Email, notf: NotfOfPageAction) = (
-        loadEmailById(emailId = emailId),
-        loadNotfByEmailId(emailId = emailId)
-        ) match {
-        case (Some(email), Some(notf)) => (email, notf)
-        case (None, _) =>
-          throw EmailNotFoundException(emailId)
-        case (_, None) =>
-          runErr("DwE87XIE3", "Notification missing for email id: "+ emailId)
-      }
-      val user = _loadUser(notf.recipientUserId) match {
-        case Some(user) => user
-        case None =>
-          runErr("DwE2XKw5", "User `"+ notf.recipientUserId +"' not found"+
-            " when logging in with email id `"+ emailId +"'.")
-      }
-      val idtyWithId = IdentityEmailId(id = emailId, userId = user.id,
-        emailSent = Some(email), notf = Some(notf))
-      val loginWithId = db.transaction { implicit connection =>
-        _saveLogin(loginReq.login, idtyWithId)
-      }
-      LoginGrant(loginWithId, idtyWithId, user, isNewIdentity = false,
-        isNewRole = false)
-    }
 
-    def _loginUnauIdty(idtySmpl: IdentitySimple): LoginGrant = {
-      db.transaction { implicit connection =>
-        var idtyId = ""
-        var emailNotfsStr = ""
-        var createdNewIdty = false
-        for (i <- 1 to 2 if idtyId.isEmpty) {
-          db.query("""
+  private def loginGuest(loginNoId: Login, idtySmpl: IdentitySimple): LoginGrant = {
+    db.transaction { implicit connection =>
+      var idtyId = ""
+      var emailNotfsStr = ""
+      var createdNewIdty = false
+      for (i <- 1 to 2 if idtyId.isEmpty) {
+        db.query("""
             select g.ID, e.EMAIL_NOTFS from DW1_GUESTS g
               left join DW1_IDS_SIMPLE_EMAIL e
               on g.EMAIL_ADDR = e.EMAIL and e.VERSION = 'C'
@@ -109,60 +63,76 @@ trait LoginSiteDaoMixin extends SiteDbDao {
               and g.EMAIL_ADDR = ?
               and g.LOCATION = ?
               and g.URL = ?
-                   """,
-            List(siteId, e2d(idtySmpl.name), e2d(idtySmpl.email),
-              e2d(idtySmpl.location), e2d(idtySmpl.website)),
-            rs => {
-              if (rs.next) {
-                idtyId = rs.getString("ID")
-                emailNotfsStr = rs.getString("EMAIL_NOTFS")
-              }
-            })
-          if (idtyId isEmpty) {
-            // Create simple user info.
-            // There is a unique constraint on SITE_ID, NAME, EMAIL, LOCATION, URL,
-            // so this insert might fail (if another thread does
-            // the insert, just before). Should it fail, the above `select'
-            // is run again and finds the row inserted by the other thread.
-            // Could avoid logging any error though!
-            createdNewIdty = true
-            db.update("""
+                 """,
+          List(siteId, e2d(idtySmpl.name), e2d(idtySmpl.email),
+            e2d(idtySmpl.location), e2d(idtySmpl.website)),
+          rs => {
+            if (rs.next) {
+              idtyId = rs.getString("ID")
+              emailNotfsStr = rs.getString("EMAIL_NOTFS")
+            }
+          })
+        if (idtyId isEmpty) {
+          // Create simple user info.
+          // There is a unique constraint on SITE_ID, NAME, EMAIL, LOCATION, URL,
+          // so this insert might fail (if another thread does
+          // the insert, just before). Should it fail, the above `select'
+          // is run again and finds the row inserted by the other thread.
+          // Could avoid logging any error though!
+          createdNewIdty = true
+          db.update("""
               insert into DW1_GUESTS(
                   SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
               values (?, nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
-              List(siteId, idtySmpl.name, e2d(idtySmpl.email),
-                e2d(idtySmpl.location), e2d(idtySmpl.website)))
-            // (Could fix: `returning ID into ?`, saves 1 roundtrip.)
-            // Loop one more lap to read ID.
-          }
+            List(siteId, idtySmpl.name, e2d(idtySmpl.email),
+              e2d(idtySmpl.location), e2d(idtySmpl.website)))
+          // (Could fix: `returning ID into ?`, saves 1 roundtrip.)
+          // Loop one more lap to read ID.
         }
-        assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
-        val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
-        // Derive a temporary user from the identity, see
-        // Debiki for Developers #9xdF21.
-        val user = _dummyUserFor(identity = idtySmpl,
-          emailNotfPrefs = notfPrefs, id = _dummyUserIdFor(idtyId))
-        val identityWithId = idtySmpl.copy(id = idtyId, userId = user.id)
-        // Quota already consumed (in the `for` loop above).
-        val loginWithId = _saveLogin(loginReq.login, identityWithId)
-        LoginGrant(loginWithId, identityWithId, user,
-          isNewIdentity = createdNewIdty, isNewRole = false)
       }
+      assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
+      val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
+      // Derive a temporary user from the identity, see
+      // Debiki for Developers #9xdF21.
+      val user = _dummyUserFor(identity = idtySmpl,
+        emailNotfPrefs = notfPrefs, id = _dummyUserIdFor(idtyId))
+      val identityWithId = idtySmpl.copy(id = idtyId, userId = user.id)
+      // Quota already consumed (in the `for` loop above).
+      val loginWithId = doSaveLogin(loginNoId, identityWithId)
+      LoginGrant(loginWithId, identityWithId, user,
+        isNewIdentity = createdNewIdty, isNewRole = false)
     }
+  }
 
-    // Handle guest/unauthenticated login and email login.
-    loginReq.identity match {
-      case idtySmpl: IdentitySimple =>
-        val loginGrant = _loginUnauIdty(idtySmpl)
-        return loginGrant
 
-      case idty: IdentityEmailId =>
-        val loginGrant = _loginWithEmailId(idty.id)
-        return loginGrant
-
-      case _ => ()
+  private def loginWithEmailId(loginNoId: Login, emailId: String): LoginGrant = {
+    val (email: Email, notf: NotfOfPageAction) = (
+      loadEmailById(emailId = emailId),
+      loadNotfByEmailId(emailId = emailId)
+      ) match {
+      case (Some(email), Some(notf)) => (email, notf)
+      case (None, _) =>
+        throw EmailNotFoundException(emailId)
+      case (_, None) =>
+        runErr("DwE87XIE3", "Notification missing for email id: "+ emailId)
     }
+    val user = _loadUser(notf.recipientUserId) match {
+      case Some(user) => user
+      case None =>
+        runErr("DwE2XKw5", "User `"+ notf.recipientUserId +"' not found"+
+          " when logging in with email id `"+ emailId +"'.")
+    }
+    val idtyWithId = IdentityEmailId(id = emailId, userId = user.id,
+      emailSent = Some(email), notf = Some(notf))
+    val loginWithId = db.transaction { implicit connection =>
+      doSaveLogin(loginNoId, idtyWithId)
+    }
+    LoginGrant(loginWithId, idtyWithId, user, isNewIdentity = false,
+      isNewRole = false)
+  }
 
+
+  private def loginOpenId(loginReq: LoginRequest): LoginGrant = {
     db.transaction { implicit connection =>
 
     // Load any matching Identity and the related User.
@@ -214,11 +184,41 @@ trait LoginSiteDaoMixin extends SiteDbDao {
           "DwE8IR31", s"Mismatch: (${classNameOf(x)}, ${classNameOf(y)})")
       }
 
-      val login = _saveLogin(loginReq.login, identity)
+      val login = doSaveLogin(loginReq.login, identity)
 
       LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
         isNewRole = userInDb.isEmpty)
     }
+  }
+
+
+  /** Assigns an id to `loginNoId', saves it and returns it (with id).
+    */
+  private def doSaveLogin(loginNoId: Login, identityWithId: Identity)
+                 (implicit connection: js.Connection): Login = {
+    // Create a new _LOGINS row, pointing to identityWithId.
+    val loginSno = db.nextSeqNo("DW1_LOGINS_SNO")
+    val login = loginNoId.copy(id = loginSno.toString,
+      identityId = identityWithId.id)
+    val identityType = identityWithId match {
+      case _: IdentitySimple => "Simple"
+      case _: IdentityOpenId => "OpenID"
+      case _: IdentityEmailId => "EmailID"
+      case _ => assErr("DwE3k2r21K5")
+    }
+    db.update("""
+          insert into DW1_LOGINS(
+              SNO, TENANT, PREV_LOGIN, ID_TYPE, ID_SNO,
+              LOGIN_IP, LOGIN_TIME)
+          values (?, ?, ?,
+              '"""+
+      // Don't bind identityType, that'd only make it harder for
+      // the optimizer.
+      identityType +"', ?, ?, ?)",
+      List(loginSno.asInstanceOf[AnyRef], siteId,
+        e2n(login.prevLoginId),  // UNTESTED unless empty
+        login.identityId, login.ip, login.date))
+    login
   }
 
 }
