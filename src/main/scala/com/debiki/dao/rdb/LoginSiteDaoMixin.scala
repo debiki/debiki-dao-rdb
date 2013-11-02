@@ -38,17 +38,27 @@ trait LoginSiteDaoMixin extends SiteDbDao {
   self: RdbSiteDao =>
 
 
-  override def saveLogin(loginReq: LoginRequest): LoginGrant = {
-    val loginGrant = loginReq.identity match {
-      case guestIdentity: IdentitySimple => loginGuest(loginReq.login, guestIdentity)
-      case emailIdentity: IdentityEmailId => loginWithEmailId(loginReq.login, emailIdentity.id)
-      case _ => loginOpenId(loginReq)
+  override def saveLogin(loginNoId: Login, identity: Identity): LoginGrant = {
+    require(loginNoId.id startsWith "?")
+    require(loginNoId.identityId == identity.id)
+    // Only when you login via email, the identity id is already known
+    // (and is the email id).
+    if (identity.isInstanceOf[IdentityEmailId]) require(!identity.id.startsWith("?"))
+    else require(identity.id startsWith "?")
+    // The user id is not known before you have logged in.
+    require(identity.userId startsWith "?")
+
+    val loginGrant = identity match {
+      case guestIdentity: IdentitySimple => loginAsGuest(loginNoId, guestIdentity)
+      case emailIdentity: IdentityEmailId => loginWithEmailId(loginNoId, emailIdentity)
+      case openidIdentity: IdentityOpenId => loginOpenId(loginNoId, openidIdentity)
     }
     loginGrant
   }
 
 
-  private def loginGuest(loginNoId: Login, idtySmpl: IdentitySimple): LoginGrant = {
+  private def loginAsGuest(loginNoId: Login, guestIdentity: IdentitySimple): LoginGrant = {
+    val idtySmpl = guestIdentity
     db.transaction { implicit connection =>
       var idtyId = ""
       var emailNotfsStr = ""
@@ -105,7 +115,8 @@ trait LoginSiteDaoMixin extends SiteDbDao {
   }
 
 
-  private def loginWithEmailId(loginNoId: Login, emailId: String): LoginGrant = {
+  private def loginWithEmailId(loginNoId: Login, emailIdentity: IdentityEmailId): LoginGrant = {
+    val emailId = emailIdentity.id
     val (email: Email, notf: NotfOfPageAction) = (
       loadEmailById(emailId = emailId),
       loadNotfByEmailId(emailId = emailId)
@@ -132,12 +143,12 @@ trait LoginSiteDaoMixin extends SiteDbDao {
   }
 
 
-  private def loginOpenId(loginReq: LoginRequest): LoginGrant = {
+  private def loginOpenId(loginNoId: Login, identityNoId: IdentityOpenId): LoginGrant = {
     db.transaction { implicit connection =>
 
     // Load any matching Identity and the related User.
       val (identityInDb: Option[Identity], userInDb: Option[User]) =
-        _loadIdtyDetailsAndUser(forIdentity = loginReq.identity)
+        _loadIdtyDetailsAndUser(forIdentity = identityNoId)
 
       // Create user if absent.
       val user = userInDb match {
@@ -146,7 +157,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
           // Copy identity name/email/etc fields to the new role.
           // Data in DW1_USERS has precedence over data in the DW1_IDS_*
           // tables, see Debiki for Developers #3bkqz5.
-          val idty = loginReq.identity
+          val idty = identityNoId
           val userNoId =  User(id = "?", displayName = idty.displayName,
             email = idty.email, emailNotfPrefs = EmailNotfPrefs.Unspecified,
             country = "", website = "", isAdmin = false, isOwner = false)
@@ -167,7 +178,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       // no point in allowing exactly simultaneous logins by one
       // single human.)
 
-      val identity = (identityInDb, loginReq.identity) match {
+      val identity = (identityInDb, identityNoId) match {
         case (None, newNoId: IdentityOpenId) =>
           _insertIdentity(siteId, newNoId.copy(userId = user.id))
         case (Some(old: IdentityOpenId), newNoId: IdentityOpenId) =>
@@ -184,7 +195,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
           "DwE8IR31", s"Mismatch: (${classNameOf(x)}, ${classNameOf(y)})")
       }
 
-      val login = doSaveLogin(loginReq.login, identity)
+      val login = doSaveLogin(loginNoId, identity)
 
       LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
         isNewRole = userInDb.isEmpty)
