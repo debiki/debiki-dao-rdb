@@ -357,6 +357,7 @@ class RdbSiteDao(
     idtyNoId match {
       case oidIdtyNoId: IdentityOpenId =>
         val idty = oidIdtyNoId.copy(id = newIdentityId)
+        val details = oidIdtyNoId.openIdDetails
         db.update("""
             insert into DW1_IDS_OPENID(
                 SNO, TENANT, USR, USR_ORIG, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
@@ -365,9 +366,9 @@ class RdbSiteDao(
             values (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             List[AnyRef](idty.id, tenantId, idty.userId, idty.userId,
-              idty.oidClaimedId, e2d(idty.oidOpLocalId), e2d(idty.oidRealm),
-              e2d(idty.oidEndpoint), e2d(idty.oidVersion),
-              e2d(idty.firstName), e2d(idty.email), e2d(idty.country)))
+              details.oidClaimedId, e2d(details.oidOpLocalId), e2d(details.oidRealm),
+              e2d(details.oidEndpoint), e2d(details.oidVersion),
+              e2d(details.firstName), e2d(details.email), e2d(details.country)))
         idty
       case _ =>
         assErr("DwE03IJL2")
@@ -377,6 +378,7 @@ class RdbSiteDao(
 
   private[rdb] def _updateIdentity(identity: IdentityOpenId)
         (implicit connection: js.Connection) {
+    val details = identity.openIdDetails
     db.update("""
       update DW1_IDS_OPENID set
           USR = ?, OID_CLAIMED_ID = ?,
@@ -385,10 +387,10 @@ class RdbSiteDao(
           FIRST_NAME = ?, EMAIL = ?, COUNTRY = ?
       where SNO = ? and TENANT = ?
       """,
-      List[AnyRef](identity.userId, identity.oidClaimedId,
-        e2d(identity.oidOpLocalId), e2d(identity.oidRealm),
-        e2d(identity.oidEndpoint), e2d(identity.oidVersion),
-        e2d(identity.firstName), e2d(identity.email), e2d(identity.country),
+      List[AnyRef](identity.userId, details.oidClaimedId,
+        e2d(details.oidOpLocalId), e2d(details.oidRealm),
+        e2d(details.oidEndpoint), e2d(details.oidVersion),
+        e2d(details.firstName), e2d(details.email), e2d(details.country),
         identity.id, siteId))
   }
 
@@ -452,13 +454,9 @@ class RdbSiteDao(
         val prevLogin = Option(rs.getString("PREV_LOGIN"))
         val ip = rs.getString("LOGIN_IP")
         val date = ts2d(rs.getTimestamp("LOGIN_TIME"))
-        // ID_TYPE need not be remembered, since each ID_SNO value
-        // is unique over all DW1_LOGIN_OPENID/SIMPLE/... tables.
-        // (So you'd find the appropriate IdentitySimple/OpenId by doing
-        // People.identities.find(_.id = x).)
-        val idId = rs.getString("ID_SNO")
+        val identityRef = makeIdentityRef(rs.getString("ID_TYPE"), id = rs.getString("ID_SNO"))
         logins ::= Login(id = loginId, prevLoginId = prevLogin, ip = ip,
-          date = date, identityId = idId)
+          date = date, identityRef = identityRef)
       }
     })
 
@@ -467,10 +465,9 @@ class RdbSiteDao(
 
 
   def loadIdtyDetailsAndUser(forLoginId: String = null,
-        forIdentity: Identity = null): Option[(Identity, User)] = {
+        forOpenIdDetails: OpenIdDetails = null): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
-      _loadIdtyDetailsAndUser(forLoginId = forLoginId,
-          forIdentity = forIdentity) match {
+      _loadIdtyDetailsAndUser(forLoginId = forLoginId, forOpenIdDetails = forOpenIdDetails) match {
         case (None, None) => None
         case (Some(idty), Some(user)) => Some(idty, user)
         case (None, user) => assErr("DwE257IV2")
@@ -485,13 +482,12 @@ class RdbSiteDao(
    */
   // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
   private[rdb] def _loadIdtyDetailsAndUser(forLoginId: String = null,
-        forIdentity: Identity = null)(implicit connection: js.Connection)
+        forOpenIdDetails: OpenIdDetails = null)(implicit connection: js.Connection)
         : (Option[Identity], Option[User]) = {
 
-    assert((forIdentity eq null) ^ (forLoginId eq null))
-    assert((forIdentity eq null) || forIdentity.isInstanceOf[IdentityOpenId])
+    assert((forOpenIdDetails eq null) ^ (forLoginId eq null))
 
-    val identityOpt = Option(forIdentity)
+    val anyOpenIdDetails = Option(forOpenIdDetails)
     val loginOpt: Option[Login] =
       if (forLoginId eq null) None
       else Some(_loadLoginById(forLoginId) getOrElse {
@@ -515,12 +511,12 @@ class RdbSiteDao(
             and i.USR = u.SNO
           """
 
-    val (whereClause, bindVals) = (identityOpt, loginOpt) match {
+    val (whereClause, bindVals) = (anyOpenIdDetails, loginOpt) match {
       case (None, Some(login: Login)) =>
         ("""where i.TENANT = ? and i.SNO = ?""",
-           List(siteId, login.identityId))
+           List(siteId, login.identityRef.identityId))
 
-      case (Some(oid: IdentityOpenId), None) =>
+      case (Some(openIdDetails: OpenIdDetails), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
         // address instead. (With Google OpenID, the email address can be
         // trusted — this is not the case, however, in general.
@@ -535,11 +531,11 @@ class RdbSiteDao(
           // the correct endpoint? What if Mallory's provider replies
           // with Googles endpoint? I guess the Relying Party impl doesn't
           // allow this but anyway, I'd like to know for sure.
-          if (oid.isGoogleLogin)
+          if (openIdDetails.isGoogleLogin)
             ("i.OID_ENDPOINT = '"+ IdentityOpenId.GoogleEndpoint +
-               "' and i.EMAIL = ?", oid.email)
+               "' and i.EMAIL = ?", openIdDetails.email)
           else
-            ("i.OID_CLAIMED_ID = ?", oid.oidClaimedId)
+            ("i.OID_CLAIMED_ID = ?", openIdDetails.oidClaimedId)
         }
         ("""where i.TENANT = ?
             and """+ claimedIdOrEmailCheck +"""
@@ -562,17 +558,18 @@ class RdbSiteDao(
             id = rs.getLong("i_id").toString,
             userId = userInDb.id,
             // COULD use d2e here, or n2e if I store Null instead of '-'.
-            oidEndpoint = rs.getString("OID_ENDPOINT"),
-            oidVersion = rs.getString("OID_VERSION"),
-            oidRealm = rs.getString("OID_REALM"),
-            oidClaimedId = rs.getString("OID_CLAIMED_ID"),
-            oidOpLocalId = rs.getString("OID_OP_LOCAL_ID"),
-            firstName = rs.getString("i_first_name"),
-            email = rs.getString("i_email"),
-            country = rs.getString("i_country"))
+            OpenIdDetails(
+              oidEndpoint = rs.getString("OID_ENDPOINT"),
+              oidVersion = rs.getString("OID_VERSION"),
+              oidRealm = rs.getString("OID_REALM"),
+              oidClaimedId = rs.getString("OID_CLAIMED_ID"),
+              oidOpLocalId = rs.getString("OID_OP_LOCAL_ID"),
+              firstName = rs.getString("i_first_name"),
+              email = rs.getString("i_email"),
+              country = rs.getString("i_country")))
 
       assErrIf(rs.next, "DwE53IK24", "More that one matching OpenID "+
-         "identity, when looking up identity: "+ identityOpt +
+         "identity, when looking up openId: "+ anyOpenIdDetails +
          ", login: "+ loginOpt)
 
       Some(identityInDb) -> Some(userInDb)
@@ -738,14 +735,15 @@ class RdbSiteDao(
                 userId = userId,
                 // These uninteresting OpenID fields were never loaded.
                 // COULD place them in an Option[OpenIdInfo]?
-                oidEndpoint = "?",
-                oidVersion = "?",
-                oidRealm = "?",
-                oidClaimedId = "?",
-                oidOpLocalId = "?",
-                firstName = n2e(rs.getString("I_NAME")),
-                email = n2e(rs.getString("I_EMAIL")),
-                country = n2e(rs.getString("I_WHERE")))
+                OpenIdDetails(
+                  oidEndpoint = "?",
+                  oidVersion = "?",
+                  oidRealm = "?",
+                  oidClaimedId = "?",
+                  oidOpLocalId = "?",
+                  firstName = n2e(rs.getString("I_NAME")),
+                  email = n2e(rs.getString("I_EMAIL")),
+                  country = n2e(rs.getString("I_WHERE"))))
         })
 
         if (user isEmpty)

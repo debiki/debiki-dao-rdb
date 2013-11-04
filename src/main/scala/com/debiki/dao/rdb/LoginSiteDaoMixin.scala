@@ -38,27 +38,17 @@ trait LoginSiteDaoMixin extends SiteDbDao {
   self: RdbSiteDao =>
 
 
-  override def saveLogin(loginNoId: Login, identity: Identity): LoginGrant = {
-    require(loginNoId.id startsWith "?")
-    require(loginNoId.identityId == identity.id)
-    // Only when you login via email, the identity id is already known
-    // (and is the email id).
-    if (identity.isInstanceOf[IdentityEmailId]) require(!identity.id.startsWith("?"))
-    else require(identity.id startsWith "?")
-    // The user id is not known before you have logged in.
-    require(identity.userId startsWith "?")
-
-    val loginGrant = identity match {
-      case guestIdentity: IdentitySimple => loginAsGuest(loginNoId, guestIdentity)
-      case emailIdentity: IdentityEmailId => loginWithEmailId(loginNoId, emailIdentity)
-      case openidIdentity: IdentityOpenId => loginOpenId(loginNoId, openidIdentity)
+  override def saveLogin(loginAttempt: LoginAttempt): LoginGrant = {
+    val loginGrant = loginAttempt match {
+      case x: GuestLoginAttempt => loginAsGuest(x)
+      case x: EmailLoginAttempt => loginWithEmailId(x)
+      case x: OpenIdLoginAttempt => loginOpenId(x)
     }
     loginGrant
   }
 
 
-  private def loginAsGuest(loginNoId: Login, guestIdentity: IdentitySimple): LoginGrant = {
-    val idtySmpl = guestIdentity
+  private def loginAsGuest(loginAttempt: GuestLoginAttempt): LoginGrant = {
     db.transaction { implicit connection =>
       var idtyId = ""
       var emailNotfsStr = ""
@@ -74,8 +64,8 @@ trait LoginSiteDaoMixin extends SiteDbDao {
               and g.LOCATION = ?
               and g.URL = ?
                  """,
-          List(siteId, e2d(idtySmpl.name), e2d(idtySmpl.email),
-            e2d(idtySmpl.location), e2d(idtySmpl.website)),
+          List(siteId, e2d(loginAttempt.name), e2d(loginAttempt.email),
+            e2d(loginAttempt.location), e2d(loginAttempt.website)),
           rs => {
             if (rs.next) {
               idtyId = rs.getString("ID")
@@ -94,29 +84,44 @@ trait LoginSiteDaoMixin extends SiteDbDao {
               insert into DW1_GUESTS(
                   SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
               values (?, nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
-            List(siteId, idtySmpl.name, e2d(idtySmpl.email),
-              e2d(idtySmpl.location), e2d(idtySmpl.website)))
+            List(siteId, loginAttempt.name, e2d(loginAttempt.email),
+              e2d(loginAttempt.location), e2d(loginAttempt.website)))
           // (Could fix: `returning ID into ?`, saves 1 roundtrip.)
           // Loop one more lap to read ID.
         }
       }
       assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
       val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
+
       // Derive a temporary user from the identity, see
       // Debiki for Developers #9xdF21.
-      val user = _dummyUserFor(identity = idtySmpl,
-        emailNotfPrefs = notfPrefs, id = _dummyUserIdFor(idtyId))
-      val identityWithId = idtySmpl.copy(id = idtyId, userId = user.id)
+      val user = User(id = _dummyUserIdFor(idtyId),
+        displayName = loginAttempt.name,
+        email = loginAttempt.email,
+        emailNotfPrefs = notfPrefs,
+        country = "",
+        website = loginAttempt.website,
+        isAdmin = false,
+        isOwner = false)
+
+      val identityWithId = IdentitySimple(
+        id = idtyId,
+        userId = user.id,
+        name = loginAttempt.name,
+        email = loginAttempt.email,
+        location = loginAttempt.location,
+        website = loginAttempt.website)
+
       // Quota already consumed (in the `for` loop above).
-      val loginWithId = doSaveLogin(loginNoId, identityWithId)
+      val loginWithId = doSaveLogin(loginAttempt, identityWithId)
       LoginGrant(loginWithId, identityWithId, user,
         isNewIdentity = createdNewIdty, isNewRole = false)
     }
   }
 
 
-  private def loginWithEmailId(loginNoId: Login, emailIdentity: IdentityEmailId): LoginGrant = {
-    val emailId = emailIdentity.id
+  private def loginWithEmailId(loginAttempt: EmailLoginAttempt): LoginGrant = {
+    val emailId = loginAttempt.emailId
     val (email: Email, notf: NotfOfPageAction) = (
       loadEmailById(emailId = emailId),
       loadNotfByEmailId(emailId = emailId)
@@ -136,31 +141,35 @@ trait LoginSiteDaoMixin extends SiteDbDao {
     val idtyWithId = IdentityEmailId(id = emailId, userId = user.id,
       emailSent = Some(email), notf = Some(notf))
     val loginWithId = db.transaction { implicit connection =>
-      doSaveLogin(loginNoId, idtyWithId)
+      doSaveLogin(loginAttempt, idtyWithId)
     }
     LoginGrant(loginWithId, idtyWithId, user, isNewIdentity = false,
       isNewRole = false)
   }
 
 
-  private def loginOpenId(loginNoId: Login, identityNoId: IdentityOpenId): LoginGrant = {
+  private def loginOpenId(loginAttempt: OpenIdLoginAttempt): LoginGrant = {
     db.transaction { implicit connection =>
 
     // Load any matching Identity and the related User.
       val (identityInDb: Option[Identity], userInDb: Option[User]) =
-        _loadIdtyDetailsAndUser(forIdentity = identityNoId)
+        _loadIdtyDetailsAndUser(forOpenIdDetails = loginAttempt.openIdDetails)
 
       // Create user if absent.
       val user = userInDb match {
         case Some(u) => u
         case None =>
-          // Copy identity name/email/etc fields to the new role.
-          // Data in DW1_USERS has precedence over data in the DW1_IDS_*
-          // tables, see Debiki for Developers #3bkqz5.
-          val idty = identityNoId
-          val userNoId =  User(id = "?", displayName = idty.displayName,
-            email = idty.email, emailNotfPrefs = EmailNotfPrefs.Unspecified,
-            country = "", website = "", isAdmin = false, isOwner = false)
+          val details = loginAttempt.openIdDetails
+          val userNoId =  User(
+            id = "?",
+            displayName = details.firstName,
+            email = details.email,
+            emailNotfPrefs = EmailNotfPrefs.Unspecified,
+            country = details.country,
+            website = "",
+            isAdmin = false,
+            isOwner = false)
+
           val userWithId = _insertUser(siteId, userNoId)
           userWithId
       }
@@ -178,24 +187,24 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       // no point in allowing exactly simultaneous logins by one
       // single human.)
 
-      val identity = (identityInDb, identityNoId) match {
-        case (None, newNoId: IdentityOpenId) =>
-          _insertIdentity(siteId, newNoId.copy(userId = user.id))
-        case (Some(old: IdentityOpenId), newNoId: IdentityOpenId) =>
-          val nev = newNoId.copy(id = old.id, userId = user.id)
+      val identity = identityInDb match {
+        case None =>
+          val identityNoId = IdentityOpenId(id = "?", userId = user.id, loginAttempt.openIdDetails)
+          _insertIdentity(siteId, identityNoId)(connection)
+        case Some(old: IdentityOpenId) =>
+          val nev = IdentityOpenId(id = old.id, userId = user.id, loginAttempt.openIdDetails)
           if (nev != old) {
-            if (nev.isGoogleLogin)
-              assErrIf(nev.email != old.email || !old.isGoogleLogin, "DwE3Bz6")
+            if (nev.openIdDetails.isGoogleLogin)
+              assErrIf(nev.openIdDetails.email != old.openIdDetails.email ||
+                !old.openIdDetails.isGoogleLogin, "DwE3Bz6")
             else
-              assErrIf(nev.oidClaimedId != old.oidClaimedId, "DwE73YQ2")
+              assErrIf(nev.openIdDetails.oidClaimedId != old.openIdDetails.oidClaimedId, "DwE73YQ2")
             _updateIdentity(nev)
           }
           nev
-        case (x, y) => assErr(
-          "DwE8IR31", s"Mismatch: (${classNameOf(x)}, ${classNameOf(y)})")
       }
 
-      val login = doSaveLogin(loginNoId, identity)
+      val login = doSaveLogin(loginAttempt, identity)
 
       LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
         isNewRole = userInDb.isEmpty)
@@ -205,18 +214,14 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
   /** Assigns an id to `loginNoId', saves it and returns it (with id).
     */
-  private def doSaveLogin(loginNoId: Login, identityWithId: Identity)
+  private def doSaveLogin(loginAttempt: LoginAttempt, identityWithId: Identity)
                  (implicit connection: js.Connection): Login = {
     // Create a new _LOGINS row, pointing to identityWithId.
     val loginSno = db.nextSeqNo("DW1_LOGINS_SNO")
-    val login = loginNoId.copy(id = loginSno.toString,
-      identityId = identityWithId.id)
-    val identityType = identityWithId match {
-      case _: IdentitySimple => "Simple"
-      case _: IdentityOpenId => "OpenID"
-      case _: IdentityEmailId => "EmailID"
-      case _ => assErr("DwE3k2r21K5")
-    }
+    val login = Login.fromLoginAttempt(loginAttempt, loginId = loginSno.toString,
+      identityRef = identityWithId.reference)
+
+    val identityType = identityRefTypeToString(loginAttempt)
     db.update("""
           insert into DW1_LOGINS(
               SNO, TENANT, PREV_LOGIN, ID_TYPE, ID_SNO,
@@ -228,8 +233,24 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       identityType +"', ?, ?, ?)",
       List(loginSno.asInstanceOf[AnyRef], siteId,
         e2n(login.prevLoginId),  // UNTESTED unless empty
-        login.identityId, login.ip, login.date))
+        login.identityRef.identityId, login.ip, login.date))
     login
+  }
+
+
+  private def identityRefTypeToString(loginAttempt: LoginAttempt) = loginAttempt match {
+    case _: GuestLoginAttempt => "Simple"
+    case _: OpenIdLoginAttempt => "OpenID"
+    case _: EmailLoginAttempt => "EmailID"
+    case _ => assErr("DwE3k2r21K5")
+  }
+
+
+  def makeIdentityRef(idType: String, id: IdentityId): IdentityRef = idType match {
+    case "Simple" => IdentityRef.Guest(id)
+    case "OpenID" => IdentityRef.Role(id)
+    case "EmailID" => IdentityRef.Email(id)
+    case _ => assErr("DwE4GQXE9")
   }
 
 }
