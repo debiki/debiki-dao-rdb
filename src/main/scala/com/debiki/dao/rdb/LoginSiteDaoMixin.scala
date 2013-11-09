@@ -41,6 +41,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
   override def saveLogin(loginAttempt: LoginAttempt): LoginGrant = {
     val loginGrant = loginAttempt match {
       case x: GuestLoginAttempt => loginAsGuest(x)
+      case x: PasswordLoginAttempt => loginWithPassword(x)
       case x: EmailLoginAttempt => loginWithEmailId(x)
       case x: OpenIdLoginAttempt => loginOpenId(x)
     }
@@ -117,6 +118,27 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       LoginGrant(loginWithId, identityWithId, user,
         isNewIdentity = createdNewIdty, isNewRole = false)
     }
+  }
+
+
+  private def loginWithPassword(loginAttempt: PasswordLoginAttempt): LoginGrant = {
+    val anyIdentityAndUser = loadIdtyDetailsAndUser(forEmailAddr = loginAttempt.email)
+
+    val (identity: PasswordIdentity, user) = anyIdentityAndUser match {
+      case Some((x: PasswordIdentity, user)) => (x, user)
+      case _ => throw IdentityNotFoundException(
+        s"No identity found with email: ${loginAttempt.email}")
+    }
+
+    val okPassword = checkPassword(loginAttempt.password, hash = identity.passwordSaltHash)
+    if (!okPassword)
+      throw BadPasswordException
+
+    val login = db.transaction { connection =>
+      doSaveLogin(loginAttempt, identity)(connection)
+    }
+
+    LoginGrant(login, identity, user, isNewIdentity = false, isNewRole = false)
   }
 
 
@@ -240,8 +262,9 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
   private def identityRefTypeToString(loginAttempt: LoginAttempt) = loginAttempt match {
     case _: GuestLoginAttempt => "Simple"
-    case _: OpenIdLoginAttempt => "OpenID"
+    case _: OpenIdLoginAttempt => "OpenID"  // should rename to Role
     case _: EmailLoginAttempt => "EmailID"
+    case _: PasswordLoginAttempt => "OpenID"  // should rename to Role
     case _ => assErr("DwE3k2r21K5")
   }
 

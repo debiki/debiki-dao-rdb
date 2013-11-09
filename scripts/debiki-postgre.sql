@@ -124,6 +124,10 @@ Rename constraints to DW1_TENANTS: ... no, DW1_WEBSITES
 
 DW1_LOGINS PK should include TENANT_ID
 
+Rename DW1_LOGINS type "OpenID" to "Role", or even better: 3 columns: EMAIL_ID/IDTY_ID/GUEST_ID
+
+Rename DW1_EMAILS_OUT.SENT_ON to SENT_AT
+
 DW1_NOTFS_PAGE_ACTIONS.TARGET_PGA --> TRIGGER_PGA, NOT NULL
     TARGET_USER_DISP_NAME --> TRIGGER_USER.., NOT NULL
 
@@ -446,13 +450,15 @@ create table DW1_IDS_OPENID( -- COULD rename to DW1_IDS_AU(thenticated)
   FIRST_NAME varchar(100)        not null,
   EMAIL varchar(100)             not null,  -- COULD rename to EMAIL_ADDR
   COUNTRY varchar(100)           not null,
+  PASSWORD_HASH varchar,
   constraint DW1_IDSOID_SNO__P primary key (SNO),
   constraint DW1_IDSOID_TNT_OID__U
       unique (TENANT, OID_CLAIMED_ID),
   constraint DW1_IDSOID_USR_TNT__R__USERS  -- ix DW1_IDSOID_TNT_USR
       foreign key (TENANT, USR)
       references DW1_USERS(TENANT, SNO) deferrable,
-  constraint DW1_IDSOID_SNO_NOT_0__C check (SNO <> '0')
+  constraint DW1_IDSOID_SNO_NOT_0__C check (SNO <> '0'),
+  constraint DW1_IDS_PASSWORDHASH__C_LEN check (length(PASSWORD_HASH) < 100)
 );
 
 create index DW1_IDSOID_TNT_USR on DW1_IDS_OPENID(TENANT, USR);

@@ -341,16 +341,17 @@ class RdbSiteDao(
     val user = userNoId.copy(id = userSno.toString)
     db.update("""
         insert into DW1_USERS(
-            TENANT, SNO, DISPLAY_NAME, EMAIL, COUNTRY,
+            TENANT, SNO, DISPLAY_NAME, EMAIL, EMAIL_NOTFS, COUNTRY,
             SUPERADMIN, IS_OWNER)
-        values (?, ?, ?, ?, ?, ?, ?)""",
+        values (?, ?, ?, ?, ?, ?, ?, ?)""",
         List[AnyRef](tenantId, user.id, e2n(user.displayName),
-           e2n(user.email), e2n(user.country),
+           e2n(user.email), _toFlag(user.emailNotfPrefs), e2n(user.country),
            tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     user
   }
 
 
+  // COULD change to insertOpenIdIdentity(...)
   private[rdb] def _insertIdentity(tenantId: String, idtyNoId: Identity)
         (implicit connection: js.Connection): Identity = {
     val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
@@ -373,6 +374,21 @@ class RdbSiteDao(
       case _ =>
         assErr("DwE03IJL2")
     }
+  }
+
+
+  private[rdb] def insertPasswordIdentity(identityNoId: PasswordIdentity)
+        (implicit connection: js.Connection): PasswordIdentity = {
+    val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
+    val identity = identityNoId.copy(id = newIdentityId)
+    db.update("""
+        insert into DW1_IDS_OPENID(
+            SNO, TENANT, USR, USR_ORIG, EMAIL, PASSWORD_HASH)
+        values (
+            ?, ?, ?, ?, ?, ?)""",
+        List[AnyRef](identity.id, siteId, identity.userId, identity.userId,
+          identity.email, identity.passwordSaltHash))
+    identity
   }
 
 
@@ -464,10 +480,15 @@ class RdbSiteDao(
   }
 
 
-  def loadIdtyDetailsAndUser(forLoginId: String = null,
-        forOpenIdDetails: OpenIdDetails = null): Option[(Identity, User)] = {
+  def loadIdtyDetailsAndUser(
+        forLoginId: String = null,
+        forOpenIdDetails: OpenIdDetails = null,
+        forEmailAddr: String = null): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
-      _loadIdtyDetailsAndUser(forLoginId = forLoginId, forOpenIdDetails = forOpenIdDetails) match {
+      _loadIdtyDetailsAndUser(
+          forLoginId = forLoginId,
+          forOpenIdDetails = forOpenIdDetails,
+          forEmailAddr = forEmailAddr) match {
         case (None, None) => None
         case (Some(idty), Some(user)) => Some(idty, user)
         case (None, user) => assErr("DwE257IV2")
@@ -477,22 +498,24 @@ class RdbSiteDao(
   }
 
 
-  /**
-   * Looks up detailed info on a single user.
-   */
+  /** Looks up detailed info on a single user. Only one forXxx param may be specified.
+    */
   // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
-  private[rdb] def _loadIdtyDetailsAndUser(forLoginId: String = null,
-        forOpenIdDetails: OpenIdDetails = null)(implicit connection: js.Connection)
+  private[rdb] def _loadIdtyDetailsAndUser(
+        forLoginId: String = null,
+        forOpenIdDetails: OpenIdDetails = null,
+        forEmailAddr: String = null)(implicit connection: js.Connection)
         : (Option[Identity], Option[User]) = {
 
-    assert((forOpenIdDetails eq null) ^ (forLoginId eq null))
-
     val anyOpenIdDetails = Option(forOpenIdDetails)
+
     val loginOpt: Option[Login] =
       if (forLoginId eq null) None
       else Some(_loadLoginById(forLoginId) getOrElse {
         return None -> None
       })
+
+    val anyEmail = Option(forEmailAddr)
 
     var sqlSelectFrom = """
         select
@@ -505,18 +528,23 @@ class RdbSiteDao(
             i.OID_VERSION,
             i.FIRST_NAME i_first_name,
             i.EMAIL i_email,
+            i.PASSWORD_HASH,
             i.COUNTRY i_country
           from DW1_IDS_OPENID i inner join DW1_USERS u
             on i.TENANT = u.TENANT
             and i.USR = u.SNO
           """
 
-    val (whereClause, bindVals) = (anyOpenIdDetails, loginOpt) match {
-      case (None, Some(login: Login)) =>
+    val (whereClause, bindVals) = (loginOpt, anyEmail, anyOpenIdDetails) match {
+      case (Some(login: Login), None, None) =>
         ("""where i.TENANT = ? and i.SNO = ?""",
            List(siteId, login.identityRef.identityId))
 
-      case (Some(openIdDetails: OpenIdDetails), None) =>
+      case (None, Some(email), None) =>
+        ("""where i.TENANT = ? and i.EMAIL = ?""",
+          List(siteId, email))
+
+      case (None, None, Some(openIdDetails: OpenIdDetails)) =>
         // With Google OpenID, the identifier varies by realm. So use email
         // address instead. (With Google OpenID, the email address can be
         // trusted — this is not the case, however, in general.
@@ -541,7 +569,7 @@ class RdbSiteDao(
             and """+ claimedIdOrEmailCheck +"""
           """, List(siteId, idOrEmail))
 
-      case _ => assErr("DwE98239k2a2")
+      case _ => assErr("DwE98239k2a2", "None, or more than one, lookup method specified")
     }
 
     db.query(sqlSelectFrom + whereClause, bindVals, rs => {
@@ -553,9 +581,28 @@ class RdbSiteDao(
       // functions.
 
       val userInDb = _User(rs)
-      val identityInDb =
-        IdentityOpenId(
-            id = rs.getLong("i_id").toString,
+
+      val id = rs.getLong("i_id").toString
+      val email = rs.getString("i_email")
+      val anyPasswordHash = Option(rs.getString("PASSWORD_HASH"))
+
+      val identityInDb = {
+        if (anyPasswordHash.nonEmpty) {
+          if (anyOpenIdDetails.isDefined) throwBadDatabaseData(
+            "DwE7IER2", s"Password hash found for OpenID user, site: $siteId, id: $id")
+
+          PasswordIdentity(
+            id = id,
+            userId = userInDb.id,
+            email = email,
+            passwordSaltHash = anyPasswordHash.get)
+        }
+        else {
+          if (anyEmail.isDefined) throwBadDatabaseData(
+            "DwE61ZW8", s"Row without password found for password user, site: $siteId, id: $id")
+
+          IdentityOpenId(
+            id = id,
             userId = userInDb.id,
             // COULD use d2e here, or n2e if I store Null instead of '-'.
             OpenIdDetails(
@@ -565,8 +612,10 @@ class RdbSiteDao(
               oidClaimedId = rs.getString("OID_CLAIMED_ID"),
               oidOpLocalId = rs.getString("OID_OP_LOCAL_ID"),
               firstName = rs.getString("i_first_name"),
-              email = rs.getString("i_email"),
+              email = email,
               country = rs.getString("i_country")))
+        }
+      }
 
       assErrIf(rs.next, "DwE53IK24", "More that one matching OpenID "+
          "identity, when looking up openId: "+ anyOpenIdDetails +
@@ -574,6 +623,16 @@ class RdbSiteDao(
 
       Some(identityInDb) -> Some(userInDb)
     })
+  }
+
+
+  def createPasswordIdentityAndRole(identityNoId: PasswordIdentity, userNoId: User)
+        : (PasswordIdentity, User) = {
+    db.transaction { connection =>
+      val user = _insertUser(siteId, userNoId)(connection)
+      val identity = insertPasswordIdentity(identityNoId.copy(userId = user.id))(connection)
+      (identity, user)
+    }
   }
 
 
@@ -1569,14 +1628,20 @@ class RdbSiteDao(
     require(email.providerEmailId isEmpty)
     require(email.sentOn isEmpty)
 
-    val vals = List(
-      siteId, email.id, email.sentTo, email.subject, email.bodyHtmlText)
+    def emailTypeToString(tyype: EmailType) = tyype match {
+      case EmailType.Notification => "Notf"
+      case EmailType.CreateAccount => "CrAc"
+      case EmailType.ResetPassword => "RsPw"
+    }
+
+    val vals = List(siteId, email.id, emailTypeToString(email.tyype), email.sentTo,
+      d2ts(email.createdAt), email.subject, email.bodyHtmlText)
 
     db.update("""
       insert into DW1_EMAILS_OUT(
-        TENANT, ID, SENT_TO, SUBJECT, BODY_HTML)
+        TENANT, ID, TYPE, SENT_TO, CREATED_AT, SUBJECT, BODY_HTML)
       values (
-        ?, ?, ?, ?, ?)
+        ?, ?, ?, ?, ?, ?, ?)
       """, vals)
   }
 
@@ -1608,7 +1673,7 @@ class RdbSiteDao(
 
   def loadEmailById(emailId: String): Option[Email] = {
     val query = """
-      select SENT_TO, SENT_ON, SUBJECT,
+      select TYPE, SENT_TO, SENT_ON, CREATED_AT, SUBJECT,
         BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
       from DW1_EMAILS_OUT
       where TENANT = ? and ID = ?
@@ -1616,10 +1681,21 @@ class RdbSiteDao(
     val emailOpt = db.queryAtnms(query, List(siteId, emailId), rs => {
       var allEmails = List[Email]()
       while (rs.next) {
+        def parseEmailType(typeString: String) = typeString match {
+          case "Notf" => EmailType.Notification
+          case "CrAc" => EmailType.CreateAccount
+          case "RsPw" => EmailType.ResetPassword
+          case _ => throwBadDatabaseData(
+            "DwE840FSIE", s"Bad email type: $typeString, email id: $emailId")
+            EmailType.Notification
+        }
+
         val email = Email(
            id = emailId,
+           tyype = parseEmailType(rs.getString("TYPE")),
            sentTo = rs.getString("SENT_TO"),
            sentOn = Option(ts2d(rs.getTimestamp("SENT_ON"))),
+           createdAt = ts2d(rs.getTimestamp("CREATED_AT")),
            subject = rs.getString("SUBJECT"),
            bodyHtmlText = rs.getString("BODY_HTML"),
            providerEmailId = Option(rs.getString("PROVIDER_EMAIL_ID")),
@@ -1629,6 +1705,7 @@ class RdbSiteDao(
       assert(allEmails.length <= 1) // loaded by PK
       allEmails.headOption
     })
+
     emailOpt
   }
 
