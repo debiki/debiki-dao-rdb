@@ -42,6 +42,8 @@ alter table DW1_IDS_OPENID add constraint DW1_IDSOID_OID__C_NN
      and PASSWORD_HASH is null
   end);
 
+create unique index DW1_IDSOID_SITE_PSWD_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
+  where PASSWORD_HASH is not null;
 
 alter table DW1_EMAILS_OUT add column CREATED_AT timestamp;
 update DW1_EMAILS_OUT set CREATED_AT = SENT_ON;
