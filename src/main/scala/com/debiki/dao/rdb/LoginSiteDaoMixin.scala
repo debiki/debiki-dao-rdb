@@ -212,7 +212,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       val identity = identityInDb match {
         case None =>
           val identityNoId = IdentityOpenId(id = "?", userId = user.id, loginAttempt.openIdDetails)
-          _insertIdentity(siteId, identityNoId)(connection)
+          insertOpenIdIdentity(siteId, identityNoId)(connection)
         case Some(old: IdentityOpenId) =>
           val nev = IdentityOpenId(id = old.id, userId = user.id, loginAttempt.openIdDetails)
           if (nev != old) {
@@ -224,6 +224,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
             _updateIdentity(nev)
           }
           nev
+        case x => throwBadDatabaseData("DwE26DFW0", s"A non-OpenID identity found in database: $x")
       }
 
       val login = doSaveLogin(loginAttempt, identity)

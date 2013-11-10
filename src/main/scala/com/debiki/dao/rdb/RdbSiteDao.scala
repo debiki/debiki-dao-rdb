@@ -351,8 +351,20 @@ class RdbSiteDao(
   }
 
 
-  // COULD change to insertOpenIdIdentity(...)
-  private[rdb] def _insertIdentity(tenantId: String, idtyNoId: Identity)
+  private[rdb] def insertIdentity(identityNoId: Identity, userId: UserId, otherSiteId: String)
+        (connection: js.Connection): Identity = {
+    identityNoId match {
+      case x: IdentityOpenId =>
+        insertOpenIdIdentity(siteId, x.copy(id = "?", userId = userId))(connection)
+      case x: PasswordIdentity =>
+        insertPasswordIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
+      case x =>
+        assErr(s"Don't know how to insert identity of type: ${classNameOf(x)}")
+    }
+  }
+
+
+  private[rdb] def insertOpenIdIdentity(tenantId: String, idtyNoId: Identity)
         (implicit connection: js.Connection): Identity = {
     val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
     idtyNoId match {
@@ -377,7 +389,7 @@ class RdbSiteDao(
   }
 
 
-  private[rdb] def insertPasswordIdentity(identityNoId: PasswordIdentity)
+  private[rdb] def insertPasswordIdentity(otherSiteId: SiteId, identityNoId: PasswordIdentity)
         (implicit connection: js.Connection): PasswordIdentity = {
     val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
     val identity = identityNoId.copy(id = newIdentityId)
@@ -386,7 +398,7 @@ class RdbSiteDao(
             SNO, TENANT, USR, USR_ORIG, EMAIL, PASSWORD_HASH)
         values (
             ?, ?, ?, ?, ?, ?)""",
-        List[AnyRef](identity.id, siteId, identity.userId, identity.userId,
+        List[AnyRef](identity.id, otherSiteId, identity.userId, identity.userId,
           identity.email, identity.passwordSaltHash))
     identity
   }
@@ -630,7 +642,8 @@ class RdbSiteDao(
         : (PasswordIdentity, User) = {
     db.transaction { connection =>
       val user = _insertUser(siteId, userNoId)(connection)
-      val identity = insertPasswordIdentity(identityNoId.copy(userId = user.id))(connection)
+      val identity = insertPasswordIdentity(
+        otherSiteId = siteId, identityNoId.copy(userId = user.id))(connection)
       (identity, user)
     }
   }
@@ -1261,7 +1274,7 @@ class RdbSiteDao(
   // ? Should replace this function with a call to CreateSiteSystemDaoMixin.createSiteImpl ?
   // And do everything in the same transaction!
   def createWebsite(name: String, address: String, ownerIp: String,
-        ownerLoginId: String, ownerIdentity: IdentityOpenId, ownerRole: User)
+        ownerLoginId: String, ownerIdentity: Identity, ownerRole: User)
         : Option[(Tenant, User)] = {
     try {
       db.transaction { implicit connection =>
@@ -1280,8 +1293,8 @@ class RdbSiteDao(
         val ownerRoleAtNewWebsite = _insertUser(newTenant.id,
           ownerRole.copy(id = "?",
             isAdmin = true, isOwner = true))
-        val ownerIdtyAtNewWebsite = _insertIdentity(newTenant.id,
-          ownerIdentity.copy(id = "?", userId = ownerRoleAtNewWebsite.id))
+        val ownerIdtyAtNewWebsite = insertIdentity(
+          ownerIdentity, userId = ownerRoleAtNewWebsite.id, otherSiteId = newTenant.id)(connection)
         Some((newTenant.copy(hosts = List(newHost)), ownerRoleAtNewWebsite))
       }
     }
