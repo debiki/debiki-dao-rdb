@@ -355,7 +355,7 @@ class RdbSiteDao(
         (connection: js.Connection): Identity = {
     identityNoId match {
       case x: IdentityOpenId =>
-        insertOpenIdIdentity(siteId, x.copy(id = "?", userId = userId))(connection)
+        insertOpenIdIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
       case x: PasswordIdentity =>
         insertPasswordIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
       case x =>
