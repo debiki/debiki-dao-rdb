@@ -127,6 +127,8 @@ DW1_LOGINS PK should include TENANT_ID
 Rename DW1_LOGINS type "OpenID" to "Role", or even better: 3 columns: EMAIL_ID/IDTY_ID/GUEST_ID
 
 Rename DW1_EMAILS_OUT.SENT_ON to SENT_AT
+Rename DW1_EMAILS_OUT.SENT_TO to TO_ADDRESS
+
 
 DW1_NOTFS_PAGE_ACTIONS.TARGET_PGA --> TRIGGER_PGA, NOT NULL
     TARGET_USER_DISP_NAME --> TRIGGER_USER.., NOT NULL
@@ -468,6 +470,8 @@ create index DW1_IDSOID_EMAIL on DW1_IDS_OPENID(EMAIL);
 create unique index DW1_IDSOID_TNT_EMAIL__U on DW1_IDS_OPENID(TENANT, EMAIL)
   where OID_ENDPOINT = 'https://www.google.com/accounts/o8/ud';
 
+create unique index DW1_IDSOID_TNT_EMAIL_PSWD__U on DW1_IDS_OPENID(TENANT, EMAIL)
+  where PASSWORD_HASH is not null;
 
 -- (Uses sequence nunmber from DW1_IDS_SNO.)
 
@@ -1087,6 +1091,9 @@ create table DW1_EMAILS_OUT(  -- abbreviated EMLOT
   ID varchar(32) not null,
   SENT_TO varchar(100) not null,  -- only one recipient, for now
   SENT_ON timestamp,
+  TYPE varchar,
+  TO_GUEST_ID varchar(32), -- refs DW1_ROLES
+  TO_ROLE_ID varchar(32),  -- references DW1_GUESTS
   SUBJECT varchar(200) not null,
   -- (Could move to separate table, if short of storage space, so the body
   -- can be deleted, but other email info kept, without this causing table
