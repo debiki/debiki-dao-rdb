@@ -57,6 +57,15 @@ alter table DW1_EMAILS_OUT add column TO_GUEST_ID varchar(32);
 alter table DW1_EMAILS_OUT add column TO_ROLE_ID varchar(32);
 
 update DW1_EMAILS_OUT set CREATED_AT = SENT_ON;
+-- I've verified in the prod db that no interesting data is lost:
+delete from DW1_NOTFS_PAGE_ACTIONS n
+    where EMAIL_SENT in (
+        select e.ID from DW1_EMAILS_OUT e
+        where e.TENANT = n.TENANT
+          and e.ID = n.EMAIL_SENT
+          and e.CREATED_AT is null);
+delete from DW1_EMAILS_OUT where CREATED_AT is null;
+alter table DW1_EMAILS_OUT alter column CREATED_AT set not null;
 alter table DW1_EMAILS_OUT add constraint DW1_EMLOT_CREATED_SENT__C_LE
     check (CREATED_AT <= SENT_ON);
 
@@ -71,13 +80,28 @@ alter table DW1_EMAILS_OUT add constraint DW1_EMLOT__R__GUESTS
 alter table DW1_EMAILS_OUT add constraint DW1_EMLOT__R__ROLES
     foreign key (TENANT, TO_ROLE_ID) references DW1_USERS(TENANT, SNO) deferrable;
 
+alter table DW1_EMAILS_OUT drop constraint DW1_EMLOT__R__TNTS;
+
+-- Use `distinct` because the guest id might be repeated, if many notifications
+-- were included in the same email to a single guest.
 update DW1_EMAILS_OUT set TO_GUEST_ID = (
-    select RCPT_ID_SIMPLE from DW1_NOTFS_PAGE_ACTIONS n
+    select distinct RCPT_ID_SIMPLE from DW1_NOTFS_PAGE_ACTIONS n
     where n.TENANT = TENANT and n.EMAIL_SENT = ID);
 
+-- See comment above about `distinct`.
 update DW1_EMAILS_OUT set TO_ROLE_ID = (
-    select RCPT_ROLE_ID from DW1_NOTFS_PAGE_ACTIONS n
+    select distinct RCPT_ROLE_ID from DW1_NOTFS_PAGE_ACTIONS n
     where n.TENANT = TENANT and n.EMAIL_SENT = ID);
+
+-- This handles some website-has-been-created emails that aren't associated with any
+-- notifications.
+update dw1_emails_out e set to_role_id = (
+    select u.sno from dw1_users u
+    where e.tenant = u.tenant and e.sent_to = u.email limit 1)
+  where to_role_id is null and to_guest_id is null;
+
+-- Finally delete old "broken" rows (two test emails it seems).
+delete from dw1_emails_out where to_role_id is null and to_guest_id is null;
 
 alter table DW1_EMAILS_OUT add constraint DW1_EMLOT_ROLEID_GUESTID__C
   check (case
@@ -92,6 +116,9 @@ alter table DW1_EMAILS_OUT add constraint DW1_EMLOT_ROLEID_GUESTID__C
 
 # --- !Downs
 
+
+alter table DW1_EMAILS_OUT add constraint DW1_EMLOT__R__TNTS
+    foreign key (TENANT) references DW1_TENANTS(ID) deferrable;
 
 alter table DW1_EMAILS_OUT drop column TYPE;
 alter table DW1_EMAILS_OUT drop column CREATED_AT;
