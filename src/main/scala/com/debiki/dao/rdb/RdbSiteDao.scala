@@ -1648,13 +1648,14 @@ class RdbSiteDao(
     }
 
     val vals = List(siteId, email.id, emailTypeToString(email.tyype), email.sentTo,
+      email.toGuestId.orNullVarchar, email.toRoleId.orNullVarchar,
       d2ts(email.createdAt), email.subject, email.bodyHtmlText)
 
     db.update("""
       insert into DW1_EMAILS_OUT(
-        TENANT, ID, TYPE, SENT_TO, CREATED_AT, SUBJECT, BODY_HTML)
+        TENANT, ID, TYPE, SENT_TO, TO_GUEST_ID, TO_ROLE_ID, CREATED_AT, SUBJECT, BODY_HTML)
       values (
-        ?, ?, ?, ?, ?, ?, ?)
+        ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """, vals)
   }
 
@@ -1686,7 +1687,7 @@ class RdbSiteDao(
 
   def loadEmailById(emailId: String): Option[Email] = {
     val query = """
-      select TYPE, SENT_TO, SENT_ON, CREATED_AT, SUBJECT,
+      select TYPE, SENT_TO, TO_GUEST_ID, TO_ROLE_ID, SENT_ON, CREATED_AT, SUBJECT,
         BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
       from DW1_EMAILS_OUT
       where TENANT = ? and ID = ?
@@ -1703,10 +1704,15 @@ class RdbSiteDao(
             EmailType.Notification
         }
 
+        val anyGuestId = Option(rs.getString("TO_GUEST_ID"))
+        val anyRoleId = Option(rs.getString("TO_ROLE_ID"))
+        val toUserId: Option[UserId] = anyRoleId.orElse(anyGuestId.map("-" + _))
+
         val email = Email(
            id = emailId,
            tyype = parseEmailType(rs.getString("TYPE")),
            sentTo = rs.getString("SENT_TO"),
+           toUserId = toUserId,
            sentOn = Option(ts2d(rs.getTimestamp("SENT_ON"))),
            createdAt = ts2d(rs.getTimestamp("CREATED_AT")),
            subject = rs.getString("SUBJECT"),

@@ -144,24 +144,18 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
   private def loginWithEmailId(loginAttempt: EmailLoginAttempt): LoginGrant = {
     val emailId = loginAttempt.emailId
-    val (email: Email, notf: NotfOfPageAction) = (
-      loadEmailById(emailId = emailId),
-      loadNotfByEmailId(emailId = emailId)
-      ) match {
-      case (Some(email), Some(notf)) => (email, notf)
-      case (None, _) =>
-        throw EmailNotFoundException(emailId)
-      case (_, None) =>
-        runErr("DwE87XIE3", "Notification missing for email id: "+ emailId)
+    val email: Email = loadEmailById(emailId = emailId) match {
+      case Some(email) if email.toUserId.isDefined => email
+      case Some(email) => throw BadEmailTypeException(emailId)
+      case None => throw EmailNotFoundException(emailId)
     }
-    val user = _loadUser(notf.recipientUserId) match {
+    val user = _loadUser(email.toUserId.get) match {
       case Some(user) => user
       case None =>
-        runErr("DwE2XKw5", "User `"+ notf.recipientUserId +"' not found"+
-          " when logging in with email id `"+ emailId +"'.")
+        runErr("DwE2XKw5", o"""User `${email.toUserId}"' not found
+           when logging in with email id `$emailId'.""")
     }
-    val idtyWithId = IdentityEmailId(id = emailId, userId = user.id,
-      emailSent = Some(email), notf = Some(notf))
+    val idtyWithId = IdentityEmailId(id = emailId, userId = user.id, emailSent = Some(email))
     val loginWithId = db.transaction { implicit connection =>
       doSaveLogin(loginAttempt, idtyWithId)
     }
