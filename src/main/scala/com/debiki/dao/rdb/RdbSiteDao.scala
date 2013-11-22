@@ -649,6 +649,20 @@ class RdbSiteDao(
   }
 
 
+  def changePassword(identity: PasswordIdentity, newPasswordSaltHash: String): Boolean = {
+    db.transaction { implicit connection =>
+      val sql = """
+        update DW1_IDS_OPENID
+        set PASSWORD_HASH = ?
+        where TENANT = ? and SNO = ?
+                """
+      val numRowsChanged = db.update(sql, List(newPasswordSaltHash, siteId, identity.id))
+      assert(numRowsChanged <= 1, "DwE87GMf0")
+      numRowsChanged == 1
+    }
+  }
+
+
   def loadIdtyAndUser(forLoginId: String): Option[(Identity, User)] = {
     def loginInfo = "login id "+ safed(forLoginId) +
           ", tenant "+ safed(siteId)
