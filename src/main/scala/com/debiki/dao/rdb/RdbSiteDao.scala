@@ -423,6 +423,46 @@ class RdbSiteDao(
   }
 
 
+  private[rdb] def insertSecureSocialIdentity(
+        otherSiteId: SiteId, identityNoId: SecureSocialIdentity)
+        (implicit connection: js.Connection): SecureSocialIdentity = {
+    val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
+    val identity = identityNoId.copy(id = newIdentityId)
+    val sql = """
+        insert into DW1_IDS_OPENID(
+            SNO, TENANT, USR, USR_ORIG,
+            FIRST_NAME, LAST_NAME, FULL_NAME, EMAIL, AVATAR_URL,
+            AUTH_METHOD, SECURESOCIAL_PROVIDER_ID, SECURESOCIAL_USER_ID)
+        values (
+            ?, ?, ?, ?,
+            ?, ?, ?, ?, ?,
+            ?, ?, ?)"""
+    val ss = identity.secureSocialCoreUser
+    val values = List[AnyRef](
+      identity.id, otherSiteId, identity.userId, identity.userId,
+      ss.firstName, ss.lastName, ss.fullName, ss.email.orNullVarchar, ss.avatarUrl.orNullVarchar,
+      ss.authMethod.method, ss.identityId.providerId, ss.identityId.userId)
+    db.update(sql, values)
+    identity
+  }
+
+
+  private[rdb] def updateSecureSocialIdentity(identity: SecureSocialIdentity)
+        (implicit connection: js.Connection) {
+    val sql = """
+      update DW1_IDS_OPENID set
+        USR = ?, AUTH_METHOD = ?,
+        FIRST_NAME = ?, LAST_NAME = ?, FULL_NAME = ?, EMAIL = ?, AVATAR_URL = ?
+      where SNO = ? and TENANT = ?"""
+    val ss = identity.secureSocialCoreUser
+    val values = List[AnyRef](
+      identity.userId, ss.authMethod.method,
+      ss.firstName, ss.lastName, ss.fullName, ss.email.orNullVarchar, ss.avatarUrl.orNullVarchar,
+      identity.id, siteId)
+    db.update(sql, values)
+  }
+
+
   override def saveLogout(loginId: String, logoutIp: String) {
     require(loginId != SystemUser.Login.id)
     db.transaction { implicit connection =>
@@ -516,10 +556,12 @@ class RdbSiteDao(
   private[rdb] def _loadIdtyDetailsAndUser(
         forLoginId: String = null,
         forOpenIdDetails: OpenIdDetails = null,
+        forSecureSocialIdentityId: securesocial.core.IdentityId = null,
         forEmailAddr: String = null)(implicit connection: js.Connection)
         : (Option[Identity], Option[User]) = {
 
     val anyOpenIdDetails = Option(forOpenIdDetails)
+    val anySecureSocialIdentityId = Option(forSecureSocialIdentityId)
 
     val loginOpt: Option[Login] =
       if (forLoginId eq null) None
@@ -538,25 +580,33 @@ class RdbSiteDao(
             i.OID_REALM,
             i.OID_ENDPOINT,
             i.OID_VERSION,
-            i.FIRST_NAME i_first_name,
-            i.EMAIL i_email,
+            i.SECURESOCIAL_USER_ID,
+            i.SECURESOCIAL_PROVIDER_ID,
             i.PASSWORD_HASH,
-            i.COUNTRY i_country
+            i.AUTH_METHOD,
+            i.FIRST_NAME i_first_name,
+            i.LAST_NAME i_last_name,
+            i.FULL_NAME i_full_name,
+            i.EMAIL i_email,
+            i.COUNTRY i_country,
+            i.AVATAR_URL i_avatar_url
           from DW1_IDS_OPENID i inner join DW1_USERS u
             on i.TENANT = u.TENANT
             and i.USR = u.SNO
-          """
+        """
 
-    val (whereClause, bindVals) = (loginOpt, anyEmail, anyOpenIdDetails) match {
-      case (Some(login: Login), None, None) =>
+    val (whereClause, bindVals) =
+        (loginOpt, anyEmail, anyOpenIdDetails, anySecureSocialIdentityId) match {
+
+      case (Some(login: Login), None, None, None) =>
         ("""where i.TENANT = ? and i.SNO = ?""",
            List(siteId, login.identityRef.identityId))
 
-      case (None, Some(email), None) =>
+      case (None, Some(email), None, None) =>
         ("""where i.TENANT = ? and i.EMAIL = ?""",
           List(siteId, email))
 
-      case (None, None, Some(openIdDetails: OpenIdDetails)) =>
+      case (None, None, Some(openIdDetails: OpenIdDetails), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
         // address instead. (With Google OpenID, the email address can be
         // trusted — this is not the case, however, in general.
@@ -581,6 +631,14 @@ class RdbSiteDao(
             and """+ claimedIdOrEmailCheck +"""
           """, List(siteId, idOrEmail))
 
+      case (None, None, None, Some(ssid: securesocial.core.IdentityId)) =>
+        val whereClause =
+          """where i.TENANT = ?
+               and i.SECURESOCIAL_PROVIDER_ID = ?
+               and i.SECURESOCIAL_USER_ID = ?"""
+        val values = List(siteId, ssid.providerId, ssid.userId)
+        (whereClause, values)
+
       case _ => assErr("DwE98239k2a2", "None, or more than one, lookup method specified")
     }
 
@@ -597,22 +655,18 @@ class RdbSiteDao(
       val id = rs.getLong("i_id").toString
       val email = rs.getString("i_email")
       val anyPasswordHash = Option(rs.getString("PASSWORD_HASH"))
+      val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
+      val anySecureSocialProvide = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
 
       val identityInDb = {
         if (anyPasswordHash.nonEmpty) {
-          if (anyOpenIdDetails.isDefined) throwBadDatabaseData(
-            "DwE7IER2", s"Password hash found for OpenID user, site: $siteId, id: $id")
-
           PasswordIdentity(
             id = id,
             userId = userInDb.id,
             email = email,
             passwordSaltHash = anyPasswordHash.get)
         }
-        else {
-          if (anyEmail.isDefined) throwBadDatabaseData(
-            "DwE61ZW8", s"Row without password found for password user, site: $siteId, id: $id")
-
+        else if (anyClaimedOpenId.nonEmpty) {
           IdentityOpenId(
             id = id,
             userId = userInDb.id,
@@ -621,11 +675,29 @@ class RdbSiteDao(
               oidEndpoint = rs.getString("OID_ENDPOINT"),
               oidVersion = rs.getString("OID_VERSION"),
               oidRealm = rs.getString("OID_REALM"),
-              oidClaimedId = rs.getString("OID_CLAIMED_ID"),
+              oidClaimedId = anyClaimedOpenId.get,
               oidOpLocalId = rs.getString("OID_OP_LOCAL_ID"),
               firstName = rs.getString("i_first_name"),
               email = email,
               country = rs.getString("i_country")))
+        }
+        else if (anySecureSocialProvide.nonEmpty) {
+          SecureSocialIdentity(
+            id = id,
+            userId = userInDb.id,
+            securesocial.core.SocialUser(
+              identityId = securesocial.core.IdentityId(
+                providerId = anySecureSocialProvide.get,
+                userId = rs.getString("SECURESOCIAL_USER_ID")),
+              firstName = rs.getString("i_first_name"),
+              lastName = rs.getString("i_last_name"),
+              fullName = rs.getString("i_full_name"),
+              email = Option(rs.getString("i_email")),
+              avatarUrl = Option(rs.getString("i_avatar_url")),
+              authMethod = securesocial.core.AuthenticationMethod(rs.getString("AUTH_METHOD"))))
+        }
+        else {
+          assErr("DwE77GJ2", s"Unknown identity in DW1_IDS_OPENID, site: $siteId, id: $id")
         }
       }
 

@@ -22,6 +22,7 @@ import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
 import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.Prelude._
+import com.debiki.core.SecureSocialIdentity.displayNameFor
 import java.{sql => js, util => ju}
 import Rdb._
 import RdbUtil._
@@ -44,6 +45,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       case x: PasswordLoginAttempt => loginWithPassword(x)
       case x: EmailLoginAttempt => loginWithEmailId(x)
       case x: OpenIdLoginAttempt => loginOpenId(x)
+      case x: SecureSocialLoginAttempt => loginSecureSocial(x)
     }
     loginGrant
   }
@@ -190,11 +192,11 @@ trait LoginSiteDaoMixin extends SiteDbDao {
           userWithId
       }
 
-      // Create or update the OpenID/Twitter/etc identity.
+      // Create or update the OpenID identity.
       //
       // (It's absent, if this is the first time the user logs in.
       // It needs to be updated, if the user has changed e.g. her
-      // OpenID name or email. Or Facebook name or email.)
+      // OpenID name or email.)
       //
       // (Concerning simultaneous inserts/updates by different threads or
       // server nodes: This insert might result in a unique key violation
@@ -229,6 +231,64 @@ trait LoginSiteDaoMixin extends SiteDbDao {
   }
 
 
+  private def loginSecureSocial(loginAttempt: SecureSocialLoginAttempt): LoginGrant = {
+    db.transaction { connection =>
+      loginSecureSocialImpl(loginAttempt)(connection)
+    }
+  }
+
+
+  private def loginSecureSocialImpl(loginAttempt: SecureSocialLoginAttempt)
+        (connection: js.Connection): LoginGrant = {
+    val (identityInDb: Option[Identity], userInDb: Option[User]) =
+      _loadIdtyDetailsAndUser(
+        forSecureSocialIdentityId = loginAttempt.secureSocialCoreUser.identityId)(connection)
+
+    // Create user if absent.
+
+    val user = userInDb match {
+      case Some(u) => u
+      case None =>
+        import loginAttempt.secureSocialCoreUser
+        val userNoId =  User(
+          id = "?",
+          displayName = displayNameFor(secureSocialCoreUser),
+          email = secureSocialCoreUser.email getOrElse "",
+          emailNotfPrefs = EmailNotfPrefs.Unspecified,
+          country = "",
+          website = "",
+          isAdmin = false,
+          isOwner = false)
+        val userWithId = _insertUser(siteId, userNoId)(connection)
+        userWithId
+    }
+
+    // Create or update the SecureSocial identity.
+    // (For some unimportant comments, see the corresponding comment in loginOpenId() above.)
+
+    val identity: SecureSocialIdentity = identityInDb match {
+      case None =>
+        val identityNoId = SecureSocialIdentity(id = "?", userId = user.id,
+          loginAttempt.secureSocialCoreUser)
+        insertSecureSocialIdentity(siteId, identityNoId)(connection)
+      case Some(old: SecureSocialIdentity) =>
+        val nev = SecureSocialIdentity(id = old.id, userId = user.id,
+          loginAttempt.secureSocialCoreUser)
+        if (nev != old) {
+          updateSecureSocialIdentity(nev)(connection)
+        }
+        nev
+      case x =>
+        throwBadDatabaseData("DwE21GSh0", s"A non-SecureSocial identity found in database: $x")
+    }
+
+    val login = doSaveLogin(loginAttempt, identity)(connection)
+
+    LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
+      isNewRole = userInDb.isEmpty)
+  }
+
+
   /** Assigns an id to `loginNoId', saves it and returns it (with id).
     */
   private def doSaveLogin(loginAttempt: LoginAttempt, identityWithId: Identity)
@@ -256,17 +316,18 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
 
   private def identityRefTypeToString(loginAttempt: LoginAttempt) = loginAttempt match {
-    case _: GuestLoginAttempt => "Simple"
+    case _: GuestLoginAttempt => "Simple"   // "Simple" should be renamed to "Guest"
     case _: OpenIdLoginAttempt => "OpenID"  // should rename to Role
     case _: EmailLoginAttempt => "EmailID"
     case _: PasswordLoginAttempt => "OpenID"  // should rename to Role
+    case _: SecureSocialLoginAttempt => "OpenID"  // should rename to Role
     case _ => assErr("DwE3k2r21K5")
   }
 
 
   def makeIdentityRef(idType: String, id: IdentityId): IdentityRef = idType match {
-    case "Simple" => IdentityRef.Guest(id)
-    case "OpenID" => IdentityRef.Role(id)
+    case "Simple" => IdentityRef.Guest(id) // "Simple" should be renamed to "Guest"
+    case "OpenID" => IdentityRef.Role(id)  // "OpenID" should be renamed to "Role"
     case "EmailID" => IdentityRef.Email(id)
     case _ => assErr("DwE4GQXE9")
   }
