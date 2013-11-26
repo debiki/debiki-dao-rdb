@@ -358,6 +358,8 @@ class RdbSiteDao(
         insertOpenIdIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
       case x: PasswordIdentity =>
         insertPasswordIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
+      case x: SecureSocialIdentity =>
+        insertSecureSocialIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
       case x =>
         assErr(s"Don't know how to insert identity of type: ${classNameOf(x)}")
     }
