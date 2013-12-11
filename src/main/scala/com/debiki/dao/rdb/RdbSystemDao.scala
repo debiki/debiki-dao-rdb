@@ -711,6 +711,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_PATHS
       delete from DW1_PAGE_PATHS
       delete from DW1_PAGES
+      delete from DW1_POSTS
       delete from DW1_IDS_SIMPLE_EMAIL
       delete from DW1_LOGINS
       delete from DW1_GUESTS
