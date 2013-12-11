@@ -2429,7 +2429,7 @@ class RdbSiteDao(
           a.payload match {
             case p: PAP.CreatePost =>
               db.update(insertIntoActions, commonVals:::List(
-                "Post", p.parentPostId.asAnyRef, e2n(p.text), NullInt, e2n(p.markup),
+                "Post", p.parentPostId.orNullInt, e2n(p.text), NullInt, e2n(p.markup),
                 e2n(p.where), _toDbVal(p.approval), NullVarchar))
             case e: PAP.EditPost =>
               val autoAppliedDbVal = if (e.autoApplied) "A" else NullVarchar
@@ -2629,7 +2629,7 @@ class RdbSiteDao(
     }
 
     val values = List[AnyRef](
-      post.parentId.asAnyRef,
+      post.parentId.orNullInt,
       post.markup,
       post.where.orNullVarchar,
       d2ts(post.creationDati),
@@ -2857,7 +2857,7 @@ class RdbSiteDao(
       loginId = "?",
       userId = rs.getString("AUTHOR_ID"),
       newIp = None, // for now
-      parentPostId = rs.getInt("PARENT_POST_ID"),
+      parentPostId = getOptionalIntNoneNot0(rs, "PARENT_POST_ID"),
       text = anyUnapprovedText getOrElse anyApprovedText.get,
       markup = rs.getString("MARKUP"),
       approval = _toAutoApproval(rs.getString("LAST_APPROVAL_TYPE")),

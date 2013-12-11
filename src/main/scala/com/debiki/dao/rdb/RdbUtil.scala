@@ -42,6 +42,15 @@ object RdbUtil {
     values.map((x: Any) => "?").mkString(",")
 
 
+  /** `rs.getInt` returns 0 instead of null.
+   */
+  def getOptionalIntNoneNot0(rs: js.ResultSet, column: String): Option[Int] = {
+    val i = rs.getInt(column)
+    if (i == 0) None
+    else Some(i)
+  }
+
+
   def ActionSelectListItems =
     "a.POST_ID, a.PAID, a.LOGIN, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
      "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.NEW_IP, " +
@@ -62,7 +71,7 @@ object RdbUtil {
     }
     val time = ts2d(rs.getTimestamp("TIME"))
     val typee = rs.getString("TYPE")
-    val relpa = rs.getInt("RELPA")
+    val relpa = getOptionalIntNoneNot0(rs, "RELPA")
     val text_? = rs.getString("TEXT")
     val markup_? = rs.getString("MARKUP")
     val where_? = rs.getString("WHEERE")
@@ -76,7 +85,7 @@ object RdbUtil {
         userId = userId, newIp = newIp)
 
     def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
-      target: ${Option(relpa)}, login id: $loginSno, user id: $userId"""
+      target: $relpa, login id: $loginSno, user id: $userId"""
     assErrIf(postId <= 0, "DwE5YQ08", s"POST_ID is <= 0, details: $details")
 
     // (This whole match-case will go away when I unify all types
@@ -94,7 +103,9 @@ object RdbUtil {
         buildAction(PAP.EditPost(n2e(text_?), newMarkup = Option(markup_?),
           autoApplied = editAutoApplied, approval = approval))
       case "EditApp" =>
-        new EditApp(id = id, editId = relpa, postId = postId, ctime = time,
+        val editId = relpa getOrElse throwBadDatabaseData(
+          "DwE26UF0", s"Edit id missing for edit app `$id', post `$postId', site `?'")
+        new EditApp(id = id, editId = editId, postId = postId, ctime = time,
           loginId = loginSno, userId = userId, newIp = newIp,
           result = n2e(text_?),
           approval = approval)
