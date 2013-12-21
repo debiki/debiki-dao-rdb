@@ -1363,7 +1363,8 @@ class RdbSiteDao(
 
   // ? Should replace this function with a call to CreateSiteSystemDaoMixin.createSiteImpl ?
   // And do everything in the same transaction!
-  def createWebsite(name: String, address: String, ownerIp: String,
+  def createWebsite(name: Option[String], address: Option[String],
+        embeddingSiteAddress: Option[String], ownerIp: String,
         ownerLoginId: String, ownerIdentity: Identity, ownerRole: User)
         : Option[(Tenant, User)] = {
     try {
@@ -1379,17 +1380,23 @@ class RdbSiteDao(
         val newTenantNoId = Tenant(id = "?", name = name,
            creatorIp = ownerIp, creatorTenantId = siteId,
            creatorLoginId = ownerLoginId, creatorRoleId = ownerRole.id,
+           embeddingSiteAddress = embeddingSiteAddress,
            hosts = Nil)
         val newTenant = _createTenant(newTenantNoId)
-        val newHost = TenantHost(address, TenantHost.RoleCanonical, TenantHost.HttpsNone)
-        val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
-        assErrIf(newHostCount != 1, "DwE09KRF3")
+        val newHosts = address match {
+          case None => Nil
+          case Some(adr) =>
+            val newHost = TenantHost(adr, TenantHost.RoleCanonical, TenantHost.HttpsNone)
+            val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
+            assErrIf(newHostCount != 1, "DwE09KRF3")
+            List(newHost)
+        }
         val ownerRoleAtNewWebsite = _insertUser(newTenant.id,
           ownerRole.copy(id = "?",
             isAdmin = true, isOwner = true))
         val ownerIdtyAtNewWebsite = insertIdentity(
           ownerIdentity, userId = ownerRoleAtNewWebsite.id, otherSiteId = newTenant.id)(connection)
-        Some((newTenant.copy(hosts = List(newHost)), ownerRoleAtNewWebsite))
+        Some((newTenant.copy(hosts = newHosts), ownerRoleAtNewWebsite))
       }
     }
     catch {
@@ -1419,11 +1426,12 @@ class RdbSiteDao(
       id = db.nextSeqNo("DW1_TENANTS_ID").toString)
     db.update("""
         insert into DW1_TENANTS (
-          ID, NAME, CREATOR_IP,
+          ID, NAME, EMBEDDING_SITE_ADDRESS, CREATOR_IP,
           CREATOR_TENANT_ID, CREATOR_LOGIN_ID, CREATOR_ROLE_ID)
-        values (?, ?, ?, ?, ?, ?)
+        values (?, ?, ?, ?, ?, ?, ?)
               """,
-      List[AnyRef](tenant.id, tenant.name, tenant.creatorIp,
+      List[AnyRef](tenant.id, tenant.name.orNullVarchar,
+        tenant.embeddingSiteAddress.orNullVarchar, tenant.creatorIp,
         tenant.creatorTenantId, tenant.creatorLoginId, tenant.creatorRoleId))
     tenant
   }

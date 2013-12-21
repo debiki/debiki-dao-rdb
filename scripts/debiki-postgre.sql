@@ -191,6 +191,7 @@ create table DW1_TENANTS(
   ID varchar(32) not null,
   NAME varchar(100) not null,
   CTIME timestamp default now() not null,
+  EMBEDDING_SITE_ADDRESS varchar,  -- there's a max 100 chars constraint
   CREATOR_IP varchar(39),
   CREATOR_TENANT_ID varchar(32),
   CREATOR_LOGIN_ID varchar(32),
@@ -204,7 +205,7 @@ create table DW1_TENANTS(
   -- tables have been created (DW1_USERS/ROLES and DW1_LOGINS).
   constraint DW1_TNT_ID__C_NE check (trim(ID) <> ''),
   constraint DW1_TNT_ID__C_N0 check (ID <> '0'),
-  constraint DW1_TNT_NAME__C_NE check (trim(NAME) <> '')
+  constraint DW1_TNT_NAME__C_NE check (NAME is null or trim(NAME) <> '')
 );
 
 create index DW1_TENANTS_CREATORIP on DW1_TENANTS(CREATOR_IP);

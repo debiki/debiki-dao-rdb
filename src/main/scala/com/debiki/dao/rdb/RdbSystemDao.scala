@@ -174,6 +174,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   def loadTenants(tenantIds: Seq[String]): Seq[Tenant] = {
+    // COULD change so uses 1 connection only, not 2 `queryAtnms`.
     // For now, load only 1 tenant.
     require(tenantIds.length == 1)
 
@@ -197,7 +198,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     var tenants = List[Tenant]()
     db.queryAtnms("""
-        select ID, NAME, CREATOR_IP, CREATOR_TENANT_ID,
+        select ID, NAME, EMBEDDING_SITE_ADDRESS, CREATOR_IP, CREATOR_TENANT_ID,
             CREATOR_LOGIN_ID, CREATOR_ROLE_ID
         from DW1_TENANTS where ID = ?
         """,
@@ -208,11 +209,12 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val hosts = hostsByTenantId(tenantId)
         tenants ::= Tenant(
           id = tenantId,
-          name = rs.getString("NAME"),
+          name = Option(rs.getString("NAME")),
           creatorIp = rs.getString("CREATOR_IP"),
           creatorTenantId = rs.getString("CREATOR_TENANT_ID"),
           creatorLoginId = rs.getString("CREATOR_LOGIN_ID"),
           creatorRoleId = rs.getString("CREATOR_ROLE_ID"),
+          embeddingSiteAddress = Option(rs.getString("EMBEDDING_SITE_ADDRESS")),
           hosts = hosts)
       }
     })

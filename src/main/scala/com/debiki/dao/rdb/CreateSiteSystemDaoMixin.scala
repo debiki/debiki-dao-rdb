@@ -63,9 +63,10 @@ trait CreateSiteSystemDaoMixin {
         newWebsiteDao.createPageImpl(page)(connection)
       }
 
-      Tenant(siteId, name = siteData.name, creatorIp = "",
+      Tenant(siteId, name = Some(siteData.name), creatorIp = "",
          creatorTenantId = "", creatorLoginId = "",
-         creatorRoleId = "", hosts = siteHost::Nil)
+         creatorRoleId = "", embeddingSiteAddress = None,
+         hosts = siteHost::Nil)
     }
   }
 
