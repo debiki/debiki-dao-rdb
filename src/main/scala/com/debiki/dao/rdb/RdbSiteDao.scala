@@ -46,6 +46,8 @@ class RdbSiteDao(
 
   val MaxWebsitesPerIp = 6
 
+  val LocalhostAddress = "127.0.0.1"
+
   def siteId = quotaConsumers.tenantId
 
   def db = systemDaoSpi.db
@@ -1366,9 +1368,13 @@ class RdbSiteDao(
         : Option[(Tenant, User)] = {
     try {
       db.transaction { implicit connection =>
-        val websiteCount = _countWebsites(createdFromIp = ownerIp)
-        if (websiteCount >= MaxWebsitesPerIp)
-          throw TooManySitesCreatedException(ownerIp)
+        // Unless apparently testing from localhost, don't allow someone to create
+        // very many sites.
+        if (ownerIp != LocalhostAddress) {
+          val websiteCount = _countWebsites(createdFromIp = ownerIp)
+          if (websiteCount >= MaxWebsitesPerIp)
+            throw TooManySitesCreatedException(ownerIp)
+        }
 
         val newTenantNoId = Tenant(id = "?", name = name,
            creatorIp = ownerIp, creatorTenantId = siteId,
