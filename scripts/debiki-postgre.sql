@@ -191,7 +191,7 @@ create table DW1_TENANTS(
   ID varchar(32) not null,
   NAME varchar(100) not null,
   CTIME timestamp default now() not null,
-  EMBEDDING_SITE_ADDRESS varchar,  -- there's a max 100 chars constraint
+  EMBEDDING_SITE_URL varchar,  -- there's a max 100 chars constraint
   CREATOR_IP varchar(39),
   CREATOR_TENANT_ID varchar(32),
   CREATOR_LOGIN_ID varchar(32),
@@ -645,7 +645,7 @@ create table DW1_PAGES(
       references DW1_PAGES(TENANT, GUID) deferrable,
   constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0'),
   constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in ('G', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C')),
+      check (PAGE_ROLE in ('G', 'EC', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C')),
   constraint DW1_PAGES_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
   constraint DW1_PAGES_CDATI_MDATI__C_LE check (CDATI <= MDATI),
   constraint DW1_PAGES_CDATI_PUBLDATI__C_LE check (CDATI <= PUBL_DATI),

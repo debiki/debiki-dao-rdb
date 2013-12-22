@@ -336,6 +336,7 @@ object RdbUtil {
   def _toPageRole(pageRoleString: String): PageRole = pageRoleString match {
     case null => PageRole.Generic
     case "G" => PageRole.Generic
+    case "EC" => PageRole.EmbeddedComments
     case "B" => PageRole.Blog
     case "BP" => PageRole.BlogPost
     case "FG" => PageRole.ForumGroup
@@ -353,6 +354,7 @@ object RdbUtil {
 
   def _pageRoleToSql(pageRole: PageRole): AnyRef = pageRole match {
     case PageRole.Generic => "G"
+    case PageRole.EmbeddedComments => "EC"
     case PageRole.Blog => "B"
     case PageRole.BlogPost => "BP"
     case PageRole.ForumGroup => "FG"
