@@ -65,7 +65,7 @@ trait CreateSiteSystemDaoMixin {
 
       Tenant(siteId, name = Some(siteData.name), creatorIp = "",
          creatorTenantId = "", creatorLoginId = "",
-         creatorRoleId = "", embeddingSiteAddress = None,
+         creatorRoleId = "", embeddingSiteUrl = None,
          hosts = siteHost::Nil)
     }
   }
