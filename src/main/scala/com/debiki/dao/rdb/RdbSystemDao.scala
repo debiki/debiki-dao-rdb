@@ -67,7 +67,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       // Use "u_*" select list item names, so works with _User(result-set).
       val q = """
          select
-            e.TENANT, '-'||g.ID u_id, g.NAME u_disp_name,
+            g.SITE_ID TENANT, '-'||g.ID u_id, g.NAME u_disp_name,
             g.EMAIL_ADDR u_email, e.EMAIL_NOTFS u_email_notfs, g.LOCATION u_country,
             g.URL u_website, 'F' u_superadmin, 'F' u_is_owner
          from
