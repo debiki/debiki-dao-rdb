@@ -161,6 +161,7 @@ class RdbSiteDao(
         (implicit connection: js.Connection) {
     val values = List(
       newMeta.parentPageId.orNullVarchar,
+      newMeta.url.orNullVarchar,
       d2ts(newMeta.modDati),
       o2ts(newMeta.pubDati),
       o2ts(newMeta.sgfntModDati),
@@ -180,6 +181,7 @@ class RdbSiteDao(
     val sql = s"""
       update DW1_PAGES set
         PARENT_PAGE_ID = ?,
+        PAGE_URL = ?,
         MDATI = ?,
         PUBL_DATI = ?,
         SGFNT_MDATI = ?,
@@ -2063,12 +2065,12 @@ class RdbSiteDao(
 
     val insertIntoColumnsSql = """
       insert into DW1_PAGES (
-         SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID,
+         SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID, PAGE_URL,
          CDATI, MDATI, PUBL_DATI)
       """
 
     val valuesSql =
-      "nextval('DW1_PAGES_SNO'), ?, ?, ?, ?, ?, ?, ?"
+      "nextval('DW1_PAGES_SNO'), ?, ?, ?, ?, ?, ?, ?, ?"
 
     // If there is no parent page, use an `insert ... values (...)` statement.
     // Otherwise, use an `insert ... select ... from ...` and verify that the
@@ -2102,6 +2104,7 @@ class RdbSiteDao(
 
     values :::= List[AnyRef](page.tenantId, page.id,
       _pageRoleToSql(page.role), page.parentPageId.orNullVarchar,
+      page.meta.url.orNullVarchar,
       d2ts(page.meta.creationDati), d2ts(page.meta.modDati),
       page.meta.pubDati.map(d2ts _).getOrElse(NullTimestamp))
 

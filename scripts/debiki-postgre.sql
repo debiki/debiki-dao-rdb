@@ -594,6 +594,7 @@ create table DW1_PAGES(
   -- 'C'ode page.
   PAGE_ROLE varchar(10) not null,
   PARENT_PAGE_ID varchar(32),
+  URL varchar, -- at most 200
 
   -- Derive reply ids from small consecutive integers, so they can be used
   -- as indexes into per page byte arrays, which clarifies which comments
