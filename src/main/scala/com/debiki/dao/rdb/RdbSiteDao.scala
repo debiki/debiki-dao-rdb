@@ -482,6 +482,13 @@ class RdbSiteDao(
   }
 
 
+  def loadLogin(loginId: LoginId): Option[Login] = {
+    db.withConnection(connection => {
+      _loadLoginById(loginId)(connection)
+    })
+  }
+
+
   private def _loadLoginById(loginId: String)
         (implicit connection: js.Connection): Option[Login] = {
     val logins = _loadLogins(byLoginIds = loginId::Nil)
