@@ -35,6 +35,12 @@ trait CreateSiteSystemDaoMixin {
   self: RdbSystemDao =>
 
 
+  /** Creates the very first site in a Debiki installation.
+    *
+    * Happens in this dedicated method, because it's a bit different from
+    * the creation of subsequent sites. For example, there's no owner data.
+    * Subsequent sites are instead created by RdbSiteDao.createWebsite().
+    */
   def createSiteImpl(siteData: FirstSiteData): Tenant = {
     val newSiteOwnerData = siteData match {
       case n: NewSiteData => Some(n.newSiteOwnerData)
@@ -46,9 +52,9 @@ trait CreateSiteSystemDaoMixin {
     db.transaction { implicit connection =>
       val siteId: String = db.nextSeqNo("DW1_TENANTS_ID").toString
       db.update("""
-        insert into DW1_TENANTS (ID, NAME)
-        values (?, ?)
-        """, List[AnyRef](siteId, siteData.name))
+        insert into DW1_TENANTS (ID, NAME, EMBEDDING_SITE_URL)
+        values (?, ?, ?)
+        """, List[AnyRef](siteId, siteData.name, siteData.embeddingSiteUrl.orNullVarchar))
       val siteHost = TenantHost(siteData.address, TenantHost.RoleCanonical, siteData.https)
       insertTenantHost(siteId, siteHost)(connection)
 
