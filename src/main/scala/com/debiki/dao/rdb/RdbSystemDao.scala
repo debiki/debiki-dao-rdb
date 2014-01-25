@@ -722,6 +722,11 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_USERS
       delete from DW1_TENANT_HOSTS
       delete from DW1_TENANTS
+      alter sequence DW1_IDS_SNO restart
+      alter sequence DW1_LOGINS_SNO restart
+      alter sequence DW1_PAGES_SNO restart
+      alter sequence DW1_TENANTS_ID restart
+      alter sequence DW1_USERS_SNO restart
       """.trim.split("\n") foreach { db.update(_) }
 
       db.update("SET CONSTRAINTS ALL IMMEDIATE")
