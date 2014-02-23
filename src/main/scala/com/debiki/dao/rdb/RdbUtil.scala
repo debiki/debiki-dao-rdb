@@ -56,8 +56,7 @@ object RdbUtil {
      "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.NEW_IP, " +
      "a.APPROVAL, a.AUTO_APPLICATION"
 
-  def _Action(rs: js.ResultSet, ratingTags: col.Map[ActionId, List[String]])
-        : PostActionDtoOld = {
+  def _Action(rs: js.ResultSet): PostActionDtoOld = {
     val postId = rs.getInt("POST_ID")
     val id = rs.getInt("PAID")
     val (loginSno, userId) = {
@@ -95,10 +94,6 @@ object RdbUtil {
       case "Post" =>
         buildAction(PAP.CreatePost(parentPostId = relpa, text = n2e(text_?),
           markup = n2e(markup_?), where = Option(where_?), approval = approval))
-      case "Rating" =>
-        val tags = ratingTags(id)
-        new Rating(id = id, postId = postId, ctime = time,
-          loginId = loginSno, userId = userId, newIp = newIp, tags = tags)
       case "Edit" =>
         buildAction(PAP.EditPost(n2e(text_?), newMarkup = Option(markup_?),
           autoApplied = editAutoApplied, approval = approval))
@@ -109,6 +104,12 @@ object RdbUtil {
           loginId = loginSno, userId = userId, newIp = newIp,
           result = n2e(text_?),
           approval = approval)
+      case "VoteLike" =>
+        buildAction(PAP.VoteLike)
+      case "VoteWrong" =>
+        buildAction(PAP.VoteWrong)
+      case "VoteOffTopic" =>
+        buildAction(PAP.VoteOffTopic)
       case flag if flag startsWith "Flag" =>
         val reasonStr = flag drop 4 // drop "Flag"
         val reason = FlagReason withName reasonStr

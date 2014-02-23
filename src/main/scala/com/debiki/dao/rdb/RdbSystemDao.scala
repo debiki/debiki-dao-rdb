@@ -708,7 +708,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       """
       delete from DW1_NOTFS_PAGE_ACTIONS
       delete from DW1_EMAILS_OUT
-      delete from DW1_PAGE_RATINGS
       delete from DW1_PAGE_ACTIONS
       delete from DW1_PATHS
       delete from DW1_PAGE_PATHS

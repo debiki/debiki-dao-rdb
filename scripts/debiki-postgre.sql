@@ -151,7 +151,6 @@ Consider clustering data.
 drop table DW0_VERSION;
 drop table DW1_NOTFS_PAGE_ACTIONS;
 drop table DW1_EMAILS_OUT;
-drop table DW1_PAGE_RATINGS;
 drop table DW1_PAGE_ACTIONS;
 drop table DW1_PATHS;
 drop table DW1_POSTS;
@@ -952,12 +951,12 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Edit', 'EditApp',
         'Aprv', 'Rjct',
-        'Rating',
+        'VoteLike', 'VoteDisagree', 'VoteOffTopic',
         'MoveTree',
         'CollapsePost', 'CollapseTree',
         'DelPost', 'DelTree',
         'FlagSpam', 'FlagIllegal', 'FlagCopyVio', 'FlagOther',
-        'Undo', 'VoteUp', 'VoteDown')),
+        'Undo')),
   -- There must be no action with id 0; let 0 mean nothing.
   constraint DW1_PACTIONS_PAID_NOT_0__C
       check (PAID <> '0'),
@@ -1064,22 +1063,6 @@ create index DW1_PGAS_TNT_GUESTID on DW1_PAGE_ACTIONS(TENANT, GUEST_ID);
 create index DW1_PGAS_TNT_ROLEID on DW1_PAGE_ACTIONS(TENANT, ROLE_ID);
 
 create index DW1_PGAS_TENANT_PAGE_POST on DW1_PAGE_ACTIONS(TENANT, PAGE_ID, POST_ID);
-
-
--- COULD rename to DW1_ACTION_RATINGS.
--- Include PAGE_ID so all ratings on a single page can be loaded in one query.
-create table DW1_PAGE_RATINGS(  -- abbreviated ARTS? PRATINGS deprctd.
-  TENANT varchar(32) not null,
-  PAGE_ID varchar(32) not null,
-  PAGE varchar(32), -- deprecated, no longer written to
-  PAID int,
-  TAG varchar(30) not null,
-  -- (will be dropped: done@test)
-  constraint DW1_ARTS__P primary key (TENANT, PAGE_ID, PAID, TAG),
-  constraint DW1_ARTS__R__PGAS  -- ix primary key
-      foreign key (TENANT, PAGE_ID, PAID)
-      references DW1_PAGE_ACTIONS(TENANT, PAGE_ID, PAID) deferrable
-);
 
 
 

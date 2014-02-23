@@ -1040,36 +1040,6 @@ class RdbSiteDao(
     // Load identities and users.
     val (identities, users) = _loadIdtysAndUsers(onPageWithId = pageId)
 
-    // Load rating tags.
-    val ratingTags: mut.HashMap[ActionId, List[String]] = db.queryAtnms("""
-        select a.PAID, r.TAG from DW1_PAGE_ACTIONS a, DW1_PAGE_RATINGS r
-        where a.TYPE = 'Rating' and a.TENANT = ? and a.PAGE_ID = ?
-          and r.TENANT = a.TENANT and r.PAGE_ID = a.PAGE_ID and r.PAID = a.PAID
-        order by a.PAID
-        """,
-      List(tenantId, pageId), rs => {
-        val map = mut.HashMap[ActionId, List[String]]()
-        var tags = List[String]()
-        var curPaid = PageParts.NoId  // current page action id
-
-        while (rs.next) {
-          val paid = rs.getInt("PAID")
-          val tag = rs.getString("TAG")
-          if (curPaid == PageParts.NoId) curPaid = paid
-          if (paid == curPaid) tags ::= tag
-          else {
-            // All tags found for the rating with _ACTIONS.PAID = curPaid.
-            map(curPaid) = tags
-            tags = tag::Nil
-            curPaid = paid
-          }
-        }
-        if (tags.nonEmpty)
-          map(curPaid) = tags
-
-        map
-      })
-
     // Load page actions.
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
@@ -1081,7 +1051,7 @@ class RdbSiteDao(
         List(tenantId, pageId), rs => {
       var actions = List[AnyRef]()
       while (rs.next) {
-        val action = _Action(rs, ratingTags)
+        val action = _Action(rs)
         actions ::= action  // this reverses above `order by TIME desc'
       }
 
@@ -1113,7 +1083,7 @@ class RdbSiteDao(
       people: People,
       pagesById: mut.Map[String, PageParts],
       pageIdsAndActions: List[(String, PostActionDtoOld)]) =
-        _loadPeoplePagesActionsNoRatingTags(sql, values)
+        _loadPeoplePagesActions(sql, values)
 
     Map[String, PageParts](pagesById.toList: _*)
   }
@@ -1310,7 +1280,7 @@ class RdbSiteDao(
       people: People,
       pagesById: mut.Map[String, PageParts],
       pageIdsAndActions: List[(String, PostActionDtoOld)]) =
-        _loadPeoplePagesActionsNoRatingTags(sql, values)
+        _loadPeoplePagesActions(sql, values)
 
     val pageIdsAndActionsDescTime =
       pageIdsAndActions sortBy { case (_, action) => - action.ctime.getTime }
@@ -1335,7 +1305,7 @@ class RdbSiteDao(
    *   DW1_PAGE_ACTIONS.PAGE_ID and
    *   RdbUtil.ActionSelectListItems.
    */
-  private def _loadPeoplePagesActionsNoRatingTags(
+  private def _loadPeoplePagesActions(
         sql: String, values: List[AnyRef])
         : (People, mut.Map[String, PageParts], List[(String, PostActionDtoOld)]) = {
     val pagesById = mut.Map[String, PageParts]()
@@ -1345,8 +1315,7 @@ class RdbSiteDao(
       db.query(sql, values, rs => {
         while (rs.next) {
           val pageId = rs.getString("PAGE_ID")
-          // Skip rating tags, for now: (as stated in the docs in Dao.scala)
-          val action = _Action(rs, ratingTags = Map.empty.withDefaultValue(Nil))
+          val action = _Action(rs)
           val page = pagesById.getOrElseUpdate(pageId, PageParts(pageId))
           val pageWithAction = page ++ (action::Nil)
           pagesById(pageId) = pageWithAction
@@ -2425,15 +2394,6 @@ class RdbSiteDao(
         d2ts(action.ctime))
 
       action match {
-        case r: Rating =>
-          db.update(insertIntoActions, commonVals:::List(
-            "Rating", NullInt,
-            NullVarchar, NullInt, NullVarchar, NullVarchar,
-            NullVarchar, NullVarchar))
-          db.batchUpdate("""
-            insert into DW1_PAGE_RATINGS(TENANT, PAGE_ID, PAID, TAG)
-            values (?, ?, ?, ?)
-            """, r.tags.map(t => List(siteId, pageId, r.id.asAnyRef, t)))
         case a: EditApp =>
           db.update(insertIntoActions, commonVals:::List(
             "EditApp", a.editId.asAnyRef, e2n(a.result), NullInt,
@@ -2470,6 +2430,9 @@ class RdbSiteDao(
                 "PinAtPos", NullInt, NullVarchar, p.position.asAnyRef,
                 NullVarchar, NullVarchar, NullVarchar, NullVarchar))
 
+            case PAP.VoteLike => insertSimpleValue("VoteLike")
+            case PAP.VoteWrong => insertSimpleValue("VoteWrong")
+            case PAP.VoteOffTopic => insertSimpleValue("VoteOffTopic")
             case PAP.CollapsePost => insertSimpleValue("CollapsePost")
             case PAP.CollapseTree => insertSimpleValue("CollapseTree")
             case PAP.CloseTree => insertSimpleValue("CloseTree")
