@@ -21,7 +21,7 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
   'Post', 'Edit', 'EditApp',
   'Aprv', 'Rjct',
   'Rating',
-  'PinAtPos', 'PinVotes'  --   <--- these two are new types
+  'PinAtPos', 'PinVotes',  --   <--- these two are new types
   'MoveTree',
   'CollapsePost', 'CollapseTree',
   'CloseTree', 'ReopenTree',
