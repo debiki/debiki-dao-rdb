@@ -147,6 +147,22 @@ object RdbUtil {
     })
 
 
+  def toActionTypeStr(voteType: PostActionPayload.Vote): String = voteType match {
+    case PostActionPayload.VoteLike => "VoteLike"
+    case PostActionPayload.VoteWrong => "VoteWrong"
+    case PostActionPayload.VoteOffTopic => "VoteOffTopic"
+  }
+
+
+  def userIdToGuestId(userId: String): Option[String] =
+    if (userId.startsWith("-")) Some(userId.drop(1))
+    else None
+
+  def userIdToRoleId(userId: String): Option[String] =
+    if (!userId.startsWith("-")) Some(userId)
+    else None
+
+
   def _dummyUserIdFor(identityId: String) = "-"+ identityId
 
 

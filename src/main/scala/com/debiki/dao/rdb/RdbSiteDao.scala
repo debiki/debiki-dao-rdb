@@ -2450,6 +2450,28 @@ class RdbSiteDao(
   }
 
 
+  def deleteVote(userId: UserId, pageId: PageId, postId: PostId, voteType: PostActionPayload.Vote) {
+    db.transaction { connection =>
+      val (guestOrRoleSql, guestOrRoleId) =
+        (userIdToGuestId(userId), userIdToRoleId(userId)) match {
+          case (Some(guestId), None) => ("GUEST_ID = ?", guestId)
+          case (None, Some(roleId)) => ("ROLE_ID = ?", roleId)
+        }
+      val sql = s"""
+        delete from DW1_PAGE_ACTIONS
+        where TENANT = ?
+          and $guestOrRoleSql
+          and PAGE_ID = ?
+          and POST_ID = ?
+          and TYPE = ?
+        """
+      val values = List[AnyRef](siteId, guestOrRoleId, pageId,
+        postId.asInstanceOf[Integer], toActionTypeStr(voteType))
+      db.update(sql, values)(connection)
+    }
+  }
+
+
   def rememberPostsAreIndexed(indexedVersion: Int, pageAndPostIds: PagePostId*) {
     val pagesAndPostsClause =
       pageAndPostIds.map(_ => "(PAGE_ID = ? and PAID = ?)").mkString(" or ")
