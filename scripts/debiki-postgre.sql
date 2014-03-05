@@ -89,7 +89,7 @@ DW2_* todo:
 Rename TENANTS to WEBSITES.
 Rename TENANT_HOSTS to WEBSITE_ADDRESSES.
 
-Add _ID to all references.
+Add _ID to all references, e.g. DW1_PAGE_ACTIONS.LOGIN -> LOGIN_ID
 Rename all GUID/whateverID/e.g. PAID to only "ID"?
 Rename all EMAIL to EMAIL_ADDR
 DW2_PAGE_PATHS -> DW2_PAGES, remove DW1_PAGES  -- Or don't?? ...(read on)...
@@ -875,6 +875,11 @@ create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT
 
 -- Contains all posts, edits, ratings etc, everything that's needed to
 -- render a discussion.
+-- System user: IP, LOGIN, ROLE_ID, GUEST_ID are all null.
+-- Not logged in user: LOGIN, ROLE_ID, GUEST_ID all null, but IP is not null.
+-- Anonymous users: IP is 0.0.0.0
+-- Guests: GUEST_ID is not null, ROLE_ID is null, currently LOGIN is not null but might change.
+-- Roles:  GUEST_ID is null, ROLE_ID is not null, LOGIN is not null.
 create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   PAGE varchar(32), -- deprecated, no longer written to
   TENANT varchar(32)  not null,
@@ -918,7 +923,7 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- 'A' if the edit was applied automatically upon creation.
   -- (When you edit a post of yours, the edit is automatically applied.)
   AUTO_APPLICATION varchar(1),
-  NEW_IP varchar(39), -- null, unless differs from DW1_LOGINS.START_IP
+  IP varchar(39), -- null for the system user
 
   -- For optimistic concurrency control, when updating other databases (ElasticSearch).
   --VERSION int,
@@ -926,6 +931,9 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   -- Which ElasticSearch index this post has been indexed into.
   -- For examlpe, 123 means index sites_v123.
   INDEX_VERSION int,
+
+  BROWSER_ID_COOKIE varchar, -- 1 .. 39 chars
+  BROWSER_FINGERPRINT int,
 
  constraint DW1_PGAS_TNT_PGID_ID__P
      primary key (TENANT, PAGE_ID, PAID);

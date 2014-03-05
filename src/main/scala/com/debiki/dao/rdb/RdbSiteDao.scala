@@ -470,7 +470,6 @@ class RdbSiteDao(
 
 
   override def saveLogout(loginId: String, logoutIp: String) {
-    require(loginId != SystemUser.Login.id)
     db.transaction { implicit connection =>
       db.update("""
           update DW1_LOGINS set LOGOUT_IP = ?, LOGOUT_TIME = ?
@@ -936,8 +935,9 @@ class RdbSiteDao(
    */
   private[rdb] def _loadUsersWhoDid(actions: List[PostActionDtoOld])
         (implicit connection: js.Connection): People = {
-    val loginIds: List[String] = actions map (_.loginId)
+    val loginIds: List[String] = actions flatMap (_.loginId)
     val logins = _loadLogins(byLoginIds = loginIds)
+    // SHOULD load by role id + guest id, not login id because it might be null soon [NoLoginId]
     val (idtys, users) = _loadIdtysAndUsers(forLoginIds = loginIds)
     People(logins, idtys, users)
   }
@@ -2364,29 +2364,44 @@ class RdbSiteDao(
 
       val insertIntoActions = """
           insert into DW1_PAGE_ACTIONS(
-            LOGIN, GUEST_ID, ROLE_ID,
+            LOGIN, GUEST_ID, ROLE_ID, IP,
+            BROWSER_ID_COOKIE, BROWSER_FINGERPRINT,
             TENANT, PAGE_ID, POST_ID, PAID, TIME,
             TYPE, RELPA, TEXT, LONG_VALUE, MARKUP, WHEERE,
             APPROVAL, AUTO_APPLICATION)
-          values (?, ?, ?,
+          values (
+            ?, ?, ?, ?,
+            ?, ?,
             ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
-            ?, ?, ?)"""
+            ?, ?, ?, ?, ?, ?,
+            ?, ?)"""
 
-      // There's no login (or identity or user) stored for the system user,
-      // so don't try to reference it via DW1_PAGE_ACTIONS.LOGIN_ID.
-      val (loginIdNullForSystem, roleIdNullForSystem) =
-        if (action.loginId == SystemUser.Login.id) {
-          assErrIf(action.userId != SystemUser.User.id, "DwE57FU1")
-          (NullVarchar, NullVarchar)
+      // Set the user id and ip to null for the system user. (The user id has to
+      // be null beause there's no matching row in the roles table.)
+      val (ipNullForSystem, roleIdNullForSystem, browserFingerprintNullForSystem) =
+        if (action.userId == SystemUser.User.id) {
+          assErrIf(action.loginId.isDefined, "DwE57FU1")
+          assErrIf(action.ip != SystemUser.Ip, "DwE8SW05")
+          (NullVarchar, NullVarchar, NullInt)
         }
-        else (action.loginId, action.anyRoleId.orNullVarchar)
+        else {
+          (action.ip, action.anyRoleId.orNullVarchar, action.browserFingerprint.asAnyRef)
+        }
+
+      val guestIdNullForUnknown =
+        if (action.userId == UnknownUser.Id)
+          NullVarchar
+        else
+          action.anyGuestId.orNullVarchar
 
       // Keep in mind that Oracle converts "" to null.
       val commonVals: List[AnyRef] = List(
-        loginIdNullForSystem,
-        action.anyGuestId.orNullVarchar,
+        action.loginId.orNullVarchar,
+        guestIdNullForUnknown,
         roleIdNullForSystem,
+        ipNullForSystem,
+        action.browserIdCookie.orNullVarchar,
+        browserFingerprintNullForSystem,
         siteId,
         pageId,
         action.postId.asAnyRef,
@@ -2450,24 +2465,58 @@ class RdbSiteDao(
   }
 
 
-  def deleteVote(userId: UserId, pageId: PageId, postId: PostId, voteType: PostActionPayload.Vote) {
+  def deleteVote(userIdData: UserIdData, pageId: PageId, postId: PostId,
+        voteType: PostActionPayload.Vote) {
     db.transaction { connection =>
-      val (guestOrRoleSql, guestOrRoleId) =
-        (userIdToGuestId(userId), userIdToRoleId(userId)) match {
-          case (Some(guestId), None) => ("GUEST_ID = ?", guestId)
-          case (None, Some(roleId)) => ("ROLE_ID = ?", roleId)
-        }
-      val sql = s"""
-        delete from DW1_PAGE_ACTIONS
-        where TENANT = ?
-          and $guestOrRoleSql
-          and PAGE_ID = ?
-          and POST_ID = ?
-          and TYPE = ?
-        """
-      val values = List[AnyRef](siteId, guestOrRoleId, pageId,
-        postId.asInstanceOf[Integer], toActionTypeStr(voteType))
-      db.update(sql, values)(connection)
+
+      def deleteVoteByUserId(): Int = {
+        val (guestOrRoleSql, guestOrRoleId) =
+          (userIdData.anyGuestId, userIdData.anyRoleId) match {
+            case (Some(guestId), None) => ("GUEST_ID = ?", guestId)
+            case (None, Some(roleId)) => ("ROLE_ID = ?", roleId)
+            case _ => assErr("DwE72RI05")
+          }
+        val sql = s"""
+          delete from DW1_PAGE_ACTIONS
+          where TENANT = ?
+            and $guestOrRoleSql
+            and PAGE_ID = ?
+            and POST_ID = ?
+            and TYPE = ?
+          """
+        val values = List[AnyRef](siteId, guestOrRoleId, pageId,
+          postId.asInstanceOf[Integer], toActionTypeStr(voteType))
+        db.update(sql, values)(connection)
+      }
+
+      def deleteVoteByCookie(): Int = {
+        val sql = s"""
+          delete from DW1_PAGE_ACTIONS
+          where TENANT = ?
+            and GUEST_ID is null
+            and ROLE_ID is null
+            and BROWSER_ID_COOKIE = ?
+            and PAGE_ID = ?
+            and POST_ID = ?
+            and TYPE = ?
+          """
+        val values = List[AnyRef](siteId, userIdData.browserIdCookie.getOrDie("DwE75FE6"),
+          pageId, postId.asInstanceOf[Integer], toActionTypeStr(voteType))
+        db.update(sql, values)(connection)
+      }
+
+      var numRowsDeleted = 0
+      if ((userIdData.anyGuestId.isDefined && userIdData.userId != UnknownUser.Id) ||
+            userIdData.anyRoleId.isDefined) {
+        numRowsDeleted = deleteVoteByUserId()
+      }
+      if (numRowsDeleted == 0 && userIdData.browserIdCookie.isDefined) {
+        numRowsDeleted = deleteVoteByCookie()
+      }
+      if (numRowsDeleted > 1) {
+        assErr("DwE8GCH0", o"""Too many votes deleted, page `$pageId' post `$postId',
+          user: $userIdData, vote type: $voteType""")
+      }
     }
   }
 
@@ -2860,12 +2909,17 @@ class RdbSiteDao(
       applyPatch(patchText, to = anyApprovedText getOrElse "")
     }
 
+    val userIdData = UserIdData(
+      loginId = None, // for now
+      userId = rs.getString("AUTHOR_ID"),
+      ip = "0.0.0.0", // for now
+      browserIdCookie = None, // for now
+      browserFingerprint = 0) // for now
+
     val postActionDto = PostActionDto.forNewPost(
       id = rs.getInt("POST_ID"),
       creationDati = ts2d(rs.getTimestamp("CREATED_AT")),
-      loginId = "?",
-      userId = rs.getString("AUTHOR_ID"),
-      newIp = None, // for now
+      userIdData = userIdData,
       parentPostId = getOptionalIntNoneNot0(rs, "PARENT_POST_ID"),
       text = anyUnapprovedText getOrElse anyApprovedText.get,
       markup = rs.getString("MARKUP"),

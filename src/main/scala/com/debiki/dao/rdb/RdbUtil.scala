@@ -53,21 +53,32 @@ object RdbUtil {
 
   def ActionSelectListItems =
     "a.POST_ID, a.PAID, a.LOGIN, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
-     "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.NEW_IP, " +
+     "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.IP, " +
+     "a.BROWSER_ID_COOKIE, a.BROWSER_FINGERPRINT," +
      "a.APPROVAL, a.AUTO_APPLICATION"
 
   def _Action(rs: js.ResultSet): PostActionDtoOld = {
     val postId = rs.getInt("POST_ID")
     val id = rs.getInt("PAID")
-    val (loginSno, userId) = {
-      // No login/identity/user is stored for the hardcoded system user.
-      val loginIdOrNull = rs.getString("LOGIN")
-      if (loginIdOrNull eq null)
-        (SystemUser.Login.id, SystemUser.User.id)
-      else
-        (loginIdOrNull,
-          Option(rs.getString("ROLE_ID")).getOrElse("-" + rs.getString("GUEST_ID")))
+    val anyLoginId = Option(rs.getString("LOGIN"))
+
+    val anyIp = Option(rs.getString("IP"))
+    val isSystemUser = anyIp.isEmpty
+    val ip = anyIp getOrElse SystemUser.Ip
+
+    val userId: UserId = {
+      val anyGuestId = Option(rs.getString("GUEST_ID"))
+      val anyRoleId = Option(rs.getString("ROLE_ID"))
+      (anyGuestId, anyRoleId) match {
+        case (Some(guestId), None) => "-" + guestId
+        case (None, Some(roleId)) => roleId
+        case (None, None) =>
+          if (isSystemUser) SystemUser.User.id
+          else UnknownUser.Id
+        case _ => assErr("DwE7390FU3")
+      }
     }
+
     val time = ts2d(rs.getTimestamp("TIME"))
     val typee = rs.getString("TYPE")
     val relpa = getOptionalIntNoneNot0(rs, "RELPA")
@@ -75,16 +86,23 @@ object RdbUtil {
     val markup_? = rs.getString("MARKUP")
     val where_? = rs.getString("WHEERE")
     val longValue_? = rs.getLong("LONG_VALUE")
-    val newIp = Option(rs.getString("NEW_IP"))
+    val anyBrowserIdCookie = Option(rs.getString("BROWSER_ID_COOKIE"))
+    val browserFingerprint = Option(rs.getInt("BROWSER_FINGERPRINT")) getOrElse 0
     val approval = _toAutoApproval(rs.getString("APPROVAL"))
     val editAutoApplied = rs.getString("AUTO_APPLICATION") == "A"
 
+    val userIdData = UserIdData(
+      loginId = anyLoginId,
+      userId = userId,
+      ip = ip,
+      browserIdCookie = anyBrowserIdCookie,
+      browserFingerprint = browserFingerprint)
+
     def buildAction(payload: PostActionPayload) =
-      PostActionDto(id, time, payload, postId = postId, loginId = loginSno,
-        userId = userId, newIp = newIp)
+      PostActionDto(id, time, payload, postId = postId, userIdData = userIdData)
 
     def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
-      target: $relpa, login id: $loginSno, user id: $userId"""
+      target: $relpa, login id: $anyLoginId, user id: $userId"""
     assErrIf(postId <= 0, "DwE5YQ08", s"POST_ID is <= 0, details: $details")
 
     // (This whole match-case will go away when I unify all types
@@ -101,9 +119,7 @@ object RdbUtil {
         val editId = relpa getOrElse throwBadDatabaseData(
           "DwE26UF0", s"Edit id missing for edit app `$id', post `$postId', site `?'")
         new EditApp(id = id, editId = editId, postId = postId, ctime = time,
-          loginId = loginSno, userId = userId, newIp = newIp,
-          result = n2e(text_?),
-          approval = approval)
+          userIdData = userIdData, result = n2e(text_?), approval = approval)
       case "VoteLike" =>
         buildAction(PAP.VoteLike)
       case "VoteWrong" =>
@@ -113,7 +129,7 @@ object RdbUtil {
       case flag if flag startsWith "Flag" =>
         val reasonStr = flag drop 4 // drop "Flag"
         val reason = FlagReason withName reasonStr
-        Flag(id = id, postId = postId, loginId = loginSno, userId = userId, newIp = newIp,
+        Flag(id = id, postId = postId, userIdData = userIdData,
           ctime = time, reason = reason, details = n2e(text_?))
       case "DelPost" =>
         buildAction(PAP.DeletePost)
@@ -152,15 +168,6 @@ object RdbUtil {
     case PostActionPayload.VoteWrong => "VoteWrong"
     case PostActionPayload.VoteOffTopic => "VoteOffTopic"
   }
-
-
-  def userIdToGuestId(userId: String): Option[String] =
-    if (userId.startsWith("-")) Some(userId.drop(1))
-    else None
-
-  def userIdToRoleId(userId: String): Option[String] =
-    if (!userId.startsWith("-")) Some(userId)
-    else None
 
 
   def _dummyUserIdFor(identityId: String) = "-"+ identityId
