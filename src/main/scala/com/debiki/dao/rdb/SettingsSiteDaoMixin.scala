@@ -20,10 +20,8 @@ package com.debiki.dao.rdb
 import com.debiki.core._
 import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
-import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
 import scala.collection.mutable
-import scala.collection.mutable.StringBuilder
 import Rdb._
 import RdbUtil._
 
@@ -38,22 +36,22 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
   def savePageSetting(section: Section, setting: SettingNameValue[_]) {
     db.transaction { connection =>
       val settingName = setting._1
-      deletePageSettingImpl(section, settingName)(connection)
-      insertPageSettingImpl(section, setting)(connection)
+      deleteSettingImpl(section, settingName)(connection)
+      insertSettingImpl(section, setting)(connection)
     }
   }
 
 
-  def loadPageSettings(pageIds: Seq[PageId]): PageSettings = {
+  def loadSettings(sections: Seq[Section]): Seq[RawSettings] = {
     db.withConnection { connection =>
-      loadPageSettingsImpl(pageIds)(connection)
+      sections.map(loadSettings(_)(connection))
     }
   }
 
 
   /** Returns the number of settings deleted.
     */
-  private def deletePageSettingImpl(section: Section, settingName: String)(
+  private def deleteSettingImpl(section: Section, settingName: String)(
         implicit connection: js.Connection): Int = {
     val (sql, values) = section match {
       case Section.WholeSite =>
@@ -79,7 +77,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
   }
 
 
-  private def insertPageSettingImpl(section: Section, setting: SettingNameValue[_])(
+  private def insertSettingImpl(section: Section, setting: SettingNameValue[_])(
         implicit connection: js.Connection) {
     val settingName = setting._1
     val settingValue = setting._2
@@ -119,100 +117,49 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
   }
 
 
-  private def loadPageSettingsImpl(pageIds: Seq[PageId])(
-        implicit connection: js.Connection): PageSettings = {
+  private def loadSettings(section: Section)(implicit connection: js.Connection): RawSettings = {
 
-    val anyPageId = pageIds.headOption
-    val ancestorIds = pageIds // include the page itself
-
-    val sql = StringBuilder.newBuilder.append("select * from (")
-    val values = mutable.ArrayBuffer[AnyRef]()
-
-    // Load page specific settings.
-    if (anyPageId.isDefined) {
-      sql.append("""
-        select NAME, TYPE, PAGE_ID, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE, -1 rownum
-        from DW1_SETTINGS
-        where TENANT_ID = ?
-          and PAGE_ID = ?
-          and TYPE = 'SinglePage'""")
-      values.append(siteId, anyPageId.get)
-    }
-
-    // Load e.g. forum, subforum or blog specific settings.
-    if (ancestorIds.nonEmpty) {
-      sql.append(s"""
-        union select *, row_number() OVER () rownum from (
-          select NAME, TYPE, PAGE_ID, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
+    val (sqlQuery, values) = section match {
+      case Section.WholeSite =>
+        val sql = """
+          select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
+          from DW1_SETTINGS
+          where TENANT_ID = ? and TYPE = 'WholeSite'
+          """
+        (sql, List(siteId))
+      case Section.PageTree(rootPageId) =>
+        val sql = """
+          select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
           from DW1_SETTINGS
           where TENANT_ID = ?
-            and PAGE_ID in (${ makeInListFor(ancestorIds) })
+            and PAGE_ID = ?
             and TYPE = 'PageTree'
-          order by ${ makeOrderByListFor("PAGE_ID", ancestorIds) }
-        ) as section_settings""")
-      values.append(siteId)
-      values.append(ancestorIds: _*) // for the in list
-      values.append(ancestorIds: _*) // for the order by list
+          """
+        (sql, List(siteId, rootPageId))
+      case Section.SinglePage(pageId) =>
+        val sql = """
+          select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
+          from DW1_SETTINGS
+          where TENANT_ID = ?
+            and PAGE_ID = ?
+            and TYPE = 'SinglePage'"""
+        (sql, List(siteId, pageId))
     }
 
-    // Load default website settings.
-    if (values.nonEmpty) sql.append(" union ")
-    sql.append(s"""
-      select NAME, TYPE, null PAGE_ID, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE, 999999 rownum
-      from DW1_SETTINGS
-      where TENANT_ID = ? and TYPE = 'WholeSite'
-      """)
-    values.append(siteId)
+    val valuesBySettingName = mutable.HashMap[String, Any]()
 
-    // Sort settings so the most specific ones appear first.
-    sql.append(") as settings_queries order by rownum asc")
-
-    val allSettings = mutable.ArrayBuffer[SectionSettings]()
-
-    db.query(sql.toString, values.toList, rs => {
-      var lastRowNumDebug = -9999
-      var lastSection: Option[Section] = None
-      val namesAndValues = mutable.ArrayBuffer[(String, Any)]()
-
+    db.query(sqlQuery, values, rs => {
       while (rs.next()) {
         val name = rs.getString("NAME")
-        val tyype = rs.getString("TYPE")
-        val pageId = Option(rs.getString("PAGE_ID"))
         val textValue = Option(rs.getString("TEXT_VALUE"))
         val longValue = Option(rs.getLong("LONG_VALUE"))
         val doubleValue = Option(rs.getDouble("DOUBLE_VALUE"))
         val value = textValue.orElse(longValue).orElse(doubleValue).getOrDie("DwE8fiG0")
-
-        val rowNumDebug = rs.getInt("rownum")
-        // Is equal for page settings (then, -1) and site settings (then, 999999).
-        assert(rowNumDebug >= lastRowNumDebug, "DwE77dhK5")
-        lastRowNumDebug = rowNumDebug
-
-        val section: Section = tyype match {
-          case "WholeSite" => Section.WholeSite
-          case "PageTree" => Section.PageTree(pageId getOrDie "DwE2DKf8")
-          case "SinglePage" => Section.SinglePage(pageId getOrDie "DwE94G02")
-          case x => assErr("DwE5fU04", s"Bad section: $x")
-        }
-
-        if (lastSection.isDefined && Some(section) != lastSection) {
-          val moreSettings = SectionSettings(lastSection.get, namesAndValues.toVector)
-          allSettings.append(moreSettings)
-          namesAndValues.clear()
-        }
-        lastSection = Some(section)
-
-        namesAndValues.append(name -> value)
-      }
-
-      lastSection foreach { section =>
-        assErrIf(Section.WholeSite != section, "DwE84GL0")
-        val lastSettings = SectionSettings(section, namesAndValues.toVector)
-        allSettings.append(lastSettings)
+        valuesBySettingName(name) = value
       }
     })
 
-    PageSettings(allSettings.toVector)
+    RawSettings(section, valuesBySettingName.toMap)
   }
 
 }
