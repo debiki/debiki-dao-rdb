@@ -41,6 +41,25 @@ object RdbUtil {
   def makeInListFor(values: Seq[_]): String =
     values.map((x: Any) => "?").mkString(",")
 
+  /** In PostgreSQL, one can order by id like so:
+    *   select ... from ... where (id in (3, 4, 1, 2))
+    *   order by id=3 desc, id=4 desc, id=1 desc
+    * see http://stackoverflow.com/a/9475755/694469
+    *
+    * Returns "id=? desc, id=? desc, ...",
+    * and simply "<field>" if `ids` is empty.
+    */
+  def makeOrderByListFor(field: String, ids: Seq[_]): String = {
+    if (ids.isEmpty)
+      return field
+
+    val sb = StringBuilder.newBuilder
+    for (id <- ids) {
+      if (sb.nonEmpty) sb.append(", ")
+      sb.append(s"$field = ? desc")
+    }
+    sb.toString
+  }
 
   /** `rs.getInt` returns 0 instead of null.
    */

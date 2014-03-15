@@ -706,6 +706,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       db.update("SET CONSTRAINTS ALL DEFERRED");
 
       """
+      delete from DW1_SETTINGS
       delete from DW1_NOTFS_PAGE_ACTIONS
       delete from DW1_EMAILS_OUT
       delete from DW1_PAGE_ACTIONS

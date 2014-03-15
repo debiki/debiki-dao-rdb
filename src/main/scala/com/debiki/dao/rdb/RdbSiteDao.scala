@@ -41,7 +41,10 @@ import RdbUtil._
 class RdbSiteDao(
   val quotaConsumers: QuotaConsumers,
   val daoFactory: RdbDaoFactory)
-  extends SiteDbDao with FullTextSearchSiteDaoMixin with LoginSiteDaoMixin {
+  extends SiteDbDao
+  with FullTextSearchSiteDaoMixin
+  with LoginSiteDaoMixin
+  with SettingsSiteDaoMixin {
 
 
   val MaxWebsitesPerIp = 6

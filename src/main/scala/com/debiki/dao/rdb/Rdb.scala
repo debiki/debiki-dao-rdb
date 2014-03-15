@@ -29,6 +29,7 @@ object Rdb {
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
   val NullInt = Null(js.Types.INTEGER)
+  val NullDouble = Null(js.Types.DOUBLE)
   val NullTimestamp = Null(js.Types.TIMESTAMP)
 
   /**
