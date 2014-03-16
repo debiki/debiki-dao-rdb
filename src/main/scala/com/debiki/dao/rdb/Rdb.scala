@@ -397,6 +397,8 @@ class Rdb(val dataSource: jxs.DataSource){
       v match {
         case i: jl.Integer => pstmt.setInt(bindPos, i.intValue)
         case l: jl.Long => pstmt.setLong(bindPos, l.longValue)
+        case l: jl.Float => pstmt.setFloat(bindPos, l.floatValue)
+        case l: jl.Double => pstmt.setDouble(bindPos, l.doubleValue)
         case s: String => pstmt.setString(bindPos, s)
         case d: js.Date => assErr("DwE0kiesE4", "Use Timestamp not Date")
         case t: js.Time => assErr("DwE96SK3X8", "Use Timestamp not Time")

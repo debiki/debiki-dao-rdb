@@ -152,8 +152,13 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
       while (rs.next()) {
         val name = rs.getString("NAME")
         val textValue = Option(rs.getString("TEXT_VALUE"))
-        val longValue = Option(rs.getLong("LONG_VALUE"))
-        val doubleValue = Option(rs.getDouble("DOUBLE_VALUE"))
+
+        var longValue = Option(rs.getLong("LONG_VALUE"))
+        if (rs.wasNull) longValue = None
+
+        var doubleValue = Option(rs.getDouble("DOUBLE_VALUE"))
+        if (rs.wasNull) doubleValue = None
+
         val value = textValue.orElse(longValue).orElse(doubleValue).getOrDie("DwE8fiG0")
         valuesBySettingName(name) = value
       }
