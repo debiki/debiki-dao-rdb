@@ -57,19 +57,19 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
       case SettingsTarget.WholeSite =>
         val sql = """
           delete from DW1_SETTINGS
-          where TENANT_ID = ? and NAME = ? and TYPE = 'WholeSite'
+          where TENANT_ID = ? and NAME = ? and TARGET = 'WholeSite'
           """
         (sql, List(siteId, settingName))
       case SettingsTarget.PageTree(rootPageId) =>
         val sql = """
           delete from DW1_SETTINGS
-          where TENANT_ID = ? and NAME = ? and TYPE = 'PageTree' and PAGE_ID = ?
+          where TENANT_ID = ? and NAME = ? and TARGET = 'PageTree' and PAGE_ID = ?
           """
         (sql, List(siteId, settingName, rootPageId))
       case SettingsTarget.SinglePage(pageId) =>
         val sql = """
           delete from DW1_SETTINGS
-          where TENANT_ID = ? and NAME = ? and TYPE = 'SinglePage' and PAGE_ID = ?
+          where TENANT_ID = ? and NAME = ? and TARGET = 'SinglePage' and PAGE_ID = ?
           """
         (sql, List(siteId, settingName, pageId))
     }
@@ -84,7 +84,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
 
     val sql = """
       insert into DW1_SETTINGS(
-        TENANT_ID, TYPE, PAGE_ID, NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE)
+        TENANT_ID, TARGET, PAGE_ID, NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE)
       values (?, ?, ?, ?, ?, ?, ?)
       """
 
@@ -124,7 +124,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
         val sql = """
           select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
           from DW1_SETTINGS
-          where TENANT_ID = ? and TYPE = 'WholeSite'
+          where TENANT_ID = ? and TARGET = 'WholeSite'
           """
         (sql, List(siteId))
       case SettingsTarget.PageTree(rootPageId) =>
@@ -133,7 +133,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
           from DW1_SETTINGS
           where TENANT_ID = ?
             and PAGE_ID = ?
-            and TYPE = 'PageTree'
+            and TARGET = 'PageTree'
           """
         (sql, List(siteId, rootPageId))
       case SettingsTarget.SinglePage(pageId) =>
@@ -142,7 +142,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
           from DW1_SETTINGS
           where TENANT_ID = ?
             and PAGE_ID = ?
-            and TYPE = 'SinglePage'"""
+            and TARGET = 'SinglePage'"""
         (sql, List(siteId, pageId))
     }
 
