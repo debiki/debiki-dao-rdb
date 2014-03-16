@@ -33,40 +33,40 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
   self: RdbSiteDao =>
 
 
-  def savePageSetting(section: Section, setting: SettingNameValue[_]) {
+  def saveSetting(target: SettingsTarget, setting: SettingNameValue[_]) {
     db.transaction { connection =>
       val settingName = setting._1
-      deleteSettingImpl(section, settingName)(connection)
-      insertSettingImpl(section, setting)(connection)
+      deleteSettingImpl(target, settingName)(connection)
+      insertSettingImpl(target, setting)(connection)
     }
   }
 
 
-  def loadSettings(sections: Seq[Section]): Seq[RawSettings] = {
+  def loadSettings(targets: Seq[SettingsTarget]): Seq[RawSettings] = {
     db.withConnection { connection =>
-      sections.map(loadSettings(_)(connection))
+      targets.map(loadSettings(_)(connection))
     }
   }
 
 
   /** Returns the number of settings deleted.
     */
-  private def deleteSettingImpl(section: Section, settingName: String)(
+  private def deleteSettingImpl(target: SettingsTarget, settingName: String)(
         implicit connection: js.Connection): Int = {
-    val (sql, values) = section match {
-      case Section.WholeSite =>
+    val (sql, values) = target match {
+      case SettingsTarget.WholeSite =>
         val sql = """
           delete from DW1_SETTINGS
           where TENANT_ID = ? and NAME = ? and TYPE = 'WholeSite'
           """
         (sql, List(siteId, settingName))
-      case Section.PageTree(rootPageId) =>
+      case SettingsTarget.PageTree(rootPageId) =>
         val sql = """
           delete from DW1_SETTINGS
           where TENANT_ID = ? and NAME = ? and TYPE = 'PageTree' and PAGE_ID = ?
           """
         (sql, List(siteId, settingName, rootPageId))
-      case Section.SinglePage(pageId) =>
+      case SettingsTarget.SinglePage(pageId) =>
         val sql = """
           delete from DW1_SETTINGS
           where TENANT_ID = ? and NAME = ? and TYPE = 'SinglePage' and PAGE_ID = ?
@@ -77,7 +77,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
   }
 
 
-  private def insertSettingImpl(section: Section, setting: SettingNameValue[_])(
+  private def insertSettingImpl(target: SettingsTarget, setting: SettingNameValue[_])(
         implicit connection: js.Connection) {
     val settingName = setting._1
     val settingValue = setting._2
@@ -88,10 +88,10 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
       values (?, ?, ?, ?, ?, ?, ?)
       """
 
-    val typeValue = section match {
-      case Section.WholeSite => "WholeSite"
-      case _: Section.PageTree => "PageTree"
-      case _: Section.SinglePage => "SinglePage"
+    val typeValue = target match {
+      case SettingsTarget.WholeSite => "WholeSite"
+      case _: SettingsTarget.PageTree => "PageTree"
+      case _: SettingsTarget.SinglePage => "SinglePage"
     }
 
     val (textValue, longValue, doubleValue) = settingValue match {
@@ -104,10 +104,10 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
       case x => assErr("DwE77Xkf5", s"Unsupported value: `$x', type: ${classNameOf(x)}")
     }
 
-    val pageIdOrNull = section match {
-      case Section.WholeSite => NullVarchar
-      case Section.PageTree(rootId) => rootId
-      case Section.SinglePage(id) => id
+    val pageIdOrNull = target match {
+      case SettingsTarget.WholeSite => NullVarchar
+      case SettingsTarget.PageTree(rootId) => rootId
+      case SettingsTarget.SinglePage(id) => id
     }
 
     val values = List[AnyRef](
@@ -117,17 +117,17 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
   }
 
 
-  private def loadSettings(section: Section)(implicit connection: js.Connection): RawSettings = {
+  private def loadSettings(target: SettingsTarget)(implicit connection: js.Connection): RawSettings = {
 
-    val (sqlQuery, values) = section match {
-      case Section.WholeSite =>
+    val (sqlQuery, values) = target match {
+      case SettingsTarget.WholeSite =>
         val sql = """
           select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
           from DW1_SETTINGS
           where TENANT_ID = ? and TYPE = 'WholeSite'
           """
         (sql, List(siteId))
-      case Section.PageTree(rootPageId) =>
+      case SettingsTarget.PageTree(rootPageId) =>
         val sql = """
           select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
           from DW1_SETTINGS
@@ -136,7 +136,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
             and TYPE = 'PageTree'
           """
         (sql, List(siteId, rootPageId))
-      case Section.SinglePage(pageId) =>
+      case SettingsTarget.SinglePage(pageId) =>
         val sql = """
           select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
           from DW1_SETTINGS
@@ -164,7 +164,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
       }
     })
 
-    RawSettings(section, valuesBySettingName.toMap)
+    RawSettings(target, valuesBySettingName.toMap)
   }
 
 }
