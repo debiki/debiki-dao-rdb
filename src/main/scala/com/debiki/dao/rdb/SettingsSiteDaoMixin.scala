@@ -84,23 +84,23 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
 
     val sql = """
       insert into DW1_SETTINGS(
-        TENANT_ID, TARGET, PAGE_ID, NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE)
-      values (?, ?, ?, ?, ?, ?, ?)
+        TENANT_ID, TARGET, PAGE_ID, NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE)
+      values (?, ?, ?, ?, ?, ?, ?, ?)
       """
 
-    val typeValue = target match {
+    val targetStr = target match {
       case SettingsTarget.WholeSite => "WholeSite"
       case _: SettingsTarget.PageTree => "PageTree"
       case _: SettingsTarget.SinglePage => "SinglePage"
     }
 
-    val (textValue, longValue, doubleValue) = settingValue match {
-      case x: String => (x, NullInt, NullDouble)
-      case x: Int => (NullVarchar, x.asAnyRef, NullDouble)
-      case x: Long => (NullVarchar, x.asAnyRef, NullDouble)
-      case x: Float => (NullVarchar, NullInt, x.asAnyRef)
-      case x: Double => (NullVarchar, NullInt, x.asAnyRef)
-      case x: Boolean => assErr("DwE7GJ340", "Use 'T' and 'F' instead")
+    val (datatype, textValue, longValue, doubleValue) = settingValue match {
+      case x: String => ("Text", x, NullInt, NullDouble)
+      case x: Int => ("Long", NullVarchar, x.asAnyRef, NullDouble)
+      case x: Long => ("Long", NullVarchar, x.asAnyRef, NullDouble)
+      case x: Float => ("Double", NullVarchar, NullInt, x.asAnyRef)
+      case x: Double => ("Double", NullVarchar, NullInt, x.asAnyRef)
+      case x: Boolean => ("Bool", if (x) "T" else "F", NullInt, NullDouble)
       case x => assErr("DwE77Xkf5", s"Unsupported value: `$x', type: ${classNameOf(x)}")
     }
 
@@ -111,7 +111,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
     }
 
     val values = List[AnyRef](
-      siteId, typeValue, pageIdOrNull, settingName, textValue, longValue, doubleValue)
+      siteId, targetStr, pageIdOrNull, settingName, datatype, textValue, longValue, doubleValue)
 
     db.update(sql, values)
   }
@@ -122,14 +122,14 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
     val (sqlQuery, values) = target match {
       case SettingsTarget.WholeSite =>
         val sql = """
-          select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
+          select NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
           from DW1_SETTINGS
           where TENANT_ID = ? and TARGET = 'WholeSite'
           """
         (sql, List(siteId))
       case SettingsTarget.PageTree(rootPageId) =>
         val sql = """
-          select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
+          select NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
           from DW1_SETTINGS
           where TENANT_ID = ?
             and PAGE_ID = ?
@@ -138,7 +138,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
         (sql, List(siteId, rootPageId))
       case SettingsTarget.SinglePage(pageId) =>
         val sql = """
-          select NAME, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
+          select NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
           from DW1_SETTINGS
           where TENANT_ID = ?
             and PAGE_ID = ?
@@ -151,15 +151,15 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
     db.query(sqlQuery, values, rs => {
       while (rs.next()) {
         val name = rs.getString("NAME")
-        val textValue = Option(rs.getString("TEXT_VALUE"))
-
-        var longValue = Option(rs.getLong("LONG_VALUE"))
-        if (rs.wasNull) longValue = None
-
-        var doubleValue = Option(rs.getDouble("DOUBLE_VALUE"))
-        if (rs.wasNull) doubleValue = None
-
-        val value = textValue.orElse(longValue).orElse(doubleValue).getOrDie("DwE8fiG0")
+        val datatype = rs.getString("DATATYPE")
+        val value = datatype match {
+          case "Text" => rs.getString("TEXT_VALUE")
+          case "Long" => rs.getLong("LONG_VALUE")
+          case "Double" => rs.getDouble("DOUBLE_VALUE")
+          case "Bool" => rs.getString("TEXT_VALUE") == "T"
+        }
+        assErrIf(rs.wasNull,
+          "DwE8fiG0", s"Bad setting: `$name', value is null, target: $target, site: `$siteId'")
         valuesBySettingName(name) = value
       }
     })
