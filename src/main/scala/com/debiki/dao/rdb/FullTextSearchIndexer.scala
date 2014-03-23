@@ -291,9 +291,7 @@ private[rdb] class IndexingActor(
 
   private def makeJsonToIndex(post: Post, page: PageNoPath, siteId: String): JsValue = {
     var sectionPageIds = page.ancestorIdsParentFirst
-    if (page.meta.pageRole.childRole.isDefined) {
-      // Since this page can have child pages, consider it a section (e.g. a blog,
-      // forum, subforum or a wiki).
+    if (page.meta.pageRole.isSection) {
       sectionPageIds ::= page.id
     }
 
