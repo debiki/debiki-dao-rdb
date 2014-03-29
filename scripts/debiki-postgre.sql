@@ -645,7 +645,7 @@ create table DW1_PAGES(
       references DW1_PAGES(TENANT, GUID) deferrable,
   constraint DW1_PAGES_SNO_NOT_0__C check (SNO <> '0'),
   constraint DW1_PAGES_PAGEROLE__C_IN
-      check (PAGE_ROLE in ('G', 'EC', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C')),
+      check (PAGE_ROLE in ('G', 'EC', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C', 'SP')),
   constraint DW1_PAGES_CACHEDTITLE__C_NE check (trim(CACHED_TITLE) <> ''),
   constraint DW1_PAGES_CDATI_MDATI__C_LE check (CDATI <= MDATI),
   constraint DW1_PAGES_CDATI_PUBLDATI__C_LE check (CDATI <= PUBL_DATI),

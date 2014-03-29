@@ -390,6 +390,7 @@ object RdbUtil {
     case "W" => PageRole.WikiMainPage
     case "WP" => PageRole.WikiPage
     case "C" => PageRole.Code
+    case "SP" => PageRole.SpecialContent
     case _ =>
       warnDbgDie(
         "Bad page role string: "+ pageRoleString +" [error DwE390KW8]")
@@ -408,6 +409,7 @@ object RdbUtil {
     case PageRole.WikiMainPage => "W"
     case PageRole.WikiPage => "WP"
     case PageRole.Code => "C"
+    case PageRole.SpecialContent => "SP"
   }
 
 

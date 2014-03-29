@@ -1,7 +1,15 @@
--- This evolution adds a delete page function.
+-- This evolution:
+--  - Adds a Special Content ('SP') page type
+--  - Adds a delete page function
 
 
 # --- !Ups
+
+
+-- Add 'SP'.
+alter table DW1_PAGES drop constraint DW1_PAGES_PAGEROLE__C_IN;
+alter table DW1_PAGES add constraint DW1_PAGES_PAGEROLE__C_IN
+  check (PAGE_ROLE in ('G', 'EC', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C', 'SP'));
 
 
 -- Usage example:  select delete_page('tenant_id', 'page_id');
@@ -23,4 +31,11 @@ $$ language plpgsql;
 # --- !Downs
 
 
+-- Remove 'SP'.
+alter table DW1_PAGES drop constraint DW1_PAGES_PAGEROLE__C_IN;
+alter table DW1_PAGES add constraint DW1_PAGES_PAGEROLE__C_IN
+  check (PAGE_ROLE in ('G', 'EC', 'B', 'BP', 'FG', 'F', 'FT', 'W', 'WP', 'C'));
+
+
 drop function delete_page(the_site_id varchar, the_page_id varchar);
+

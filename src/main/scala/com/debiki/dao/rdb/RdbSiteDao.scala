@@ -1477,6 +1477,7 @@ class RdbSiteDao(
           and t.TENANT = ?
           and ($pageRangeClauses)
           and ($filterStatusClauses)
+          and g.PAGE_ROLE <> 'SP' -- skip Special Content
         $orderByStr
         limit $limit"""
 
