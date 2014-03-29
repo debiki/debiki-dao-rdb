@@ -679,7 +679,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       // (which is currently the case).
       // COULD try to load an up-to-date version from DW1_POSTS first (so the
       // history of each post needn't be loaded too).
-      val pageParts: List[PageParts] = pageIds.flatMap(siteDao.loadPage(_).toList)
+      val pageParts: List[PageParts] = pageIds.flatMap(siteDao.loadPageParts(_).toList)
 
       for {
         (pageId, postIds) <- postIdsByPage.iterator

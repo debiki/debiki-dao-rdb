@@ -1017,14 +1017,14 @@ class RdbSiteDao(
   }
 
 
-  override def loadPage(pageGuid: String, tenantId: Option[String] = None)
+  override def loadPageParts(pageGuid: String, tenantId: Option[String] = None)
         : Option[PageParts] =
-    _loadPageAnyTenant(
+    _loadPagePartsAnyTenant(
       tenantId = tenantId getOrElse this.siteId,
       pageId = pageGuid)
 
 
-  private def _loadPageAnyTenant(tenantId: String, pageId: String)
+  private def _loadPagePartsAnyTenant(tenantId: String, pageId: String)
         : Option[PageParts] = {
     /*
     db.transaction { implicit connection =>
@@ -1057,6 +1057,9 @@ class RdbSiteDao(
         val action = _Action(rs)
         actions ::= action  // this reverses above `order by TIME desc'
       }
+
+      if (actions.isEmpty)
+        return None
 
       Some(PageParts.fromActions(
           pageId, People(logins, identities, users), actions))
