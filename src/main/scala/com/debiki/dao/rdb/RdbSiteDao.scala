@@ -121,21 +121,25 @@ class RdbSiteDao(
   }
 
 
-  def loadPageMeta(pageId: PageId): Option[PageMeta] = {
-    loadPageMetas(pageId::Nil) get pageId
+  def loadPageMeta(pageId: PageId): Option[PageMeta] = loadPageMeta(pageId, None)
+
+
+  def loadPageMeta(pageId: PageId, anySiteId: Option[SiteId]): Option[PageMeta] = {
+    loadPageMetas(pageId::Nil, anySiteId) get pageId
   }
 
 
-  def loadPageMetas(pageIds: Seq[PageId]): Map[PageId, PageMeta] = {
-    if (pageIds.isEmpty) return Map.empty
-    db.withConnection { loadPageMetaImpl(pageIds)(_) }
-  }
-
-
-  def loadPageMetaImpl(pageIds: Seq[PageId])(connection: js.Connection)
+  def loadPageMetas(pageIds: Seq[PageId], anySiteId: Option[SiteId] = None)
         : Map[PageId, PageMeta] = {
+    if (pageIds.isEmpty) return Map.empty
+    db.withConnection { loadPageMetaImpl(pageIds, anySiteId)(_) }
+  }
+
+
+  def loadPageMetaImpl(pageIds: Seq[PageId], anySiteId: Option[SiteId] = None)(
+        connection: js.Connection): Map[PageId, PageMeta] = {
     assErrIf(pageIds.isEmpty, "DwE84KF0")
-    val values = siteId :: pageIds.toList
+    val values = anySiteId.getOrElse(siteId) :: pageIds.toList
     val sql = s"""
         select g.GUID, ${_PageMetaSelectListItems}
         from DW1_PAGES g
@@ -1058,8 +1062,15 @@ class RdbSiteDao(
         actions ::= action  // this reverses above `order by TIME desc'
       }
 
-      if (actions.isEmpty)
-        return None
+      if (actions.isEmpty) {
+        // BUG Race condition, if page just created in other thread. COULD fix by
+        // joining with DW1_PAGES in the query above somehow.
+        val anyMeta = loadPageMeta(pageId, anySiteId = Some(tenantId))
+        if (anyMeta.isEmpty) {
+          // The page doesn't exist.
+          return None
+        }
+      }
 
       Some(PageParts.fromActions(
           pageId, People(logins, identities, users), actions))
