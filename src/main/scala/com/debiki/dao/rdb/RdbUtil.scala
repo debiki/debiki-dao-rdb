@@ -384,8 +384,8 @@ object RdbUtil {
     case "EC" => PageRole.EmbeddedComments
     case "B" => PageRole.Blog
     case "BP" => PageRole.BlogPost
-    case "FG" => PageRole.ForumGroup
     case "F" => PageRole.Forum
+    case "FC" => PageRole.ForumCategory
     case "FT" => PageRole.ForumTopic
     case "W" => PageRole.WikiMainPage
     case "WP" => PageRole.WikiPage
@@ -403,8 +403,8 @@ object RdbUtil {
     case PageRole.EmbeddedComments => "EC"
     case PageRole.Blog => "B"
     case PageRole.BlogPost => "BP"
-    case PageRole.ForumGroup => "FG"
     case PageRole.Forum => "F"
+    case PageRole.ForumCategory => "FC"
     case PageRole.ForumTopic => "FT"
     case PageRole.WikiMainPage => "W"
     case PageRole.WikiPage => "WP"
