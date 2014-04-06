@@ -2055,53 +2055,19 @@ class RdbSiteDao(
     page.meta.pubDati.foreach(publDati =>
       require(page.meta.creationDati.getTime <= publDati.getTime))
 
-    var values = List[AnyRef]()
-
-    val insertIntoColumnsSql = """
+    val sql = """
       insert into DW1_PAGES (
          SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
          CDATI, MDATI, PUBL_DATI)
+      values (
+         nextval('DW1_PAGES_SNO'), ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
-    val valuesSql =
-      "nextval('DW1_PAGES_SNO'), ?, ?, ?, ?, ?, ?, ?, ?"
-
-    // If there is no parent page, use an `insert ... values (...)` statement.
-    // Otherwise, use an `insert ... select ... from ...` and verify that the
-    // parent page has the appropriate page role.
-    val sql = page.parentPageId match {
-      case None =>
-        s"$insertIntoColumnsSql values ($valuesSql)"
-
-      case Some(parentPageId) =>
-        // Add `from ... where ...` values.
-        values :::= List(
-          page.tenantId,
-          parentPageId,
-          _pageRoleToSql(page.role.parentRole getOrElse {
-            runErr("DwE77DK1", s"Page role ${page.role} cannot have any parent page")
-          }))
-
-        // (I think the below `where exists` results in race conditions, if
-        // PAGE_ROLE can ever be changed. It is never changed though. Consider reading
-        // this:  http://www.postgresql.org/docs/9.2/static/transaction-iso.html
-        //          #XACT-READ-COMMITTED )
-        s"""
-          $insertIntoColumnsSql
-          select $valuesSql
-          from DW1_PAGES p
-            where p.TENANT = ?
-              and p.GUID = ?
-              and p.PAGE_ROLE = ?
-          """
-    }
-
-    values :::= List[AnyRef](page.tenantId, page.id,
+    val values = List[AnyRef](page.tenantId, page.id,
       _pageRoleToSql(page.role), page.parentPageId.orNullVarchar,
       page.meta.embeddingPageUrl.orNullVarchar,
       d2ts(page.meta.creationDati), d2ts(page.meta.modDati),
       page.meta.pubDati.map(d2ts _).getOrElse(NullTimestamp))
-
 
     val numNewRows = db.update(sql, values)
 
