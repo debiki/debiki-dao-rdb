@@ -25,6 +25,7 @@ import com.debiki.core.Prelude._
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
+import scala.collection.mutable
 import scala.collection.{mutable => mut}
 import scala.collection.mutable.StringBuilder
 import DbDao._
@@ -293,6 +294,77 @@ class RdbSiteDao(
       })
     }
     result
+  }
+
+
+  def loadCategoryTree(rootPageId: PageId): Seq[Category] = {
+
+    // The below SQL selects rows like so:
+    //
+    // category_id | sub_category_id |                  category_name
+    // -------------+-----------------+--------------------------------------------------
+    // 110j7       |                 | Sandbox (test forum)
+    // 110j7       | 71cs1           | Some Sandbox Sub Category
+    // 110j7       | 62nk9           | Another Sandbox Sub Category
+    // 1d8z5       |                 | General
+    // 1d8z5       | 84472           | Sub Category of General
+    // 1d8z5       | 71py0           | Yet Another Sub Category
+    //
+    // That is, a category directly followed by all its sub categories. And only
+    // two levels of categories is allowed.
+
+    val sql = i"""
+      with categories as (
+        select guid category_id, null::varchar sub_category_id, cached_title category_name
+        from dw1_pages
+        where
+          parent_page_id = ? and
+          page_role = 'FC'),
+      sub_categories as (
+        select parent_page_id category_id, guid sub_categories, cached_title category_name
+        from dw1_pages
+        where
+          parent_page_id in (select category_id from categories) and
+          page_role = 'FC')
+      select * from categories
+      union
+      select * from sub_categories
+      order by category_id, sub_category_id desc;
+      """
+
+    var allCategories = Vector[Category]()
+    var anyCurrentCategory: Option[Category] = None
+
+    db.queryAtnms(sql, List[AnyRef](rootPageId), rs => {
+      while (rs.next()) {
+        val categoryId = rs.getString("category_id")
+        val anySubCategoryId = Option(rs.getString("sub_category_id"))
+        val categoryName = Option(rs.getString("category_name")) getOrElse ""
+
+        if (Some(categoryId) != anyCurrentCategory.map(_.pageId)) {
+          // The category is always listed before any sub categories.
+          alwaysAssert(anySubCategoryId.isEmpty, "DwE28GI95")
+
+          if (anyCurrentCategory.isDefined) {
+            allCategories = allCategories :+ anyCurrentCategory.get
+          }
+          anyCurrentCategory = Some(Category(categoryName, pageId = categoryId, Vector.empty))
+        }
+        else {
+          alwaysAssert(anySubCategoryId.isDefined, "DwE77Gb91")
+          val newSubCategory = Category(categoryName, pageId = anySubCategoryId.get, Vector.empty)
+          anyCurrentCategory = anyCurrentCategory map { curCat =>
+            curCat.copy(subCategories = curCat.subCategories :+ newSubCategory)
+          }
+        }
+      }
+    })
+
+    anyCurrentCategory.foreach { lastCategory =>
+      allCategories = allCategories :+ lastCategory
+    }
+
+    allCategories
   }
 
 
