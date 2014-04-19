@@ -43,6 +43,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
   def secretSalt(): String = unimplemented
 
+  /** Creates a site specific dao that charges nothing. */
   def newSiteDao(siteId: SiteId): RdbSiteDao =
     daoFactory.newSiteDbDao(QuotaConsumers(siteId))
 
@@ -694,6 +695,11 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     }
 
     chunksOfPostsToIndex
+  }
+
+
+  def applyEvolutions() {
+    new evolutions.Evolution001(this).apply()
   }
 
 
