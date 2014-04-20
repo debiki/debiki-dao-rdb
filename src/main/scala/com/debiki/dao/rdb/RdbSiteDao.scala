@@ -1592,7 +1592,7 @@ class RdbSiteDao(
   }
 
 
-  def listChildPages(parentPageId: String, sortBy: PageSortOrder,
+  def listChildPages(parentPageIds: Seq[String], sortBy: PageSortOrder,
         limit: Int, offset: Int, filterPageRole: Option[PageRole] = None)
         : Seq[PagePathAndMeta] = {
 
@@ -1600,11 +1600,14 @@ class RdbSiteDao(
     require(offset == 0)  // for now
 
     val orderByStr = sortBy match {
+      case PageSortOrder.Any => ""
       case PageSortOrder.ByPublTime => " order by g.PUBL_DATI desc"
-      case _ => unimplemented("sorting by anything but page publ dati")
+      case PageSortOrder.ByBumpTime => " order by g.CACHED_LAST_VISIBLE_POST_DATI desc"
+      case PageSortOrder.ByNumLikes => " order by g.CACHED_NUM_LIKES desc"
+      case _ => unimplemented(s"Sort order unsupported: $sortBy [DwE2GFU06]")
     }
 
-    var values: List[AnyRef] = siteId :: parentPageId :: Nil
+    var values: List[AnyRef] = siteId :: parentPageIds.toList
 
     val pageRoleTestAnd = filterPageRole match {
       case Some(pageRole) =>
@@ -1623,19 +1626,29 @@ class RdbSiteDao(
         from DW1_PAGES g left join DW1_PAGE_PATHS t
           on g.TENANT = t.TENANT and g.GUID = t.PAGE_ID
           and t.CANONICAL = 'C'
-        where $pageRoleTestAnd g.TENANT = ? and g.PARENT_PAGE_ID = ?
+        where
+          $pageRoleTestAnd
+          g.TENANT = ? and
+          g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) })
         """+ orderByStr +"""
         limit """+ limit
 
     var items = List[PagePathAndMeta]()
 
     db.withConnection { implicit connection =>
-      val parentsAncestors = loadAncestorIdsParentFirstImpl(parentPageId)(connection)
-      val ancestorIds = parentPageId :: parentsAncestors
+
+      val parentsAncestorsByParentId: collection.Map[PageId, List[PageId]] =
+        batchLoadAncestorIdsParentFirst(parentPageIds.toList)(connection)
+
       db.query(sql, values, rs => {
         while (rs.next) {
           val pagePath = _PagePath(rs, siteId)
           val pageMeta = _PageMeta(rs, pagePath.pageId.get)
+
+          val parentsAncestors =
+            parentsAncestorsByParentId.get(pageMeta.parentPageId.get) getOrElse Nil
+          val ancestorIds = pageMeta.parentPageId.get :: parentsAncestors
+
           items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
         }
       })
