@@ -1527,12 +1527,10 @@ class RdbSiteDao(
   def listPagePaths(
     pageRanges: PathRanges,
     includeStatuses: List[PageStatus],
-    sortBy: PageSortOrder,
-    limit: Int,
-    offset: Int): Seq[PagePathAndMeta] = {
+    orderOffset: PageOrderOffset,
+    limit: Int): Seq[PagePathAndMeta] = {
 
     require(1 <= limit)
-    require(offset == 0)  // for now
     require(pageRanges.pageIds isEmpty) // for now
 
     val statusesToInclStr =
@@ -1540,10 +1538,10 @@ class RdbSiteDao(
     if (statusesToInclStr isEmpty)
       return Nil
 
-    val orderByStr = sortBy match {
-      case PageSortOrder.ByPath =>
+    val orderByStr = orderOffset match {
+      case PageOrderOffset.ByPath =>
         " order by t.PARENT_FOLDER, t.SHOW_ID, t.PAGE_SLUG"
-      case PageSortOrder.ByPublTime =>
+      case PageOrderOffset.ByPublTime =>
         // For now: (CACHED_PUBL_TIME not implemented)
         " order by t.CDATI desc"
     }
@@ -1592,19 +1590,23 @@ class RdbSiteDao(
   }
 
 
-  def listChildPages(parentPageIds: Seq[String], sortBy: PageSortOrder,
-        limit: Int, offset: Int, filterPageRole: Option[PageRole] = None)
+  def listChildPages(parentPageIds: Seq[String], orderOffset: PageOrderOffset,
+        limit: Int, filterPageRole: Option[PageRole] = None)
         : Seq[PagePathAndMeta] = {
 
     require(1 <= limit)
-    require(offset == 0)  // for now
 
-    val orderByStr = sortBy match {
-      case PageSortOrder.Any => ""
-      case PageSortOrder.ByPublTime => " order by g.PUBL_DATI desc"
-      case PageSortOrder.ByBumpTime => " order by g.CACHED_LAST_VISIBLE_POST_DATI desc"
-      case PageSortOrder.ByNumLikes => " order by g.CACHED_NUM_LIKES desc"
-      case _ => unimplemented(s"Sort order unsupported: $sortBy [DwE2GFU06]")
+    val (orderByStr, offsetStr) = orderOffset match {
+      case PageOrderOffset.Any =>
+        ("", "")
+      case PageOrderOffset.ByPublTime =>
+        ("order by g.PUBL_DATI desc", "")
+      case PageOrderOffset.ByBumpTime(anyDate) =>
+        ("order by g.CACHED_LAST_VISIBLE_POST_DATI desc", "")
+      case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
+        ("order by g.CACHED_NUM_LIKES desc", "")
+      case _ =>
+        unimplemented(s"Sort order unsupported: $orderOffset [DwE2GFU06]")
     }
 
     var values: List[AnyRef] = siteId :: parentPageIds.toList
@@ -1630,8 +1632,9 @@ class RdbSiteDao(
           $pageRoleTestAnd
           g.TENANT = ? and
           g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) })
-        """+ orderByStr +"""
-        limit """+ limit
+        $orderByStr
+        limit $limit
+        $offsetStr"""
 
     var items = List[PagePathAndMeta]()
 
