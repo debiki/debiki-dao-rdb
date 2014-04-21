@@ -1595,29 +1595,47 @@ class RdbSiteDao(
         : Seq[PagePathAndMeta] = {
 
     require(1 <= limit)
+    var values = Vector[AnyRef]()
 
-    val (orderByStr, offsetStr) = orderOffset match {
+    val (orderByStr, offsetTestAnd) = orderOffset match {
       case PageOrderOffset.Any =>
         ("", "")
       case PageOrderOffset.ByPublTime =>
         ("order by g.PUBL_DATI desc", "")
       case PageOrderOffset.ByBumpTime(anyDate) =>
-        ("order by g.CACHED_LAST_VISIBLE_POST_DATI desc", "")
+        val offsetTestAnd = anyDate match {
+          case None => ""
+          case Some(date) =>
+            values :+= d2ts(date)
+            "g.CACHED_LAST_VISIBLE_POST_DATI <= ? and"
+        }
+        ("order by g.CACHED_LAST_VISIBLE_POST_DATI desc", offsetTestAnd)
       case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
-        ("order by g.CACHED_NUM_LIKES desc", "")
+        val offsetTestAnd = anyLikesAndDate match {
+          case None => ""
+          case Some((maxNumLikes, date)) =>
+            values :+= maxNumLikes.asAnyRef
+            values :+= d2ts(date)
+            values :+= maxNumLikes.asAnyRef
+            """((g.CACHED_NUM_LIKES <= ? and g.CACHED_LAST_VISIBLE_POST_DATI <= ?) or
+                (g.CACHED_NUM_LIKES < ?)) and"""
+        }
+        ("order by g.CACHED_NUM_LIKES desc, CACHED_LAST_VISIBLE_POST_DATI desc", offsetTestAnd)
       case _ =>
         unimplemented(s"Sort order unsupported: $orderOffset [DwE2GFU06]")
     }
 
-    var values: List[AnyRef] = siteId :: parentPageIds.toList
+    values :+= siteId
 
     val pageRoleTestAnd = filterPageRole match {
       case Some(pageRole) =>
         illArgIf(pageRole == PageRole.Generic, "DwE20kIR8")
-        values ::= _pageRoleToSql(pageRole)
+        values :+= _pageRoleToSql(pageRole)
         "g.PAGE_ROLE = ? and"
       case None => ""
     }
+
+    values = values ++ parentPageIds
 
     val sql = s"""
         select t.PARENT_FOLDER,
@@ -1629,12 +1647,12 @@ class RdbSiteDao(
           on g.TENANT = t.TENANT and g.GUID = t.PAGE_ID
           and t.CANONICAL = 'C'
         where
-          $pageRoleTestAnd
+          $offsetTestAnd
           g.TENANT = ? and
+          $pageRoleTestAnd
           g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) })
         $orderByStr
-        limit $limit
-        $offsetStr"""
+        limit $limit"""
 
     var items = List[PagePathAndMeta]()
 
@@ -1643,7 +1661,7 @@ class RdbSiteDao(
       val parentsAncestorsByParentId: collection.Map[PageId, List[PageId]] =
         batchLoadAncestorIdsParentFirst(parentPageIds.toList)(connection)
 
-      db.query(sql, values, rs => {
+      db.query(sql, values.toList, rs => {
         while (rs.next) {
           val pagePath = _PagePath(rs, siteId)
           val pageMeta = _PageMeta(rs, pagePath.pageId.get)
