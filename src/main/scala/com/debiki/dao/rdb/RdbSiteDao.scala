@@ -1732,7 +1732,7 @@ class RdbSiteDao(
       accessPage = true,
       editUnauReply = true,
       createPage = mayCreatePage,
-      editPage = isWiki,
+      editPage = isWiki || isPageAuthor,
       // Authenticated users can edit others' comments.
       //  — no, disable this for now, seems too dangerous.
       //    Instead I should perhaps have the AutoApprover check the user's
