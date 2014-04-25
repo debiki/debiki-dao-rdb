@@ -61,13 +61,7 @@ trait CreateSiteSystemDaoMixin {
       val newWebsiteDao = self.daoFactory.newSiteDbDao(
         QuotaConsumers(tenantId = siteId, ip = anyOwnerIp, roleId = None))
 
-
       // Could send an email, see AppCreateWebsite.createWebsite() in project debiki-server.
-
-      for (pageNoSiteId <- siteData.pagesToCreate) {
-        val page = pageNoSiteId.copyWithNewSiteId(siteId)
-        newWebsiteDao.createPageImpl(page)(connection)
-      }
 
       Tenant(siteId, name = Some(siteData.name), creatorIp = "",
          creatorTenantId = "", creatorLoginId = "",
