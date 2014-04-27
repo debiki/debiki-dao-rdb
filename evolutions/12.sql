@@ -18,10 +18,10 @@ alter table DW1_PAGES add constraint DW1_PAGES_PAGEROLE__C_IN
   check (PAGE_ROLE in ('G', 'EC', 'B', 'BP', 'F', 'FC', 'FT', 'W', 'WP', 'C', 'SP'));
 
 
--- Usage example:  select delete_page('tenant_id', 'page_id');
+-- Usage example:  select delete_page('tenant_id', 'page_id')
 --
--- (Play framework thinks that each ';' ends an evolution statement, so in the
--- function body use ';;' which Play converts to a single ';'.)
+-- (Play framework thinks that each 'semicolon' ends an evolution statement, so in the
+-- function body use 'semicolonsemicolon' which Play converts to a single 'semicolon'.)
 --
 create function delete_page(the_site_id varchar, the_page_id varchar) returns void as $$
 begin
