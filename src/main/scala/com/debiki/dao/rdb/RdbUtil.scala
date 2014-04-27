@@ -122,7 +122,7 @@ object RdbUtil {
 
     def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
       target: $relpa, login id: $anyLoginId, user id: $userId"""
-    assErrIf(postId <= 0, "DwE5YQ08", s"POST_ID is <= 0, details: $details")
+    assErrIf(postId < 0, "DwE5YQ08", s"POST_ID is < 0, details: $details")
 
     // (This whole match-case will go away when I unify all types
     // into CreatePostAction?)  ...
