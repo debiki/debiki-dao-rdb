@@ -265,9 +265,9 @@ class Rdb(val dataSource: jxs.DataSource){
   /**
    * For calls to stored functions: """{? = call some_function(?, ?, ...) }"""
    */
-  def call(sql: String, binds: List[AnyRef] = Nil, outParamSqlType: Int,
-           resultHandler: (js.CallableStatement) => Unit)
-          (implicit conn: js.Connection) {
+  def call[A](sql: String, binds: List[AnyRef] = Nil, outParamSqlType: Int,
+           resultHandler: (js.CallableStatement) => A)
+          (implicit conn: js.Connection): A = {
     callImpl(sql, binds, outParamSqlType, resultHandler, conn)
   }
 
@@ -372,8 +372,8 @@ class Rdb(val dataSource: jxs.DataSource){
 
 
   private def callImpl[A](query: String, binds: List[AnyRef],
-        outParamSqlType: Int, resultHandler: (js.CallableStatement) => Unit,
-        conn: js.Connection) {
+        outParamSqlType: Int, resultHandler: (js.CallableStatement) => A,
+        conn: js.Connection): A = {
     // (Optionally, see my self-answered StackOverflow question:
     //  http://stackoverflow.com/a/15063409/694469 )
     var statement: js.CallableStatement = null

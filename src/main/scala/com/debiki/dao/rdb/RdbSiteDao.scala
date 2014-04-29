@@ -87,6 +87,19 @@ class RdbSiteDao(
   }
 
 
+  def nextPageId(): PageId = {
+    db.transaction { implicit connection =>
+      val sql = """{? = call INC_NEXT_PAGE_ID(?) }"""
+      var nextPageIdInt =
+        db.call(sql, List(siteId), js.Types.INTEGER, result => {
+          val nextId = result.getInt(1)
+          nextId
+        })
+      nextPageIdInt.toString
+    }
+  }
+
+
   def createPage(pagePerhapsId: Page): Page = {
     db.transaction { implicit connection =>
       createPageImpl(pagePerhapsId)(connection)
