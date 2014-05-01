@@ -1726,7 +1726,7 @@ class RdbSiteDao(
 
     // For now, hardcode rules here:
     val mayCreatePage = {
-      val p = reqInfo.pagePath.path
+      val p = reqInfo.pagePath.value
       if (p startsWith "/test/") true
       else if (p startsWith "/forum/") true
       else if (p startsWith "/wiki/") true
@@ -2243,7 +2243,7 @@ class RdbSiteDao(
           //  and are fairly long, unlikely to clash.
           throw new ju.ConcurrentModificationException(
             s"Another administrator/moderator apparently just added a path" +
-            s" to this page: ${pagePath.path}, id `${pagePath.pageId.get}'." +
+            s" to this page: ${pagePath.value}, id `${pagePath.pageId.get}'." +
             s" (Or the server needs to generate longer page ids.)")
         }
         throw ex
