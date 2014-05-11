@@ -35,43 +35,16 @@ import com.typesafe.config.{ConfigFactory, Config}
   */
 class RdbDaoSpecOld extends tck.dao.old.DbDaoTckTest(new tck.dao.old.TestContextBuilder {
 
-  class TestContext(
-    override val dbDaoFactory: DbDaoFactory,
-    override val quotaManager: QuotaCharger) extends tck.dao.old.TestContext
 
   override def buildTestContext(what: tck.dao.old.DbDaoTckTest.What, version: String) = {
-
-    // Connect to test database.
-    // (Load config settings from src/test/resources/application.conf, and from
-    // <debiki-site-seed-repo>/conf-local/test-db.conf, included (softlinked) via
-    // above application.conf.)
-    val config: Config = ConfigFactory.load()
-
-    val driverName = config.getString("db.test.driver")
-    Class.forName(driverName);	// load driver
-    val ds = new BoneCPDataSource()
-    ds.setJdbcUrl(config.getString("db.test.url"))
-    ds.setUsername(config.getString("db.test.user"))
-    ds.setPassword(config.getString("db.test.password"))
-
-    val db = new Rdb(ds)
-    val daoFactory = new RdbDaoFactory(db, ActorSystem("TestActorSystem"),
-      fullTextSearchDbDataPath = Some("target/elasticsearch-data"), isTest = true)
+    val daoFactory = com.debiki.dao.rdb.RdbDaoSuite.daoFactory
 
     // Prepare schema and search index.
     daoFactory.fullTextSearchIndexer.debugDeleteIndexAndMappings()
     daoFactory.fullTextSearchIndexer.createIndexAndMappinigsIfAbsent()
     daoFactory.systemDbDao.emptyDatabase()
 
-    // A simple quota charger, which never throws any OverQuotaException.
-    val kindQuotaCharger = new QuotaCharger {
-      override def chargeOrThrow(quotaConsumers: QuotaConsumers,
-            resourceUse: ResourceUse, mayPilfer: Boolean) { }
-      override def throwUnlessEnoughQuota(quotaConsumers: QuotaConsumers,
-            resourceUse: ResourceUse, mayPilfer: Boolean) { }
-    }
-
-    new TestContext(daoFactory, kindQuotaCharger)
+    new tck.dao.old.TestContext(daoFactory)
   }
 
 })

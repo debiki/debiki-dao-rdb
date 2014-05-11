@@ -56,6 +56,12 @@ class RdbDaoFactory(
     if (!fastStartSkipSearch) fullTextSearchIndexer.shutdown()
   }
 
+
+  override def debugDeleteRecreateSearchEngineIndexes() {
+    fullTextSearchIndexer.debugDeleteIndexAndMappings()
+    fullTextSearchIndexer.createIndexAndMappinigsIfAbsent()
+  }
+
   override def debugWaitUntilSearchEngineStarted() {
     fullTextSearchIndexer.debugWaitUntilSearchEngineStarted()
   }
