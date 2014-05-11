@@ -25,25 +25,21 @@ import com.jolbox.bonecp.BoneCPDataSource
 import com.typesafe.config.{ConfigFactory, Config}
 
 
-/**
- * The test suite. Actual tests are defined in parent class DbDaoTckTest.
- *
- * Tables in the test schema are cleared before each test.
- */
-class RdbDaoSpec extends tck.dao.DbDaoTckTest(RdbDaoTest)
+/** The old Specs2 based test suite. Actual tests are defined in parent class
+  *   com.debiki.tck.dao.old.DbDaoTckTest,
+  * but don't add new tests there however, because it's a huge and monolithic. Instead add
+  * tests to new/old files in com.debiki.tck.dao (but not ...tck.dao.old).
+  *
+  * Tables in the test schema are cleared before each test. (What? That means just once,
+  * since there's just one single huge spec )-:)
+  */
+class RdbDaoSpecOld extends tck.dao.old.DbDaoTckTest(new tck.dao.old.TestContextBuilder {
 
+  class TestContext(
+    override val dbDaoFactory: DbDaoFactory,
+    override val quotaManager: QuotaCharger) extends tck.dao.old.TestContext
 
-
-class RdbTestContext(
-  override val dbDaoFactory: DbDaoFactory,
-  override val quotaManager: QuotaCharger)
-  extends tck.dao.TestContext
-
-
-
-object RdbDaoTest extends tck.dao.TestContextBuilder {
-
-  override def buildTestContext(what: tck.dao.DbDaoTckTest.What, version: String) = {
+  override def buildTestContext(what: tck.dao.old.DbDaoTckTest.What, version: String) = {
 
     // Connect to test database.
     // (Load config settings from src/test/resources/application.conf, and from
@@ -75,8 +71,9 @@ object RdbDaoTest extends tck.dao.TestContextBuilder {
             resourceUse: ResourceUse, mayPilfer: Boolean) { }
     }
 
-    new RdbTestContext(daoFactory, kindQuotaCharger)
+    new TestContext(daoFactory, kindQuotaCharger)
   }
-}
+
+})
 
 
