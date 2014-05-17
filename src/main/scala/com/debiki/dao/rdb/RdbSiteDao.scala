@@ -1211,15 +1211,6 @@ class RdbSiteDao(
   }
 
 
-  def loadCachedPostsById(postIdsByPageId: Map[PageId, Seq[PostId]])(connection: js.Connection)
-        : Map[PageId, PageParts] = {
-    /* val postStatesByPageId: Map[PageId, Seq[PostState]] =
-      loadPostStatesById(postIdsByPageId)(connection)
-      */
-    unimplemented
-  }
-
-
   def loadPostsRecentlyActive(limit: Int, offset: Int): (List[Post], People) = {
     db.withConnection { implicit connection =>
       var statess: List[List[(String, PostState)]] = Nil
@@ -1573,6 +1564,10 @@ class RdbSiteDao(
       case PageOrderOffset.ByPublTime =>
         // For now: (CACHED_PUBL_TIME not implemented)
         " order by t.CDATI desc"
+      case _ =>
+        // now I've added a few new sort orders, but this function is
+        // hardly used any more anyway, so don't impnement.
+        unimplemented("DwE582WR0")
     }
 
     val (pageRangeClauses, pageRangeValues) = _pageRangeToSql(pageRanges)
