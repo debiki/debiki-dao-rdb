@@ -44,6 +44,7 @@ class RdbSiteDao(
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
   with FullTextSearchSiteDaoMixin
+  with UserSiteDaoMixin
   with LoginSiteDaoMixin
   with SettingsSiteDaoMixin {
 
@@ -1045,7 +1046,8 @@ class RdbSiteDao(
   }
 
 
-  private[rdb] def _loadUser(userId: String): Option[User] = loadUsers(userId::Nil).headOption
+  def loadUser(userId: String): Option[User] =
+    loadUsers(userId::Nil).headOption
 
 
   private[rdb] def loadUsers(userIds: List[String]): List[User] = {

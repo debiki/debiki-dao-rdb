@@ -959,7 +959,7 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Edit', 'EditApp',
         'Aprv', 'Rjct',
-        'VoteLike', 'VoteDisagree', 'VoteOffTopic',
+        'VoteLike', 'VoteWrong', 'VoteOffTopic',
         'MoveTree',
         'CollapsePost', 'CollapseTree',
         'DelPost', 'DelTree',

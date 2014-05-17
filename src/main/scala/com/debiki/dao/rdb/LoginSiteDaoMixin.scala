@@ -151,7 +151,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       case Some(email) => throw BadEmailTypeException(emailId)
       case None => throw EmailNotFoundException(emailId)
     }
-    val user = _loadUser(email.toUserId.get) match {
+    val user = loadUser(email.toUserId.get) match {
       case Some(user) => user
       case None =>
         runErr("DwE2XKw5", o"""User `${email.toUserId}"' not found

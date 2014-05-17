@@ -70,6 +70,14 @@ object RdbUtil {
   }
 
 
+  def userIdAndColumnFor(userId: UserId) = {
+    if (User.isRoleId(userId))
+      (userId, "ROLE_ID")
+    else
+      (userId.drop(1), "GUEST_ID")
+  }
+
+
   def ActionSelectListItems =
     "a.POST_ID, a.PAID, a.LOGIN, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
      "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.IP, " +

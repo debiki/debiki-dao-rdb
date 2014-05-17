@@ -32,6 +32,8 @@ import com.typesafe.config.{ConfigFactory, Config}
   *
   * Tables in the test schema are cleared before each test. (What? That means just once,
   * since there's just one single huge spec )-:)
+  *
+  * Run like so:  test-only com.debiki.dao.rdb.RdbDaoSpecOld
   */
 class RdbDaoSpecOld extends tck.dao.old.DbDaoTckTest(new tck.dao.old.TestContextBuilder {
 
