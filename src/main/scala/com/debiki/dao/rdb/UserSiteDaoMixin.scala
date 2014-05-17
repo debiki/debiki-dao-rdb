@@ -107,22 +107,24 @@ trait UserSiteDaoMixin extends SiteDbDao {
     val incompleteInfos: Seq[UserActionInfo] = loadIncompleteActionInfos(userId)
 
     // Load user display names.
-    // val userIds = actionInfos.map(_.actingUserId) // ++ actionInfos.map(_.targetUserId)
-    // loadUsers(userIds)
-    // And update the actionInfos with the users' display names.
+    val userIds = incompleteInfos.map(_.actingUserId).distinct //++ actionInfos.map(_.targetUserId)
+    val usersById = loadUsersAsMap(userIds)
 
     // Load page titles and roles.
     val pageIds = incompleteInfos.map(_.pageId).distinct
     val pageMetaById = loadPageMetas(pageIds)
-    val infosWithUserAndPageNames = incompleteInfos.flatMap(actionInfo => {
-      pageMetaById.get(actionInfo.pageId).toList map { pageMeta: PageMeta =>
+
+    // Update the incomplete action infos.
+    val infos = incompleteInfos flatMap { actionInfo =>
+      pageMetaById.get(actionInfo.pageId).toList map { pageMeta =>
+        val anyActingUser = usersById.get(actionInfo.actingUserId)
         actionInfo.copy(
           pageTitle = pageMeta.cachedTitle.getOrElse("(Unnamed page)"),
-          pageRole = pageMeta.pageRole)
+          pageRole = pageMeta.pageRole,
+          actingUserDisplayName = anyActingUser.map(_.displayName) getOrElse "(Unnamed user)")
       }
-    })
-
-    infosWithUserAndPageNames
+    }
+    infos
   }
 
 
@@ -173,7 +175,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
           pageTitle = "", // filled in later
           pageRole = PageRole.Generic, // filled in later
           postId = postId,
-          postExcerpt = excerpt.take(200), // or could load from DW1_POSTS, to get current version
+          postExcerpt = excerpt.take(200) + "...", // or load current version from DW1_POSTS
           actionId = actionId,
           actingUserId = userId,
           actingUserDisplayName = "?", // filled in later

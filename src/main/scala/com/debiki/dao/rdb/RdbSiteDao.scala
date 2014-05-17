@@ -1047,15 +1047,23 @@ class RdbSiteDao(
 
 
   def loadUser(userId: String): Option[User] =
-    loadUsers(userId::Nil).headOption
+    loadUsersAsList(userId::Nil).headOption
 
 
-  private[rdb] def loadUsers(userIds: List[String]): List[User] = {
-    val usersBySiteAndId =  // SHOULD specify consumers
+  private[rdb] def loadUsersAsList(userIds: List[String]): List[User] = {
+    val usersBySiteAndId =  // SHOULD specify quota consumers
       systemDaoSpi.loadUsers(Map(siteId -> userIds))
     usersBySiteAndId.values.toList
   }
 
+
+  private[rdb] def loadUsersAsMap(userIds: Seq[String]): Map[UserId, User] = {
+    val usersBySiteAndId =  // SHOULD specify quota consumers
+      systemDaoSpi.loadUsers(Map(siteId -> userIds.toList))
+    usersBySiteAndId map { case (siteAndUserId, user) =>
+      siteAndUserId._2 -> user
+    }
+  }
 
   override def listUsers(userQuery: UserQuery): Seq[(User, Seq[String])] = {
     db.withConnection(implicit connection => {
@@ -1223,7 +1231,7 @@ class RdbSiteDao(
       val states = statess.flatten
       val userIds = states.map(_._2.creationPostActionDto.userId)
 
-      val people = People(users = loadUsers(userIds))
+      val people = People(users = loadUsersAsList(userIds))
 
       val statesByPageId: Map[String, List[PostState]] =
         states.groupBy(_._1).mapValues(_.map(_._2))
