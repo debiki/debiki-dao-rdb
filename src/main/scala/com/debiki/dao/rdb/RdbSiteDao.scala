@@ -88,15 +88,20 @@ class RdbSiteDao(
 
 
   def nextPageId(): PageId = {
-    db.transaction { implicit connection =>
-      val sql = """{? = call INC_NEXT_PAGE_ID(?) }"""
-      var nextPageIdInt =
-        db.call(sql, List(siteId), js.Types.INTEGER, result => {
-          val nextId = result.getInt(1)
-          nextId
-        })
-      nextPageIdInt.toString
+    db.transaction { connection =>
+      nextPageIdImpl(connection)
     }
+  }
+
+
+  private def nextPageIdImpl(implicit connecton: js.Connection): PageId = {
+    val sql = """{? = call INC_NEXT_PAGE_ID(?) }"""
+    var nextPageIdInt =
+      db.call(sql, List(siteId), js.Types.INTEGER, result => {
+        val nextId = result.getInt(1)
+        nextId
+      })
+    nextPageIdInt.toString
   }
 
 
@@ -115,7 +120,8 @@ class RdbSiteDao(
       // Fine, a valid new page id has been assigned somewhere else?
       pagePerhapsId
     } else {
-      pagePerhapsId.copyWithNewId(nextRandomPageId)  // COULD ensure same
+      val nextId = nextPageIdImpl(connection)
+      pagePerhapsId.copyWithNewId(nextId)  // COULD ensure same
                                           // method used in all DAO modules!
     }
 
