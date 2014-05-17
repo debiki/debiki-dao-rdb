@@ -2989,38 +2989,34 @@ class RdbSiteDao(
   }
 
 
-  private def loadPostStatesById(postIdsByPageId: Map[PageId, Seq[PostId]])(
-        implicit connection: js.Connection): Map[PageId, Seq[PostState]] = {
-    unimplemented /*
-    var values = Vector[AnyRef](siteId)
+  def loadPostStatesById(pagePostIds: Seq[PagePostId])(implicit connection: js.Connection)
+        : Map[PagePostId, PostState] = {
+    if (pagePostIds.isEmpty)
+      return Map.empty
 
-    val pagePostIdsClauseList =
-      for ((pageId, postIds) <- postIdsByPageId)
-      yield {
-        values :+= pageId
-        values ++= postIds
-        val postIdClauses = postIds.map(_ => "POST_ID = ?").mkString(" or ")
-        s"(PAGE_ID = ? and ($postIdClauses))"
-      }
+    var values = mutable.ArrayBuffer[AnyRef](siteId)
 
-    val pagePostIdsClauseStr = pagePostIdsClauseList.mkString(" or ")
+    val pagePostIdsClause = new StringBuilder()
+    for (pagePostId <- pagePostIds) {
+      values += pagePostId.pageId
+      values += pagePostId.postId.asAnyRef
+      if (pagePostIdsClause.nonEmpty) pagePostIdsClause.append(" or ")
+      pagePostIdsClause.append("(PAGE_ID = ? and POST_ID = ?)")
+    }
 
     val sql = s"""
       select * from DW1_POSTS
-      where SITE_ID = ? and ($pagePostIdsClauseStr)
-      order by SITE_ID, PAGE_ID
-      """
+      where SITE_ID = ? and (${pagePostIdsClause.toString})"""
 
-    --- Wrong result type! ---
-    var result: List[(PageId, PostState)] = Nil
+    var result = Map[PagePostId, PostState]()
     db.query(sql, values.toList, rs => {
       while (rs.next) {
         val pageId = rs.getString("PAGE_ID")
-        result ::= (pageId, readPostState(rs))
+        val postId = rs.getInt("POST_ID")
+        result += PagePostId(pageId, postId = postId) -> readPostState(rs)
       }
     })
     result
-    */
   }
 
 

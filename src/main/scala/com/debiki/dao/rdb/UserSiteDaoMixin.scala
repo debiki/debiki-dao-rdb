@@ -114,13 +114,26 @@ trait UserSiteDaoMixin extends SiteDbDao {
     val pageIds = incompleteInfos.map(_.pageId).distinct
     val pageMetaById = loadPageMetas(pageIds)
 
+    // Load excerpts (well, whole posts right now).
+    val postsById: Map[PagePostId, PostState] = db.withConnection { connection =>
+      loadPostStatesById(
+        incompleteInfos.map(info => PagePostId(pageId = info.pageId, postId = info.postId)))(
+        connection)
+    }
+
     // Update the incomplete action infos.
     val infos = incompleteInfos flatMap { actionInfo =>
       pageMetaById.get(actionInfo.pageId).toList map { pageMeta =>
         val anyActingUser = usersById.get(actionInfo.actingUserId)
+        val anyPostState = postsById.get(PagePostId(actionInfo.pageId, postId = actionInfo.postId))
+        val anyExcerpt = anyPostState.flatMap(_.lastApprovedText) map { text =>
+          if (text.length <= 200) text
+          else text.take(197) + "..."
+        }
         actionInfo.copy(
           pageTitle = pageMeta.cachedTitle.getOrElse("(Unnamed page)"),
           pageRole = pageMeta.pageRole,
+          postExcerpt = anyExcerpt.getOrElse("(Text not yet approved)"),
           actingUserDisplayName = anyActingUser.map(_.displayName) getOrElse "(Unnamed user)")
       }
     }
@@ -131,7 +144,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
   private def loadIncompleteActionInfos(userId: UserId): Seq[UserActionInfo] = {
     val (guestOrRoleId, userIdColumn) = RdbUtil.userIdAndColumnFor(userId)
     val query = s"""
-      select PAGE_ID, POST_ID, PAID, TIME, TYPE, RELPA, TEXT, TIME
+      select PAGE_ID, POST_ID, PAID, TIME, TYPE, RELPA, TIME
       from DW1_PAGE_ACTIONS
       where TENANT = ? and $userIdColumn = ?
       order by time desc
@@ -146,7 +159,6 @@ trait UserSiteDaoMixin extends SiteDbDao {
         val actionId = rs.getInt("PAID")
         val tyype = rs.getString("TYPE")
         val relatedActionId = rs.getInt("RELPA")
-        var excerpt = Option(rs.getString("TEXT")) getOrElse ""
         val createdAt = ts2d(rs.getTimestamp("TIME"))
 
         var createdNewPage = false
@@ -162,7 +174,6 @@ trait UserSiteDaoMixin extends SiteDbDao {
             else repliedToPostId = Some(relatedActionId)
           case "Edit" =>
             editedPostId = Some(postId)
-            excerpt = "" // it's a diff, don't include
           case "VoteLike" => votedLike = true
           case "VoteWrong" => votedWrong = true
           case "VoteOffTopic" => votedOffTopic = true
@@ -175,7 +186,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
           pageTitle = "", // filled in later
           pageRole = PageRole.Generic, // filled in later
           postId = postId,
-          postExcerpt = excerpt.take(200) + "...", // or load current version from DW1_POSTS
+          postExcerpt = "?", // filled in later
           actionId = actionId,
           actingUserId = userId,
           actingUserDisplayName = "?", // filled in later
