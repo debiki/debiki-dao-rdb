@@ -140,7 +140,7 @@ trait FullTextSearchSiteDaoMixin extends SiteDbDao {
       (json, hit)
     }
 
-    val pageMetaByPageId = loadPageMetas(pageIds.toList)
+    val pageMetaByPageId = loadPageMetasAsMap(pageIds.toList)
     // ... Could also load author names ...
 
     val hits = for ((json, hit) <- jsonAndElasticSearchHits) yield {

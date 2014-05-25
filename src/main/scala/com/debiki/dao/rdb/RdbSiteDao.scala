@@ -146,11 +146,11 @@ class RdbSiteDao(
 
 
   def loadPageMeta(pageId: PageId, anySiteId: Option[SiteId]): Option[PageMeta] = {
-    loadPageMetas(pageId::Nil, anySiteId) get pageId
+    loadPageMetasAsMap(pageId::Nil, anySiteId) get pageId
   }
 
 
-  def loadPageMetas(pageIds: Seq[PageId], anySiteId: Option[SiteId] = None)
+  def loadPageMetasAsMap(pageIds: Seq[PageId], anySiteId: Option[SiteId] = None)
         : Map[PageId, PageMeta] = {
     if (pageIds.isEmpty) return Map.empty
     db.withConnection { loadPageMetaImpl(pageIds, anySiteId)(_) }

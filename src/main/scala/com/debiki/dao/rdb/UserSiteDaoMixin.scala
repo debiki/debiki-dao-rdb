@@ -112,7 +112,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
     // Load page titles and roles.
     val pageIds = incompleteInfos.map(_.pageId).distinct
-    val pageMetaById = loadPageMetas(pageIds)
+    val pageMetaById = loadPageMetasAsMap(pageIds)
 
     // Load excerpts (well, whole posts right now).
     val postsById: Map[PagePostId, PostState] = db.withConnection { connection =>
