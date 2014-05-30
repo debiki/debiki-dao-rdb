@@ -154,10 +154,10 @@ object RdbUtil {
       case "VoteOffTopic" =>
         buildAction(PAP.VoteOffTopic)
       case flag if flag startsWith "Flag" =>
-        val reasonStr = flag drop 4 // drop "Flag"
-        val reason = FlagReason withName reasonStr
+        val typeStr = flag drop 4 // drop "Flag"
+        val tyype = FlagType withName typeStr
         Flag(id = id, postId = postId, userIdData = userIdData,
-          ctime = time, reason = reason, details = n2e(text_?))
+          ctime = time, tyype = tyype, reason = n2e(text_?))
       case "DelPost" =>
         buildAction(PAP.DeletePost)
       case "DelTree" =>

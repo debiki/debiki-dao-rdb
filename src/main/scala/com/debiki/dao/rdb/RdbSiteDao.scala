@@ -2533,8 +2533,8 @@ class RdbSiteDao(
             NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
         case f: Flag =>
           db.update(insertIntoActions, commonVals:::List(
-            "Flag" + f.reason,
-            NullInt, e2n(f.details), NullInt, NullVarchar, NullVarchar,
+            "Flag" + f.tyype,
+            NullInt, e2n(f.reason), NullInt, NullVarchar, NullVarchar,
             NullVarchar, NullVarchar))
         case a: PostActionDto[_] =>
           def insertSimpleValue(tyype: String) =
