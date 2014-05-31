@@ -145,8 +145,7 @@ object RdbUtil {
       case "EditApp" =>
         val editId = relpa getOrElse throwBadDatabaseData(
           "DwE26UF0", s"Edit id missing for edit app `$id', post `$postId', site `?'")
-        new EditApp(id = id, editId = editId, postId = postId, ctime = time,
-          userIdData = userIdData, result = n2e(text_?), approval = approval)
+        buildAction(PAP.EditApp(editId = editId, approval = approval))
       case "VoteLike" =>
         buildAction(PAP.VoteLike)
       case "VoteWrong" =>

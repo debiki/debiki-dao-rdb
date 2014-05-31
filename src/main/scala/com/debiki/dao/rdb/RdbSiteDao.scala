@@ -2472,7 +2472,7 @@ class RdbSiteDao(
       }
 
     val actionsWithIds = PageParts.assignIdsTo(actions, nextNewReplyId)
-    for (action <- actionsWithIds) {
+    for (action: PostActionDtoOld <- actionsWithIds) {
       // Could optimize:  (but really *not* important!)
       // Use a CallableStatement and `insert into ... returning ...'
       // to create the _ACTIONS row and read the SNO in one single roundtrip.
@@ -2527,16 +2527,11 @@ class RdbSiteDao(
         d2ts(action.ctime))
 
       action match {
-        case a: EditApp =>
-          db.update(insertIntoActions, commonVals:::List(
-            "EditApp", a.editId.asAnyRef, e2n(a.result), NullInt,
-            NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
         case a: PostActionDto[_] =>
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
               tyype, a.postId.asAnyRef, NullVarchar, NullInt, NullVarchar, NullVarchar,
               NullVarchar, NullVarchar))
-
           val PAP = PostActionPayload
           a.payload match {
             case p: PAP.CreatePost =>
@@ -2548,6 +2543,10 @@ class RdbSiteDao(
               db.update(insertIntoActions, commonVals:::List(
                 "Edit", NullInt, e2n(e.text), NullInt, e2n(e.newMarkup), NullVarchar,
                 _toDbVal(e.approval), autoAppliedDbVal))
+            case a: PAP.EditApp =>
+              db.update(insertIntoActions, commonVals:::List(
+                "EditApp", a.editId.asAnyRef, NullVarchar, NullInt,
+                NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
             case r: PAP.ReviewPost =>
               val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
               db.update(insertIntoActions, commonVals:::List(
