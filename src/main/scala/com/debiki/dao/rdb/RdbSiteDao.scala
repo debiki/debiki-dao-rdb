@@ -2531,11 +2531,6 @@ class RdbSiteDao(
           db.update(insertIntoActions, commonVals:::List(
             "EditApp", a.editId.asAnyRef, e2n(a.result), NullInt,
             NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
-        case f: Flag =>
-          db.update(insertIntoActions, commonVals:::List(
-            "Flag" + f.tyype,
-            NullInt, e2n(f.reason), NullInt, NullVarchar, NullVarchar,
-            NullVarchar, NullVarchar))
         case a: PostActionDto[_] =>
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
@@ -2562,6 +2557,11 @@ class RdbSiteDao(
               db.update(insertIntoActions, commonVals:::List(
                 "PinAtPos", NullInt, NullVarchar, p.position.asAnyRef,
                 NullVarchar, NullVarchar, NullVarchar, NullVarchar))
+            case f: PAP.Flag =>
+              db.update(insertIntoActions, commonVals:::List(
+                "Flag" + f.tyype,
+                NullInt, e2n(f.reason), NullInt, NullVarchar, NullVarchar,
+                NullVarchar, NullVarchar))
 
             case PAP.VoteLike => insertSimpleValue("VoteLike")
             case PAP.VoteWrong => insertSimpleValue("VoteWrong")
