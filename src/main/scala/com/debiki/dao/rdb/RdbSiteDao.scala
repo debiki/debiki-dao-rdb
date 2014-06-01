@@ -135,8 +135,8 @@ class RdbSiteDao(
     // the page (since the title/body creation actions would already be present).
     val emptyPage = PageNoPath(PageParts(page.id), page.ancestorIdsParentFirst,
       page.meta.copy(pageExists = true))
-    val (newPageNoPath, actionDtosWithIds) =
-      savePageActionsImpl(emptyPage, page.parts.actionDtos)(connection)
+    val (newPageNoPath, rawActionsWithIds) =
+      savePageActionsImpl(emptyPage, page.parts.rawActions)(connection)
 
     Page(newPageNoPath.meta, page.path, page.ancestorIdsParentFirst, newPageNoPath.parts)
   }
@@ -1220,7 +1220,7 @@ class RdbSiteDao(
       if (statess.length < limit) statess ::= loadPostStatesHandled(limit, offset)
 
       val states = statess.flatten
-      val userIds = states.map(_._2.creationPostActionDto.userId)
+      val userIds = states.map(_._2.creationAction.userId)
 
       val people = People(users = loadUsersAsList(userIds))
 
@@ -3025,7 +3025,7 @@ class RdbSiteDao(
       browserIdCookie = None, // for now
       browserFingerprint = 0) // for now
 
-    val postActionDto = RawPostAction.forNewPost(
+    val rawPostAction = RawPostAction.forNewPost(
       id = rs.getInt("POST_ID"),
       creationDati = ts2d(rs.getTimestamp("CREATED_AT")),
       userIdData = userIdData,
@@ -3036,7 +3036,7 @@ class RdbSiteDao(
       where = Option(rs.getString("WHEERE")))
 
     new PostState(
-      postActionDto,
+      rawPostAction,
       lastActedUponAt = ts2d(rs.getTimestamp("LAST_ACTED_UPON_AT")),
       lastReviewDati = ts2o(rs.getTimestamp("LAST_REVIEWED_AT")),
       lastAuthoritativeReviewDati = ts2o(rs.getTimestamp("LAST_AUTHLY_REVIEWED_AT")),
