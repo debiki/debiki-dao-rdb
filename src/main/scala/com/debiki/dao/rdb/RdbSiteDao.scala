@@ -1036,7 +1036,7 @@ class RdbSiteDao(
    * Also loads Login:s and IdentityOpenId:s, so each action can be
    * associated with the relevant user.
    */
-  private[rdb] def _loadUsersWhoDid(actions: List[PostActionDto[_]])
+  private[rdb] def _loadUsersWhoDid(actions: List[RawPostAction[_]])
         (implicit connection: js.Connection): People = {
     val loginIds: List[String] = actions flatMap (_.userIdData.loginId)
     val logins = _loadLogins(byLoginIds = loginIds)
@@ -1420,9 +1420,9 @@ class RdbSiteDao(
    */
   private def _loadPeoplePagesActions(
         sql: String, values: List[AnyRef])
-        : (People, mut.Map[String, PageParts], List[(String, PostActionDto[_])]) = {
+        : (People, mut.Map[String, PageParts], List[(String, RawPostAction[_])]) = {
     val pagesById = mut.Map[String, PageParts]()
-    var pageIdsAndActions = List[(String, PostActionDto[_])]()
+    var pageIdsAndActions = List[(String, RawPostAction[_])]()
 
     val people = db.withConnection { implicit connection =>
       db.query(sql, values, rs => {
@@ -2389,8 +2389,8 @@ class RdbSiteDao(
   }
 
 
-  override def savePageActions(page: PageNoPath, actions: List[PostActionDto[_]])
-      : (PageNoPath, List[PostActionDto[_]]) = {
+  override def savePageActions(page: PageNoPath, actions: List[RawPostAction[_]])
+      : (PageNoPath, List[RawPostAction[_]]) = {
     // Try many times, because harmless deadlocks might abort the first attempt.
     // Example: Editing a row with a foreign key to table R result in a shared lock
     // on the referenced row in table R — so if two sessions A and B insert rows for
@@ -2408,8 +2408,8 @@ class RdbSiteDao(
 
 
   private def savePageActionsImpl(
-        page: PageNoPath, actions: List[PostActionDto[_]])(
-        implicit conn: js.Connection):  (PageNoPath, List[PostActionDto[_]]) = {
+        page: PageNoPath, actions: List[RawPostAction[_]])(
+        implicit conn: js.Connection):  (PageNoPath, List[RawPostAction[_]]) = {
 
     // Save new actions.
     val actionsWithIds = insertActions(page.id, actions)
@@ -2425,9 +2425,9 @@ class RdbSiteDao(
       for (postId <- postIds)
       yield newParts.getPost(postId) getOrDie "DwE70Bf8"
 
-    // Weird comment: (we already have the PostActionDto's here!?)
+    // Weird comment: (we already have the RawPostAction's here!?)
     // If a rating implies nearby posts are to be considered read,
-    // we need the actual PostActionDto's here, not only post ids — so we
+    // we need the actual RawPostAction's here, not only post ids — so we
     // can update the read counts of all affected posts.
     posts foreach { post =>
       insertUpdatePost(post)(conn)
@@ -2447,8 +2447,8 @@ class RdbSiteDao(
   }
 
 
-  private def insertActions(pageId: String, actions: Seq[PostActionDto[_]])
-        (implicit conn: js.Connection): Seq[PostActionDto[_]] = {
+  private def insertActions(pageId: String, actions: Seq[RawPostAction[_]])
+        (implicit conn: js.Connection): Seq[RawPostAction[_]] = {
     val numNewReplies = actions.filter(PageParts.isReply _).size
 
     val nextNewReplyId =
@@ -3025,7 +3025,7 @@ class RdbSiteDao(
       browserIdCookie = None, // for now
       browserFingerprint = 0) // for now
 
-    val postActionDto = PostActionDto.forNewPost(
+    val postActionDto = RawPostAction.forNewPost(
       id = rs.getInt("POST_ID"),
       creationDati = ts2d(rs.getTimestamp("CREATED_AT")),
       userIdData = userIdData,

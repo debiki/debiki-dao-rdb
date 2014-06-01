@@ -84,7 +84,7 @@ object RdbUtil {
      "a.BROWSER_ID_COOKIE, a.BROWSER_FINGERPRINT," +
      "a.APPROVAL, a.AUTO_APPLICATION"
 
-  def _Action(rs: js.ResultSet): PostActionDto[_] = {
+  def _Action(rs: js.ResultSet): RawPostAction[_] = {
     val postId = rs.getInt("POST_ID")
     val id = rs.getInt("PAID")
     val anyLoginId = Option(rs.getString("LOGIN"))
@@ -126,7 +126,7 @@ object RdbUtil {
       browserFingerprint = browserFingerprint)
 
     def buildAction(payload: PostActionPayload) =
-      PostActionDto(id, time, payload, postId = postId, userIdData = userIdData)
+      RawPostAction(id, time, payload, postId = postId, userIdData = userIdData)
 
     def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
       target: $relpa, login id: $anyLoginId, user id: $userId"""
