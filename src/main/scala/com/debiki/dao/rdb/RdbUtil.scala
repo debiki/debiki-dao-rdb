@@ -84,7 +84,7 @@ object RdbUtil {
      "a.BROWSER_ID_COOKIE, a.BROWSER_FINGERPRINT," +
      "a.APPROVAL, a.AUTO_APPLICATION"
 
-  def _Action(rs: js.ResultSet): PostActionDtoOld = {
+  def _Action(rs: js.ResultSet): PostActionDto[_] = {
     val postId = rs.getInt("POST_ID")
     val id = rs.getInt("PAID")
     val anyLoginId = Option(rs.getString("LOGIN"))

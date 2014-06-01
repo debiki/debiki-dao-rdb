@@ -1036,9 +1036,9 @@ class RdbSiteDao(
    * Also loads Login:s and IdentityOpenId:s, so each action can be
    * associated with the relevant user.
    */
-  private[rdb] def _loadUsersWhoDid(actions: List[PostActionDtoOld])
+  private[rdb] def _loadUsersWhoDid(actions: List[PostActionDto[_]])
         (implicit connection: js.Connection): People = {
-    val loginIds: List[String] = actions flatMap (_.loginId)
+    val loginIds: List[String] = actions flatMap (_.userIdData.loginId)
     val logins = _loadLogins(byLoginIds = loginIds)
     // SHOULD load by role id + guest id, not login id because it might be null soon [NoLoginId]
     val (idtys, users) = _loadIdtysAndUsers(forLoginIds = loginIds)
@@ -1204,7 +1204,7 @@ class RdbSiteDao(
     val (
       people: People,
       pagesById: mut.Map[String, PageParts],
-      pageIdsAndActions: List[(String, PostActionDtoOld)]) =
+      pageIdsAndActions) =
         _loadPeoplePagesActions(sql, values)
 
     Map[String, PageParts](pagesById.toList: _*)
@@ -1267,7 +1267,7 @@ class RdbSiteDao(
 
   def loadRecentActionExcerpts(fromIp: Option[String],
         byIdentity: Option[String],
-        pathRanges: PathRanges, limit: Int): (Seq[PostActionOld], People) = {
+        pathRanges: PathRanges, limit: Int): (Seq[PostAction[_]], People) = {
 
     def buildByPersonQuery(fromIp: Option[String],
           byIdentity: Option[String], limit: Int) = {
@@ -1392,7 +1392,7 @@ class RdbSiteDao(
     val (
       people: People,
       pagesById: mut.Map[String, PageParts],
-      pageIdsAndActions: List[(String, PostActionDtoOld)]) =
+      pageIdsAndActions) =
         _loadPeoplePagesActions(sql, values)
 
     val pageIdsAndActionsDescTime =
@@ -1405,7 +1405,7 @@ class RdbSiteDao(
       val page = pagesById.get(pageId).getOrElse(assErr(
         "DwE9031211", "Page "+ pageId +" missing when loading recent actions, "+
         debugDetails))
-      PostActionOld(page, action)
+      new PostAction(page, action)
     }
 
     (smartActions, people)
@@ -1420,9 +1420,9 @@ class RdbSiteDao(
    */
   private def _loadPeoplePagesActions(
         sql: String, values: List[AnyRef])
-        : (People, mut.Map[String, PageParts], List[(String, PostActionDtoOld)]) = {
+        : (People, mut.Map[String, PageParts], List[(String, PostActionDto[_])]) = {
     val pagesById = mut.Map[String, PageParts]()
-    var pageIdsAndActions = List[(String, PostActionDtoOld)]()
+    var pageIdsAndActions = List[(String, PostActionDto[_])]()
 
     val people = db.withConnection { implicit connection =>
       db.query(sql, values, rs => {
@@ -2389,8 +2389,8 @@ class RdbSiteDao(
   }
 
 
-  override def savePageActions[T <: PostActionDtoOld](
-        page: PageNoPath, actions: List[T]): (PageNoPath, List[T]) = {
+  override def savePageActions(page: PageNoPath, actions: List[PostActionDto[_]])
+      : (PageNoPath, List[PostActionDto[_]]) = {
     // Try many times, because harmless deadlocks might abort the first attempt.
     // Example: Editing a row with a foreign key to table R result in a shared lock
     // on the referenced row in table R — so if two sessions A and B insert rows for
@@ -2407,9 +2407,9 @@ class RdbSiteDao(
   }
 
 
-  private def savePageActionsImpl[T <: PostActionDtoOld](
-        page: PageNoPath, actions: List[T])(
-        implicit conn: js.Connection):  (PageNoPath, List[T]) = {
+  private def savePageActionsImpl(
+        page: PageNoPath, actions: List[PostActionDto[_]])(
+        implicit conn: js.Connection):  (PageNoPath, List[PostActionDto[_]]) = {
 
     // Save new actions.
     val actionsWithIds = insertActions(page.id, actions)
@@ -2443,12 +2443,12 @@ class RdbSiteDao(
     if (!daoFactory.fastStartSkipSearch)
       fullTextSearchIndexer.indexNewPostsSoon(page, posts, siteId)
 
-    (PageNoPath(newParts, page.ancestorIdsParentFirst, newMeta), actionsWithIds)
+    (PageNoPath(newParts, page.ancestorIdsParentFirst, newMeta), actionsWithIds.toList)
   }
 
 
-  private def insertActions[T <: PostActionDtoOld](pageId: String, actions: List[T])
-        (implicit conn: js.Connection): List[T] = {
+  private def insertActions(pageId: String, actions: Seq[PostActionDto[_]])
+        (implicit conn: js.Connection): Seq[PostActionDto[_]] = {
     val numNewReplies = actions.filter(PageParts.isReply _).size
 
     val nextNewReplyId =
@@ -2472,7 +2472,7 @@ class RdbSiteDao(
       }
 
     val actionsWithIds = PageParts.assignIdsTo(actions, nextNewReplyId)
-    for (action: PostActionDtoOld <- actionsWithIds) {
+    for (action <- actionsWithIds) {
       // Could optimize:  (but really *not* important!)
       // Use a CallableStatement and `insert into ... returning ...'
       // to create the _ACTIONS row and read the SNO in one single roundtrip.
@@ -2526,14 +2526,13 @@ class RdbSiteDao(
         action.id.asAnyRef,
         d2ts(action.ctime))
 
-      action match {
-        case a: PostActionDto[_] =>
+      // TODO fix indentation
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
-              tyype, a.postId.asAnyRef, NullVarchar, NullInt, NullVarchar, NullVarchar,
+              tyype, action.postId.asAnyRef, NullVarchar, NullInt, NullVarchar, NullVarchar,
               NullVarchar, NullVarchar))
           val PAP = PostActionPayload
-          a.payload match {
+          action.payload match {
             case p: PAP.CreatePost =>
               db.update(insertIntoActions, commonVals:::List(
                 "Post", p.parentPostId.orNullInt, e2n(p.text), NullInt, e2n(p.markup),
@@ -2573,9 +2572,6 @@ class RdbSiteDao(
             case PAP.Undo(_) => unimplemented
             case PAP.Delete(_) => unimplemented // there's no DW1_PAGE_ACTIONS.TYPE?
           }
-        case x => unimplemented(
-          "Saving this: "+ classNameOf(x) +" [error DwE38rkRF]")
-      }
     }
 
     actionsWithIds
