@@ -307,7 +307,7 @@ class RdbSiteDao(
       db.query(sql, siteId :: pageIds, rs => {
         while (rs.next()) {
           val sqlArray: java.sql.Array = rs.getArray("path")
-          val pageIdPathSelfFirst = sqlArray.getArray.asInstanceOf[Array[String]].toList
+          val pageIdPathSelfFirst = sqlArray.getArray.asInstanceOf[Array[PageId]].toList
           val pageId::ancestorIds = pageIdPathSelfFirst
           // Update `result` if we found longest list of ancestors thus far, for pageId.
           val lengthOfStoredPath = result.get(pageId).map(_.length) getOrElse -1
@@ -392,14 +392,14 @@ class RdbSiteDao(
   }
 
 
-  def movePages(pageIds: Seq[String], fromFolder: String, toFolder: String) {
+  def movePages(pageIds: Seq[PageId], fromFolder: String, toFolder: String) {
     db.transaction { implicit connection =>
       _movePages(pageIds, fromFolder = fromFolder, toFolder = toFolder)
     }
   }
 
 
-  private def _movePages(pageIds: Seq[String], fromFolder: String,
+  private def _movePages(pageIds: Seq[PageId], fromFolder: String,
         toFolder: String)(implicit connection: js.Connection) {
     unimplemented("Moving pages and updating DW1_PAGE_PATHS.CANONICAL")
     /*
@@ -431,7 +431,7 @@ class RdbSiteDao(
   }
 
 
-  def moveRenamePage(pageId: String,
+  def moveRenamePage(pageId: PageId,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String]): PagePath = {
     db.transaction { implicit connection =>
@@ -442,7 +442,7 @@ class RdbSiteDao(
 
 
 
-  private[rdb] def _insertUser(tenantId: String, userNoId: User)
+  private[rdb] def _insertUser(tenantId: SiteId, userNoId: User)
         (implicit connection: js.Connection): User = {
     val userSno = db.nextSeqNo("DW1_USERS_SNO")
     val user = userNoId.copy(id = userSno.toString)
@@ -458,7 +458,7 @@ class RdbSiteDao(
   }
 
 
-  private[rdb] def insertIdentity(identityNoId: Identity, userId: UserId, otherSiteId: String)
+  private[rdb] def insertIdentity(identityNoId: Identity, userId: UserId, otherSiteId: SiteId)
         (connection: js.Connection): Identity = {
     identityNoId match {
       case x: IdentityOpenId =>
@@ -473,7 +473,7 @@ class RdbSiteDao(
   }
 
 
-  private[rdb] def insertOpenIdIdentity(tenantId: String, idtyNoId: Identity)
+  private[rdb] def insertOpenIdIdentity(tenantId: SiteId, idtyNoId: Identity)
         (implicit connection: js.Connection): Identity = {
     val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
     idtyNoId match {
@@ -572,7 +572,7 @@ class RdbSiteDao(
   }
 
 
-  override def saveLogout(loginId: String, logoutIp: String) {
+  override def saveLogout(loginId: LoginId, logoutIp: String) {
     db.transaction { implicit connection =>
       db.update("""
           update DW1_LOGINS set LOGOUT_IP = ?, LOGOUT_TIME = ?
@@ -591,7 +591,7 @@ class RdbSiteDao(
   }
 
 
-  private def _loadLoginById(loginId: String)
+  private def _loadLoginById(loginId: LoginId)
         (implicit connection: js.Connection): Option[Login] = {
     val logins = _loadLogins(byLoginIds = loginId::Nil)
     assErrIf(logins.length > 1, "DwE47IB6")
@@ -599,8 +599,8 @@ class RdbSiteDao(
   }
 
 
-  private def _loadLogins(byLoginIds: List[String] = null,
-        onPageGuid: String = null)
+  private def _loadLogins(byLoginIds: List[LoginId] = null,
+        onPageGuid: PageId = null)
         (implicit connection: js.Connection): List[Login] = {
 
     assert((byLoginIds ne null) ^ (onPageGuid ne null))
@@ -648,7 +648,7 @@ class RdbSiteDao(
 
 
   def loadIdtyDetailsAndUser(
-        forLoginId: String = null,
+        forLoginId: LoginId = null,
         forOpenIdDetails: OpenIdDetails = null,
         forEmailAddr: String = null): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
@@ -669,7 +669,7 @@ class RdbSiteDao(
     */
   // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
   private[rdb] def _loadIdtyDetailsAndUser(
-        forLoginId: String = null,
+        forLoginId: LoginId = null,
         forOpenIdDetails: OpenIdDetails = null,
         forSecureSocialIdentityId: securesocial.core.IdentityId = null,
         forEmailAddr: String = null)(implicit connection: js.Connection)
@@ -850,7 +850,7 @@ class RdbSiteDao(
   }
 
 
-  def loadIdtyAndUser(forLoginId: String): Option[(Identity, User)] = {
+  def loadIdtyAndUser(forLoginId: LoginId): Option[(Identity, User)] = {
     def loginInfo = "login id "+ safed(forLoginId) +
           ", tenant "+ safed(siteId)
 
@@ -887,8 +887,8 @@ class RdbSiteDao(
    * Looks up people by page id or login id. Does not load all authentication details.
    */
   // SHOULD reuse a `connection: js.Connection` but doesnt
-  private def _loadIdtysAndUsers(onPageWithId: String = null,
-                         forLoginIds: List[String] = null
+  private def _loadIdtysAndUsers(onPageWithId: PageId = null,
+                         forLoginIds: List[LoginId] = null
                             ): Pair[List[Identity], List[User]] = {
     // Load users. First find all relevant identities, by joining
     // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
@@ -976,7 +976,7 @@ class RdbSiteDao(
               u.SNO = i.I_USR and
               u.TENANT = ?
         """, args ::: List(siteId, siteId, siteId), rs => {
-      var usersById = mut.HashMap[String, User]()
+      var usersById = mut.HashMap[UserId, User]()
       var identities = List[Identity]()
       while (rs.next) {
         val idId = rs.getString("I_ID")
@@ -1038,7 +1038,7 @@ class RdbSiteDao(
    */
   private[rdb] def _loadUsersWhoDid(actions: List[RawPostAction[_]])
         (implicit connection: js.Connection): People = {
-    val loginIds: List[String] = actions flatMap (_.userIdData.loginId)
+    val loginIds: List[LoginId] = actions flatMap (_.userIdData.loginId)
     val logins = _loadLogins(byLoginIds = loginIds)
     // SHOULD load by role id + guest id, not login id because it might be null soon [NoLoginId]
     val (idtys, users) = _loadIdtysAndUsers(forLoginIds = loginIds)
@@ -1046,18 +1046,18 @@ class RdbSiteDao(
   }
 
 
-  def loadUser(userId: String): Option[User] =
+  def loadUser(userId: UserId): Option[User] =
     loadUsersAsList(userId::Nil).headOption
 
 
-  private[rdb] def loadUsersAsList(userIds: List[String]): List[User] = {
+  private[rdb] def loadUsersAsList(userIds: List[UserId]): List[User] = {
     val usersBySiteAndId =  // SHOULD specify quota consumers
       systemDaoSpi.loadUsers(Map(siteId -> userIds))
     usersBySiteAndId.values.toList
   }
 
 
-  private[rdb] def loadUsersAsMap(userIds: Seq[String]): Map[UserId, User] = {
+  private[rdb] def loadUsersAsMap(userIds: Seq[UserId]): Map[UserId, User] = {
     val usersBySiteAndId =  // SHOULD specify quota consumers
       systemDaoSpi.loadUsers(Map(siteId -> userIds.toList))
     usersBySiteAndId map { case (siteAndUserId, user) =>
@@ -1126,14 +1126,14 @@ class RdbSiteDao(
   }
 
 
-  override def loadPageParts(pageGuid: String, tenantId: Option[String] = None)
+  override def loadPageParts(pageGuid: PageId, tenantId: Option[SiteId] = None)
         : Option[PageParts] =
     _loadPagePartsAnyTenant(
       tenantId = tenantId getOrElse this.siteId,
       pageId = pageGuid)
 
 
-  private def _loadPagePartsAnyTenant(tenantId: String, pageId: String)
+  private def _loadPagePartsAnyTenant(tenantId: SiteId, pageId: PageId)
         : Option[PageParts] = {
     /*
     db.transaction { implicit connection =>
@@ -1183,7 +1183,7 @@ class RdbSiteDao(
   }
 
 
-  def loadPageBodiesTitles(pageIds: Seq[String]): Map[String, PageParts] = {
+  def loadPageBodiesTitles(pageIds: Seq[PageId]): Map[PageId, PageParts] = {
 
     if (pageIds isEmpty)
       return Map.empty
@@ -1203,17 +1203,17 @@ class RdbSiteDao(
 
     val (
       people: People,
-      pagesById: mut.Map[String, PageParts],
+      pagesById: mut.Map[PageId, PageParts],
       pageIdsAndActions) =
         _loadPeoplePagesActions(sql, values)
 
-    Map[String, PageParts](pagesById.toList: _*)
+    Map[PageId, PageParts](pagesById.toList: _*)
   }
 
 
   def loadPostsRecentlyActive(limit: Int, offset: Int): (List[Post], People) = {
     db.withConnection { implicit connection =>
-      var statess: List[List[(String, PostState)]] = Nil
+      var statess: List[List[(PageId, PostState)]] = Nil
       if (statess.length < limit) statess ::= loadPostStatesPendingFlags(limit, offset)
       if (statess.length < limit) statess ::= loadPostStatesPendingApproval(limit, offset)
       if (statess.length < limit) statess ::= loadPostStatesWithSuggestions(limit, offset)
@@ -1224,10 +1224,10 @@ class RdbSiteDao(
 
       val people = People(users = loadUsersAsList(userIds))
 
-      val statesByPageId: Map[String, List[PostState]] =
+      val statesByPageId: Map[PageId, List[PostState]] =
         states.groupBy(_._1).mapValues(_.map(_._2))
 
-      val pagesById: Map[String, PageParts] = for ((pageId, states) <- statesByPageId) yield {
+      val pagesById: Map[PageId, PageParts] = for ((pageId, states) <- statesByPageId) yield {
         pageId -> PageParts(pageId, people, postStates = states)
       }
 
@@ -1266,11 +1266,11 @@ class RdbSiteDao(
 
 
   def loadRecentActionExcerpts(fromIp: Option[String],
-        byIdentity: Option[String],
+        byIdentity: Option[IdentityId],
         pathRanges: PathRanges, limit: Int): (Seq[PostAction[_]], People) = {
 
     def buildByPersonQuery(fromIp: Option[String],
-          byIdentity: Option[String], limit: Int) = {
+          byIdentity: Option[IdentityId], limit: Int) = {
 
       val (loginIdsWhereSql, loginIdsWhereValues) =
         if (fromIp isDefined)
@@ -1391,7 +1391,7 @@ class RdbSiteDao(
 
     val (
       people: People,
-      pagesById: mut.Map[String, PageParts],
+      pagesById: mut.Map[PageId, PageParts],
       pageIdsAndActions) =
         _loadPeoplePagesActions(sql, values)
 
@@ -1420,9 +1420,9 @@ class RdbSiteDao(
    */
   private def _loadPeoplePagesActions(
         sql: String, values: List[AnyRef])
-        : (People, mut.Map[String, PageParts], List[(String, RawPostAction[_])]) = {
-    val pagesById = mut.Map[String, PageParts]()
-    var pageIdsAndActions = List[(String, RawPostAction[_])]()
+        : (People, mut.Map[PageId, PageParts], List[(PageId, RawPostAction[_])]) = {
+    val pagesById = mut.Map[PageId, PageParts]()
+    var pageIdsAndActions = List[(PageId, RawPostAction[_])]()
 
     val people = db.withConnection { implicit connection =>
       db.query(sql, values, rs => {
@@ -1456,7 +1456,7 @@ class RdbSiteDao(
   // And do everything in the same transaction!
   def createWebsite(name: Option[String], address: Option[String],
         embeddingSiteUrl: Option[String], ownerIp: String,
-        ownerLoginId: String, ownerIdentity: Identity, ownerRole: User)
+        ownerLoginId: LoginId, ownerIdentity: Identity, ownerRole: User)
         : Option[(Tenant, User)] = {
     try {
       db.transaction { implicit connection =>
@@ -1614,7 +1614,7 @@ class RdbSiteDao(
   }
 
 
-  def listChildPages(parentPageIds: Seq[String], orderOffset: PageOrderOffset,
+  def listChildPages(parentPageIds: Seq[PageId], orderOffset: PageOrderOffset,
         limit: Int, filterPageRole: Option[PageRole] = None)
         : Seq[PagePathAndMeta] = {
 
@@ -1826,7 +1826,7 @@ class RdbSiteDao(
   }
 
 
-  def loadNotfsForRole(userId: String): Seq[NotfOfPageAction] = {
+  def loadNotfsForRole(userId: UserId): Seq[NotfOfPageAction] = {
     val numToLoad = 50 // for now
     val notfsToMail = systemDaoSpi.loadNotfsImpl(   // SHOULD specify consumers
        numToLoad, Some(siteId), userIdOpt = Some(userId))
@@ -1961,7 +1961,7 @@ class RdbSiteDao(
   }
 
 
-  def configRole(loginId: String, ctime: ju.Date, roleId: String,
+  def configRole(loginId: LoginId, ctime: ju.Date, roleId: RoleId,
         emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean],
         isOwner: Option[Boolean]) {
     // Currently auditing not implemented for the roles/users table,
@@ -2002,7 +2002,7 @@ class RdbSiteDao(
   }
 
 
-  def configIdtySimple(loginId: String, ctime: ju.Date,
+  def configIdtySimple(loginId: LoginId, ctime: ju.Date,
                        emailAddr: String, emailNotfPrefs: EmailNotfPrefs) {
     db.transaction { implicit connection =>
       // Mark the current row as 'O' (old) -- unless EMAIL_NOTFS is 'F'
@@ -2032,20 +2032,20 @@ class RdbSiteDao(
   }
 
 
-  def lookupPagePath(pageId: String): Option[PagePath] =
+  def lookupPagePath(pageId: PageId): Option[PagePath] =
     lookupPagePathImpl(pageId)(null)
 
 
-  def lookupPagePathImpl(pageId: String)(implicit connection: js.Connection)
+  def lookupPagePathImpl(pageId: PageId)(implicit connection: js.Connection)
         : Option[PagePath] =
     lookupPagePathsImpl(pageId, loadRedirects = false).headOption
 
 
-  def lookupPagePathAndRedirects(pageId: String): List[PagePath] =
+  def lookupPagePathAndRedirects(pageId: PageId): List[PagePath] =
     lookupPagePathsImpl(pageId, loadRedirects = true)(null)
 
 
-  private def lookupPagePathsImpl(pageId: String, loadRedirects: Boolean)
+  private def lookupPagePathsImpl(pageId: PageId, loadRedirects: Boolean)
         (implicit connection: js.Connection)
         : List[PagePath] = {
 
@@ -2262,7 +2262,7 @@ class RdbSiteDao(
   }
 
 
-  private def updateParentPageChildCount(parentId: String, change: Int)
+  private def updateParentPageChildCount(parentId: PageId, change: Int)
         (implicit conn: js.Connection) {
     require(change == 1 || change == -1)
     val sql = i"""
@@ -2299,7 +2299,7 @@ class RdbSiteDao(
   }
 
 
-  private def moveRenamePageImpl(pageId: String,
+  private def moveRenamePageImpl(pageId: PageId,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String])
         (implicit conn: js.Connection): PagePath = {
@@ -2352,7 +2352,7 @@ class RdbSiteDao(
     //    a 'C'anonical path to another page (which we shouldn't do,
     //    because then that page would no longer be reachable).
 
-    def changeExistingPathsToRedirects(pageId: String) {
+    def changeExistingPathsToRedirects(pageId: PageId) {
       val vals = List(siteId, pageId)
       val stmt = """
         update DW1_PAGE_PATHS
@@ -2447,7 +2447,7 @@ class RdbSiteDao(
   }
 
 
-  private def insertActions(pageId: String, actions: Seq[RawPostAction[_]])
+  private def insertActions(pageId: PageId, actions: Seq[RawPostAction[_]])
         (implicit conn: js.Connection): Seq[RawPostAction[_]] = {
     val numNewReplies = actions.filter(PageParts.isReply _).size
 
@@ -2881,7 +2881,7 @@ class RdbSiteDao(
 
   private def loadPostStatesPendingFlags(
         limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(String, PostState)] =
+        : List[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = "NUM_PENDING_FLAGS > 0",
       orderBy = Some("SITE_ID, NUM_PENDING_FLAGS desc"))
@@ -2889,7 +2889,7 @@ class RdbSiteDao(
 
   private def loadPostStatesPendingApproval(
         limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(String, PostState)] =
+        : List[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         NUM_PENDING_FLAGS = 0 and (
@@ -2905,7 +2905,7 @@ class RdbSiteDao(
 
   private def loadPostStatesWithSuggestions(
         limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(String, PostState)] =
+        : List[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         NUM_PENDING_FLAGS = 0 and
@@ -2930,7 +2930,7 @@ class RdbSiteDao(
 
   private def loadPostStatesHandled(
         limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(String, PostState)] =
+        : List[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         NUM_PENDING_FLAGS = 0 and
@@ -2956,7 +2956,7 @@ class RdbSiteDao(
 
   private def loadPostStatesImpl(
       limit: Int, offset: Int, whereTests: String, orderBy: Option[String] = None)(
-      implicit connection: js.Connection): List[(String, PostState)] = {
+      implicit connection: js.Connection): List[(PageId, PostState)] = {
 
     val orderByClause = orderBy.map("order by " + _) getOrElse ""
     val sql = s"""
@@ -2966,7 +2966,7 @@ class RdbSiteDao(
       """
 
     val values = List(siteId)
-    var result: List[(String, PostState)] = Nil
+    var result: List[(PageId, PostState)] = Nil
 
     db.query(sql, values, rs => {
       while (rs.next) {
