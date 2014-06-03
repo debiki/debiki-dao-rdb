@@ -21,11 +21,12 @@ import com.debiki.core._
 import com.debiki.core.DbDao._
 import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.PagePath._
+import com.debiki.core.{PostActionPayload => PAP}
 import com.debiki.core.Prelude._
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
-import scala.collection.mutable
+import scala.collection.{immutable, mutable}
 import scala.collection.{mutable => mut}
 import scala.collection.mutable.StringBuilder
 import DbDao._
@@ -1262,6 +1263,59 @@ class RdbSiteDao(
 
       (postsSorted, people)
     }
+  }
+
+
+  def loadFlags(pagePostIds: Seq[PagePostId])
+        : (Map[PagePostId, Seq[RawPostAction[PAP.Flag]]], People) = {
+    db.withConnection { connection =>
+      loadFlagsImpl(pagePostIds)(connection)
+    }
+  }
+
+
+  def loadFlagsImpl(pagePostIds: Seq[PagePostId])(implicit connection: js.Connection)
+        : (Map[PagePostId, Seq[RawPostAction[PAP.Flag]]], People) = {
+    if (pagePostIds isEmpty)
+      return (Map.empty, People.None)
+
+    val pagePostIdsSql = {
+      val sb = new StringBuilder
+      pagePostIds foreach { pagePostId =>
+        if (!sb.isEmpty) sb.append(" or ")
+        sb.append(s"(PAGE_ID = ? and POST_ID = ?)")
+      }
+      sb.toString
+    }
+
+    val sql = s"""
+      select a.PAGE_ID, $ActionSelectListItems
+      from DW1_PAGE_ACTIONS a
+      where a.TENANT = ?
+        and a.type like 'Flag%'
+        and ($pagePostIdsSql)"""
+
+    val values: List[AnyRef] = siteId :: pagePostIds.map(_.toList).flatten.toList
+
+    var flagsMap = immutable.HashMap[PagePostId, Vector[RawPostAction[PAP.Flag]]]()
+      .withDefaultValue(Vector.empty)
+
+    val flaggers = db.withConnection { implicit connection =>
+      db.query(sql, values, rs => {
+        while (rs.next) {
+          val pageId = rs.getString("PAGE_ID")
+          val flag = _Action(rs).asInstanceOf[RawPostAction[PAP.Flag]]
+          val pagePostId = PagePostId(pageId, flag.postId)
+          var flags = flagsMap(pagePostId)
+          flags :+= flag
+          flagsMap += pagePostId -> flags
+        }
+      })
+
+      People(users = loadUsersAsList(flagsMap.values.flatten.map(_.userId).toList.distinct))
+    }
+
+    (flagsMap, flaggers)
   }
 
 
