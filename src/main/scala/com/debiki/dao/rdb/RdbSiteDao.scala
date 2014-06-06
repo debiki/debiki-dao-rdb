@@ -2882,9 +2882,9 @@ class RdbSiteDao(
       o2ts(post.treeCollapsedAt),
       o2ts(post.treeClosedAt),
       o2ts(post.postDeletedAt),
-      post.postDeleterUserId.orNullVarchar,
+      post.postDeletedById.orNullVarchar,
       o2ts(post.treeDeletedAt),
-      post.treeDeleterUserId.orNullVarchar,
+      post.treeDeletedById.orNullVarchar,
       o2ts(post.postHiddenAt),
       post.postHiddenById.orNullVarchar,
 
