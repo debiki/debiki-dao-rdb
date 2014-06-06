@@ -2736,7 +2736,11 @@ class RdbSiteDao(
         TREE_COLLAPSED_AT = ?,
         TREE_CLOSED_AT = ?,
         POST_DELETED_AT = ?,
+        POST_DELETED_BY_ID = ?,
         TREE_DELETED_AT = ?,
+        TREE_DELETED_BY_ID = ?,
+        POST_HIDDEN_AT = ?,
+        POST_HIDDEN_BY_ID = ?,
 
         NUM_EDIT_SUGGESTIONS = ?,
         NUM_EDITS_APPLD_UNREVIEWED = ?,
@@ -2797,7 +2801,11 @@ class RdbSiteDao(
         TREE_COLLAPSED_AT,
         TREE_CLOSED_AT,
         POST_DELETED_AT,
+        POST_DELETED_BY_ID,
         TREE_DELETED_AT,
+        TREE_DELETED_BY_ID,
+        POST_HIDDEN_AT,
+        POST_HIDDEN_BY_ID,
 
         NUM_EDIT_SUGGESTIONS,
         NUM_EDITS_APPLD_UNREVIEWED,
@@ -2840,7 +2848,7 @@ class RdbSiteDao(
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?)"""
+         ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
     val collapsed: AnyRef =
       if (post.isTreeCollapsed) "CollapseTree"
@@ -2874,7 +2882,11 @@ class RdbSiteDao(
       o2ts(post.treeCollapsedAt),
       o2ts(post.treeClosedAt),
       o2ts(post.postDeletedAt),
+      post.postDeleterUserId.orNullVarchar,
       o2ts(post.treeDeletedAt),
+      post.treeDeleterUserId.orNullVarchar,
+      o2ts(post.postHiddenAt),
+      post.postHiddenById.orNullVarchar,
 
       post.numPendingEditSuggestions.asInstanceOf[AnyRef],
       post.numEditsAppliedUnreviewed.asInstanceOf[AnyRef],
@@ -3105,7 +3117,11 @@ class RdbSiteDao(
       treeCollapsedAt = ts2o(rs.getTimestamp("TREE_COLLAPSED_AT")),
       treeClosedAt = ts2o(rs.getTimestamp("TREE_CLOSED_AT")),
       postDeletedAt = ts2o(rs.getTimestamp("POST_DELETED_AT")),
+      postDeletedById = Option(rs.getString("POST_DELETED_BY_ID")),
       treeDeletedAt = ts2o(rs.getTimestamp("TREE_DELETED_AT")),
+      treeDeletedById = Option(rs.getString("TREE_DELETED_BY_ID")),
+      postHiddenAt = ts2o(rs.getTimestamp("POST_HIDDEN_AT")),
+      postHiddenById = Option(rs.getString("POST_HIDDEN_BY_ID")),
       numEditSuggestions = rs.getInt("NUM_EDIT_SUGGESTIONS"),
       numEditsAppliedUnreviewed = rs.getInt("NUM_EDITS_APPLD_UNREVIEWED"),
       numEditsAppldPrelApproved = rs.getInt("NUM_EDITS_APPLD_PREL_APPROVED"),
