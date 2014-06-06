@@ -163,7 +163,6 @@ object RdbUtil {
       case "Aprv" | "Rjct" =>
         assert((typee == "Rjct") == approval.isEmpty)
         buildAction(PAP.ReviewPost(approval))
-      case "Undo" => unimplemented
       case "CloseTree" => buildAction(PostActionPayload.CloseTree)
       case "PinAtPos" =>
         buildAction(PAP.PinPostAtPosition(longValue_?.toInt))

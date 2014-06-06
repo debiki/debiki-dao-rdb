@@ -2623,7 +2623,6 @@ class RdbSiteDao(
             case PAP.CloseTree => insertSimpleValue("CloseTree")
             case PAP.DeletePost => insertSimpleValue("DelPost")
             case PAP.DeleteTree => insertSimpleValue("DelTree")
-            case PAP.Undo(_) => unimplemented
             case PAP.Delete(_) => unimplemented // there's no DW1_PAGE_ACTIONS.TYPE?
           }
     }
