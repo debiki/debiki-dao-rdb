@@ -1214,54 +1214,24 @@ class RdbSiteDao(
 
   def loadPostsRecentlyActive(limit: Int, offset: Int): (List[Post], People) = {
     db.withConnection { implicit connection =>
-      var statess: List[List[(PageId, PostState)]] = Nil
-      if (statess.length < limit) statess ::= loadPostStatesPendingFlags(limit, offset)
-      if (statess.length < limit) statess ::= loadPostStatesPendingApproval(limit, offset)
-      if (statess.length < limit) statess ::= loadPostStatesWithSuggestions(limit, offset)
-      if (statess.length < limit) statess ::= loadPostStatesHandled(limit, offset)
+      var statess = Vector[Vector[(PageId, PostState)]]()
+      if (statess.length < limit) statess :+= loadPostStatesPendingFlags(limit, offset)
+      if (statess.length < limit) statess :+= loadPostStatesPendingApproval(limit, offset)
+      if (statess.length < limit) statess :+= loadPostStatesWithSuggestions(limit, offset)
+      if (statess.length < limit) statess :+= loadPostStatesHandled(limit, offset)
 
       val states = statess.flatten
       val userIds = states.map(_._2.creationAction.userId)
 
-      val people = People(users = loadUsersAsList(userIds))
+      val people = People(users = loadUsersAsList(userIds.toList))
 
-      val statesByPageId: Map[PageId, List[PostState]] =
-        states.groupBy(_._1).mapValues(_.map(_._2))
-
-      val pagesById: Map[PageId, PageParts] = for ((pageId, states) <- statesByPageId) yield {
-        pageId -> PageParts(pageId, people, postStates = states)
+      val posts = states map { case (pageId, state) =>
+        val pageParts = PageParts(pageId, people, state::Nil)
+        val post = pageParts.getPost_!(state.postId)
+        post
       }
 
-      val posts = pagesById.values.flatMap(_.getAllPosts).toList
-
-      // Sort posts so flags appear first, then new posts pending approval, then
-      // pending edits, then edit suggestions, then old posts with nothing new.
-      // The sort order must match the indexes used when loading posts — see the
-      // `loadPostStates...` invokations above.
-
-      def sortFn(a: Post, b: Post): Boolean = {
-        if (a.numPendingFlags > b.numPendingFlags) return true
-        if (a.numPendingFlags < b.numPendingFlags) return false
-
-        val aIsPendingReview = !a.currentVersionPermReviewed
-        val bIsPendingReview = !b.currentVersionPermReviewed
-
-        if (aIsPendingReview && !bIsPendingReview) return true
-        if (!aIsPendingReview && bIsPendingReview) return false
-        if (aIsPendingReview && bIsPendingReview)
-          return a.lastActedUponAt.getTime > b.lastActedUponAt.getTime
-
-        if (a.numPendingEditSuggestions > 0 && b.numPendingEditSuggestions == 0)
-          return true
-        if (a.numPendingEditSuggestions == 0 && b.numPendingEditSuggestions > 0)
-          return false
-
-        a.lastActedUponAt.getTime > b.lastActedUponAt.getTime
-      }
-
-      val postsSorted = posts sortWith sortFn
-
-      (postsSorted, people)
+      (posts.toList, people)
     }
   }
 
@@ -2948,7 +2918,7 @@ class RdbSiteDao(
     */
   private def loadPostStatesPendingFlags(
         limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(PageId, PostState)] =
+        : Vector[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = """
         POST_DELETED_AT is null and
@@ -2963,7 +2933,7 @@ class RdbSiteDao(
     */
   private def loadPostStatesPendingApproval(
         limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(PageId, PostState)] =
+        : Vector[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         POST_DELETED_AT is null and
@@ -2983,7 +2953,7 @@ class RdbSiteDao(
     */
   private def loadPostStatesWithSuggestions(
         limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(PageId, PostState)] =
+        : Vector[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
         POST_DELETED_AT is null and
@@ -3012,7 +2982,7 @@ class RdbSiteDao(
     */
   private def loadPostStatesHandled(
         limit: Int, offset: Int)(implicit connection: js.Connection)
-        : List[(PageId, PostState)] =
+        : Vector[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""(
         POST_DELETED_AT is not null or
@@ -3041,7 +3011,7 @@ class RdbSiteDao(
 
   private def loadPostStatesImpl(
       limit: Int, offset: Int, whereTests: String, orderBy: Option[String] = None)(
-      implicit connection: js.Connection): List[(PageId, PostState)] = {
+      implicit connection: js.Connection): Vector[(PageId, PostState)] = {
 
     val orderByClause = orderBy.map("order by " + _) getOrElse ""
     val sql = s"""
@@ -3051,12 +3021,12 @@ class RdbSiteDao(
       """
 
     val values = List(siteId)
-    var result: List[(PageId, PostState)] = Nil
+    var result = Vector[(PageId, PostState)]()
 
     db.query(sql, values, rs => {
       while (rs.next) {
         val pageId = rs.getString("PAGE_ID")
-        result ::= (pageId, readPostState(rs))
+        result :+= (pageId, readPostState(rs))
       }
     })
 
