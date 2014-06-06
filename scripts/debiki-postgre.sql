@@ -801,72 +801,7 @@ create table DW1_POSTS(
 );
 
 
--- Flags are important — we first show all posts with unhandled flags...
--- (NOTE: If you edit this index, update the corresponding `where` test
--- in RelDbTenantDao.loadPostStatesPendingFlags, or there'll be full table scans!)
-create index DW1_POSTS_PENDING_FLAGS on DW1_POSTS (SITE_ID, NUM_PENDING_FLAGS)
-  where
-    NUM_PENDING_FLAGS > 0;
-
--- ...Then unapproved posts, or posts with changes in need of review (that is,
--- edits not yet reviewed, or edits preliminarily approved by the computer)...
--- (NOTE: If you edit this index, update the corresponding `where` test
--- in RelDbTenantDao.loadPostStatesPendingApproval.)
-create index DW1_POSTS_PENDING_STH on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
-  where
-    NUM_PENDING_FLAGS = 0 and (
-      (LAST_APPROVAL_TYPE is null or LAST_APPROVAL_TYPE = 'P') or
-      NUM_EDITS_TO_REVIEW > 0 or
-      NUM_COLLAPSES_TO_REVIEW > 0 or
-      NUM_UNCOLLAPSES_TO_REVIEW > 0 or
-      NUM_DELETES_TO_REVIEW > 0 or
-      NUM_UNDELETES_TO_REVIEW > 0);
-
--- ...Then things with pending suggestions...
--- (NOTE: If you edit this index, update the corresponding `where` test
--- in RelDbTenantDao.loadPostStatesWithSuggestions.)
-create index DW1_POSTS_PENDING_EDIT_SUGGS on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
-  where
-    NUM_PENDING_FLAGS = 0 and
-    LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
-    NUM_EDITS_TO_REVIEW = 0 and
-    NUM_COLLAPSES_TO_REVIEW = 0 and
-    NUM_UNCOLLAPSES_TO_REVIEW = 0 and
-    NUM_DELETES_TO_REVIEW = 0 and
-    NUM_UNDELETES_TO_REVIEW = 0 and (
-      NUM_EDIT_SUGGESTIONS > 0 or
-      (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
-      (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
-      (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
-      (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
-      (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
-      (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
-      (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
-      (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
-
--- And last of all, posts with nothing to review, and no pending suggestions.
--- (Including new auto approved posts by well behaved users.)
--- (NOTE: If you edit this index, update the corresponding `where` test
--- in RelDbTenantDao.loadPostStatesHandled.)
-create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT)
-  where
-    NUM_PENDING_FLAGS = 0 and
-    LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
-    NUM_EDITS_TO_REVIEW = 0 and
-    NUM_COLLAPSES_TO_REVIEW = 0 and
-    NUM_UNCOLLAPSES_TO_REVIEW = 0 and
-    NUM_DELETES_TO_REVIEW = 0 and
-    NUM_UNDELETES_TO_REVIEW = 0 and
-    NUM_EDIT_SUGGESTIONS = 0 and not (
-      NUM_EDIT_SUGGESTIONS > 0 or
-      (NUM_COLLAPSE_POST_VOTES_PRO > 0   and POST_COLLAPSED_AT is null) or
-      (NUM_UNCOLLAPSE_POST_VOTES_PRO > 0 and POST_COLLAPSED_AT is not null) or
-      (NUM_COLLAPSE_TREE_VOTES_PRO > 0   and TREE_COLLAPSED_AT is null) or
-      (NUM_UNCOLLAPSE_TREE_VOTES_PRO > 0 and TREE_COLLAPSED_AT is not null) or
-      (NUM_DELETE_POST_VOTES_PRO > 0     and POST_DELETED_AT is null) or
-      (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
-      (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
-      (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null));
+-- DW1_POSTS indexes: See 16.sql (or some later file)
 
 
 

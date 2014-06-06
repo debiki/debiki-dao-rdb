@@ -2944,19 +2944,30 @@ class RdbSiteDao(
   // Therefore: Only edit the where tests below, by copy-pasting from
   // debiki-postgre.sql (the indexes below `create table DW1_POSTS`).
 
+  /** Loads non-deleted posts with pending flags
+    */
   private def loadPostStatesPendingFlags(
         limit: Int, offset: Int)(implicit connection: js.Connection)
         : List[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
-      whereTests = "NUM_PENDING_FLAGS > 0",
+      whereTests = """
+        POST_DELETED_AT is null and
+        TREE_DELETED_AT is null and
+        NUM_PENDING_FLAGS > 0
+      """,
       orderBy = Some("SITE_ID, NUM_PENDING_FLAGS desc"))
 
 
+  /** Loads non-deleted posts with edits to review, or that are new and pending
+    * approval.
+    */
   private def loadPostStatesPendingApproval(
         limit: Int, offset: Int)(implicit connection: js.Connection)
         : List[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
+        POST_DELETED_AT is null and
+        TREE_DELETED_AT is null and
         NUM_PENDING_FLAGS = 0 and (
           (LAST_APPROVAL_TYPE is null or LAST_APPROVAL_TYPE = 'P') or
           NUM_EDITS_TO_REVIEW > 0 or
@@ -2968,11 +2979,15 @@ class RdbSiteDao(
       orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
 
+  /** Loads non-deleted posts with edit suggestions or other suggestions.
+    */
   private def loadPostStatesWithSuggestions(
         limit: Int, offset: Int)(implicit connection: js.Connection)
         : List[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
       whereTests = s"""
+        POST_DELETED_AT is null and
+        TREE_DELETED_AT is null and
         NUM_PENDING_FLAGS = 0 and
         LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
         NUM_EDITS_TO_REVIEW = 0 and
@@ -2993,11 +3008,16 @@ class RdbSiteDao(
       orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
 
+  /** Loads uninteresting posts, namely posts that have already been reviewed or deleted.
+    */
   private def loadPostStatesHandled(
         limit: Int, offset: Int)(implicit connection: js.Connection)
         : List[(PageId, PostState)] =
     loadPostStatesImpl(limit, offset,
-      whereTests = s"""
+      whereTests = s"""(
+        POST_DELETED_AT is not null or
+        TREE_DELETED_AT is not null
+      ) or (
         NUM_PENDING_FLAGS = 0 and
         LAST_APPROVAL_TYPE in ('W', 'A', 'M') and
         NUM_EDITS_TO_REVIEW = 0 and
@@ -3015,7 +3035,7 @@ class RdbSiteDao(
           (NUM_UNDELETE_POST_VOTES_PRO > 0   and POST_DELETED_AT is not null) or
           (NUM_DELETE_TREE_VOTES_PRO > 0     and TREE_DELETED_AT is null) or
           (NUM_UNDELETE_TREE_VOTES_PRO > 0   and TREE_DELETED_AT is not null))
-        """,
+      )""",
       orderBy = Some("SITE_ID, LAST_ACTED_UPON_AT desc"))
 
 
@@ -3026,7 +3046,7 @@ class RdbSiteDao(
     val orderByClause = orderBy.map("order by " + _) getOrElse ""
     val sql = s"""
       select * from DW1_POSTS
-      where SITE_ID = ? and $whereTests
+      where SITE_ID = ? and ($whereTests)
       $orderByClause limit $limit offset $offset
       """
 
