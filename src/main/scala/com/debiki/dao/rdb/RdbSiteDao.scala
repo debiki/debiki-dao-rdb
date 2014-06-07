@@ -2454,9 +2454,17 @@ class RdbSiteDao(
     // we need the actual RawPostAction's here, not only post ids — so we
     // can update the read counts of all affected posts.
     posts foreach { post =>
+      // Doesn't totally work (!). Uses page.parts which was loaded *before*
+      // the actions were inserted, and does thus not take e.g. cleared flags
+      // into account (it thinks all flags are still pending, event if a ClearFlags
+      // action has been inserted). However, we call updateAffectedThings() below which
+      // correctly updates everything anyway.
       insertUpdatePost(post)(conn)
     }
 
+    // Update e.g. posts that were hidden/shown or post/flags/pages that were deleted
+    // or undeleted, so e.g. their DELETED_AT/BY_ID columns have correct values.
+    updateAffectedThings(page.id, actionsWithIds)(conn)
 
     // Update cached page meta (e.g. the page title).
     val newMeta = PageMeta.forChangedPage(page.meta, newParts)
@@ -2594,10 +2602,111 @@ class RdbSiteDao(
             case PAP.DeletePost => insertSimpleValue("DelPost")
             case PAP.DeleteTree => insertSimpleValue("DelTree")
             case PAP.Delete(_) => unimplemented // there's no DW1_PAGE_ACTIONS.TYPE?
+            case PAP.HidePost => insertSimpleValue("HidePost")
+            case PAP.ClearFlags => insertSimpleValue("ClearFlags")
           }
     }
 
     actionsWithIds
+  }
+
+
+  /** Looks at each RawPostAction, and find out which tables and columns to update,
+    * because of that action. For example, an action.payload = ClearFlags results in
+    * DW1_PAGE_ACTIONS.DELETED_AT/BY_ID being set for all flags for action.postId.
+    */
+  private def updateAffectedThings(pageId: PageId, actions: Seq[RawPostAction[_]])
+        (implicit connection: js.Connection) {
+
+    def setColumn(table: String, pageId: PageId, postId: PostId,
+            changedAtColumn: String, date: ju.Date,
+            changedByColumn: String, userId: UserId)
+            (implicit connection: js.Connection) {
+      UNTESTED
+      var sql = s"""
+        update $table set
+          $changedAtColumn = ?
+          $changedByColumn = ?
+        where TENANT = ? and PAGE_ID = ? and POST_ID = ? and $changedAtColumn is null"""
+      var values = List[AnyRef](siteId, d2ts(date), userId, pageId, postId.asAnyRef)
+      db.update(sql, values)
+    }
+
+    val now = new ju.Date
+
+    // Deleting the original post deletes the whole page.
+    def deletePage(userId: UserId) {
+      UNTESTED
+      var sql = s"""
+        update DW1_PAGES set DELETED_AT = ?, DELETED_BY_ID = ?
+        where TENANT = ? and PAGE_ID = ? and DELETED_AT is null"""
+      var values = Vector[AnyRef](siteId, d2ts(now), userId, pageId)
+      db.update(sql, values.toList)
+    }
+
+    def clearFlags(postId: PostId, userId: UserId) {
+      // Minor BUG: race condition. What if a flag is created by another thread right here?
+      // It would be deleted, although it hasn't yet been considered by any moderator.
+
+      // Mark flags as deleted.
+      val sql = s"""
+        update DW1_PAGE_ACTIONS set DELETED_AT = ?, DELETED_BY_ID = ?
+        where TENANT = ?
+          and PAGE_ID = ?
+          and POST_ID = ?
+          and TYPE like 'Flag%'
+          and DELETED_AT is null"""
+      val values = List[AnyRef](d2ts(now), userId, siteId, pageId, postId.asAnyRef)
+      db.update(sql, values)
+
+      // Set pending flag count to 0.
+      val sql2 = s"""
+        update DW1_POSTS set
+          NUM_HANDLED_FLAGS = NUM_HANDLED_FLAGS + NUM_PENDING_FLAGS,
+          NUM_PENDING_FLAGS = 0
+        where SITE_ID = ?
+          and PAGE_ID = ?
+          and POST_ID = ?"""
+      val values2 = List[AnyRef](siteId, pageId, postId.asAnyRef)
+      db.update(sql2, values2)
+    }
+
+    for (action <- actions) action.payload match {
+      case PAP.DeletePost =>
+        UNTESTED
+        setColumn("DW1_POSTS", pageId, action.postId,
+          "POST_DELETED_AT", now,
+          "POST_DELETED_BY_ID", action.userId)(connection)
+        if (action.postId == PageParts.BodyId) {
+          deletePage(action.userId)
+        }
+      case PAP.DeleteTree =>
+        UNTESTED
+        setColumn("DW1_POSTS", pageId, action.postId,
+          "TREE_DELETED_AT", now,
+          "TREE_DELETED_BY_ID", action.userId)(connection)
+        if (action.postId == PageParts.BodyId) {
+          deletePage(action.userId)
+        }
+        // We need to update all posts in the tree starting at action.postId. Load the
+        // whole page, to find action.postId's successors.
+        val pageParts = loadPageParts(pageId) getOrElse { return }
+        val successors = pageParts.successorsTo(action.postId)
+        for (post <- successors) {
+          setColumn("DW1_POSTS", pageId, post.id,
+            "POST_DELETED_AT", now,
+            "POST_DELETED_BY_ID", action.userId)(connection)
+        }
+      case PAP.HidePost =>
+        UNTESTED
+        setColumn("DW1_POSTS", pageId, action.id,
+          "POST_HIDDEN_AT", now,
+          "POST_HIDDEN_BY_ID", action.userId)(connection)
+      case PAP.ClearFlags =>
+        clearFlags(action.postId, action.userId)
+      case _ =>
+        // ignore, for now
+    }
   }
 
 

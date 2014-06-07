@@ -82,7 +82,7 @@ object RdbUtil {
     "a.POST_ID, a.PAID, a.LOGIN, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
      "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.IP, " +
      "a.BROWSER_ID_COOKIE, a.BROWSER_FINGERPRINT," +
-     "a.APPROVAL, a.AUTO_APPLICATION"
+     "a.APPROVAL, a.AUTO_APPLICATION, a.DELETED_AT, a.DELETED_BY_ID"
 
   def _Action(rs: js.ResultSet): RawPostAction[_] = {
     val postId = rs.getInt("POST_ID")
@@ -117,6 +117,8 @@ object RdbUtil {
     val browserFingerprint = Option(rs.getInt("BROWSER_FINGERPRINT")) getOrElse 0
     val approval = _toAutoApproval(rs.getString("APPROVAL"))
     val editAutoApplied = rs.getString("AUTO_APPLICATION") == "A"
+    val deletedAt = ts2o(rs.getTimestamp("DELETED_AT"))
+    val deletedById = Option(rs.getString("DELETED_BY_ID"))
 
     val userIdData = UserIdData(
       loginId = anyLoginId,
@@ -126,7 +128,8 @@ object RdbUtil {
       browserFingerprint = browserFingerprint)
 
     def buildAction(payload: PostActionPayload) =
-      RawPostAction(id, time, payload, postId = postId, userIdData = userIdData)
+      RawPostAction(id, time, payload, postId = postId, userIdData = userIdData,
+        deletedAt = deletedAt, deletedById = deletedById)
 
     def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
       target: $relpa, login id: $anyLoginId, user id: $userId"""
@@ -156,10 +159,14 @@ object RdbUtil {
         val typeStr = flag drop 4 // drop "Flag"
         val tyype = FlagType withName typeStr
         buildAction(PAP.Flag(tyype = tyype, reason = n2e(text_?)))
+      case "ClearFlags" =>
+        buildAction(PAP.ClearFlags)
       case "DelPost" =>
         buildAction(PAP.DeletePost)
       case "DelTree" =>
         buildAction(PAP.DeleteTree)
+      case "HidePost" =>
+        buildAction(PAP.HidePost)
       case "Aprv" | "Rjct" =>
         assert((typee == "Rjct") == approval.isEmpty)
         buildAction(PAP.ReviewPost(approval))
