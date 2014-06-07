@@ -167,8 +167,8 @@ object RdbUtil {
         buildAction(PAP.DeleteTree)
       case "HidePost" =>
         buildAction(PAP.HidePost)
-      case "Aprv" | "Rjct" =>
-        assert((typee == "Rjct") == approval.isEmpty)
+      case "Aprv" =>
+        assert(approval.isDefined)
         buildAction(PAP.ReviewPost(approval))
       case "CloseTree" => buildAction(PostActionPayload.CloseTree)
       case "PinAtPos" =>

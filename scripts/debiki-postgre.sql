@@ -893,7 +893,7 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
       references DW1_PAGES (SNO) deferrable,
   constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
         'Post', 'Edit', 'EditApp',
-        'Aprv', 'Rjct',
+        'Aprv',
         'VoteLike', 'VoteWrong', 'VoteOffTopic',
         'MoveTree',
         'CollapsePost', 'CollapseTree',
@@ -924,7 +924,6 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
   constraint DW1_PGAS_TYPE_APPROVAL__C check(
       case TYPE
         when 'Aprv' then (APPROVAL is not null)
-        when 'Rjct' then (APPROVAL is null)
         else true
       end),
   constraint DW1_PGAS_AUTOAPPL__C_IN

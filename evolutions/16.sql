@@ -3,6 +3,8 @@
 -- - Adds hidden/deleted-at/-by columns, and Undelete actions
 -- - Adds ClearFlag action
 -- - Updates DW1_POSTS indexes to take into account that posts can be hidden and deleted
+-- - Changes Reject ('Rjct') to Delete-Post ('DelPost')
+-- - Adds DW1_POSTS.LAST_MANUALLY_APPROVED_BY_ID
 
 
 # --- !Ups
@@ -15,6 +17,20 @@ alter table DW1_POSTS add column POST_HIDDEN_AT timestamp;
 alter table DW1_POSTS add column POST_HIDDEN_BY_ID varchar(32);
 alter table DW1_POSTS add column POST_DELETED_BY_ID varchar(32);
 alter table DW1_POSTS add column TREE_DELETED_BY_ID varchar(32);
+alter table DW1_POSTS add column LAST_MANUALLY_APPROVED_BY_ID varchar(32);
+
+
+-- Set my user as the one that approved the comments (it is).
+update DW1_POSTS set LAST_MANUALLY_APPROVED_BY_ID = '55'
+  where LAST_MANUALLY_APPROVED_AT is not null and SITE_ID = '3';
+
+-- Mark rejected posts as deleted; I'll replace 'Reject' with 'Delete'.
+update DW1_POSTS set
+  POST_DELETED_AT = LAST_REVIEWED_AT,
+  POST_DELETED_BY_ID = '55' -- that's me, KajMagnus, at site '3'
+  where LAST_AUTHLY_REVIEWED_AT is not null and LAST_APPROVAL_TYPE is null and SITE_ID = '3';
+  -- (Fortunately, there are no rejected posts at any other site, right now.)
+
 
 alter table DW1_PAGE_ACTIONS add column DELETED_AT timestamp;
 alter table DW1_PAGE_ACTIONS add column DELETED_BY_ID varchar(32);
@@ -23,10 +39,12 @@ alter table DW1_PAGE_ACTIONS add column DELETED_BY_ID varchar(32);
 alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
 
 update DW1_PAGE_ACTIONS set TYPE = 'FlagInapt' where TYPE in ('FlagIllegal', 'FlagCopyVio');
+update DW1_PAGE_ACTIONS set TYPE = 'DelPost' where TYPE = 'Rjct';
+-- (The author of the Rjct:s is already no. 55, that is, me, KajMagnus.)
 
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
   'Post', 'Edit', 'EditApp',
-  'Aprv', 'Rjct',
+  'Aprv',                                -- <-- Delete 'Rjct', use 'DelPost' instead
   'VoteLike', 'VoteWrong', 'VoteOffTopic',
   'PinAtPos', 'PinVotes',
   'MoveTree',
@@ -36,6 +54,14 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
   'FlagSpam', 'FlagInapt', 'FlagOther',  -- <-- replace 'FlagIllegal' and 'CopyVio' with 'Inapt'
   'ClearFlags'));                        -- <-- add 'ClearFlags'
                                          -- <-- remove 'Undo'
+
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE_APPROVAL__C;
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE_APPROVAL__C check(
+  case TYPE
+    when 'Aprv' then (APPROVAL is not null)
+    else true
+  end);
+
 
 -- DW1_POSTS
 
@@ -132,6 +158,7 @@ alter table DW1_POSTS drop column POST_HIDDEN_AT;
 alter table DW1_POSTS drop column POST_HIDDEN_BY_ID;
 alter table DW1_POSTS drop column POST_DELETED_BY_ID;
 alter table DW1_POSTS drop column TREE_DELETED_BY_ID;
+alter table DW1_POSTS drop column LAST_MANUALLY_APPROVED_BY_ID;
 
 alter table DW1_PAGE_ACTIONS drop column DELETED_AT;
 alter table DW1_PAGE_ACTIONS drop column DELETED_BY_ID;
@@ -142,3 +169,5 @@ alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_TYPE__C_IN;
 alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C_IN check (true);
 
 -- Leave DW1_POSTS indexes as is.
+-- Leave constraint DW1_PGAS_TYPE_APPROVAL__C as is.
+

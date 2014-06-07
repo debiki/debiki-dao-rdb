@@ -1198,7 +1198,7 @@ class RdbSiteDao(
         and (
           a.POST_ID in ("""+ bodyOrTitle +""") and
           a.type in (
-              'Post', 'Edit', 'EditApp', 'Rjct', 'Aprv', 'DelPost', 'DelTree'))"""
+              'Post', 'Edit', 'EditApp', 'Aprv', 'DelPost', 'DelTree'))"""
 
     val values = siteId :: pageIds.toList
 
@@ -2579,7 +2579,8 @@ class RdbSiteDao(
                 "EditApp", a.editId.asAnyRef, NullVarchar, NullInt,
                 NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
             case r: PAP.ReviewPost =>
-              val tyype = r.approval.isDefined ? "Aprv" | "Rjct"
+              assert(r.approval.isDefined)
+              val tyype = "Aprv"
               db.update(insertIntoActions, commonVals:::List(
                 tyype, NullInt, NullVarchar, NullInt, NullVarchar, NullVarchar,
                 _toDbVal(r.approval), NullVarchar))
@@ -2805,6 +2806,7 @@ class RdbSiteDao(
         LAST_APPROVAL_TYPE = ?,
         LAST_PERMANENTLY_APPROVED_AT = ?,
         LAST_MANUALLY_APPROVED_AT = ?,
+        LAST_MANUALLY_APPROVED_BY_ID = ?,
         AUTHOR_ID = ?,
         LAST_EDIT_APPLIED_AT = ?,
         LAST_EDIT_REVERTED_AT = ?,
@@ -2870,6 +2872,7 @@ class RdbSiteDao(
         LAST_APPROVAL_TYPE,
         LAST_PERMANENTLY_APPROVED_AT,
         LAST_MANUALLY_APPROVED_AT,
+        LAST_MANUALLY_APPROVED_BY_ID,
         AUTHOR_ID,
         LAST_EDIT_APPLIED_AT,
         LAST_EDIT_REVERTED_AT,
@@ -2927,7 +2930,7 @@ class RdbSiteDao(
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
     val collapsed: AnyRef =
       if (post.isTreeCollapsed) "CollapseTree"
@@ -2951,6 +2954,7 @@ class RdbSiteDao(
       _toDbVal(post.lastApprovalType), // LAST_APPROVAL_TYPE
       o2ts(post.lastPermanentApprovalDati), // LAST_PERMANENTLY_APPROVED_AT
       o2ts(post.lastManualApprovalDati), // LAST_MANUALLY_APPROVED_AT
+      post.lastManuallyApprovedById.orNullVarchar,
       post.userId,  // AUTHOR_ID
       o2ts(post.lastEditAppliedAt), // LAST_EDIT_APPLIED_AT
       o2ts(post.lastEditRevertedAt), // LAST_EDIT_REVERTED_AT
@@ -3208,6 +3212,7 @@ class RdbSiteDao(
       lastApprovedText = anyApprovedText,
       lastPermanentApprovalDati = ts2o(rs.getTimestamp("LAST_PERMANENTLY_APPROVED_AT")),
       lastManualApprovalDati = ts2o(rs.getTimestamp("LAST_MANUALLY_APPROVED_AT")),
+      lastManuallyApprovedById = Option(rs.getString("LAST_MANUALLY_APPROVED_BY_ID")),
       lastEditAppliedAt = ts2o(rs.getTimestamp("LAST_EDIT_APPLIED_AT")),
       lastEditRevertedAt = ts2o(rs.getTimestamp("LAST_EDIT_REVERTED_AT")),
       lastEditorId = Option(rs.getString("LAST_EDITOR_ID")),
