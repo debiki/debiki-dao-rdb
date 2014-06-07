@@ -2578,12 +2578,11 @@ class RdbSiteDao(
               db.update(insertIntoActions, commonVals:::List(
                 "EditApp", a.editId.asAnyRef, NullVarchar, NullInt,
                 NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
-            case r: PAP.ReviewPost =>
-              assert(r.approval.isDefined)
+            case r: PAP.ApprovePost =>
               val tyype = "Aprv"
               db.update(insertIntoActions, commonVals:::List(
                 tyype, NullInt, NullVarchar, NullInt, NullVarchar, NullVarchar,
-                _toDbVal(r.approval), NullVarchar))
+                _toDbVal(Some(r.approval)), NullVarchar))
             case p: PAP.PinPostAtPosition =>
               db.update(insertIntoActions, commonVals:::List(
                 "PinAtPos", NullInt, NullVarchar, p.position.asAnyRef,

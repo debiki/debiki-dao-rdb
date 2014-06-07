@@ -168,8 +168,7 @@ object RdbUtil {
       case "HidePost" =>
         buildAction(PAP.HidePost)
       case "Aprv" =>
-        assert(approval.isDefined)
-        buildAction(PAP.ReviewPost(approval))
+        buildAction(PAP.ApprovePost(approval getOrDie "DwE2UGX0"))
       case "CloseTree" => buildAction(PostActionPayload.CloseTree)
       case "PinAtPos" =>
         buildAction(PAP.PinPostAtPosition(longValue_?.toInt))
