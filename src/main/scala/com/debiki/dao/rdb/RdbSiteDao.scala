@@ -2623,29 +2623,29 @@ class RdbSiteDao(
             changedAtColumn: String, date: ju.Date,
             changedByColumn: String, userId: UserId)
             (implicit connection: js.Connection) {
-      UNTESTED
+      val siteIdColumn = if (table == "DW1_POSTS") "SITE_ID" else "TENANT"
       var sql = s"""
         update $table set
-          $changedAtColumn = ?
+          $changedAtColumn = ?,
           $changedByColumn = ?
-        where TENANT = ? and PAGE_ID = ? and POST_ID = ? and $changedAtColumn is null"""
-      var values = List[AnyRef](siteId, d2ts(date), userId, pageId, postId.asAnyRef)
+        where $siteIdColumn = ? and PAGE_ID = ? and POST_ID = ? and $changedAtColumn is null"""
+      var values = List[AnyRef](d2ts(date), userId, siteId, pageId, postId.asAnyRef)
       db.update(sql, values)
     }
 
-    val now = new ju.Date
-
     // Deleting the original post deletes the whole page.
-    def deletePage(userId: UserId) {
+    def deletePage(date: ju.Date, userId: UserId) {
       UNTESTED
       var sql = s"""
-        update DW1_PAGES set DELETED_AT = ?, DELETED_BY_ID = ?
+        update DW1_PAGES set
+          DELETED_AT = ?,
+          DELETED_BY_ID = ?
         where TENANT = ? and PAGE_ID = ? and DELETED_AT is null"""
-      var values = Vector[AnyRef](siteId, d2ts(now), userId, pageId)
+      var values = Vector[AnyRef](d2ts(date), userId, siteId, pageId)
       db.update(sql, values.toList)
     }
 
-    def clearFlags(postId: PostId, userId: UserId) {
+    def clearFlags(date: ju.Date, postId: PostId, userId: UserId) {
       // Minor BUG: race condition. What if a flag is created by another thread right here?
       // It would be deleted, although it hasn't yet been considered by any moderator.
 
@@ -2657,7 +2657,7 @@ class RdbSiteDao(
           and POST_ID = ?
           and TYPE like 'Flag%'
           and DELETED_AT is null"""
-      val values = List[AnyRef](d2ts(now), userId, siteId, pageId, postId.asAnyRef)
+      val values = List[AnyRef](d2ts(date), userId, siteId, pageId, postId.asAnyRef)
       db.update(sql, values)
 
       // Set pending flag count to 0.
@@ -2676,18 +2676,18 @@ class RdbSiteDao(
       case PAP.DeletePost =>
         UNTESTED
         setColumn("DW1_POSTS", pageId, action.postId,
-          "POST_DELETED_AT", now,
+          "POST_DELETED_AT", action.creationDati,
           "POST_DELETED_BY_ID", action.userId)(connection)
         if (action.postId == PageParts.BodyId) {
-          deletePage(action.userId)
+          deletePage(action.creationDati, action.userId)
         }
       case PAP.DeleteTree =>
         UNTESTED
         setColumn("DW1_POSTS", pageId, action.postId,
-          "TREE_DELETED_AT", now,
+          "TREE_DELETED_AT", action.creationDati,
           "TREE_DELETED_BY_ID", action.userId)(connection)
         if (action.postId == PageParts.BodyId) {
-          deletePage(action.userId)
+          deletePage(action.creationDati, action.userId)
         }
         // We need to update all posts in the tree starting at action.postId. Load the
         // whole page, to find action.postId's successors.
@@ -2695,16 +2695,16 @@ class RdbSiteDao(
         val successors = pageParts.successorsTo(action.postId)
         for (post <- successors) {
           setColumn("DW1_POSTS", pageId, post.id,
-            "POST_DELETED_AT", now,
+            "POST_DELETED_AT", action.creationDati,
             "POST_DELETED_BY_ID", action.userId)(connection)
         }
       case PAP.HidePost =>
         UNTESTED
         setColumn("DW1_POSTS", pageId, action.id,
-          "POST_HIDDEN_AT", now,
+          "POST_HIDDEN_AT", action.creationDati,
           "POST_HIDDEN_BY_ID", action.userId)(connection)
       case PAP.ClearFlags =>
-        clearFlags(action.postId, action.userId)
+        clearFlags(action.creationDati, action.postId, action.userId)
       case _ =>
         // ignore, for now
     }
