@@ -24,7 +24,7 @@ alter table DW1_POSTS add column LAST_MANUALLY_APPROVED_BY_ID varchar(32);
 update DW1_POSTS set LAST_MANUALLY_APPROVED_BY_ID = '55'
   where LAST_MANUALLY_APPROVED_AT is not null and SITE_ID = '3';
 
--- Mark rejected posts as deleted; I'll replace 'Reject' with 'Delete'.
+-- Mark rejected posts as deleted. I will replace 'Reject' with 'Delete'.
 update DW1_POSTS set
   POST_DELETED_AT = LAST_REVIEWED_AT,
   POST_DELETED_BY_ID = '55' -- that's me, KajMagnus, at site '3'
