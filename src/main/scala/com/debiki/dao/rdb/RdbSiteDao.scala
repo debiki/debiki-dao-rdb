@@ -2599,10 +2599,12 @@ class RdbSiteDao(
             case PAP.CollapsePost => insertSimpleValue("CollapsePost")
             case PAP.CollapseTree => insertSimpleValue("CollapseTree")
             case PAP.CloseTree => insertSimpleValue("CloseTree")
-            case PAP.DeletePost => insertSimpleValue("DelPost")
+            case PAP.DeletePost(clearFlags) =>
+              if (clearFlags) insertSimpleValue("DelPostClearFlags")
+              else insertSimpleValue("DelPost")
             case PAP.DeleteTree => insertSimpleValue("DelTree")
             case PAP.Delete(_) => unimplemented // there's no DW1_PAGE_ACTIONS.TYPE?
-            case PAP.HidePost => insertSimpleValue("HidePost")
+            case PAP.HidePostClearFlags => insertSimpleValue("HidePostClearFlags")
             case PAP.ClearFlags => insertSimpleValue("ClearFlags")
           }
     }
@@ -2647,6 +2649,8 @@ class RdbSiteDao(
     def clearFlags(date: ju.Date, postId: PostId, userId: UserId) {
       // Minor BUG: race condition. What if a flag is created by another thread right here?
       // It would be deleted, although it hasn't yet been considered by any moderator.
+      // COULD specify ids of flags to delete, or specify a date/action-id up to which flags
+      // are to be deleted.
 
       // Mark flags as deleted.
       val sql = s"""
@@ -2672,8 +2676,10 @@ class RdbSiteDao(
     }
 
     for (action <- actions) action.payload match {
-      case PAP.DeletePost =>
-        UNTESTED
+      case deletePost: PAP.DeletePost =>
+        if (deletePost.clearFlags) {
+          clearFlags(action.creationDati, action.postId, action.userId)
+        }
         setColumn("DW1_POSTS", pageId, action.postId,
           "POST_DELETED_AT", action.creationDati,
           "POST_DELETED_BY_ID", action.userId)(connection)
@@ -2697,8 +2703,9 @@ class RdbSiteDao(
             "POST_DELETED_AT", action.creationDati,
             "POST_DELETED_BY_ID", action.userId)(connection)
         }
-      case PAP.HidePost =>
+      case PAP.HidePostClearFlags =>
         UNTESTED
+        clearFlags(action.creationDati, action.postId, action.userId)
         setColumn("DW1_POSTS", pageId, action.id,
           "POST_HIDDEN_AT", action.creationDati,
           "POST_HIDDEN_BY_ID", action.userId)(connection)

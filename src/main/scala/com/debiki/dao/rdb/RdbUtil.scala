@@ -162,11 +162,13 @@ object RdbUtil {
       case "ClearFlags" =>
         buildAction(PAP.ClearFlags)
       case "DelPost" =>
-        buildAction(PAP.DeletePost)
+        buildAction(PAP.DeletePost(clearFlags = false))
+      case "DelPostClearFlags" =>
+        buildAction(PAP.DeletePost(clearFlags = true))
       case "DelTree" =>
         buildAction(PAP.DeleteTree)
-      case "HidePost" =>
-        buildAction(PAP.HidePost)
+      case "HidePostClearFlags" =>
+        buildAction(PAP.HidePostClearFlags)
       case "Aprv" =>
         buildAction(PAP.ApprovePost(approval getOrDie "DwE2UGX0"))
       case "CloseTree" => buildAction(PostActionPayload.CloseTree)

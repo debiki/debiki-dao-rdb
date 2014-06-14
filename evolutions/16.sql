@@ -49,8 +49,8 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
   'PinAtPos', 'PinVotes',
   'MoveTree',
   'CollapsePost', 'CollapseTree', 'CloseTree', 'Reopen', -- <-- Rename 'ReopenTree' to 'Reopen'
-  'HidePost', 'Unhide',                  -- <-- Add 'HidePost' and 'Unhide'.
-  'DelPost', 'DelTree', 'Undelete',      -- <-- add 'Undelete'
+  'HidePostClearFlags', 'Unhide',                  -- <-- Add 'HidePostClearFlags' and 'Unhide'.
+  'DelPost', 'DelPostClearFlags', 'DelTree', 'Undelete', -- <-- add 'DelPostClearFlags and 'Undelete'
   'FlagSpam', 'FlagInapt', 'FlagOther',  -- <-- replace 'FlagIllegal' and 'CopyVio' with 'Inapt'
   'ClearFlags'));                        -- <-- add 'ClearFlags'
                                          -- <-- remove 'Undo'
