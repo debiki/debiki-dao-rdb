@@ -1429,7 +1429,8 @@ class RdbSiteDao(
       val page = pagesById.get(pageId).getOrElse(assErr(
         "DwE9031211", "Page "+ pageId +" missing when loading recent actions, "+
         debugDetails))
-      new PostAction(page, action)
+      page.getActionById(action.id).getOrDie(
+        "DwE85FKA2", s"Action `${action.id}` missing on page `$pageId`")
     }
 
     (smartActions, people)
