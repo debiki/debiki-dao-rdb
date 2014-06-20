@@ -63,6 +63,13 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE_APPROVAL__C check(
   end);
 
 
+alter table DW1_PAGE_ACTIONS drop constraint DW1_PGAS_APPROVAL__C_IN;
+update DW1_PAGE_ACTIONS set APPROVAL = 'A' where APPROVAL = 'M';
+alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_APPROVAL__C_IN
+  check (APPROVAL in ('P', 'W', 'A'));
+
+
+
 -- DW1_POSTS
 
 -- Flags are important — we first show all non-deleted posts with unhandled flags...
@@ -170,4 +177,4 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C_IN check (true);
 
 -- Leave DW1_POSTS indexes as is.
 -- Leave constraint DW1_PGAS_TYPE_APPROVAL__C as is.
-
+-- Leave constraint DW1_PGAS_APPROVAL__C_IN as is.

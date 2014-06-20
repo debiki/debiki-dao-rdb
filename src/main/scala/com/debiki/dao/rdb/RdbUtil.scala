@@ -372,7 +372,6 @@ object RdbUtil {
     case "P" => Some(Approval.Preliminary)
     case "W" => Some(Approval.WellBehavedUser)
     case "A" => Some(Approval.AuthoritativeUser)
-    case "M" => Some(Approval.Manual)
   }
 
 
@@ -381,7 +380,6 @@ object RdbUtil {
     case Some(Approval.Preliminary) => "P"
     case Some(Approval.WellBehavedUser) => "W"
     case Some(Approval.AuthoritativeUser) => "A"
-    case Some(Approval.Manual) => "M"
   }
 
 

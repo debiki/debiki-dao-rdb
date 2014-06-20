@@ -918,7 +918,7 @@ create table DW1_PAGE_ACTIONS(   -- abbreviated PGAS (PACTIONS deprectd abbrv.)
     (LOGIN is null and GUEST_ID is null and ROLE_ID is null) -- it's the system user
      or (LOGIN is not null and (GUEST_ID is null) <> (ROLE_ID is null))),
   constraint DW1_PGAS_APPROVAL__C_IN
-      check (APPROVAL in ('P', 'W', 'A', 'M')),
+      check (APPROVAL in ('P', 'W', 'A')),
   -- Approval rows must have an approval reason defined,
   -- but rejections must have no approval reason.
   constraint DW1_PGAS_TYPE_APPROVAL__C check(
