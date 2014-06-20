@@ -69,6 +69,11 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_APPROVAL__C_IN
   check (APPROVAL in ('P', 'W', 'A'));
 
 
+alter table DW1_POSTS drop constraint DW1_POSTS_APPROVAL__C_IN;
+update DW1_POSTS set LAST_APPROVAL_TYPE = 'A' where LAST_APPROVAL_TYPE = 'M';
+alter table DW1_POSTS add constraint DW1_POSTS_APPROVAL__C_IN
+  check (LAST_APPROVAL_TYPE in ('P', 'W', 'A'));
+
 
 -- DW1_POSTS
 
