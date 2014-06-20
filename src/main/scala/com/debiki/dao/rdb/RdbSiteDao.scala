@@ -2607,6 +2607,14 @@ class RdbSiteDao(
             case PAP.Delete(_) => unimplemented // there's no DW1_PAGE_ACTIONS.TYPE?
             case PAP.HidePostClearFlags => insertSimpleValue("HidePostClearFlags")
             case PAP.ClearFlags => insertSimpleValue("ClearFlags")
+            case PAP.RejectEdits(deleteEdits) =>
+              if (deleteEdits) {
+                // Would need to actually delete the edits too, not implemented.
+                ??? // insertSimpleValue("RejectDeleteEdits")
+              }
+              else {
+                insertSimpleValue("RejectKeepEdits")
+              }
           }
     }
 

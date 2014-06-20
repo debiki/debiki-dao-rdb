@@ -2,6 +2,7 @@
 -- - Replaces FlagCopyVio and Illegal with FlagInapt
 -- - Adds hidden/deleted-at/-by columns, and Undelete actions
 -- - Adds ClearFlag action
+-- - Adds RejectKeepEdits, RejectDeleteEdits actions
 -- - Updates DW1_POSTS indexes to take into account that posts can be hidden and deleted
 -- - Changes Reject ('Rjct') to Delete-Post ('DelPost')
 -- - Adds DW1_POSTS.LAST_MANUALLY_APPROVED_BY_ID
@@ -51,6 +52,7 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C_IN check (TYPE in (
   'CollapsePost', 'CollapseTree', 'CloseTree', 'Reopen', -- <-- Rename 'ReopenTree' to 'Reopen'
   'HidePostClearFlags', 'Unhide',                  -- <-- Add 'HidePostClearFlags' and 'Unhide'.
   'DelPost', 'DelPostClearFlags', 'DelTree', 'Undelete', -- <-- add 'DelPostClearFlags and 'Undelete'
+  'RejectKeepEdits', 'RejectDeleteEdits', -- <-- new
   'FlagSpam', 'FlagInapt', 'FlagOther',  -- <-- replace 'FlagIllegal' and 'CopyVio' with 'Inapt'
   'ClearFlags'));                        -- <-- add 'ClearFlags'
                                          -- <-- remove 'Undo'
