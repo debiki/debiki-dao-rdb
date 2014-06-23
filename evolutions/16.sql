@@ -161,6 +161,11 @@ create index DW1_POSTS_PENDING_NOTHING on DW1_POSTS (SITE_ID, LAST_ACTED_UPON_AT
   );
 
 
+-- Change from 100 to 250. A Facebook URL was 124 chars.
+alter table DW1_IDS_OPENID drop constraint DW1_IDS_AVATARURL__C_LEN;
+alter table DW1_IDS_OPENID add constraint DW1_IDS_AVATARURL__C_LEN CHECK (length(AVATAR_URL) < 250);
+
+
 
 # --- !Downs
 
@@ -185,3 +190,4 @@ alter table DW1_PAGE_ACTIONS add constraint DW1_PGAS_TYPE__C_IN check (true);
 -- Leave DW1_POSTS indexes as is.
 -- Leave constraint DW1_PGAS_TYPE_APPROVAL__C as is.
 -- Leave constraint DW1_PGAS_APPROVAL__C_IN as is.
+-- Leave constraint DW1_IDS_AVATARURL__C_LEN as is.
