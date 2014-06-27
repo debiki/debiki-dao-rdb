@@ -25,6 +25,7 @@ import com.debiki.core.Prelude._
 import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
+import org.flywaydb.core.Flyway
 import scala.{collection => col}
 import scala.collection.{mutable => mut}
 import scala.collection.mutable.StringBuilder
@@ -699,7 +700,14 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   def applyEvolutions() {
-    new evolutions.Evolution001(this).apply()
+    val flyway = new Flyway()
+    flyway.setDataSource(db.dataSource)
+    flyway.setSchemas("public")
+    // Default prefix is uppercase "V" but I want files in lowercase, e.g. v2014_06_26...
+    flyway.setSqlMigrationPrefix("v")
+    // Warning: Don't clean() in production, could wipe out all data.
+    flyway.setCleanOnValidationError(daoFactory.isTest)
+    flyway.migrate()
   }
 
 

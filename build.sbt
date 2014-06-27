@@ -11,6 +11,7 @@ scalaVersion := "2.10.3"
 //   jdbc-112010-090769.html
 
 libraryDependencies ++= Seq(
+  "org.flywaydb" % "flyway-core" % "3.0",
   "junit" % "junit" % "4.7" % "test",
   // The test suite needs a sl4j implementation or it logs nothing on errors:
   "ch.qos.logback" % "logback-classic" % "0.9.26" % "test",
