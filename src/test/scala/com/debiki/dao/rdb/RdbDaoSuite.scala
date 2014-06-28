@@ -63,7 +63,6 @@ object RdbDaoSuite {
       fullTextSearchDbDataPath = Some("target/elasticsearch-data"), isTest = true,
       fastStartSkipSearch = !withSearchEngine)
 
-    daoFactory.systemDbDao.applyEvolutions()
     daoFactory
   }
 

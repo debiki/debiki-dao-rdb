@@ -31,6 +31,10 @@ class RdbDaoFactory(
   val fastStartSkipSearch: Boolean = false) extends DbDaoFactory {
 
 
+  val systemDbDao = new RdbSystemDao(this)
+  systemDbDao.applyEvolutions()
+
+
   def fullTextSearchIndexer =
     if (fastStartSkipSearch)
       sys.error("Search disabled, please check your Java -D...=... startup flags")
@@ -40,9 +44,6 @@ class RdbDaoFactory(
   private val _fullTextSearchIndexer =
     if (fastStartSkipSearch) null
     else new FullTextSearchIndexer(this)
-
-
-  val systemDbDao = new RdbSystemDao(this)
 
 
   def newSiteDbDao(quotaConsumers: QuotaConsumers) =
