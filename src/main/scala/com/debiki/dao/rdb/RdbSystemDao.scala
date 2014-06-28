@@ -699,11 +699,19 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
+  /** Finds all evolution scripts below src/main/resources/db/migration and applies them.
+    */
   def applyEvolutions() {
     val flyway = new Flyway()
+
+    // --- Temporarily, to initialize the production database -----
+    flyway.setInitDescription("base version")
+    flyway.setInitOnMigrate(true)
+    // ------------------------------------------------------------
+
     flyway.setDataSource(db.dataSource)
     flyway.setSchemas("public")
-    // Default prefix is uppercase "V" but I want files in lowercase, e.g. v2014_06_26...
+    // Default prefix is uppercase "V" but I want files in lowercase, e.g. v1__migration_name.sql.
     flyway.setSqlMigrationPrefix("v")
     // Warning: Don't clean() in production, could wipe out all data.
     flyway.setCleanOnValidationError(daoFactory.isTest)
