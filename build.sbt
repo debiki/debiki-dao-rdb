@@ -16,7 +16,7 @@ libraryDependencies ++= Seq(
   // The test suite needs a sl4j implementation or it logs nothing on errors:
   "ch.qos.logback" % "logback-classic" % "0.9.26" % "test",
   "org.specs2" %% "specs2" % "1.14" % "test",
-  "org.scalatest" % "scalatest_2.10" % "2.1.5" % "test",
+  "org.scalatest" %% "scalatest" % "2.2.0" % "test",
   // For loading test database connection info.
   "com.typesafe" % "config" % "1.0.1" % "test",
   // A data source:
