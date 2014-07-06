@@ -47,6 +47,7 @@ class RdbSiteDao(
   with FullTextSearchSiteDaoMixin
   with UserSiteDaoMixin
   with LoginSiteDaoMixin
+  with PostsReadStatsSiteDaoMixin
   with SettingsSiteDaoMixin {
 
 

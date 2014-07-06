@@ -86,5 +86,9 @@ package specs {
     */
   class UserInfoSpecRunner extends UserInfoSpec(daoFactoryNoSearchEngine) with DbDaoSpecShutdown
 
+  /** In Play's console:   test-only com.debiki.dao.rdb.specs.PostsReadStatsSpecRunner
+    */
+  class PostsReadStatsSpecRunner extends PostsReadStatsSpec(daoFactoryNoSearchEngine)
+    with DbDaoSpecShutdown
 
 }
