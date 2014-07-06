@@ -1,0 +1,21 @@
+<configuration>
+
+  <conversionRule conversionWord="coloredLevel" converterClass="play.api.Logger$ColoredLevel" />
+
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%date %coloredLevel %logger{15}: %message%n%rootException{9}</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="play" level="DEBUG" />
+  <logger name="application" level="DEBUG" />
+  <logger name="app" level="DEBUG" />
+  <logger name="app.installation.password" level="INFO" />
+  <logger name="org.elasticsearch" level="INFO" />
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT" />
+  </root>
+
+</configuration>
