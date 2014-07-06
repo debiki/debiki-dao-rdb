@@ -36,17 +36,35 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao {
 
   def updatePostsReadStats(pageId: PageId, postIdsRead: Set[PostId],
         actionMakingThemRead: RawPostAction[_]) {
-    db.transaction { implicit connection =>
-      val sql = s"""
-        insert into DW1_POSTS_READ_STATS(
-          SITE_ID, PAGE_ID, POST_ID, USER_ID, READ_ACTION_ID, READ_AT)
-        values (?, ?, ?, ?, ?, ?)"""
-      for (postId <- postIdsRead) {
+    // There's an ignore-duplicate-inserts rule in the database (DW1_PSTSRD_IGNORE_DUPL_INS).
+    // However, if two transactions insert the same PK data at the same time that rule
+    // will have no effect, see:
+    //  http://postgresql.1045698.n5.nabble.com/Duplicated-entries-are-not-ignored-even-if-a-quot-do-instead-nothing-quot-rule-is-added-td5116004.html
+    //   """if a concurrent transaction tries to create the same record, one of the transactions
+    //   is going to find that it already exists on transaction commit. An INSERT-rule is not
+    //   going to protect you against that."""
+    // So let's insert each row in its own transaction and ignore any PK error.
+    // (One single transaction for all rows won't work, because the whole transaction would
+    // fail on any single unique key error.)
+    // (If we'd like to avoid roundtrips for separate commits, we could enable autocommit?
+    // Or insert via a stored procedure? Well, performance hardly matters.)
+    for (postId <- postIdsRead) {
+      db.transaction { implicit connection =>
+        val sql = s"""
+          insert into DW1_POSTS_READ_STATS(
+            SITE_ID, PAGE_ID, POST_ID, USER_ID, READ_ACTION_ID, READ_AT)
+          values (?, ?, ?, ?, ?, ?)"""
         val values = List[AnyRef](siteId, pageId, postId.asAnyRef,
           actionMakingThemRead.userId, actionMakingThemRead.id.asAnyRef,
           actionMakingThemRead.creationDati)
-        // There's an ignore-duplicate-inserts rule in the database (DW1_PSTSRD_IGNORE_DUPL_INS).
-        db.update(sql, values)
+        try {
+          db.update(sql, values)
+        }
+        catch {
+          case ex: js.SQLException if isUniqueConstrViolation(ex) =>
+            // Ignore, simply means the user has already read the post.
+            // And see the long comment above.
+        }
       }
     }
   }
