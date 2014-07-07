@@ -1,3 +1,7 @@
+-- This evolution:
+--  - Creates posts-read-stats table.
+--  - Adds a unique index for votes.
+
 
 create table DW1_POSTS_READ_STATS(
   SITE_ID varchar(32) not null,
@@ -30,7 +34,27 @@ create or replace rule DW1_PSTSRD_IGNORE_DUPL_INS as
    do instead nothing;
 
 
--- Only one vote per person.
+
+-- Only one vote per person. But I accidentally added duplicate votes, so first:
+
+delete from DW1_PAGE_ACTIONS a using DW1_PAGE_ACTIONS a2
+  where a.TENANT = a2.TENANT
+    and a.PAGE_ID = a2.PAGE_ID
+    and a.POST_ID = a2.POST_ID
+    and a.GUEST_ID = a2.GUEST_ID
+    and a.TYPE = a2.TYPE
+    and a.TYPE like 'Vote%'
+    and a.time > a2.time;
+
+delete from DW1_PAGE_ACTIONS a using DW1_PAGE_ACTIONS a2
+  where a.TENANT = a2.TENANT
+    and a.PAGE_ID = a2.PAGE_ID
+    and a.POST_ID = a2.POST_ID
+    and a.ROLE_ID = a2.ROLE_ID
+    and a.TYPE = a2.TYPE
+    and a.TYPE like 'Vote%'
+    and a.time > a2.time;
+
 create unique index DW1_PGAS_GUEST_VOTES__U
   on DW1_PAGE_ACTIONS(TENANT, PAGE_ID, POST_ID, GUEST_ID, TYPE)
   where TYPE like 'Vote%';
