@@ -9,6 +9,7 @@ create table DW1_POSTS_READ_STATS(
   READ_ACTION_ID int not null,
   READ_AT timestamp not null,
   constraint DW1_PSTSRD__P primary key (SITE_ID, PAGE_ID, POST_ID, USER_ID),
+  -- Don't include the action id in the constraint because the action might be deleted.
   constraint DW1_PSTSRD_SITE_PAGE__R__PAGES foreign key (SITE_ID, PAGE_ID)
       references DW1_PAGES(TENANT, GUID)
 );
@@ -28,3 +29,12 @@ create or replace rule DW1_PSTSRD_IGNORE_DUPL_INS as
         and USER_ID = new.USER_ID)
    do instead nothing;
 
+
+-- Only one vote per person.
+create unique index DW1_PGAS_GUEST_VOTES__U
+  on DW1_PAGE_ACTIONS(TENANT, PAGE_ID, POST_ID, GUEST_ID, TYPE)
+  where TYPE like 'Vote%';
+
+create unique index DW1_PGAS_ROLE_VOTES__U
+  on DW1_PAGE_ACTIONS(TENANT, PAGE_ID, POST_ID, ROLE_ID, TYPE)
+  where TYPE like 'Vote%';
