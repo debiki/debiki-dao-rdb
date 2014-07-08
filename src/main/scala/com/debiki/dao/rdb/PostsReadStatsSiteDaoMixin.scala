@@ -52,11 +52,11 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao {
       db.transaction { implicit connection =>
         val sql = s"""
           insert into DW1_POSTS_READ_STATS(
-            SITE_ID, PAGE_ID, POST_ID, USER_ID, READ_ACTION_ID, READ_AT)
-          values (?, ?, ?, ?, ?, ?)"""
+            SITE_ID, PAGE_ID, POST_ID, IP, USER_ID, READ_ACTION_ID, READ_AT)
+          values (?, ?, ?, ?, ?, ?, ?)"""
         val values = List[AnyRef](siteId, pageId, postId.asAnyRef,
-          actionMakingThemRead.userId, actionMakingThemRead.id.asAnyRef,
-          actionMakingThemRead.creationDati)
+          actionMakingThemRead.ip, actionMakingThemRead.userId,
+          actionMakingThemRead.id.asAnyRef, actionMakingThemRead.creationDati)
         try {
           db.update(sql, values)
         }
@@ -72,24 +72,36 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao {
 
   def loadPostsReadStats(pageId: PageId): PostsReadStats = {
     val sql = s"""
-      select POST_ID, USER_ID from DW1_POSTS_READ_STATS
+      select POST_ID, IP, USER_ID from DW1_POSTS_READ_STATS
       where SITE_ID = ? and PAGE_ID = ?"""
     val values = List[AnyRef](siteId, pageId)
-    val readerIdsByPostId = mutable.HashMap[PostId, ArrayBuffer[UserId]]()
+    val ipsByPostId = mutable.HashMap[PostId, ArrayBuffer[String]]()
+    val roleIdsByPostId = mutable.HashMap[PostId, ArrayBuffer[RoleId]]()
+
     db.queryAtnms(sql, values, rs => {
       while (rs.next) {
         val postId = rs.getInt("POST_ID")
+        val ip = rs.getString("IP")
         val userId = rs.getString("USER_ID")
-        val buffer = readerIdsByPostId.get(postId).getOrElse(new ArrayBuffer)
-        buffer += userId
-        readerIdsByPostId.put(postId, buffer)
+        if (User.isRoleId(userId)) {
+          val buffer = roleIdsByPostId.getOrElseUpdate(postId, new ArrayBuffer[RoleId])
+          buffer += userId
+        }
+        else {
+          val buffer = ipsByPostId.getOrElseUpdate(postId, new ArrayBuffer[String])
+          buffer += ip
+        }
       }
     })
 
-    val immutableMap = readerIdsByPostId.map({ postAndUsers =>
-      (postAndUsers._1, postAndUsers._2.toSet)
+    val immutableIpsMap = ipsByPostId.map({ case (postId, ips) =>
+      (postId, ips.toSet)
     }).toMap
-    PostsReadStats(pageId, immutableMap)
+    val immutableRolesMap = roleIdsByPostId.map({ case (postId, roleIds) =>
+      (postId, roleIds.toSet)
+    }).toMap
+
+    PostsReadStats(pageId, immutableIpsMap, immutableRolesMap)
   }
 
 }
