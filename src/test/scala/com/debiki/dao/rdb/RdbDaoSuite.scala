@@ -91,4 +91,8 @@ package specs {
   class PostsReadStatsSpecRunner extends PostsReadStatsSpec(daoFactoryNoSearchEngine)
     with DbDaoSpecShutdown
 
+  /** In Play's console:   test-only com.debiki.dao.rdb.specs.VoteSpecRunner
+    */
+  class VoteSpecRunner extends VoteSpec(daoFactoryNoSearchEngine)
+    with DbDaoSpecShutdown
 }

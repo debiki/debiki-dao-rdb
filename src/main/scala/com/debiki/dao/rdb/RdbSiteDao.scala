@@ -2415,7 +2415,7 @@ class RdbSiteDao(
   }
 
 
-  override def savePageActions(page: PageNoPath, actions: List[RawPostAction[_]])
+  override def doSavePageActions(page: PageNoPath, actions: List[RawPostAction[_]])
       : (PageNoPath, List[RawPostAction[_]]) = {
     // Try many times, because harmless deadlocks might abort the first attempt.
     // Example: Editing a row with a foreign key to table R result in a shared lock
