@@ -2565,6 +2565,17 @@ class RdbSiteDao(
             db.update(insertIntoActions, commonVals:::List(
               tyype, action.postId.asAnyRef, NullVarchar, NullInt, NullVarchar, NullVarchar,
               NullVarchar, NullVarchar))
+
+      def tryInsertVote(voteString: String) {
+        try {
+          insertSimpleValue(voteString)
+        }
+        catch {
+          case ex: js.SQLException if isUniqueConstrViolation(ex) =>
+            throw DbDao.DuplicateVoteException
+        }
+      }
+
           val PAP = PostActionPayload
           action.payload match {
             case p: PAP.CreatePost =>
@@ -2595,9 +2606,9 @@ class RdbSiteDao(
                 NullInt, e2n(f.reason), NullInt, NullVarchar, NullVarchar,
                 NullVarchar, NullVarchar))
 
-            case PAP.VoteLike => insertSimpleValue("VoteLike")
-            case PAP.VoteWrong => insertSimpleValue("VoteWrong")
-            case PAP.VoteOffTopic => insertSimpleValue("VoteOffTopic")
+            case PAP.VoteLike => tryInsertVote("VoteLike")
+            case PAP.VoteWrong => tryInsertVote("VoteWrong")
+            case PAP.VoteOffTopic => tryInsertVote("VoteOffTopic")
             case PAP.CollapsePost => insertSimpleValue("CollapsePost")
             case PAP.CollapseTree => insertSimpleValue("CollapseTree")
             case PAP.CloseTree => insertSimpleValue("CloseTree")
