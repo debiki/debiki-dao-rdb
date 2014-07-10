@@ -94,3 +94,17 @@ create unique index DW1_PGAS_ROLE_VOTES__U
   on DW1_PAGE_ACTIONS(TENANT, PAGE_ID, POST_ID, ROLE_ID, TYPE)
   where TYPE like 'Vote%';
 
+
+-- For each like, add an entry that marks the post as read.
+insert into DW1_POSTS_READ_STATS(
+    SITE_ID, PAGE_ID, POST_ID, IP, USER_ID, READ_ACTION_ID, READ_AT)
+  select
+    TENANT, PAGE_ID, POST_ID, IP,
+    case
+      when GUEST_ID is not null then '-' || GUEST_ID
+      else ROLE_ID
+    end,
+    PAID, TIME
+  from DW1_PAGE_ACTIONS
+  where TYPE = 'VoteLike';
+
