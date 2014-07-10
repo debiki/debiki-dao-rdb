@@ -82,14 +82,14 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao {
       while (rs.next) {
         val postId = rs.getInt("POST_ID")
         val ip = rs.getString("IP")
-        val userId = rs.getString("USER_ID")
-        if (User.isRoleId(userId)) {
-          val buffer = roleIdsByPostId.getOrElseUpdate(postId, new ArrayBuffer[RoleId])
-          buffer += userId
-        }
-        else {
-          val buffer = ipsByPostId.getOrElseUpdate(postId, new ArrayBuffer[String])
-          buffer += ip
+        val anyUserId = Option(rs.getString("USER_ID"))
+        anyUserId match {
+          case Some(id) if User.isRoleId(id) =>
+            val buffer = roleIdsByPostId.getOrElseUpdate(postId, new ArrayBuffer[RoleId])
+            buffer += id
+          case _ =>
+            val buffer = ipsByPostId.getOrElseUpdate(postId, new ArrayBuffer[String])
+            buffer += ip
         }
       }
     })

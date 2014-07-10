@@ -8,7 +8,7 @@ create table DW1_POSTS_READ_STATS(
   PAGE_ID varchar(32) not null,
   POST_ID int not null,
   IP character varying(39),
-  USER_ID varchar(32) not null,
+  USER_ID varchar(32),
   -- The action that resulted in this post being considered read.
   READ_ACTION_ID int not null,
   READ_AT timestamp not null,
@@ -20,7 +20,7 @@ create table DW1_POSTS_READ_STATS(
 
 -- Guest users may read a post only once per ip. Guest user ids start with '-', right now.
 create unique index DW1_PSTSRD_GUEST_IP__U on DW1_POSTS_READ_STATS (SITE_ID, PAGE_ID, POST_ID, IP)
-  where USER_ID like '-%';
+  where USER_ID is null or USER_ID like '-%';
 
 -- Roles and guests can read a post once per user id (many roles from the same ip is okay).
 create unique index DW1_PSTSRD_ROLE__U on DW1_POSTS_READ_STATS (SITE_ID, PAGE_ID, POST_ID, USER_ID);
