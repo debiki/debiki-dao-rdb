@@ -19,29 +19,17 @@ package com.debiki.dao.rdb
 
 import akka.actor.ActorSystem
 import com.debiki.core._
-import com.debiki.core.Prelude._
-import play.{api => p}
-import play.api.Play.current
 
 
 /** Constructs per site data access objects, and one global.
   */
 class RdbDaoFactory(
+  val db: Rdb,
   val actorSystem: ActorSystem,
   val fullTextSearchDbDataPath: Option[String],
   val isTest: Boolean = false,
   val fastStartSkipSearch: Boolean = false) extends DbDaoFactory {
 
-  val db: Rdb = {
-    val dataSourceName = if (isTest) "test" else "default"
-    val dataSource = p.db.DB.getDataSource(dataSourceName)
-    val db = new Rdb(dataSource)
-    // Log which database we've connected to.
-    val boneDataSource = dataSource.asInstanceOf[com.jolbox.bonecp.BoneCPDataSource]
-    p.Logger.info(o"""Connected to database: ${boneDataSource.getJdbcUrl}
-        as user ${boneDataSource.getUsername}.""")
-    db
-  }
 
   val systemDbDao = new RdbSystemDao(this)
   systemDbDao.applyEvolutions()

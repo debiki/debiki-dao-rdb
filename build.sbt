@@ -11,10 +11,7 @@ scalaVersion := "2.10.3"
 //   jdbc-112010-090769.html
 
 libraryDependencies ++= Seq(
-  // Database schema migrations/evolutions
   "org.flywaydb" % "flyway-core" % "3.0",
-  // Database connection source
-  "com.typesafe.play" %% "play-jdbc" % "2.2.3",
   "junit" % "junit" % "4.7" % "test",
   // The test suite needs a sl4j implementation or it logs nothing on errors:
   "ch.qos.logback" % "logback-classic" % "0.9.26" % "test",
@@ -30,6 +27,11 @@ libraryDependencies ++= Seq(
   "org.jsoup" % "jsoup" % "1.7.2",
   // Full text search engine:
   "org.elasticsearch" % "elasticsearch" % "0.90.2"
+  // These 2 lines below might be useful, if in the future I ever make debiki-dao-rdb
+  // itself apply evolutions to the db schema. Then a Play app is needed, and
+  // Play's JDBC module.
+  //"play" %% "play" % "2.1.3" % "test"
+  //"play" %% "play-jdbc" % "2.1.3" % "test"
 )
 
 // See: https://groups.google.com/forum/?fromgroups=#!topic/simple-build-tool/bkF1IDZj4L0
