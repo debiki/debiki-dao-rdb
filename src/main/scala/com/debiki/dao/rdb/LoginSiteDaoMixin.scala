@@ -22,7 +22,7 @@ import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
 import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.Prelude._
-import com.debiki.core.SecureSocialIdentity.displayNameFor
+//import com.debiki.core.SecureSocialIdentity.displayNameFor
 import java.{sql => js, util => ju}
 import Rdb._
 import RdbUtil._
@@ -45,7 +45,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       case x: PasswordLoginAttempt => loginWithPassword(x)
       case x: EmailLoginAttempt => loginWithEmailId(x)
       case x: OpenIdLoginAttempt => loginOpenId(x)
-      case x: SecureSocialLoginAttempt => loginSecureSocial(x)
+      //case x: SecureSocialLoginAttempt => loginSecureSocial(x)
     }
     loginGrant
   }
@@ -230,14 +230,14 @@ trait LoginSiteDaoMixin extends SiteDbDao {
     }
   }
 
-
+  /*
   private def loginSecureSocial(loginAttempt: SecureSocialLoginAttempt): LoginGrant = {
     db.transaction { connection =>
       loginSecureSocialImpl(loginAttempt)(connection)
     }
-  }
+  }*/
 
-
+  /*
   private def loginSecureSocialImpl(loginAttempt: SecureSocialLoginAttempt)
         (connection: js.Connection): LoginGrant = {
     val (identityInDb: Option[Identity], userInDb: Option[User]) =
@@ -286,7 +286,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
     LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
       isNewRole = userInDb.isEmpty)
-  }
+  } */
 
 
   /** Assigns an id to `loginNoId', saves it and returns it (with id).
@@ -320,7 +320,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
     case _: OpenIdLoginAttempt => "OpenID"  // should rename to Role
     case _: EmailLoginAttempt => "EmailID"
     case _: PasswordLoginAttempt => "OpenID"  // should rename to Role
-    case _: SecureSocialLoginAttempt => "OpenID"  // should rename to Role
+    //case _: SecureSocialLoginAttempt => "OpenID"  // should rename to Role
     case _ => assErr("DwE3k2r21K5")
   }
 
