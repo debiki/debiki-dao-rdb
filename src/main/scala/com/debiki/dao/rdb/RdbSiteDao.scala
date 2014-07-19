@@ -467,10 +467,8 @@ class RdbSiteDao(
         insertOpenIdIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
       case x: PasswordIdentity =>
         insertPasswordIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
-      /*
-      case x: SecureSocialIdentity =>
-        insertSecureSocialIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
-      */
+      case x: OpenAuthIdentity =>
+        insertOpenAuthIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
       case x =>
         assErr(s"Don't know how to insert identity of type: ${classNameOf(x)}")
     }
@@ -536,10 +534,9 @@ class RdbSiteDao(
   }
 
 
-  /*
-  private[rdb] def insertSecureSocialIdentity(
-        otherSiteId: SiteId, identityNoId: SecureSocialIdentity)
-        (implicit connection: js.Connection): SecureSocialIdentity = {
+  private[rdb] def insertOpenAuthIdentity(
+        otherSiteId: SiteId, identityNoId: OpenAuthIdentity)
+        (implicit connection: js.Connection): OpenAuthIdentity = {
     val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
     val identity = identityNoId.copy(id = newIdentityId)
     val sql = """
@@ -551,31 +548,33 @@ class RdbSiteDao(
             ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?)"""
-    val ss = identity.secureSocialCoreUser
+    val ds = identity.openAuthDetails
+    val method = "OAuth" // should probably remove this column
     val values = List[AnyRef](
       identity.id, otherSiteId, identity.userId, identity.userId,
-      ss.firstName, ss.lastName, ss.fullName, ss.email.orNullVarchar, ss.avatarUrl.orNullVarchar,
-      ss.authMethod.method, ss.identityId.providerId, ss.identityId.userId)
+      ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
+      ds.fullName.orNullVarchar, ds.email.orNullVarchar, ds.avatarUrl.orNullVarchar,
+      method, ds.providerId, ds.providerKey)
     db.update(sql, values)
     identity
-  }*/
+  }
 
 
-  /*
-  private[rdb] def updateSecureSocialIdentity(identity: SecureSocialIdentity)
+  private[rdb] def updateOpenAuthIdentity(identity: OpenAuthIdentity)
         (implicit connection: js.Connection) {
     val sql = """
       update DW1_IDS_OPENID set
         USR = ?, AUTH_METHOD = ?,
         FIRST_NAME = ?, LAST_NAME = ?, FULL_NAME = ?, EMAIL = ?, AVATAR_URL = ?
       where SNO = ? and TENANT = ?"""
-    val ss = identity.secureSocialCoreUser
+    val ds = identity.openAuthDetails
+    val method = "OAuth" // should probably remove this column
     val values = List[AnyRef](
-      identity.userId, ss.authMethod.method,
-      ss.firstName, ss.lastName, ss.fullName, ss.email.orNullVarchar, ss.avatarUrl.orNullVarchar,
+      identity.userId, method, ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
+      ds.fullName.orNullVarchar, ds.email.orNullVarchar, ds.avatarUrl.orNullVarchar,
       identity.id, siteId)
     db.update(sql, values)
-  }*/
+  }
 
 
   override def saveLogout(loginId: LoginId, logoutIp: String) {
@@ -677,12 +676,12 @@ class RdbSiteDao(
   private[rdb] def _loadIdtyDetailsAndUser(
         forLoginId: LoginId = null,
         forOpenIdDetails: OpenIdDetails = null,
-        //forSecureSocialIdentityId: securesocial.core.IdentityId = null,
+        forOpenAuthProfile: OpenAuthProviderIdKey = null,
         forEmailAddr: String = null)(implicit connection: js.Connection)
         : (Option[Identity], Option[User]) = {
 
     val anyOpenIdDetails = Option(forOpenIdDetails)
-    //val anySecureSocialIdentityId = Option(forSecureSocialIdentityId)
+    val anyOpenAuthKey = Option(forOpenAuthProfile)
 
     val loginOpt: Option[Login] =
       if (forLoginId eq null) None
@@ -717,17 +716,17 @@ class RdbSiteDao(
         """
 
     val (whereClause, bindVals) =
-        (loginOpt, anyEmail, anyOpenIdDetails) match { //, anySecureSocialIdentityId) match {
+        (loginOpt, anyEmail, anyOpenIdDetails, anyOpenAuthKey) match {
 
-      case (Some(login: Login), None, None) =>
+      case (Some(login: Login), None, None, None) =>
         ("""where i.TENANT = ? and i.SNO = ?""",
            List(siteId, login.identityRef.identityId))
 
-      case (None, Some(email), None) =>
+      case (None, Some(email), None, None) =>
         ("""where i.TENANT = ? and i.EMAIL = ?""",
           List(siteId, email))
 
-      case (None, None, Some(openIdDetails: OpenIdDetails)) =>
+      case (None, None, Some(openIdDetails: OpenIdDetails), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
         // address instead. (With Google OpenID, the email address can be
         // trusted — this is not the case, however, in general.
@@ -752,15 +751,13 @@ class RdbSiteDao(
             and """+ claimedIdOrEmailCheck +"""
           """, List(siteId, idOrEmail))
 
-      /*
-      case (None, None, None, Some(ssid: securesocial.core.IdentityId)) =>
+      case (None, None, None, Some(openAuthKey: OpenAuthProviderIdKey)) =>
         val whereClause =
           """where i.TENANT = ?
                and i.SECURESOCIAL_PROVIDER_ID = ?
                and i.SECURESOCIAL_USER_ID = ?"""
-        val values = List(siteId, ssid.providerId, ssid.userId)
+        val values = List(siteId, openAuthKey.providerId, openAuthKey.providerKey)
         (whereClause, values)
-        */
 
       case _ => assErr("DwE98239k2a2", "None, or more than one, lookup method specified")
     }
@@ -779,7 +776,7 @@ class RdbSiteDao(
       val email = rs.getString("i_email")
       val anyPasswordHash = Option(rs.getString("PASSWORD_HASH"))
       val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
-      //val anySecureSocialProvide = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
+      val anyOpenAuthProviderId = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
 
       val identityInDb = {
         if (anyPasswordHash.nonEmpty) {
@@ -804,29 +801,26 @@ class RdbSiteDao(
               email = email,
               country = rs.getString("i_country")))
         }
-        /*
-        else if (anySecureSocialProvide.nonEmpty) {
-          SecureSocialIdentity(
+        else if (anyOpenAuthProviderId.nonEmpty) {
+          OpenAuthIdentity(
             id = id,
             userId = userInDb.id,
-            securesocial.core.SocialUser(
-              identityId = securesocial.core.IdentityId(
-                providerId = anySecureSocialProvide.get,
-                userId = rs.getString("SECURESOCIAL_USER_ID")),
-              firstName = rs.getString("i_first_name"),
-              lastName = rs.getString("i_last_name"),
-              fullName = rs.getString("i_full_name"),
+            openAuthDetails = OpenAuthDetails(
+              providerId = anyOpenAuthProviderId.get,
+              providerKey = rs.getString("SECURESOCIAL_USER_ID"),
+              firstName = Option(rs.getString("i_first_name")),
+              lastName = Option(rs.getString("i_last_name")),
+              fullName = Option(rs.getString("i_full_name")),
               email = Option(rs.getString("i_email")),
-              avatarUrl = Option(rs.getString("i_avatar_url")),
-              authMethod = securesocial.core.AuthenticationMethod(rs.getString("AUTH_METHOD"))))
-        }*/
+              avatarUrl = Option(rs.getString("i_avatar_url"))))
+        }
         else {
           assErr("DwE77GJ2", s"Unknown identity in DW1_IDS_OPENID, site: $siteId, id: $id")
         }
       }
 
-      assErrIf(rs.next, "DwE53IK24", "More that one matching OpenID "+
-         "identity, when looking up openId: "+ anyOpenIdDetails +
+      assErrIf(rs.next, "DwE53IK24", "More that one matching identity, when"+
+         " looking up: "+ (loginOpt, anyEmail, anyOpenIdDetails, anyOpenAuthKey) +
          ", login: "+ loginOpt)
 
       Some(identityInDb) -> Some(userInDb)

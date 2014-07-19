@@ -45,7 +45,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       case x: PasswordLoginAttempt => loginWithPassword(x)
       case x: EmailLoginAttempt => loginWithEmailId(x)
       case x: OpenIdLoginAttempt => loginOpenId(x)
-      //case x: SecureSocialLoginAttempt => loginSecureSocial(x)
+      case x: OpenAuthLoginAttempt => loginOpenAuth(x)
     }
     loginGrant
   }
@@ -230,30 +230,29 @@ trait LoginSiteDaoMixin extends SiteDbDao {
     }
   }
 
-  /*
-  private def loginSecureSocial(loginAttempt: SecureSocialLoginAttempt): LoginGrant = {
-    db.transaction { connection =>
-      loginSecureSocialImpl(loginAttempt)(connection)
-    }
-  }*/
 
-  /*
-  private def loginSecureSocialImpl(loginAttempt: SecureSocialLoginAttempt)
+  private def loginOpenAuth(loginAttempt: OpenAuthLoginAttempt): LoginGrant = {
+    db.transaction { connection =>
+      loginOpenAuthImpl(loginAttempt)(connection)
+    }
+  }
+
+
+  private def loginOpenAuthImpl(loginAttempt: OpenAuthLoginAttempt)
         (connection: js.Connection): LoginGrant = {
     val (identityInDb: Option[Identity], userInDb: Option[User]) =
       _loadIdtyDetailsAndUser(
-        forSecureSocialIdentityId = loginAttempt.secureSocialCoreUser.identityId)(connection)
+        forOpenAuthProfile = loginAttempt.profileProviderAndKey)(connection)
 
     // Create user if absent.
 
     val user = userInDb match {
       case Some(u) => u
       case None =>
-        import loginAttempt.secureSocialCoreUser
         val userNoId =  User(
           id = "?",
-          displayName = displayNameFor(secureSocialCoreUser),
-          email = secureSocialCoreUser.email getOrElse "",
+          displayName = loginAttempt.openAuthDetails.displayName,
+          email = loginAttempt.openAuthDetails.email getOrElse "",
           emailNotfPrefs = EmailNotfPrefs.Unspecified,
           country = "",
           website = "",
@@ -266,16 +265,16 @@ trait LoginSiteDaoMixin extends SiteDbDao {
     // Create or update the SecureSocial identity.
     // (For some unimportant comments, see the corresponding comment in loginOpenId() above.)
 
-    val identity: SecureSocialIdentity = identityInDb match {
+    val identity: OpenAuthIdentity = identityInDb match {
       case None =>
-        val identityNoId = SecureSocialIdentity(id = "?", userId = user.id,
-          loginAttempt.secureSocialCoreUser)
-        insertSecureSocialIdentity(siteId, identityNoId)(connection)
-      case Some(old: SecureSocialIdentity) =>
-        val nev = SecureSocialIdentity(id = old.id, userId = user.id,
-          loginAttempt.secureSocialCoreUser)
+        val identityNoId = OpenAuthIdentity(id = "?", userId = user.id,
+          loginAttempt.openAuthDetails)
+        insertOpenAuthIdentity(siteId, identityNoId)(connection)
+      case Some(old: OpenAuthIdentity) =>
+        val nev = OpenAuthIdentity(id = old.id, userId = user.id,
+          loginAttempt.openAuthDetails)
         if (nev != old) {
-          updateSecureSocialIdentity(nev)(connection)
+          updateOpenAuthIdentity(nev)(connection)
         }
         nev
       case x =>
@@ -286,7 +285,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
     LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
       isNewRole = userInDb.isEmpty)
-  } */
+  }
 
 
   /** Assigns an id to `loginNoId', saves it and returns it (with id).
@@ -320,7 +319,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
     case _: OpenIdLoginAttempt => "OpenID"  // should rename to Role
     case _: EmailLoginAttempt => "EmailID"
     case _: PasswordLoginAttempt => "OpenID"  // should rename to Role
-    //case _: SecureSocialLoginAttempt => "OpenID"  // should rename to Role
+    case _: OpenAuthLoginAttempt => "OpenID"  // should rename to Role
     case _ => assErr("DwE3k2r21K5")
   }
 
