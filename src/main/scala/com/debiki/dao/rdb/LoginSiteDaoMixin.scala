@@ -181,7 +181,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
           val userNoId =  User(
             id = "?",
             displayName = details.firstName,
-            email = details.email,
+            email = details.email getOrElse "",
             emailNotfPrefs = EmailNotfPrefs.Unspecified,
             country = details.country,
             website = "",

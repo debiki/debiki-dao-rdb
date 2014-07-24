@@ -492,7 +492,7 @@ class RdbSiteDao(
             List[AnyRef](idty.id, tenantId, idty.userId, idty.userId,
               details.oidClaimedId, e2d(details.oidOpLocalId), e2d(details.oidRealm),
               e2d(details.oidEndpoint), e2d(details.oidVersion),
-              e2d(details.firstName), e2d(details.email), e2d(details.country)))
+              e2d(details.firstName), details.email.orNullVarchar, e2d(details.country)))
         idty
       case _ =>
         assErr("DwE03IJL2")
@@ -529,7 +529,7 @@ class RdbSiteDao(
       List[AnyRef](identity.userId, details.oidClaimedId,
         e2d(details.oidOpLocalId), e2d(details.oidRealm),
         e2d(details.oidEndpoint), e2d(details.oidVersion),
-        e2d(details.firstName), e2d(details.email), e2d(details.country),
+        e2d(details.firstName), details.email.orNullVarchar, e2d(details.country),
         identity.id, siteId))
   }
 
@@ -743,7 +743,7 @@ class RdbSiteDao(
           // allow this but anyway, I'd like to know for sure.
           if (openIdDetails.isGoogleLogin)
             ("i.OID_ENDPOINT = '"+ IdentityOpenId.GoogleEndpoint +
-               "' and i.EMAIL = ?", openIdDetails.email)
+               "' and i.EMAIL = ?", openIdDetails.email.getOrDie("DwE77ZS10"))
           else
             ("i.OID_CLAIMED_ID = ?", openIdDetails.oidClaimedId)
         }
@@ -773,7 +773,7 @@ class RdbSiteDao(
       val userInDb = _User(rs)
 
       val id = rs.getLong("i_id").toString
-      val email = rs.getString("i_email")
+      val email = Option(rs.getString("i_email"))
       val anyPasswordHash = Option(rs.getString("PASSWORD_HASH"))
       val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
       val anyOpenAuthProviderId = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
@@ -783,7 +783,7 @@ class RdbSiteDao(
           PasswordIdentity(
             id = id,
             userId = userInDb.id,
-            email = email,
+            email = email getOrDie "DwE083FW5",
             passwordSaltHash = anyPasswordHash.get)
         }
         else if (anyClaimedOpenId.nonEmpty) {
@@ -811,7 +811,7 @@ class RdbSiteDao(
               firstName = Option(rs.getString("i_first_name")),
               lastName = Option(rs.getString("i_last_name")),
               fullName = Option(rs.getString("i_full_name")),
-              email = Option(rs.getString("i_email")),
+              email = email,
               avatarUrl = Option(rs.getString("i_avatar_url"))))
         }
         else {
@@ -1018,7 +1018,7 @@ class RdbSiteDao(
                   oidClaimedId = "?",
                   oidOpLocalId = "?",
                   firstName = n2e(rs.getString("I_NAME")),
-                  email = n2e(rs.getString("I_EMAIL")),
+                  email = Option(rs.getString("I_EMAIL")),
                   country = n2e(rs.getString("I_WHERE"))))
         })
 
