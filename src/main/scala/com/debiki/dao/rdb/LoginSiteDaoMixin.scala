@@ -116,9 +116,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
         website = loginAttempt.website)
 
       // Quota already consumed (in the `for` loop above).
-      val loginWithId = doSaveLogin(loginAttempt, identityWithId)
-      LoginGrant(loginWithId, identityWithId, user,
-        isNewIdentity = createdNewIdty, isNewRole = false)
+      LoginGrant(identityWithId, user, isNewIdentity = createdNewIdty, isNewRole = false)
     }
   }
 
@@ -136,11 +134,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
     if (!okPassword)
       throw BadPasswordException
 
-    val login = db.transaction { connection =>
-      doSaveLogin(loginAttempt, identity)(connection)
-    }
-
-    LoginGrant(login, identity, user, isNewIdentity = false, isNewRole = false)
+    LoginGrant(identity, user, isNewIdentity = false, isNewRole = false)
   }
 
 
@@ -158,11 +152,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
            when logging in with email id `$emailId'.""")
     }
     val idtyWithId = IdentityEmailId(id = emailId, userId = user.id, emailSent = Some(email))
-    val loginWithId = db.transaction { implicit connection =>
-      doSaveLogin(loginAttempt, idtyWithId)
-    }
-    LoginGrant(loginWithId, idtyWithId, user, isNewIdentity = false,
-      isNewRole = false)
+    LoginGrant(idtyWithId, user, isNewIdentity = false, isNewRole = false)
   }
 
 
@@ -223,9 +213,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
         case x => throwBadDatabaseData("DwE26DFW0", s"A non-OpenID identity found in database: $x")
       }
 
-      val login = doSaveLogin(loginAttempt, identity)
-
-      LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
+      LoginGrant(identity, user, isNewIdentity = identityInDb.isEmpty,
         isNewRole = userInDb.isEmpty)
     }
   }
@@ -281,36 +269,8 @@ trait LoginSiteDaoMixin extends SiteDbDao {
         throwBadDatabaseData("DwE21GSh0", s"A non-SecureSocial identity found in database: $x")
     }
 
-    val login = doSaveLogin(loginAttempt, identity)(connection)
-
-    LoginGrant(login, identity, user, isNewIdentity = identityInDb.isEmpty,
+    LoginGrant(identity, user, isNewIdentity = identityInDb.isEmpty,
       isNewRole = userInDb.isEmpty)
-  }
-
-
-  /** Assigns an id to `loginNoId', saves it and returns it (with id).
-    */
-  private def doSaveLogin(loginAttempt: LoginAttempt, identityWithId: Identity)
-                 (implicit connection: js.Connection): Login = {
-    // Create a new _LOGINS row, pointing to identityWithId.
-    val loginSno = db.nextSeqNo("DW1_LOGINS_SNO")
-    val login = Login.fromLoginAttempt(loginAttempt, loginId = loginSno.toString,
-      identityRef = identityWithId.reference)
-
-    val identityType = identityRefTypeToString(loginAttempt)
-    db.update("""
-          insert into DW1_LOGINS(
-              SNO, TENANT, PREV_LOGIN, ID_TYPE, ID_SNO,
-              LOGIN_IP, LOGIN_TIME)
-          values (?, ?, ?,
-              '"""+
-      // Don't bind identityType, that'd only make it harder for
-      // the optimizer.
-      identityType +"', ?, ?, ?)",
-      List(loginSno.asInstanceOf[AnyRef], siteId,
-        e2n(None),  // UNTESTED unless empty TODO [nologin] delete DW1_LOGINS
-        login.identityRef.identityId, login.ip, login.date))
-    login
   }
 
 

@@ -329,7 +329,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
          QUOTA_LIMIT_FREELOAD,
          QUOTA_DAILY_FREE,
          QUOTA_DAILY_FREELOAD,
-         NUM_LOGINS,
          NUM_IDS_UNAU,
          NUM_IDS_AU,
          NUM_ROLES,
@@ -393,7 +392,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
          -- Skip QUOTA_LIMIT_PAID; it does not regenerate automatically.
          QUOTA_LIMIT_FREE = greatest(QUOTA_LIMIT_FREE, ?),
          QUOTA_LIMIT_FREELOAD = greatest(QUOTA_LIMIT_FREELOAD, ?),
-         NUM_LOGINS = NUM_LOGINS + ?,
          NUM_IDS_UNAU = NUM_IDS_UNAU + ?,
          NUM_IDS_AU = NUM_IDS_AU + ?,
          NUM_ROLES = NUM_ROLES + ?,
@@ -416,7 +414,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       vals ::= delta.deltaQuota.freeload
       vals ::= delta.newFreeLimit
       vals ::= delta.newFreeloadLimit
-      vals ::= delta.deltaResources.numLogins
       vals ::= delta.deltaResources.numIdsUnau
       vals ::= delta.deltaResources.numIdsAu
       vals ::= delta.deltaResources.numRoles
@@ -737,7 +734,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_PAGES
       delete from DW1_POSTS
       delete from DW1_IDS_SIMPLE_EMAIL
-      delete from DW1_LOGINS
       delete from DW1_GUESTS
       delete from DW1_IDS_OPENID
       delete from DW1_QUOTAS
@@ -745,7 +741,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_TENANT_HOSTS
       delete from DW1_TENANTS
       alter sequence DW1_IDS_SNO restart
-      alter sequence DW1_LOGINS_SNO restart
       alter sequence DW1_PAGES_SNO restart
       alter sequence DW1_TENANTS_ID restart
       alter sequence DW1_USERS_SNO restart

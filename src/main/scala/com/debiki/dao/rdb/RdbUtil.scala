@@ -341,7 +341,6 @@ object RdbUtil {
 
   def _ResourceUse(rs: js.ResultSet) =
     ResourceUse(
-      numLogins = rs.getInt("NUM_LOGINS"),
       numIdsUnau = rs.getInt("NUM_IDS_UNAU"),
       numIdsAu = rs.getInt("NUM_IDS_AU"),
       numRoles = rs.getInt("NUM_ROLES"),
