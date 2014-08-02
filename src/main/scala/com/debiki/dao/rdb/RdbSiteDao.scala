@@ -1820,14 +1820,12 @@ class RdbSiteDao(
       // Or, for now, fail and throw some SQLException if EMAIL_NOTFS is 'F'
       // for this `emailAddr' -- since there'll be a primary key violation,
       // see the update statement above.
-      val loginId = ???
       db.update("""
           insert into DW1_IDS_SIMPLE_EMAIL (
               TENANT, CTIME, VERSION, EMAIL, EMAIL_NOTFS)
-          values (?, ?, ?, 'C', ?, ?)
+          values (?, ?, 'C', ?, ?)
           """,
-          List(siteId, loginId, d2ts(ctime), emailAddr,
-              _toFlag(emailNotfPrefs)))
+          List(siteId, d2ts(ctime), emailAddr, _toFlag(emailNotfPrefs)))
     }
   }
 
