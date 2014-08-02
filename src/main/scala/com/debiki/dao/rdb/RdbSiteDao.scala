@@ -1134,28 +1134,30 @@ class RdbSiteDao(
 
 
   def loadRecentActionExcerpts(fromIp: Option[String],
-        byIdentity: Option[IdentityId],
+        byRole: Option[UserId],
         pathRanges: PathRanges, limit: Int): (Seq[PostAction[_]], People) = {
 
     def buildByPersonQuery(fromIp: Option[String],
-          byIdentity: Option[IdentityId], limit: Int) = {
+          byRole: Option[UserId], limit: Int) = {
 
+      // COULD match on browser cookie and/or fingerprint as well.
       val (loginIdsWhereSql, loginIdsWhereValues) =
-        if (fromIp isDefined)
-          ("l.LOGIN_IP = ? and l.TENANT = ?", List(fromIp.get, siteId))
-        else
-          ("l.ID_SNO = ? and l.ID_TYPE = 'OpenID' and l.TENANT = ?",
-             List(byIdentity.get, siteId))
+        if (fromIp isDefined) {
+          ("a.IP = ? and a.TENANT = ?", List(fromIp.get, siteId))
+        }
+        else {
+          assErrIf(!User.isRoleId(byRole.get), "DwE27JX1")
+          ("a.ROLE_ID = ? and a.TENANT = ?", List(byRole.get, siteId))
+        }
 
       // For now, don't select posts only. We're probably interested in
       // all actions by this user, e.g also his/her ratings, to find
       // out if s/he is astroturfing. (See this function's docs in class Dao.)
       val sql = """
            select a.TENANT, a.PAGE_ID, a.PAID, a.POST_ID
-           from DW1_LOGINS l inner join DW1_PAGE_ACTIONS a
-           on l.TENANT = a.TENANT and l.SNO = a.LOGIN
+           from DW1_PAGE_ACTIONS a
            where """+ loginIdsWhereSql +"""
-           order by l.LOGIN_TIME desc
+           order by a.TIME desc
            limit """+ limit
 
       // Load things that concerns the selected actions only — not
@@ -1166,8 +1168,10 @@ class RdbSiteDao(
         -- Load actions that affected [an action by login id]
         -- (e.g. edits, flags, approvals).
           or (
-          a.TYPE <> 'Rating' and -- skip ratings
-          a.POST_ID = actionIds.POST_ID)"""
+          a.TYPE not like 'Vote%' and -- skip votes
+          a.POST_ID = actionIds.POST_ID)"""  // BUG? This finds too many posts:
+                      // if `byRole` has voted on a comment, flags on that comment
+                      // will be found?
 
       (sql, loginIdsWhereValues, whereClause)
     }
@@ -1225,17 +1229,17 @@ class RdbSiteDao(
       (sql, values, whereClause)
     }
 
-    val lookupByPerson = fromIp.isDefined || byIdentity.isDefined
+    val lookupByPerson = fromIp.isDefined || byRole.isDefined
     val lookupByPaths = pathRanges != PathRanges.Anywhere
 
     // By IP or identity id lookup cannot be combined with by path lookup.
     require(!lookupByPaths || !lookupByPerson)
     // Cannot lookup both by IP and by identity id.
-    if (lookupByPerson) require(fromIp.isDefined ^ byIdentity.isDefined)
+    if (lookupByPerson) require(fromIp.isDefined ^ byRole.isDefined)
     require(0 <= limit)
 
     val (selectActionIds, values, postIdWhereClause) =
-      if (lookupByPerson) buildByPersonQuery(fromIp, byIdentity, limit)
+      if (lookupByPerson) buildByPersonQuery(fromIp, byRole, limit)
       else if (lookupByPaths) buildByPathQuery(pathRanges, limit)
       else
         // COULD write more efficient query: don't join with DW1_PAGE_PATHS.
@@ -1266,7 +1270,7 @@ class RdbSiteDao(
     val pageIdsAndActionsDescTime =
       pageIdsAndActions sortBy { case (_, action) => - action.ctime.getTime }
 
-    def debugDetails = "fromIp: "+ fromIp +", byIdentity: "+ byIdentity +
+    def debugDetails = "fromIp: "+ fromIp +", byRole: "+ byRole +
        ", pathRanges: "+ pathRanges
 
     val smartActions = pageIdsAndActionsDescTime map { case (pageId, action) =>
