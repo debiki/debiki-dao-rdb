@@ -79,7 +79,7 @@ object RdbUtil {
 
 
   def ActionSelectListItems =
-    "a.POST_ID, a.PAID, a.LOGIN, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
+    "a.POST_ID, a.PAID, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
      "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.IP, " +
      "a.BROWSER_ID_COOKIE, a.BROWSER_FINGERPRINT," +
      "a.APPROVAL, a.AUTO_APPLICATION, a.DELETED_AT, a.DELETED_BY_ID"

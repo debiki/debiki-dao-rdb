@@ -604,11 +604,8 @@ class RdbSiteDao(
   }
 
 
-  private def _loadLogins(byLoginIds: List[LoginId] = null,
-        onPageGuid: PageId = null)
+  private def _loadLogins(byLoginIds: List[LoginId])
         (implicit connection: js.Connection): List[Login] = {
-
-    assert((byLoginIds ne null) ^ (onPageGuid ne null))
 
     val selectList = """
         select
@@ -619,13 +616,7 @@ class RdbSiteDao(
         """
 
     val (fromWhereClause, pageOrLoginIds) =
-      if (onPageGuid ne null)
-        ("""from DW1_PAGE_ACTIONS a, DW1_LOGINS l
-          where a.TENANT = ?
-            and a.PAGE_ID = ?
-            and l.TENANT = a.TENANT
-            and l.SNO = a.LOGIN""", onPageGuid::Nil)
-      else if (byLoginIds isEmpty)
+      if (byLoginIds isEmpty)
         return Nil
       else
         ("""from DW1_LOGINS l
@@ -1894,7 +1885,6 @@ class RdbSiteDao(
       // Or, for now, fail and throw some SQLException if EMAIL_NOTFS is 'F'
       // for this `emailAddr' -- since there'll be a primary key violation,
       // see the update statement above.
-      // TODO [nologin] Remove LOGIN field.
       val loginId = ???
       db.update("""
           insert into DW1_IDS_SIMPLE_EMAIL (
@@ -2363,16 +2353,15 @@ class RdbSiteDao(
       // insert into _ACTIONS (instead of one insert per row), and then
       // batch inserts into other tables e.g. _RATINGS.
 
-      // TODO [nologin] Remove LOGIN field
       val insertIntoActions = """
           insert into DW1_PAGE_ACTIONS(
-            LOGIN, GUEST_ID, ROLE_ID, IP,
+            GUEST_ID, ROLE_ID, IP,
             BROWSER_ID_COOKIE, BROWSER_FINGERPRINT,
             TENANT, PAGE_ID, POST_ID, PAID, TIME,
             TYPE, RELPA, TEXT, LONG_VALUE, MARKUP, WHEERE,
             APPROVAL, AUTO_APPLICATION)
           values (
-            ?, ?, ?, ?,
+            ?, ?, ?,
             ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
@@ -2397,7 +2386,6 @@ class RdbSiteDao(
 
       // Keep in mind that Oracle converts "" to null.
       val commonVals: List[AnyRef] = List(
-        NullVarchar, // action.loginId.orNullVarchar,
         guestIdNullForUnknown,
         roleIdNullForSystem,
         ipNullForSystem,
