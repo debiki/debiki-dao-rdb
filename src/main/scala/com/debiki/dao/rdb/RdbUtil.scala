@@ -87,7 +87,6 @@ object RdbUtil {
   def _Action(rs: js.ResultSet): RawPostAction[_] = {
     val postId = rs.getInt("POST_ID")
     val id = rs.getInt("PAID")
-    val anyLoginId = Option(rs.getString("LOGIN"))
 
     val anyIp = Option(rs.getString("IP"))
     val isSystemUser = anyIp.isEmpty
@@ -121,7 +120,6 @@ object RdbUtil {
     val deletedById = Option(rs.getString("DELETED_BY_ID"))
 
     val userIdData = UserIdData(
-      loginId = anyLoginId,
       userId = userId,
       ip = ip,
       browserIdCookie = anyBrowserIdCookie,
@@ -132,7 +130,7 @@ object RdbUtil {
         deletedAt = deletedAt, deletedById = deletedById)
 
     def details = o"""action id: ${Option(id)}, post id: ${Option(postId)},
-      target: $relpa, login id: $anyLoginId, user id: $userId"""
+      target: $relpa, user id: $userId"""
     assErrIf(postId < 0, "DwE5YQ08", s"POST_ID is < 0, details: $details")
 
     // (This whole match-case will go away when I unify all types

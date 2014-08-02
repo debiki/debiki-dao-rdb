@@ -308,7 +308,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       // the optimizer.
       identityType +"', ?, ?, ?)",
       List(loginSno.asInstanceOf[AnyRef], siteId,
-        e2n(login.prevLoginId),  // UNTESTED unless empty
+        e2n(None),  // UNTESTED unless empty TODO [nologin] delete DW1_LOGINS
         login.identityRef.identityId, login.ip, login.date))
     login
   }

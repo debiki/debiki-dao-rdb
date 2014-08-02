@@ -64,7 +64,7 @@ trait CreateSiteSystemDaoMixin {
       // Could send an email, see AppCreateWebsite.createWebsite() in project debiki-server.
 
       Tenant(siteId, name = Some(siteData.name), creatorIp = "",
-         creatorTenantId = "", creatorLoginId = "",
+         creatorTenantId = "",
          creatorRoleId = "", embeddingSiteUrl = None,
          hosts = siteHost::Nil)
     }

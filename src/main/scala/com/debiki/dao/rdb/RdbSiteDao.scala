@@ -639,11 +639,10 @@ class RdbSiteDao(
         siteId :: pageOrLoginIds, rs => {
       while (rs.next) {
         val loginId = rs.getString("LOGIN_SNO")
-        val prevLogin = Option(rs.getString("PREV_LOGIN"))
         val ip = rs.getString("LOGIN_IP")
         val date = ts2d(rs.getTimestamp("LOGIN_TIME"))
         val identityRef = makeIdentityRef(rs.getString("ID_TYPE"), id = rs.getString("ID_SNO"))
-        logins ::= Login(id = loginId, prevLoginId = prevLogin, ip = ip,
+        logins ::= Login(id = loginId, ip = ip,
           date = date, identityRef = identityRef)
       }
     })
@@ -653,12 +652,12 @@ class RdbSiteDao(
 
 
   def loadIdtyDetailsAndUser(
-        forLoginId: LoginId = null,
+        forUserId: UserId = null,
         forOpenIdDetails: OpenIdDetails = null,
         forEmailAddr: String = null): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
       _loadIdtyDetailsAndUser(
-          forLoginId = forLoginId,
+          forUserId = forUserId,
           forOpenIdDetails = forOpenIdDetails,
           forEmailAddr = forEmailAddr) match {
         case (None, None) => None
@@ -674,7 +673,7 @@ class RdbSiteDao(
     */
   // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
   private[rdb] def _loadIdtyDetailsAndUser(
-        forLoginId: LoginId = null,
+        forUserId: UserId = null,
         forOpenIdDetails: OpenIdDetails = null,
         forOpenAuthProfile: OpenAuthProviderIdKey = null,
         forEmailAddr: String = null)(implicit connection: js.Connection)
@@ -683,11 +682,9 @@ class RdbSiteDao(
     val anyOpenIdDetails = Option(forOpenIdDetails)
     val anyOpenAuthKey = Option(forOpenAuthProfile)
 
-    val loginOpt: Option[Login] =
-      if (forLoginId eq null) None
-      else Some(_loadLoginById(forLoginId) getOrElse {
-        return None -> None
-      })
+    val anyUserId: Option[UserId] =
+      if (forUserId eq null) None
+      else Some(forUserId)
 
     val anyEmail = Option(forEmailAddr)
 
@@ -716,11 +713,12 @@ class RdbSiteDao(
         """
 
     val (whereClause, bindVals) =
-        (loginOpt, anyEmail, anyOpenIdDetails, anyOpenAuthKey) match {
+        (anyUserId, anyEmail, anyOpenIdDetails, anyOpenAuthKey) match {
 
-      case (Some(login: Login), None, None, None) =>
-        ("""where i.TENANT = ? and i.SNO = ?""",
-           List(siteId, login.identityRef.identityId))
+      case (Some(userId: UserId), None, None, None) =>
+        UNTESTED // [nologin]
+        ("""where i.TENANT = ? and i.USR = ?""",
+           List(siteId, userId))
 
       case (None, Some(email), None, None) =>
         ("""where i.TENANT = ? and i.EMAIL = ?""",
@@ -820,8 +818,7 @@ class RdbSiteDao(
       }
 
       assErrIf(rs.next, "DwE53IK24", "More that one matching identity, when"+
-         " looking up: "+ (loginOpt, anyEmail, anyOpenIdDetails, anyOpenAuthKey) +
-         ", login: "+ loginOpt)
+         " looking up: "+ (anyUserId, anyEmail, anyOpenIdDetails, anyOpenAuthKey))
 
       Some(identityInDb) -> Some(userInDb)
     })
@@ -853,182 +850,43 @@ class RdbSiteDao(
   }
 
 
-  def loadIdtyAndUser(forLoginId: LoginId): Option[(Identity, User)] = {
-    def loginInfo = "login id "+ safed(forLoginId) +
-          ", tenant "+ safed(siteId)
+  // SHOULD reuse a `connection: js.Connection` but doesn't
+  private def loadUsersOnPage(pageId: PageId): List[User] = {
+    val sql = s"""
+      select ${_UserSelectListItems}
+      from DW1_PAGE_ACTIONS a left join DW1_USERS u
+        on a.TENANT = u.TENANT and a.ROLE_ID = u.SNO
+        where a.TENANT = ?
+          and a.PAGE_ID = ?
+          and a.ROLE_ID is not null
+      union
+      select
+        '-'||g.ID u_id,
+        g.NAME u_disp_name,
+        g.EMAIL_ADDR u_email,
+        e.EMAIL_NOTFS u_email_notfs,
+        g.LOCATION u_country,
+        g.URL u_website,
+        'F' u_superadmin,
+        'F' u_is_owner
+      from
+        DW1_PAGE_ACTIONS a left join DW1_GUESTS g
+          on a.TENANT = g.SITE_ID and a.GUEST_ID = g.ID
+        left join DW1_IDS_SIMPLE_EMAIL e
+           on g.SITE_ID = e.TENANT and g.EMAIL_ADDR = e.EMAIL
+        where a.TENANT = ?
+          and a.PAGE_ID = ?
+          and a.GUEST_ID is not null """
 
-    _loadIdtysAndUsers(forLoginIds = forLoginId::Nil) match {
-      case (List(i: Identity), List(u: User)) => Some(i, u)
-      case (List(i: Identity), Nil) => assErr(
-        "DwE6349krq20", "Found no user for "+ loginInfo +
-            ", with identity "+ safed(i.id))
-      case (Nil, Nil) =>
-        // The webapp should never try to load non existing identities?
-        // (The login id was once fetched from the database.
-        // It is sent to the client in a signed cookie so it cannot be
-        // tampered with.) Identities cannot be deleted!
-        // This might happen however, if a server is restarted and switches
-        // over to another database, where the login id does not exist, and
-        // the server continues using the same signed cookie salt.
-        // 1. The server could do that if a failover happens to a standby
-        // database, and a few transactions were lost when the master died?!
-        // 2. This could also happen during testing, if I manually
-        // delete the login.
-        // Let the caller deal with the error (it'll probably silently
-        // create a new session or show an error message).
-        None
-      case (is, us) =>
-        // There should be exactly one identity per login, and at most
-        // one user per identity.
-        assErr("DwE42RxkW1", "Found "+ is.length +" identities and "+
-              us.length +" users for "+ loginInfo)
-    }
-  }
-
-
-  /**
-   * Looks up people by page id or login id. Does not load all authentication details.
-   */
-  // SHOULD reuse a `connection: js.Connection` but doesnt
-  private def _loadIdtysAndUsers(onPageWithId: PageId = null,
-                         forLoginIds: List[LoginId] = null
-                            ): Pair[List[Identity], List[User]] = {
-    // Load users. First find all relevant identities, by joining
-    // DW1_PAGE_ACTIONS and _LOGINS. Then all user ids, by joining
-    // the result with _IDS_SIMPLE and _IDS_OPENID. Then load the users.
-
-    require((onPageWithId ne null) ^ (forLoginIds ne null))
-
-    val (selectLoginIds, args) = (onPageWithId, forLoginIds) match {
-      case (null, Nil) => return (Nil, Nil)
-      // (Need to specify tenant id here, and when selecting from DW1_USERS,
-      // because there's no foreign key from DW1_LOGINS to DW1_IDS_<type>.)
-      case (null, loginIds) => ("""
-          select ID_SNO, ID_TYPE
-              from DW1_LOGINS
-              where  TENANT = ? and SNO in ("""+ makeInListFor(loginIds) +""")
-          """, siteId :: loginIds)
-      case (pageId, null) => ("""
-          select distinct l.ID_SNO, l.ID_TYPE
-              from DW1_PAGE_ACTIONS a, DW1_LOGINS l
-              where a.PAGE_ID = ? and a.TENANT = ?
-                and a.LOGIN = l.SNO and a.TENANT = l.TENANT
-          """, List(pageId, siteId))
-      case (x, y) => assErr(
-        "DwE33Zb7", s"Mismatch: (${classNameOf(x)}, ${classNameOf(y)})")
-    }
-
-    // Load identities and users. Details: First find identities of all types
-    // by joining logins with each identity table, and then taking the union
-    // of all these joins. Use generic column names (since each identity
-    // table has identity provider specific column names).
-    // Then join all the identities found with DW1_USERS.
-    // Note: There are identities with no matching users (IdentitySimple),
-    // so do a left outer join.
-    // Note: There might be > 1 identity per user (if a user has merged
-    // e.g. her Twitter and Facebook identities to one single user account).
-    // So each user might be returned > 1 times, i.e. once per identity.
-    // This wastes some bandwidth, but I guess it's better than doing a
-    // separate query to fetch all relevant users exactly once -- that
-    // additional roundtrip to the database would probably be more expensive;
-    // I guess fairly few users will merge their identities.
-    db.queryAtnms("""
-        with logins as ("""+ selectLoginIds +"""),
-        identities as (
-            -- Simple identities
-            select ID_TYPE, g.ID I_ID, '' I_USR,
-                   g.NAME I_NAME, g.EMAIL_ADDR I_EMAIL,
-                   e.EMAIL_NOTFS I_EMAIL_NOTFS,
-                   g.LOCATION I_WHERE, g.URL I_WEBSITE
-            from logins, DW1_GUESTS g
-              left join DW1_IDS_SIMPLE_EMAIL e
-              on g.EMAIL_ADDR = e.EMAIL and e.VERSION = 'C'
-            where g.SITE_ID = ?
-              and g.ID = logins.ID_SNO
-              and logins.ID_TYPE = 'Simple'
-            union
-            -- OpenID
-            select ID_TYPE, oi.SNO I_ID, oi.USR,
-                   oi.FIRST_NAME I_NAME, oi.EMAIL I_EMAIL,
-                   null as I_EMAIL_NOTFS,
-                   oi.COUNTRY I_WHERE, cast('' as varchar(100)) I_WEBSITE
-            from DW1_IDS_OPENID oi, logins
-            where oi.SNO = logins.ID_SNO and logins.ID_TYPE = 'OpenID'
-              and oi.TENANT = ?
-            -- union
-            -- Twitter tables
-            -- Facebook tables
-            -- Email identities (skip for now, only used when unsubscribing)
-            )
-        select i.ID_TYPE, i.I_ID,
-            i.I_NAME, i.I_EMAIL,
-            case
-              -- Can only be non-null for IdentitySimple.
-              when i.I_EMAIL_NOTFS is not null then i.I_EMAIL_NOTFS
-              else u.EMAIL_NOTFS end  -- might be null
-              u_email_notfs,
-            i.I_WHERE, i.I_WEBSITE,
-            u.SNO u_id,
-            u.DISPLAY_NAME u_disp_name,
-            u.EMAIL u_email,
-            u.COUNTRY u_country,
-            u.WEBSITE u_website,
-            u.SUPERADMIN u_superadmin,
-            u.IS_OWNER u_is_owner
-        from identities i left join DW1_USERS u on
-              u.SNO = i.I_USR and
-              u.TENANT = ?
-        """, args ::: List(siteId, siteId, siteId), rs => {
-      var usersById = mut.HashMap[UserId, User]()
-      var identities = List[Identity]()
-      while (rs.next) {
-        val idId = rs.getString("I_ID")
-        var userId = rs.getLong("u_id").toString  // 0 if null
-        var user: Option[User] = None
-        assErrIf3(idId isEmpty, "DwE392Qvc89")
-
-        // Warning: Some dupl code in _loadIdtyDetailsAndUser:
-        // COULD break out construction of Identity to reusable
-        // functions.
-
-        identities ::= (rs.getString("ID_TYPE") match {
-          case "Simple" =>
-            userId = _dummyUserIdFor(idId)
-            val emailPrefs = _toEmailNotfs(rs.getString("u_email_notfs"))
-            val i = IdentitySimple(
-                id = idId,
-                userId = userId,
-                name = d2e(rs.getString("I_NAME")),
-                email = d2e(rs.getString("I_EMAIL")),
-                location = d2e(rs.getString("I_WHERE")),
-                website = d2e(rs.getString("I_WEBSITE")))
-            user = Some(_dummyUserFor(i, emailNotfPrefs = emailPrefs))
-            i
-          case "OpenID" =>
-            assErrIf3(userId isEmpty, "DwE9V86kr8")
-            IdentityOpenId(
-                id = idId,
-                userId = userId,
-                // These uninteresting OpenID fields were never loaded.
-                // COULD place them in an Option[OpenIdInfo]?
-                OpenIdDetails(
-                  oidEndpoint = "?",
-                  oidVersion = "?",
-                  oidRealm = "?",
-                  oidClaimedId = "?",
-                  oidOpLocalId = "?",
-                  firstName = n2e(rs.getString("I_NAME")),
-                  email = Option(rs.getString("I_EMAIL")),
-                  country = n2e(rs.getString("I_WHERE"))))
-        })
-
-        if (user isEmpty)
-          user = Some(_User(rs))
-
-        if (!usersById.contains(userId)) usersById(userId) = user.get
+    val values = List[AnyRef](siteId, pageId, siteId, pageId)
+    var users: List[User] = Nil
+    db.queryAtnms(sql, values, rs => {
+      while (rs.next()) {
+        val user = _User(rs)
+        users ::= user
       }
-      (identities, usersById.values.toList)  // silly to throw away hash map
     })
+    users
   }
 
 
@@ -1041,11 +899,9 @@ class RdbSiteDao(
    */
   private[rdb] def _loadUsersWhoDid(actions: List[RawPostAction[_]])
         (implicit connection: js.Connection): People = {
-    val loginIds: List[LoginId] = actions flatMap (_.userIdData.loginId)
-    val logins = _loadLogins(byLoginIds = loginIds)
-    // SHOULD load by role id + guest id, not login id because it might be null soon [NoLoginId]
-    val (idtys, users) = _loadIdtysAndUsers(forLoginIds = loginIds)
-    People(logins, idtys, users)
+    val userIds: List[UserId] = actions map (_.userIdData.userId)
+    val users = loadUsersAsList(userIds)
+    People(logins = Nil, identities = Nil, users)
   }
 
 
@@ -1138,22 +994,8 @@ class RdbSiteDao(
 
   private def _loadPagePartsAnyTenant(tenantId: SiteId, pageId: PageId)
         : Option[PageParts] = {
-    /*
-    db.transaction { implicit connection =>
-      // BUG: There might be a NPE / None.get because of phantom reads.
-      // Prevent phantom reads from DW1_ACTIONS. (E.g. rating tags are read
-      // from DW1_RATINGS before _ACTIONS is considered, and another session
-      // might insert a row into _ACTIONS just after _RATINGS was queried.)
-      connection.setTransactionIsolation(
-        Connection.TRANSACTION_SERIALIZABLE)
-      */
 
-    // COULD reuse connection throughout function, make it implicit in arg.
-    var logins: List[Login] =
-      db.withConnection { _loadLogins(onPageGuid = pageId)(_) }
-
-    // Load identities and users.
-    val (identities, users) = _loadIdtysAndUsers(onPageWithId = pageId)
+    val users = loadUsersOnPage(pageId)
 
     // Load page actions.
     // Order by TIME desc, because when the action list is constructed
@@ -1181,7 +1023,7 @@ class RdbSiteDao(
       }
 
       Some(PageParts.fromActions(
-          pageId, People(logins, identities, users), actions))
+          pageId, People(logins = Nil, identities = Nil, users), actions))
     })
   }
 
@@ -1483,7 +1325,7 @@ class RdbSiteDao(
   // And do everything in the same transaction!
   def createWebsite(name: Option[String], address: Option[String],
         embeddingSiteUrl: Option[String], ownerIp: String,
-        ownerLoginId: LoginId, ownerIdentity: Identity, ownerRole: User)
+        ownerIdentity: Identity, ownerRole: User)
         : Option[(Tenant, User)] = {
     try {
       db.transaction { implicit connection =>
@@ -1497,7 +1339,7 @@ class RdbSiteDao(
 
         val newTenantNoId = Tenant(id = "?", name = name,
            creatorIp = ownerIp, creatorTenantId = siteId,
-           creatorLoginId = ownerLoginId, creatorRoleId = ownerRole.id,
+           creatorRoleId = ownerRole.id,
            embeddingSiteUrl = embeddingSiteUrl,
            hosts = Nil)
         val newTenant = _createTenant(newTenantNoId)
@@ -1550,7 +1392,8 @@ class RdbSiteDao(
               """,
       List[AnyRef](tenant.id, tenant.name.orNullVarchar,
         tenant.embeddingSiteUrl.orNullVarchar, tenant.creatorIp,
-        tenant.creatorTenantId, tenant.creatorLoginId, tenant.creatorRoleId))
+        tenant.creatorTenantId, "??", tenant.creatorRoleId))
+    // TODO [nologin] Remove CREATOR_LOGIN_ID column, and ?? above.
     tenant
   }
 
@@ -1988,11 +1831,11 @@ class RdbSiteDao(
   }
 
 
-  def configRole(loginId: LoginId, ctime: ju.Date, roleId: RoleId,
+  def configRole(ctime: ju.Date, roleId: RoleId,
         emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean],
         isOwner: Option[Boolean]) {
     // Currently auditing not implemented for the roles/users table,
-    // so loginId and ctime aren't used.
+    // so ctime isn't used.
     require(!roleId.startsWith("-") && !roleId.startsWith("?"))
 
     var changes = StringBuilder.newBuilder
@@ -2029,8 +1872,7 @@ class RdbSiteDao(
   }
 
 
-  def configIdtySimple(loginId: LoginId, ctime: ju.Date,
-                       emailAddr: String, emailNotfPrefs: EmailNotfPrefs) {
+  def configIdtySimple(ctime: ju.Date, emailAddr: String, emailNotfPrefs: EmailNotfPrefs) {
     db.transaction { implicit connection =>
       // Mark the current row as 'O' (old) -- unless EMAIL_NOTFS is 'F'
       // (Forbidden Forever). Then leave it as is, and let the insert
@@ -2048,9 +1890,11 @@ class RdbSiteDao(
       // Or, for now, fail and throw some SQLException if EMAIL_NOTFS is 'F'
       // for this `emailAddr' -- since there'll be a primary key violation,
       // see the update statement above.
+      // TODO [nologin] Remove LOGIN field.
+      val loginId = ???
       db.update("""
           insert into DW1_IDS_SIMPLE_EMAIL (
-              TENANT, LOGIN, CTIME, VERSION, EMAIL, EMAIL_NOTFS)
+              TENANT, CTIME, VERSION, EMAIL, EMAIL_NOTFS)
           values (?, ?, ?, 'C', ?, ?)
           """,
           List(siteId, loginId, d2ts(ctime), emailAddr,
@@ -2515,6 +2359,7 @@ class RdbSiteDao(
       // insert into _ACTIONS (instead of one insert per row), and then
       // batch inserts into other tables e.g. _RATINGS.
 
+      // TODO [nologin] Remove LOGIN field
       val insertIntoActions = """
           insert into DW1_PAGE_ACTIONS(
             LOGIN, GUEST_ID, ROLE_ID, IP,
@@ -2533,7 +2378,6 @@ class RdbSiteDao(
       // be null beause there's no matching row in the roles table.)
       val (ipNullForSystem, roleIdNullForSystem, browserFingerprintNullForSystem) =
         if (action.userId == SystemUser.User.id) {
-          assErrIf(action.loginId.isDefined, "DwE57FU1")
           assErrIf(action.ip != SystemUser.Ip, "DwE8SW05")
           (NullVarchar, NullVarchar, NullInt)
         }
@@ -2549,7 +2393,7 @@ class RdbSiteDao(
 
       // Keep in mind that Oracle converts "" to null.
       val commonVals: List[AnyRef] = List(
-        action.loginId.orNullVarchar,
+        NullVarchar, // action.loginId.orNullVarchar,
         guestIdNullForUnknown,
         roleIdNullForSystem,
         ipNullForSystem,
@@ -3215,7 +3059,6 @@ class RdbSiteDao(
     }
 
     val userIdData = UserIdData(
-      loginId = None, // for now
       userId = rs.getString("AUTHOR_ID"),
       ip = "0.0.0.0", // for now
       browserIdCookie = None, // for now
