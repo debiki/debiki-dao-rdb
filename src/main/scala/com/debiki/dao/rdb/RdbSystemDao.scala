@@ -288,7 +288,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   /**
    * Use together with `_quotaConsumerIndexedVals` just below.
    */
-  val _QuotaConsumerIndexedColsEq_??? = """
+  val _QuotaConsumerIndexedColsEq_3_? = """
     -- There is a functional index, DW1_QTAS_TNT_IP_ROLE__U, on these:
     coalesce(TENANT, '-') = ? and
     coalesce(IP, '-') = ? and
@@ -347,7 +347,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     var vals = List[AnyRef]()
     consumers foreach { consumer =>
       if (vals nonEmpty) query ++= " or "
-      query ++= _QuotaConsumerIndexedColsEq_???
+      query ++= _QuotaConsumerIndexedColsEq_3_?
       vals :::= _quotaConsumerIndexedVals(consumer, insert = false)
                   .asInstanceOf[List[AnyRef]]
     }
@@ -403,7 +403,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
          NUM_DB_REQS_READ = NUM_DB_REQS_READ + ?,
          NUM_DB_REQS_WRITE = NUM_DB_REQS_WRITE + ?
        where """ +
-         _QuotaConsumerIndexedColsEq_???
+         _QuotaConsumerIndexedColsEq_3_?
 
     var batches = List[List[Any]]()
     for ((consumer, delta) <- deltas) {
