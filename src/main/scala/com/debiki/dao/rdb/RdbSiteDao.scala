@@ -827,7 +827,7 @@ class RdbSiteDao(
         (implicit connection: js.Connection): People = {
     val userIds: List[UserId] = actions map (_.userIdData.userId)
     val users = loadUsersAsList(userIds)
-    People(logins = Nil, identities = Nil, users)
+    People(users)
   }
 
 
@@ -948,8 +948,7 @@ class RdbSiteDao(
         }
       }
 
-      Some(PageParts.fromActions(
-          pageId, People(logins = Nil, identities = Nil, users), actions))
+      Some(PageParts.fromActions(pageId, People(users), actions))
     })
   }
 

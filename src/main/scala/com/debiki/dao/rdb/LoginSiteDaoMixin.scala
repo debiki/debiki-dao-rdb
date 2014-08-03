@@ -273,22 +273,4 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       isNewRole = userInDb.isEmpty)
   }
 
-
-  private def identityRefTypeToString(loginAttempt: LoginAttempt) = loginAttempt match {
-    case _: GuestLoginAttempt => "Simple"   // "Simple" should be renamed to "Guest"
-    case _: OpenIdLoginAttempt => "OpenID"  // should rename to Role
-    case _: EmailLoginAttempt => "EmailID"
-    case _: PasswordLoginAttempt => "OpenID"  // should rename to Role
-    case _: OpenAuthLoginAttempt => "OpenID"  // should rename to Role
-    case _ => assErr("DwE3k2r21K5")
-  }
-
-
-  def makeIdentityRef(idType: String, id: IdentityId): IdentityRef = idType match {
-    case "Simple" => IdentityRef.Guest(id) // "Simple" should be renamed to "Guest"
-    case "OpenID" => IdentityRef.Role(id)  // "OpenID" should be renamed to "Role"
-    case "EmailID" => IdentityRef.Email(id)
-    case _ => assErr("DwE4GQXE9")
-  }
-
 }
