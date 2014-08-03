@@ -1316,13 +1316,11 @@ class RdbSiteDao(
     db.update("""
         insert into DW1_TENANTS (
           ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP,
-          CREATOR_TENANT_ID, CREATOR_LOGIN_ID, CREATOR_ROLE_ID)
-        values (?, ?, ?, ?, ?, ?, ?)
-              """,
+          CREATOR_TENANT_ID, CREATOR_ROLE_ID)
+        values (?, ?, ?, ?, ?, ?)""",
       List[AnyRef](tenant.id, tenant.name.orNullVarchar,
         tenant.embeddingSiteUrl.orNullVarchar, tenant.creatorIp,
-        tenant.creatorTenantId, "??", tenant.creatorRoleId))
-    // TODO [nologin] Remove CREATOR_LOGIN_ID column, and ?? above.
+        tenant.creatorTenantId, tenant.creatorRoleId))
     tenant
   }
 
