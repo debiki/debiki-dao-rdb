@@ -41,7 +41,6 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
   override def saveLogin(loginAttempt: LoginAttempt): LoginGrant = {
     val loginGrant = loginAttempt match {
-      case x: GuestLoginAttempt => loginAsGuest(x)
       case x: PasswordLoginAttempt => loginWithPassword(x)
       case x: EmailLoginAttempt => loginWithEmailId(x)
       case x: OpenIdLoginAttempt => loginOpenId(x)
@@ -51,11 +50,11 @@ trait LoginSiteDaoMixin extends SiteDbDao {
   }
 
 
-  private def loginAsGuest(loginAttempt: GuestLoginAttempt): LoginGrant = {
+  override def loginAsGuest(loginAttempt: GuestLoginAttempt): GuestLoginResult = {
     db.transaction { implicit connection =>
       var idtyId = ""
       var emailNotfsStr = ""
-      var createdNewIdty = false
+      var isNewGuest = false
       for (i <- 1 to 2 if idtyId.isEmpty) {
         db.query("""
             select g.ID, e.EMAIL_NOTFS from DW1_GUESTS g
@@ -82,7 +81,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
           // the insert, just before). Should it fail, the above `select'
           // is run again and finds the row inserted by the other thread.
           // Could avoid logging any error though!
-          createdNewIdty = true
+          isNewGuest = true
           db.update("""
               insert into DW1_GUESTS(
                   SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
@@ -107,16 +106,8 @@ trait LoginSiteDaoMixin extends SiteDbDao {
         isAdmin = false,
         isOwner = false)
 
-      val identityWithId = IdentitySimple(
-        id = idtyId,
-        userId = user.id,
-        name = loginAttempt.name,
-        email = loginAttempt.email,
-        location = loginAttempt.location,
-        website = loginAttempt.website)
-
       // Quota already consumed (in the `for` loop above).
-      LoginGrant(identityWithId, user, isNewIdentity = createdNewIdty, isNewRole = false)
+      GuestLoginResult(user, isNewGuest)
     }
   }
 

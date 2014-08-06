@@ -207,16 +207,6 @@ object RdbUtil {
   def _dummyUserIdFor(identityId: String) = "-"+ identityId
 
 
-  def _dummyUserFor(identity: IdentitySimple, emailNotfPrefs: EmailNotfPrefs,
-                    id: String = null): User = {
-    User(id = (if (id ne null) id else identity.userId),
-      displayName = identity.name, email = identity.email,
-      emailNotfPrefs = emailNotfPrefs,
-      country = "",
-      website = identity.website, isAdmin = false, isOwner = false)
-  }
-
-
   val _UserSelectListItems =
     // (These u_* item names are relied on e.g. by RdbSystemDao.loadUsers.)
     """u.SNO u_id,
