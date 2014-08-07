@@ -39,7 +39,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
   self: RdbSiteDao =>
 
 
-  override def saveLogin(loginAttempt: LoginAttempt): LoginGrant = {
+  override def tryLogin(loginAttempt: LoginAttempt): LoginGrant = {
     val loginGrant = loginAttempt match {
       case x: PasswordLoginAttempt => loginWithPassword(x)
       case x: EmailLoginAttempt => loginWithEmailId(x)
