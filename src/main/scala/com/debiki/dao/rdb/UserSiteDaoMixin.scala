@@ -40,6 +40,22 @@ trait UserSiteDaoMixin extends SiteDbDao {
   self: RdbSiteDao =>
 
 
+  def createUserAndLogin(newUserData: NewUserData): LoginGrant = {
+    db.transaction(connection => {
+      createUserAndLoginImpl(newUserData)(connection)
+    })
+  }
+
+
+  private def createUserAndLoginImpl(newUserData: NewUserData)(connection: js.Connection)
+        : LoginGrant = {
+    val user = _insertUser(siteId, newUserData.userNoId)(connection)
+    val identityNoId = OpenAuthIdentity(id = "?", userId = user.id, newUserData.identityData)
+    val identity = insertOpenAuthIdentity(siteId, identityNoId)(connection)
+    LoginGrant(identity, user, isNewIdentity = true, isNewRole = true)
+  }
+
+
   private[rdb] def _insertUser(tenantId: SiteId, userNoId: User)
         (implicit connection: js.Connection): User = {
     val userSno = db.nextSeqNo("DW1_USERS_SNO")

@@ -158,6 +158,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       val user = userInDb match {
         case Some(u) => u
         case None =>
+          ??? /* Don't create a new user from here
           val details = loginAttempt.openIdDetails
           val userNoId =  User(
             id = "?",
@@ -171,6 +172,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
           val userWithId = _insertUser(siteId, userNoId)
           userWithId
+          */
       }
 
       // Create or update the OpenID identity.
@@ -188,8 +190,10 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
       val identity = identityInDb match {
         case None =>
+          ??? /* Don't create a new identity from here
           val identityNoId = IdentityOpenId(id = "?", userId = user.id, loginAttempt.openIdDetails)
           insertOpenIdIdentity(siteId, identityNoId)(connection)
+          */
         case Some(old: IdentityOpenId) =>
           val nev = IdentityOpenId(id = old.id, userId = user.id, loginAttempt.openIdDetails)
           if (nev != old) {
@@ -223,32 +227,15 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       _loadIdtyDetailsAndUser(
         forOpenAuthProfile = loginAttempt.profileProviderAndKey)(connection)
 
-    // Create user if absent.
-
     val user = userInDb match {
       case Some(u) => u
-      case None =>
-        val userNoId =  User(
-          id = "?",
-          displayName = loginAttempt.openAuthDetails.displayName,
-          email = loginAttempt.openAuthDetails.email getOrElse "",
-          emailNotfPrefs = EmailNotfPrefs.Unspecified,
-          country = "",
-          website = "",
-          isAdmin = false,
-          isOwner = false)
-        val userWithId = _insertUser(siteId, userNoId)(connection)
-        userWithId
+      case None => throw IdentityNotFoundException("")
     }
 
-    // Create or update the SecureSocial identity.
     // (For some unimportant comments, see the corresponding comment in loginOpenId() above.)
 
     val identity: OpenAuthIdentity = identityInDb match {
-      case None =>
-        val identityNoId = OpenAuthIdentity(id = "?", userId = user.id,
-          loginAttempt.openAuthDetails)
-        insertOpenAuthIdentity(siteId, identityNoId)(connection)
+      case None => throw IdentityNotFoundException("")
       case Some(old: OpenAuthIdentity) =>
         val nev = OpenAuthIdentity(id = old.id, userId = user.id,
           loginAttempt.openAuthDetails)
