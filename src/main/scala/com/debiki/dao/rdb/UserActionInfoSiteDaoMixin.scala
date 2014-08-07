@@ -26,10 +26,9 @@ import Rdb._
 import RdbUtil._
 
 
-/** Loads info on users — should move some other methods that creates/updates
-  * users from RdbSiteDao to this class too.
+/** Loads statistics on users, e.g. num posts posted, and lists things they've done.
   */
-trait UserSiteDaoMixin extends SiteDbDao {
+trait UserActionInfoSiteDaoMixin extends SiteDbDao {
   self: RdbSiteDao =>
 
 

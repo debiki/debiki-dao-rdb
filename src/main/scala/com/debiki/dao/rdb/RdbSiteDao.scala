@@ -45,7 +45,7 @@ class RdbSiteDao(
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
   with FullTextSearchSiteDaoMixin
-  with UserSiteDaoMixin
+  with UserActionInfoSiteDaoMixin
   with LoginSiteDaoMixin
   with PostsReadStatsSiteDaoMixin
   with SettingsSiteDaoMixin {
