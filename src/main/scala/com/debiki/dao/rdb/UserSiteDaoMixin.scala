@@ -50,8 +50,8 @@ trait UserSiteDaoMixin extends SiteDbDao {
   private def createUserAndLoginImpl(newUserData: NewUserData)(connection: js.Connection)
         : LoginGrant = {
     val user = _insertUser(siteId, newUserData.userNoId)(connection)
-    val identityNoId = OpenAuthIdentity(id = "?", userId = user.id, newUserData.identityData)
-    val identity = insertOpenAuthIdentity(siteId, identityNoId)(connection)
+    val identityNoId = newUserData.identityNoId
+    val identity = insertIdentity(identityNoId, userId = user.id, siteId)(connection)
     LoginGrant(identity, user, isNewIdentity = true, isNewRole = true)
   }
 
