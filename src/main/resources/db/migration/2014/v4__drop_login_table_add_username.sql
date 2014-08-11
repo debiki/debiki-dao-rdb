@@ -16,3 +16,9 @@ drop table DW1_LOGINS;
 drop sequence DW1_LOGINS_SNO;
 
 
+alter table DW1_USERS add column USERNAME varchar;
+-- Scala code currently requires 3 - 20 chars, but be a bit lax here in the database
+-- so I don't have to add an evolution just to change this.
+alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_LEN check (length(trim(USERNAME)) >= 2);
+alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_LEN2 check (length(USERNAME) < 40);
+

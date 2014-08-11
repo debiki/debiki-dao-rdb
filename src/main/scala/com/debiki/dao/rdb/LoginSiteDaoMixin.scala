@@ -99,6 +99,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
       // Debiki for Developers #9xdF21.
       val user = User(id = _dummyUserIdFor(idtyId),
         displayName = loginAttempt.name,
+        username = None,
         email = loginAttempt.email,
         emailNotfPrefs = notfPrefs,
         country = "",

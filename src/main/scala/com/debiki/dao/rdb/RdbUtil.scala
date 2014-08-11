@@ -211,6 +211,7 @@ object RdbUtil {
     // (These u_* item names are relied on e.g. by RdbSystemDao.loadUsers.)
     """u.SNO u_id,
       |u.DISPLAY_NAME u_disp_name,
+      |u.USERNAME u_username,
       |u.EMAIL u_email,
       |u.EMAIL_NOTFS u_email_notfs,
       |u.COUNTRY u_country,
@@ -226,6 +227,7 @@ object RdbUtil {
       // See usage of this function in RdbSystemDao.loadUsers(). ))
       id = rs.getString("u_id"),
       displayName = dn2e(rs.getString("u_disp_name")),
+      username = Option(rs.getString("u_username")),
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = _toEmailNotfs(rs.getString("u_email_notfs")),
       country = dn2e(rs.getString("u_country")),

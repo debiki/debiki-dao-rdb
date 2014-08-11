@@ -62,10 +62,10 @@ trait UserSiteDaoMixin extends SiteDbDao {
     val user = userNoId.copy(id = userSno.toString)
     db.update("""
         insert into DW1_USERS(
-            TENANT, SNO, DISPLAY_NAME, EMAIL, EMAIL_NOTFS, COUNTRY,
+            TENANT, SNO, DISPLAY_NAME, USERNAME, EMAIL, EMAIL_NOTFS, COUNTRY,
             SUPERADMIN, IS_OWNER)
-        values (?, ?, ?, ?, ?, ?, ?, ?)""",
-        List[AnyRef](tenantId, user.id, e2n(user.displayName),
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        List[AnyRef](tenantId, user.id, e2n(user.displayName), user.username.orNullVarchar,
            e2n(user.email), _toFlag(user.emailNotfPrefs), e2n(user.country),
            tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     user
@@ -401,6 +401,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
       select
         '-'||g.ID u_id,
         g.NAME u_disp_name,
+        null u_username,
         g.EMAIL_ADDR u_email,
         e.EMAIL_NOTFS u_email_notfs,
         g.LOCATION u_country,
@@ -481,6 +482,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
       i"""select
         '-' || g.ID as u_id,
         g.NAME u_disp_name,
+        null u_username,
         g.EMAIL_ADDR u_email,
         e.EMAIL_NOTFS u_email_notfs,
         g.LOCATION u_country,
