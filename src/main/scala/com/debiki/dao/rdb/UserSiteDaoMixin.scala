@@ -58,15 +58,21 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
   private[rdb] def _insertUser(tenantId: SiteId, userNoId: User)
         (implicit connection: js.Connection): User = {
+    require(userNoId.emailVerifiedAt.isEmpty)
+    val createdAt = userNoId.createdAt.getOrElse(new ju.Date)
     val userSno = db.nextSeqNo("DW1_USERS_SNO")
-    val user = userNoId.copy(id = userSno.toString)
+    val user = userNoId.copy(id = userSno.toString, createdAt = Some(createdAt))
     db.update("""
         insert into DW1_USERS(
-            TENANT, SNO, DISPLAY_NAME, USERNAME, EMAIL, EMAIL_NOTFS, COUNTRY,
-            SUPERADMIN, IS_OWNER)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            TENANT, SNO, DISPLAY_NAME, USERNAME, CREATED_AT,
+            EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT,
+            COUNTRY, SUPERADMIN, IS_OWNER)
+        values (
+            ?, ?, ?, ?, ?,
+            ?, ?, null,
+            ?, ?, ?)""",
         List[AnyRef](tenantId, user.id, e2n(user.displayName), user.username.orNullVarchar,
-           e2n(user.email), _toFlag(user.emailNotfPrefs), e2n(user.country),
+           createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs), e2n(user.country),
            tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     user
   }
@@ -402,8 +408,10 @@ trait UserSiteDaoMixin extends SiteDbDao {
         '-'||g.ID u_id,
         g.NAME u_disp_name,
         null u_username,
+        null u_created_at,
         g.EMAIL_ADDR u_email,
         e.EMAIL_NOTFS u_email_notfs,
+        null u_email_verified_at,
         g.LOCATION u_country,
         g.URL u_website,
         'F' u_superadmin,
@@ -483,8 +491,10 @@ trait UserSiteDaoMixin extends SiteDbDao {
         '-' || g.ID as u_id,
         g.NAME u_disp_name,
         null u_username,
+        null u_created_at,
         g.EMAIL_ADDR u_email,
         e.EMAIL_NOTFS u_email_notfs,
+        null u_email_verified_at,
         g.LOCATION u_country,
         g.URL u_website,
         'F' u_superadmin,

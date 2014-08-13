@@ -70,7 +70,10 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       val q = """
          select
             g.SITE_ID TENANT, '-'||g.ID u_id, g.NAME u_disp_name, null u_username,
-            g.EMAIL_ADDR u_email, e.EMAIL_NOTFS u_email_notfs, g.LOCATION u_country,
+            null u_created_at,
+            g.EMAIL_ADDR u_email, e.EMAIL_NOTFS u_email_notfs,
+            null u_email_verified_at,
+            g.LOCATION u_country,
             g.URL u_website, 'F' u_superadmin, 'F' u_is_owner
          from
            DW1_GUESTS g left join DW1_IDS_SIMPLE_EMAIL e

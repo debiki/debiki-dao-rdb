@@ -22,3 +22,11 @@ alter table DW1_USERS add column USERNAME varchar;
 alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_LEN check (length(trim(USERNAME)) >= 2);
 alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_LEN2 check (length(USERNAME) < 40);
 
+
+alter table DW1_USERS add column EMAIL_VERIFIED_AT timestamp;
+
+
+alter table DW1_USERS add column CREATED_AT timestamp;
+update DW1_USERS set CREATED_AT = now();
+alter table DW1_USERS alter column CREATED_AT set not null;
+
