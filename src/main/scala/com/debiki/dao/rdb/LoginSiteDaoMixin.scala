@@ -116,19 +116,18 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
 
   private def loginWithPassword(loginAttempt: PasswordLoginAttempt): LoginGrant = {
-    val anyIdentityAndUser = loadIdtyDetailsAndUser(forEmailAddr = loginAttempt.email)
-
-    val (identity: PasswordIdentity, user) = anyIdentityAndUser match {
-      case Some((x: PasswordIdentity, user)) => (x, user)
-      case _ => throw IdentityNotFoundException(
-        s"No identity found with email: ${loginAttempt.email}")
+    val anyUser = loadUserByEmailOrUsername(loginAttempt.email)
+    val user = anyUser getOrElse {
+      throw IdentityNotFoundException(s"No user found with email: ${loginAttempt.email}")
     }
-
-    val okPassword = checkPassword(loginAttempt.password, hash = identity.passwordSaltHash)
+    val correctHash = user.passwordHash getOrElse {
+      throw IdentityNotFoundException(s"User with email `${loginAttempt.email}' has no password")
+    }
+    val okPassword = checkPassword(loginAttempt.password, hash = correctHash)
     if (!okPassword)
       throw BadPasswordException
 
-    LoginGrant(identity, user, isNewIdentity = false, isNewRole = false)
+    LoginGrant(identity = None, user, isNewIdentity = false, isNewRole = false)
   }
 
 
@@ -146,7 +145,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
            when logging in with email id `$emailId'.""")
     }
     val idtyWithId = IdentityEmailId(id = emailId, userId = user.id, emailSent = Some(email))
-    LoginGrant(idtyWithId, user, isNewIdentity = false, isNewRole = false)
+    LoginGrant(Some(idtyWithId), user, isNewIdentity = false, isNewRole = false)
   }
 
 
@@ -211,7 +210,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
         case x => throwBadDatabaseData("DwE26DFW0", s"A non-OpenID identity found in database: $x")
       }
 
-      LoginGrant(identity, user, isNewIdentity = identityInDb.isEmpty,
+      LoginGrant(Some(identity), user, isNewIdentity = identityInDb.isEmpty,
         isNewRole = userInDb.isEmpty)
     }
   }
@@ -250,7 +249,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
         throwBadDatabaseData("DwE21GSh0", s"A non-SecureSocial identity found in database: $x")
     }
 
-    LoginGrant(identity, user, isNewIdentity = identityInDb.isEmpty,
+    LoginGrant(Some(identity), user, isNewIdentity = identityInDb.isEmpty,
       isNewRole = userInDb.isEmpty)
   }
 

@@ -787,7 +787,7 @@ class RdbSiteDao(
   // And do everything in the same transaction!
   def createWebsite(name: Option[String], address: Option[String],
         embeddingSiteUrl: Option[String], ownerIp: String,
-        ownerIdentity: Identity, ownerRole: User)
+        ownerIdentity: Option[Identity], ownerRole: User)
         : Option[(Tenant, User)] = {
     try {
       db.transaction { implicit connection =>
@@ -816,8 +816,10 @@ class RdbSiteDao(
         val ownerRoleAtNewWebsite = _insertUser(newTenant.id,
           ownerRole.copy(id = "?",
             isAdmin = true, isOwner = true))
-        val ownerIdtyAtNewWebsite = insertIdentity(
-          ownerIdentity, userId = ownerRoleAtNewWebsite.id, otherSiteId = newTenant.id)(connection)
+        ownerIdentity foreach { identity =>
+          insertIdentity(identity, userId = ownerRoleAtNewWebsite.id,
+            otherSiteId = newTenant.id)(connection)
+        }
         Some((newTenant.copy(hosts = newHosts), ownerRoleAtNewWebsite))
       }
     }

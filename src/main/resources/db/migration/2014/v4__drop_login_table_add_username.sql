@@ -21,6 +21,7 @@ alter table DW1_USERS add column USERNAME varchar;
 -- so I don't have to add an evolution just to change this.
 alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_LEN check (length(trim(USERNAME)) >= 2);
 alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_LEN2 check (length(USERNAME) < 40);
+alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_AT check (USERNAME not like '%@%');
 
 
 alter table DW1_USERS add column EMAIL_VERIFIED_AT timestamp;
@@ -29,4 +30,12 @@ alter table DW1_USERS add column EMAIL_VERIFIED_AT timestamp;
 alter table DW1_USERS add column CREATED_AT timestamp;
 update DW1_USERS set CREATED_AT = now();
 alter table DW1_USERS alter column CREATED_AT set not null;
+
+
+alter table DW1_USERS add column PASSWORD_HASH varchar;
+alter table DW1_USERS add constraint DW1_USERS_PASSWORDHASH__C_LEN check (
+    length(PASSWORD_HASH) between 8 and 150);
+
+-- There are no passwords right now anyway, need not move to DW1_USERS.PASSWORD_HASH.
+alter table DW1_IDS_OPENID drop column PASSWORD_HASH;
 

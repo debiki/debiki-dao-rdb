@@ -52,7 +52,14 @@ trait UserSiteDaoMixin extends SiteDbDao {
     val user = _insertUser(siteId, newUserData.userNoId)(connection)
     val identityNoId = newUserData.identityNoId
     val identity = insertIdentity(identityNoId, userId = user.id, siteId)(connection)
-    LoginGrant(identity, user, isNewIdentity = true, isNewRole = true)
+    LoginGrant(Some(identity), user, isNewIdentity = true, isNewRole = true)
+  }
+
+
+  def createPasswordUser(userData: NewPasswordUserData): User = {
+    db.transaction(connection => {
+      _insertUser(siteId, userData.userNoId)(connection)
+    })
   }
 
 
@@ -65,14 +72,15 @@ trait UserSiteDaoMixin extends SiteDbDao {
     db.update("""
         insert into DW1_USERS(
             TENANT, SNO, DISPLAY_NAME, USERNAME, CREATED_AT,
-            EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT,
+            EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, PASSWORD_HASH,
             COUNTRY, SUPERADMIN, IS_OWNER)
         values (
             ?, ?, ?, ?, ?,
-            ?, ?, null,
+            ?, ?, null, ?,
             ?, ?, ?)""",
         List[AnyRef](tenantId, user.id, e2n(user.displayName), user.username.orNullVarchar,
-           createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs), e2n(user.country),
+           createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs),
+           userNoId.passwordHash.orNullVarchar, e2n(user.country),
            tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     user
   }
@@ -83,8 +91,6 @@ trait UserSiteDaoMixin extends SiteDbDao {
     identityNoId match {
       case x: IdentityOpenId =>
         insertOpenIdIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
-      case x: PasswordIdentity =>
-        insertPasswordIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
       case x: OpenAuthIdentity =>
         insertOpenAuthIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
       case x =>
@@ -115,21 +121,6 @@ trait UserSiteDaoMixin extends SiteDbDao {
       case _ =>
         assErr("DwE03IJL2")
     }
-  }
-
-
-  private[rdb] def insertPasswordIdentity(otherSiteId: SiteId, identityNoId: PasswordIdentity)
-        (implicit connection: js.Connection): PasswordIdentity = {
-    val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
-    val identity = identityNoId.copy(id = newIdentityId)
-    db.update("""
-        insert into DW1_IDS_OPENID(
-            SNO, TENANT, USR, USR_ORIG, EMAIL, PASSWORD_HASH)
-        values (
-            ?, ?, ?, ?, ?, ?)""",
-        List[AnyRef](identity.id, otherSiteId, identity.userId, identity.userId,
-          identity.email, identity.passwordSaltHash))
-    identity
   }
 
 
@@ -197,13 +188,11 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
   def loadIdtyDetailsAndUser(
         forUserId: UserId = null,
-        forOpenIdDetails: OpenIdDetails = null,
-        forEmailAddr: String = null): Option[(Identity, User)] = {
+        forOpenIdDetails: OpenIdDetails = null): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
       _loadIdtyDetailsAndUser(
           forUserId = forUserId,
-          forOpenIdDetails = forOpenIdDetails,
-          forEmailAddr = forEmailAddr) match {
+          forOpenIdDetails = forOpenIdDetails) match {
         case (None, None) => None
         case (Some(idty), Some(user)) => Some(idty, user)
         case (None, user) => assErr("DwE257IV2")
@@ -219,8 +208,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
   private[rdb] def _loadIdtyDetailsAndUser(
         forUserId: UserId = null,
         forOpenIdDetails: OpenIdDetails = null,
-        forOpenAuthProfile: OpenAuthProviderIdKey = null,
-        forEmailAddr: String = null)(implicit connection: js.Connection)
+        forOpenAuthProfile: OpenAuthProviderIdKey = null)(implicit connection: js.Connection)
         : (Option[Identity], Option[User]) = {
 
     val anyOpenIdDetails = Option(forOpenIdDetails)
@@ -229,8 +217,6 @@ trait UserSiteDaoMixin extends SiteDbDao {
     val anyUserId: Option[UserId] =
       if (forUserId eq null) None
       else Some(forUserId)
-
-    val anyEmail = Option(forEmailAddr)
 
     var sqlSelectFrom = """
         select
@@ -243,7 +229,6 @@ trait UserSiteDaoMixin extends SiteDbDao {
             i.OID_VERSION,
             i.SECURESOCIAL_USER_ID,
             i.SECURESOCIAL_PROVIDER_ID,
-            i.PASSWORD_HASH,
             i.AUTH_METHOD,
             i.FIRST_NAME i_first_name,
             i.LAST_NAME i_last_name,
@@ -256,19 +241,13 @@ trait UserSiteDaoMixin extends SiteDbDao {
             and i.USR = u.SNO
         """
 
-    val (whereClause, bindVals) =
-        (anyUserId, anyEmail, anyOpenIdDetails, anyOpenAuthKey) match {
+    val (whereClause, bindVals) = (anyUserId, anyOpenIdDetails, anyOpenAuthKey) match {
 
-      case (Some(userId: UserId), None, None, None) =>
-        UNTESTED // [nologin]
+      case (Some(userId: UserId), None, None) =>
         ("""where i.TENANT = ? and i.USR = ?""",
            List(siteId, userId))
 
-      case (None, Some(email), None, None) =>
-        ("""where i.TENANT = ? and i.EMAIL = ?""",
-          List(siteId, email))
-
-      case (None, None, Some(openIdDetails: OpenIdDetails), None) =>
+      case (None, Some(openIdDetails: OpenIdDetails), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
         // address instead. (With Google OpenID, the email address can be
         // trusted — this is not the case, however, in general.
@@ -293,7 +272,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
             and """+ claimedIdOrEmailCheck +"""
           """, List(siteId, idOrEmail))
 
-      case (None, None, None, Some(openAuthKey: OpenAuthProviderIdKey)) =>
+      case (None, None, Some(openAuthKey: OpenAuthProviderIdKey)) =>
         val whereClause =
           """where i.TENANT = ?
                and i.SECURESOCIAL_PROVIDER_ID = ?
@@ -316,19 +295,11 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
       val id = rs.getLong("i_id").toString
       val email = Option(rs.getString("i_email"))
-      val anyPasswordHash = Option(rs.getString("PASSWORD_HASH"))
       val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
       val anyOpenAuthProviderId = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
 
       val identityInDb = {
-        if (anyPasswordHash.nonEmpty) {
-          PasswordIdentity(
-            id = id,
-            userId = userInDb.id,
-            email = email getOrDie "DwE083FW5",
-            passwordSaltHash = anyPasswordHash.get)
-        }
-        else if (anyClaimedOpenId.nonEmpty) {
+        if (anyClaimedOpenId.nonEmpty) {
           IdentityOpenId(
             id = id,
             userId = userInDb.id,
@@ -362,35 +333,51 @@ trait UserSiteDaoMixin extends SiteDbDao {
       }
 
       assErrIf(rs.next, "DwE53IK24", "More that one matching identity, when"+
-         " looking up: "+ (anyUserId, anyEmail, anyOpenIdDetails, anyOpenAuthKey))
+         " looking up: "+ (anyUserId, anyOpenIdDetails, anyOpenAuthKey))
 
       Some(identityInDb) -> Some(userInDb)
     })
   }
 
 
-  def createPasswordIdentityAndRole(identityNoId: PasswordIdentity, userNoId: User)
-        : (PasswordIdentity, User) = {
-    db.transaction { connection =>
-      val user = _insertUser(siteId, userNoId)(connection)
-      val identity = insertPasswordIdentity(
-        otherSiteId = siteId, identityNoId.copy(userId = user.id))(connection)
-      (identity, user)
+  def changePassword(user: User, newPasswordSaltHash: String): Boolean = {
+    db.transaction { implicit connection =>
+      val sql = """
+        update DW1_USERS
+        set PASSWORD_HASH = ?
+        where TENANT = ? and SNO = ?
+                """
+      val numRowsChanged = db.update(sql, List(newPasswordSaltHash, siteId, user.id))
+      assert(numRowsChanged <= 1, "DwE87GMf0")
+      numRowsChanged == 1
     }
   }
 
 
-  def changePassword(identity: PasswordIdentity, newPasswordSaltHash: String): Boolean = {
-    db.transaction { implicit connection =>
-      val sql = """
-        update DW1_IDS_OPENID
-        set PASSWORD_HASH = ?
-        where TENANT = ? and SNO = ?
-                """
-      val numRowsChanged = db.update(sql, List(newPasswordSaltHash, siteId, identity.id))
-      assert(numRowsChanged <= 1, "DwE87GMf0")
-      numRowsChanged == 1
-    }
+  def loadUserByEmailOrUsername(emailOrUsername: String): Option[User] = {
+    db.withConnection(connection => {
+      loadUserByEmailOrUsernameImpl(emailOrUsername)(connection)
+    })
+  }
+
+
+  def loadUserByEmailOrUsernameImpl(emailOrUsername: String)
+        (implicit connection: js.Connection): Option[User] = {
+    val sql = s"""
+      select ${_UserSelectListItems}
+      from DW1_USERS u
+      where u.TENANT = ? and (u.EMAIL = ? or u.USERNAME = ?)"""
+    val values = List(siteId, emailOrUsername, emailOrUsername)
+    db.query(sql, values, rs => {
+      if (!rs.next()) {
+        None
+      }
+      else {
+        val user = _User(rs)
+        assErrIf(rs.next(), "DwE7FH46")
+        Some(user)
+      }
+    })
   }
 
 
@@ -412,6 +399,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
         g.EMAIL_ADDR u_email,
         e.EMAIL_NOTFS u_email_notfs,
         null u_email_verified_at,
+        null u_password_hash,
         g.LOCATION u_country,
         g.URL u_website,
         'F' u_superadmin,
@@ -495,6 +483,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
         g.EMAIL_ADDR u_email,
         e.EMAIL_NOTFS u_email_notfs,
         null u_email_verified_at,
+        null u_password_hash,
         g.LOCATION u_country,
         g.URL u_website,
         'F' u_superadmin,

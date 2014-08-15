@@ -73,6 +73,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
             null u_created_at,
             g.EMAIL_ADDR u_email, e.EMAIL_NOTFS u_email_notfs,
             null u_email_verified_at,
+            null u_password_hash,
             g.LOCATION u_country,
             g.URL u_website, 'F' u_superadmin, 'F' u_is_owner
          from
