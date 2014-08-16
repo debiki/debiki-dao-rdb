@@ -539,11 +539,9 @@ trait UserSiteDaoMixin extends SiteDbDao {
   }
 
 
-  def configRole(ctime: ju.Date, roleId: RoleId,
+  def configRole(roleId: RoleId,
         emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean],
-        isOwner: Option[Boolean]) {
-    // Currently auditing not implemented for the roles/users table,
-    // so ctime isn't used.
+        isOwner: Option[Boolean], emailVerifiedAt: Option[Option[ju.Date]]) {
     require(!roleId.startsWith("-") && !roleId.startsWith("?"))
 
     var changes = StringBuilder.newBuilder
@@ -568,6 +566,12 @@ trait UserSiteDaoMixin extends SiteDbDao {
       if (changes.nonEmpty) changes ++= ", "
       changes ++= "IS_OWNER = ?"
       newValues ::= (if (isOwner) "T" else NullVarchar)
+    }
+
+    emailVerifiedAt foreach { verifiedAt =>
+      if (changes.nonEmpty) changes ++= ", "
+      changes ++= "EMAIL_VERIFIED_AT = ?"
+      newValues ::= o2ts(verifiedAt)
     }
 
     if (newValues.isEmpty)

@@ -120,6 +120,9 @@ trait LoginSiteDaoMixin extends SiteDbDao {
     val user = anyUser getOrElse {
       throw IdentityNotFoundException(s"No user found with email: ${loginAttempt.email}")
     }
+    if (user.emailVerifiedAt.isEmpty) {
+      throw DbDao.EmailNotVerifiedException
+    }
     val correctHash = user.passwordHash getOrElse {
       throw IdentityNotFoundException(s"User with email `${loginAttempt.email}' has no password")
     }
