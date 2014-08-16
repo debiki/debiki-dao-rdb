@@ -69,7 +69,8 @@ trait UserSiteDaoMixin extends SiteDbDao {
     val createdAt = userNoId.createdAt.getOrElse(new ju.Date)
     val userSno = db.nextSeqNo("DW1_USERS_SNO")
     val user = userNoId.copy(id = userSno.toString, createdAt = Some(createdAt))
-    db.update("""
+    try {
+      db.update("""
         insert into DW1_USERS(
             TENANT, SNO, DISPLAY_NAME, USERNAME, CREATED_AT,
             EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, PASSWORD_HASH,
@@ -82,6 +83,20 @@ trait UserSiteDaoMixin extends SiteDbDao {
            createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs),
            userNoId.passwordHash.orNullVarchar, e2n(user.country),
            tOrNull(user.isAdmin), tOrNull(user.isOwner)))
+    }
+    catch {
+      case ex: js.SQLException =>
+        if (!isUniqueConstrViolation(ex))
+          throw ex
+
+        if (uniqueConstrViolatedIs("DW1_USERS_SITE_EMAIL__U", ex))
+          throw DbDao.DuplicateUserEmail
+
+        if (uniqueConstrViolatedIs("DW1_USERS_SITE_USERNAME__U", ex))
+          throw DbDao.DuplicateUsername
+
+        assErr("DwE6ZP21")
+    }
     user
   }
 

@@ -102,6 +102,13 @@ object Rdb {
     sqlException.getSQLState == "23505"
   }
 
+  def uniqueConstrViolatedIs(constraintName: String, sqlException: js.SQLException): Boolean = {
+    assErrIf(sqlException.getSQLState != "23505", "DwE6EHW0")
+    // On the 2nd line, the values of the key violated are included, but they
+    // might be user provided so throw them away.
+    val firstLine = sqlException.getMessage.takeWhile(_ != '\n')
+    firstLine.contains(s""""${constraintName.toLowerCase}"""")
+  }
 }
 
 

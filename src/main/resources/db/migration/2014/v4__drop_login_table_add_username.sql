@@ -23,6 +23,15 @@ alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_LEN check (length(tri
 alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_LEN2 check (length(USERNAME) < 40);
 alter table DW1_USERS add constraint DW1_USERS_USERNAME__C_AT check (USERNAME not like '%@%');
 
+create unique index DW1_USERS_SITE_USERNAME__U on DW1_USERS (TENANT, USERNAME);
+
+
+-- Create unique index on user email, but first delete duplicated email users.
+delete from DW1_NOTFS_PAGE_ACTIONS where TENANT = '12' and RCPT_ROLE_ID = '53';
+delete from DW1_USERS where TENANT = '12' and SNO = '53' and EMAIL = 'kajmagnus79d@gmail.com';
+delete from DW1_USERS where TENANT = '3'  and SNO = '56' and EMAIL = 'kajmagnus79d@gmail.com';
+create unique index DW1_USERS_SITE_EMAIL__U on DW1_USERS (TENANT, EMAIL);
+
 
 alter table DW1_USERS add column EMAIL_VERIFIED_AT timestamp;
 
@@ -38,4 +47,9 @@ alter table DW1_USERS add constraint DW1_USERS_PASSWORDHASH__C_LEN check (
 
 -- There are no passwords right now anyway, need not move to DW1_USERS.PASSWORD_HASH.
 alter table DW1_IDS_OPENID drop column PASSWORD_HASH;
+
+
+-- Now a new user is created before the confirmation email is sent, so this constraint
+-- no longer works. Delet it, don't fix it, I think it's too restrictive.
+alter table DW1_EMAILS_OUT drop constraint DW1_EMLOT_ROLEID_GUESTID__C;
 
