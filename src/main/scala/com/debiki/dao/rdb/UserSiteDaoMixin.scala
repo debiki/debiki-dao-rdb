@@ -201,13 +201,9 @@ trait UserSiteDaoMixin extends SiteDbDao {
   }
 
 
-  def loadIdtyDetailsAndUser(
-        forUserId: UserId = null,
-        forOpenIdDetails: OpenIdDetails = null): Option[(Identity, User)] = {
+  def loadIdtyDetailsAndUser(userId: UserId): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
-      _loadIdtyDetailsAndUser(
-          forUserId = forUserId,
-          forOpenIdDetails = forOpenIdDetails) match {
+      _loadIdtyDetailsAndUser(forUserId = userId) match {
         case (None, None) => None
         case (Some(idty), Some(user)) => Some(idty, user)
         case (None, user) => assErr("DwE257IV2")
@@ -277,11 +273,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
           // the correct endpoint? What if Mallory's provider replies
           // with Googles endpoint? I guess the Relying Party impl doesn't
           // allow this but anyway, I'd like to know for sure.
-          if (openIdDetails.isGoogleLogin)
-            ("i.OID_ENDPOINT = '"+ IdentityOpenId.GoogleEndpoint +
-               "' and i.EMAIL = ?", openIdDetails.email.getOrDie("DwE77ZS10"))
-          else
-            ("i.OID_CLAIMED_ID = ?", openIdDetails.oidClaimedId)
+          ("i.OID_CLAIMED_ID = ?", openIdDetails.oidClaimedId)
         }
         ("""where i.TENANT = ?
             and """+ claimedIdOrEmailCheck +"""

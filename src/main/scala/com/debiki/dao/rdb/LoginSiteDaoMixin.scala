@@ -202,11 +202,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
         case Some(old: IdentityOpenId) =>
           val nev = IdentityOpenId(id = old.id, userId = user.id, loginAttempt.openIdDetails)
           if (nev != old) {
-            if (nev.openIdDetails.isGoogleLogin)
-              assErrIf(nev.openIdDetails.email != old.openIdDetails.email ||
-                !old.openIdDetails.isGoogleLogin, "DwE3Bz6")
-            else
-              assErrIf(nev.openIdDetails.oidClaimedId != old.openIdDetails.oidClaimedId, "DwE73YQ2")
+            assErrIf(nev.openIdDetails.oidClaimedId != old.openIdDetails.oidClaimedId, "DwE73YQ2")
             _updateIdentity(nev)
           }
           nev
