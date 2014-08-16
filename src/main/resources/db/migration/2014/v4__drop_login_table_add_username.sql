@@ -30,6 +30,12 @@ create unique index DW1_USERS_SITE_USERNAME__U on DW1_USERS (TENANT, USERNAME);
 delete from DW1_NOTFS_PAGE_ACTIONS where TENANT = '12' and RCPT_ROLE_ID = '53';
 delete from DW1_USERS where TENANT = '12' and SNO = '53' and EMAIL = 'kajmagnus79d@gmail.com';
 delete from DW1_USERS where TENANT = '3'  and SNO = '56' and EMAIL = 'kajmagnus79d@gmail.com';
+-- Set email addresses to null for old Google OpenID users (Googe is disabling OpenID).
+update DW1_USERS as u set EMAIL = null
+    from DW1_IDS_OPENID as i
+    where u.TENANT = i.TENANT
+      and u.SNO = i.USR
+      and i.OID_ENDPOINT = 'https://www.google.com/accounts/o8/ud';
 create unique index DW1_USERS_SITE_EMAIL__U on DW1_USERS (TENANT, EMAIL);
 
 
