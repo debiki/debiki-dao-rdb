@@ -65,7 +65,6 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
   private[rdb] def _insertUser(tenantId: SiteId, userNoId: User)
         (implicit connection: js.Connection): User = {
-    require(userNoId.emailVerifiedAt.isEmpty)
     val createdAt = userNoId.createdAt.getOrElse(new ju.Date)
     val userSno = db.nextSeqNo("DW1_USERS_SNO")
     val user = userNoId.copy(id = userSno.toString, createdAt = Some(createdAt))
@@ -76,11 +75,11 @@ trait UserSiteDaoMixin extends SiteDbDao {
             EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, PASSWORD_HASH,
             COUNTRY, SUPERADMIN, IS_OWNER)
         values (
-            ?, ?, ?, ?, ?,
-            ?, ?, null, ?,
-            ?, ?, ?)""",
+            ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?, ?)""",
         List[AnyRef](tenantId, user.id, e2n(user.displayName), user.username.orNullVarchar,
-           createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs),
+           createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
            userNoId.passwordHash.orNullVarchar, e2n(user.country),
            tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     }
