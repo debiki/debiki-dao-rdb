@@ -79,7 +79,7 @@ object RdbUtil {
 
 
   def ActionSelectListItems =
-    "a.POST_ID, a.PAID, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
+    "a.POST_ID, a.MULTIREPLY, a.PAID, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
      "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.IP, " +
      "a.BROWSER_ID_COOKIE, a.BROWSER_FINGERPRINT," +
      "a.APPROVAL, a.AUTO_APPLICATION, a.DELETED_AT, a.DELETED_BY_ID"
@@ -138,7 +138,8 @@ object RdbUtil {
     val PAP = PostActionPayload
     val action = typee match {
       case "Post" =>
-        buildAction(PAP.CreatePost(parentPostId = relpa, text = n2e(text_?),
+        buildAction(PAP.CreatePost(parentPostId = relpa,
+          multireplyPostIds = fromDbMultireply(rs.getString("MULTIREPLY")), text = n2e(text_?),
           markup = n2e(markup_?), where = Option(where_?), approval = approval))
       case "Edit" =>
         buildAction(PAP.EditPost(n2e(text_?), newMarkup = Option(markup_?),
@@ -365,6 +366,16 @@ object RdbUtil {
     case "N" => TenantHost.HttpsNone
   }
 
+
+  def toDbMultireply(postIds: Set[PostId]) = {
+    if (postIds.isEmpty) NullVarchar
+    else postIds.mkString(",")
+  }
+
+  def fromDbMultireply(postIdsCommaSeparated: String): Set[PostId] = {
+    if (postIdsCommaSeparated == null) Set[PostId]()
+    else postIdsCommaSeparated.split(',').map(_.toInt).toSet
+  }
 
   def _toAutoApproval(dbVal: String): Option[Approval] = dbVal match {
     case null => None
