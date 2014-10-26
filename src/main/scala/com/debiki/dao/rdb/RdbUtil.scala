@@ -80,7 +80,7 @@ object RdbUtil {
 
   def ActionSelectListItems =
     "a.POST_ID, a.MULTIREPLY, a.PAID, a.GUEST_ID, a.ROLE_ID, a.TIME, a.TYPE, a.RELPA, " +
-     "a.TEXT, a.MARKUP, a.WHEERE, a.LONG_VALUE, a.IP, " +
+     "a.TEXT, a.WHEERE, a.LONG_VALUE, a.IP, " +
      "a.BROWSER_ID_COOKIE, a.BROWSER_FINGERPRINT," +
      "a.APPROVAL, a.AUTO_APPLICATION, a.DELETED_AT, a.DELETED_BY_ID"
 
@@ -109,7 +109,6 @@ object RdbUtil {
     val typee = rs.getString("TYPE")
     val relpa = getOptionalIntNoneNot0(rs, "RELPA")
     val text_? = rs.getString("TEXT")
-    val markup_? = rs.getString("MARKUP")
     val where_? = rs.getString("WHEERE")
     val longValue_? = rs.getLong("LONG_VALUE")
     val anyBrowserIdCookie = Option(rs.getString("BROWSER_ID_COOKIE"))
@@ -140,9 +139,9 @@ object RdbUtil {
       case "Post" =>
         buildAction(PAP.CreatePost(parentPostId = relpa,
           multireplyPostIds = fromDbMultireply(rs.getString("MULTIREPLY")), text = n2e(text_?),
-          markup = n2e(markup_?), where = Option(where_?), approval = approval))
+          where = Option(where_?), approval = approval))
       case "Edit" =>
-        buildAction(PAP.EditPost(n2e(text_?), newMarkup = Option(markup_?),
+        buildAction(PAP.EditPost(n2e(text_?),
           autoApplied = editAutoApplied, approval = approval))
       case "EditApp" =>
         val editId = relpa getOrElse throwBadDatabaseData(

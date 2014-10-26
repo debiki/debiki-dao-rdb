@@ -382,7 +382,6 @@ object FullTextSearchIndexer {
     |    "sectionPageIds":               {"type": "string", "index": "not_analyzed"},
     |    "createdAt":                    {"type": "date"},
     |    "currentText":                  {"type": "string", "index": "no"},
-    |    "currentMarkup":                {"type": "string", "index": "no"},
     |    "anyDirectApproval":            {"type": "string", "index": "no"},
     |    "where":                        {"type": "string", "index": "no"},
     |    "loginId":                      {"type": "string", "index": "not_analyzed"},

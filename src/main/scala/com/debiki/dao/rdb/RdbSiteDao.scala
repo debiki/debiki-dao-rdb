@@ -1754,13 +1754,13 @@ class RdbSiteDao(
             GUEST_ID, ROLE_ID, IP,
             BROWSER_ID_COOKIE, BROWSER_FINGERPRINT,
             TENANT, PAGE_ID, POST_ID, PAID, TIME,
-            TYPE, RELPA, TEXT, LONG_VALUE, MARKUP, WHEERE,
+            TYPE, RELPA, TEXT, LONG_VALUE, WHEERE,
             MULTIREPLY, APPROVAL, AUTO_APPLICATION)
           values (
             ?, ?, ?,
             ?, ?,
             ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?,
             ?, ?, ?)"""
 
       // Set the user id and ip to null for the system user. (The user id has to
@@ -1797,7 +1797,7 @@ class RdbSiteDao(
           def insertSimpleValue(tyype: String) =
             db.update(insertIntoActions, commonVals:::List(
               tyype, action.postId.asAnyRef, NullVarchar, NullInt, NullVarchar, NullVarchar,
-              NullVarchar, NullVarchar, NullVarchar))
+              NullVarchar, NullVarchar))
 
       def tryInsertVote(voteString: String) {
         try {
@@ -1813,31 +1813,31 @@ class RdbSiteDao(
           action.payload match {
             case p: PAP.CreatePost =>
               db.update(insertIntoActions, commonVals:::List(
-                "Post", p.parentPostId.orNullInt, e2n(p.text), NullInt, e2n(p.markup),
+                "Post", p.parentPostId.orNullInt, e2n(p.text), NullInt,
                 e2n(p.where), toDbMultireply(p.multireplyPostIds),
                 _toDbVal(p.approval), NullVarchar))
             case e: PAP.EditPost =>
               val autoAppliedDbVal = if (e.autoApplied) "A" else NullVarchar
               db.update(insertIntoActions, commonVals:::List(
-                "Edit", NullInt, e2n(e.text), NullInt, e2n(e.newMarkup), NullVarchar,
+                "Edit", NullInt, e2n(e.text), NullInt, NullVarchar,
                 NullVarchar, _toDbVal(e.approval), autoAppliedDbVal))
             case a: PAP.EditApp =>
               db.update(insertIntoActions, commonVals:::List(
-                "EditApp", a.editId.asAnyRef, NullVarchar, NullInt, NullVarchar,
+                "EditApp", a.editId.asAnyRef, NullVarchar, NullInt,
                 NullVarchar, NullVarchar, _toDbVal(a.approval), NullVarchar))
             case r: PAP.ApprovePost =>
               val tyype = "Aprv"
               db.update(insertIntoActions, commonVals:::List(
-                tyype, NullInt, NullVarchar, NullInt, NullVarchar, NullVarchar,
+                tyype, NullInt, NullVarchar, NullInt, NullVarchar,
                 NullVarchar, _toDbVal(Some(r.approval)), NullVarchar))
             case p: PAP.PinPostAtPosition =>
               db.update(insertIntoActions, commonVals:::List(
                 "PinAtPos", NullInt, NullVarchar, p.position.asAnyRef,
-                NullVarchar, NullVarchar, NullVarchar, NullVarchar, NullVarchar))
+                NullVarchar, NullVarchar, NullVarchar, NullVarchar))
             case f: PAP.Flag =>
               db.update(insertIntoActions, commonVals:::List(
                 "Flag" + f.tyype,
-                NullInt, e2n(f.reason), NullInt, NullVarchar, NullVarchar,
+                NullInt, e2n(f.reason), NullInt, NullVarchar,
                 NullVarchar, NullVarchar, NullVarchar))
 
             case PAP.VoteLike => tryInsertVote("VoteLike")
@@ -2058,7 +2058,6 @@ class RdbSiteDao(
       update DW1_POSTS set
         PARENT_POST_ID = ?,
         MULTIREPLY = ?,
-        MARKUP = ?,
         WHEERE = ?,
         CREATED_AT = ?,
         LAST_ACTED_UPON_AT = ?,
@@ -2125,7 +2124,6 @@ class RdbSiteDao(
       insert into DW1_POSTS (
         PARENT_POST_ID,
         MULTIREPLY,
-        MARKUP,
         WHEERE,
         CREATED_AT,
         LAST_ACTED_UPON_AT,
@@ -2193,8 +2191,7 @@ class RdbSiteDao(
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         ?)"""
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
     val collapsed: AnyRef =
       if (post.isTreeCollapsed) "CollapseTree"
@@ -2209,7 +2206,6 @@ class RdbSiteDao(
     val values = List[AnyRef](
       post.parentId.orNullInt,
       toDbMultireply(post.multireplyPostIds),
-      post.markup,
       post.where.orNullVarchar,
       d2ts(post.creationDati),
       d2ts(post.lastActedUponAt),
@@ -2464,7 +2460,6 @@ class RdbSiteDao(
       parentPostId = getOptionalIntNoneNot0(rs, "PARENT_POST_ID"),
       multireplyPostIds = fromDbMultireply(rs.getString("MULTIREPLY")),
       text = anyUnapprovedText getOrElse anyApprovedText.get,
-      markup = rs.getString("MARKUP"),
       approval = _toAutoApproval(rs.getString("LAST_APPROVAL_TYPE")),
       where = Option(rs.getString("WHEERE")))
 
