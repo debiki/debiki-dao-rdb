@@ -602,6 +602,59 @@ trait UserSiteDaoMixin extends SiteDbDao {
     }
   }
 
+
+  def loadRolePageSettings(roleId: RoleId, pageId: PageId): Option[RolePageSettings] = {
+    val query = i"""
+      select NOTF_LEVEL
+      from DW1_ROLE_PAGE_SETTINGS
+      where SITE_ID = ? and ROLE_ID = ? and PAGE_ID = ?"""
+    val values = List(siteId, roleId, pageId)
+    db.queryAtnms(query, values, rs => {
+      if (!rs.next)
+        return None
+
+      val notfLevel = flagToNotfLevel(rs.getString("NOTF_LEVEL"))
+      return Some(RolePageSettings(notfLevel))
+    })
+  }
+
+
+  def saveRolePageSettings(roleId: RoleId, pageId: PageId, settings: RolePageSettings)  {
+    // Race condition below. Ignore it; a single user is unlikely to update itself
+    // two times simultaneously.
+    val updateDontInsert = loadRolePageSettings(roleId, pageId = pageId).isDefined
+    val sql =
+      if (updateDontInsert) """
+        update DW1_ROLE_PAGE_SETTINGS
+        set NOTF_LEVEL = ?
+        where SITE_ID = ? and ROLE_ID = ? and PAGE_ID = ?"""
+      else """
+        insert into DW1_ROLE_PAGE_SETTINGS(
+          NOTF_LEVEL, SITE_ID, ROLE_ID, PAGE_ID)
+        values (?, ?, ?, ?)"""
+    val values = List(notfLevelToFlag(settings.notfLevel), siteId, roleId, pageId)
+    db.transaction { implicit connection =>
+      db.update(sql, values)
+    }
+  }
+
+
+  private def notfLevelToFlag(notfLevel: PageNotfLevel) = notfLevel match {
+    case PageNotfLevel.Watching => "W"
+    case PageNotfLevel.Tracking => "T"
+    case PageNotfLevel.Regular => "R"
+    case PageNotfLevel.Muted => "M"
+  }
+
+
+  private def flagToNotfLevel(flag: String) = flag match {
+    case "W" => PageNotfLevel.Watching
+    case "T" => PageNotfLevel.Tracking
+    case "R" => PageNotfLevel.Regular
+    case "M" => PageNotfLevel.Muted
+    case x => die("DwE7FK02", s"Bad notf level: `$x'")
+  }
+
 }
 
 
