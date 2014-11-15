@@ -576,21 +576,10 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val seenAt = ts2o(rs.getTimestamp("SEEN_AT"))
 
         val notification = notfTypeStr match {
-          case "M" =>
-            Notification.Mention(
-              siteId = siteId,
-              createdAt = createdAt,
-              pageId = pageId,
-              postId = postId,
-              byUserId = byUserId,
-              toUserId = toUserId,
-              emailId = emailId,
-              emailCreatedAt = emailCreatedAt,
-              seenAt = seenAt)
-          case "R" | "r" | "N" =>
+          case "R" | "M" | "N" =>
             val newPostType = notfTypeStr match {
               case "R" => Notification.NewPostNotfType.DirectReply
-              case "r" => Notification.NewPostNotfType.IndirectReply
+              case "M" => Notification.NewPostNotfType.Mention
               case "N" => Notification.NewPostNotfType.NewPost
             }
             Notification.NewPost(

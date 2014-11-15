@@ -54,12 +54,6 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
       notificationTypeToFlag(notf))
 
     notf match {
-      case mention: Notification.Mention =>
-        values += mention.pageId
-        values += mention.postId.asAnyRef
-        values += NullInt
-        values += mention.byUserId
-        values += mention.toUserId
       case postNotf: Notification.NewPost =>
         values += postNotf.pageId
         values += postNotf.postId.asAnyRef
@@ -110,9 +104,6 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
     val tyype = notificationTypeToFlag(notification)
 
     val (whereClause, values): (String, List[AnyRef]) = notification match {
-      case mention: Notification.Mention =>
-        ("SITE_ID = ? and NOTF_TYPE = ? and PAGE_ID = ? and POST_ID = ? and TO_USER_ID = ?",
-          List(siteId, tyype, mention.pageId, mention.postId.asAnyRef, mention.toUserId))
       case newPost: Notification.NewPost =>
         ("SITE_ID = ? and NOTF_TYPE = ? and PAGE_ID = ? and POST_ID = ? and TO_USER_ID = ?",
           List(siteId, tyype, newPost.pageId, newPost.postId.asAnyRef, newPost.toUserId))
@@ -125,11 +116,10 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
 
 
   def notificationTypeToFlag(notification: Notification): AnyRef = notification match {
-    case _: Notification.Mention => "M"
     case newPostNotf: Notification.NewPost =>
       (newPostNotf.notfType match {
         case Notification.NewPostNotfType.DirectReply => "R"
-        case Notification.NewPostNotfType.IndirectReply => "r"
+        case Notification.NewPostNotfType.Mention => "M"
         case Notification.NewPostNotfType.NewPost => "N"
       }).asAnyRef
   }
