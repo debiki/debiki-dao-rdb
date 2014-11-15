@@ -49,6 +49,12 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     daoFactory.newSiteDbDao(QuotaConsumers(siteId))
 
 
+  def loadUser(siteId: SiteId, userId: UserId): Option[User] = {
+    val userBySiteUserId = loadUsers(Map(siteId -> List(userId)))
+    userBySiteUserId.get((siteId, userId))
+  }
+
+
   // private [this dao package]
   def loadUsers(userIdsByTenant: Map[String, List[String]])
         : Map[(String, String), User] = {
@@ -493,7 +499,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def loadNotfsToMailOut(delayInMinutes: Int, numToLoad: Int): NotfsToMail =
+  def loadNotificationsToMailOut(delayInMinutes: Int, numToLoad: Int)
+        : Map[SiteId, Seq[Notification]] =
     loadNotfsImpl(numToLoad, None, delayMinsOpt = Some(delayInMinutes))
 
 
@@ -502,59 +509,48 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
    * numToLoad + delayMinsOpt --> loads notfs to mail out, for all tenants
    * tenantIdOpt + userIdOpt --> loads that user's notfs
    * tenantIdOpt + emailIdOpt --> loads a single email and notf
-   * @return
    */
-  //private  [this package]
   def loadNotfsImpl(numToLoad: Int, tenantIdOpt: Option[String] = None,
         delayMinsOpt: Option[Int] = None, userIdOpt: Option[String] = None,
-        emailIdOpt: Option[String] = None)
-        : NotfsToMail = {
+        emailIdOpt: Option[String] = None): Map[SiteId, Seq[Notification]] = {
 
+    require(emailIdOpt.isEmpty, "looking up by email id not tested after rewrite")
     require(delayMinsOpt.isEmpty || userIdOpt.isEmpty)
     require(delayMinsOpt.isEmpty || emailIdOpt.isEmpty)
     require(userIdOpt.isEmpty || emailIdOpt.isEmpty)
     require(delayMinsOpt.isDefined != tenantIdOpt.isDefined)
-    require(!userIdOpt.isDefined || tenantIdOpt.isDefined)
-    require(!emailIdOpt.isDefined || tenantIdOpt.isDefined)
+    require(userIdOpt.isEmpty || tenantIdOpt.isDefined)
+    require(emailIdOpt.isEmpty || tenantIdOpt.isDefined)
     require(numToLoad > 0)
     require(emailIdOpt.isEmpty || numToLoad == 1)
-    // When loading email addrs, an SQL in list is used, but
-    // Oracle limits the max in list size to 1000. As a stupid workaround,
-    // don't load more than 1000 notifications at a time.
-    illArgErrIf3(numToLoad >= 1000, "DwE903kI23", "Too long SQL in-list")
 
     val baseQuery = """
-       select
-         TENANT, CTIME, PAGE_ID, PAGE_TITLE,
-         RCPT_ID_SIMPLE, RCPT_ROLE_ID,
-         EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
-         RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME,
-         STATUS, EMAIL_STATUS, EMAIL_SENT, EMAIL_LINK_CLICKED, DEBUG
-       from DW1_NOTFS_PAGE_ACTIONS
-       where """
+      select
+        SITE_ID, NOTF_TYPE, CREATED_AT,
+        PAGE_ID, POST_ID, ACTION_ID,
+        BY_USER_ID, TO_USER_ID,
+        EMAIL_ID, EMAIL_CREATED_AT, SEEN_AT
+      from DW1_NOTIFICATIONS
+      where """
 
-    val (whereOrderBy, vals) = (userIdOpt, emailIdOpt) match {
+    val (whereOrderBy, values) = (userIdOpt, emailIdOpt) match {
       case (Some(uid), None) =>
+        // Later on, could choose to load only those not yet seen.
         var whereOrderBy =
-           "TENANT = ? and "+ (
-           if (uid startsWith "-") "RCPT_ID_SIMPLE = ?"
-           else "RCPT_ROLE_ID = ?"
-           ) +" order by CTIME desc"
-        // IdentitySimple user ids start with '-'.
-        val uidNoDash = uid.dropWhile(_ == '-')
-        val vals = List(tenantIdOpt.get, uidNoDash)
+          "SITE_ID = ? and TO_USER_ID = ? order by CREATED_AT desc"
+        val vals = List(tenantIdOpt.get, uid)
         (whereOrderBy, vals)
       case (None, Some(emailId)) =>
-        val whereOrderBy = "TENANT = ? and EMAIL_SENT = ?"
-        val vals = tenantIdOpt.get::emailId::Nil
+        val whereOrderBy = "SITE_ID = ? and EMAIL_ID = ?"
+        val vals = List(tenantIdOpt.get, emailId)
         (whereOrderBy, vals)
       case (None, None) =>
-        // Load notfs with emails pending, for all tenants.
+        // Load notfs for which emails are to be sent, for all tenants.
         val whereOrderBy =
-           "EMAIL_STATUS = 'P' and CTIME <= ? order by CTIME asc"
+          "EMAIL_CREATED_AT is null and CREATED_AT <= ? order by CREATED_AT asc"
         val nowInMillis = (new ju.Date).getTime
         val someMinsAgo =
-           new ju.Date(nowInMillis - delayMinsOpt.get * 60 * 1000)
+          new ju.Date(nowInMillis - delayMinsOpt.get.toLong * 60 * 1000)
         val vals = someMinsAgo::Nil
         (whereOrderBy, vals)
       case _ =>
@@ -563,46 +559,59 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     val query = baseQuery + whereOrderBy +" limit "+ numToLoad
     var notfsByTenant =
-       Map[String, List[NotfOfPageAction]]().withDefaultValue(Nil)
+       Map[SiteId, List[Notification]]().withDefaultValue(Nil)
 
-    db.queryAtnms(query, vals, rs => {
+    db.queryAtnms(query, values, rs => {
       while (rs.next) {
-        val tenantId = rs.getString("TENANT")
-        val eventTypeStr = rs.getString("EVENT_TYPE")
-        val rcptIdSimple = rs.getString("RCPT_ID_SIMPLE")
-        val rcptRoleId = rs.getString("RCPT_ROLE_ID")
-        val rcptUserId =
-          if (rcptRoleId ne null) rcptRoleId
-          else "-"+ rcptIdSimple
-        val notf = NotfOfPageAction(
-          ctime = ts2d(rs.getTimestamp("CTIME")),
-          recipientUserId = rcptUserId,
-          pageTitle = rs.getString("PAGE_TITLE"),
-          pageId = rs.getString("PAGE_ID"),
-          eventType = NotfOfPageAction.Type.PersonalReply,  // for now
-          eventActionId = rs.getInt("EVENT_PGA"),
-          triggerActionId = rs.getInt("TARGET_PGA"),
-          recipientActionId = rs.getInt("RCPT_PGA"),
-          recipientUserDispName = rs.getString("RCPT_USER_DISP_NAME"),
-          eventUserDispName = rs.getString("EVENT_USER_DISP_NAME"),
-          triggerUserDispName = Option(rs.getString("TARGET_USER_DISP_NAME")),
-          emailPending = rs.getString("EMAIL_STATUS") == "P",
-          emailId = Option(rs.getString("EMAIL_SENT")),
-          debug = Option(rs.getString("DEBUG")))
+        val siteId = rs.getString("SITE_ID")
+        val notfTypeStr = rs.getString("NOTF_TYPE")
+        val createdAt = ts2d(rs.getTimestamp("CREATED_AT"))
+        val pageId = rs.getString("PAGE_ID")
+        val postId = rs.getInt("POST_ID")
+        val actionId = rs.getInt("ACTION_ID")
+        val byUserId = rs.getString("BY_USER_ID")
+        val toUserId = rs.getString("TO_USER_ID")
+        val emailId = Option(rs.getString("EMAIL_ID"))
+        val emailCreatedAt = ts2o(rs.getTimestamp("EMAIL_CREATED_AT"))
+        val seenAt = ts2o(rs.getTimestamp("SEEN_AT"))
 
-        // Add notf to the list of all notifications for siteId.
-        val notfsForTenant: List[NotfOfPageAction] = notfsByTenant(tenantId)
-        notfsByTenant = notfsByTenant + (tenantId -> (notf::notfsForTenant))
+        val notification = notfTypeStr match {
+          case "M" =>
+            Notification.Mention(
+              siteId = siteId,
+              createdAt = createdAt,
+              pageId = pageId,
+              postId = postId,
+              byUserId = byUserId,
+              toUserId = toUserId,
+              emailId = emailId,
+              emailCreatedAt = emailCreatedAt,
+              seenAt = seenAt)
+          case "R" | "r" | "N" =>
+            val newPostType = notfTypeStr match {
+              case "R" => Notification.NewPostNotfType.DirectReply
+              case "r" => Notification.NewPostNotfType.IndirectReply
+              case "N" => Notification.NewPostNotfType.NewPost
+            }
+            Notification.NewPost(
+              notfType = newPostType,
+              siteId = siteId,
+              createdAt = createdAt,
+              pageId = pageId,
+              postId = postId,
+              byUserId = byUserId,
+              toUserId = toUserId,
+              emailId = emailId,
+              emailCreatedAt = emailCreatedAt,
+              seenAt = seenAt)
+        }
+
+        val notfsForTenant: List[Notification] = notfsByTenant(siteId)
+        notfsByTenant = notfsByTenant + (siteId -> (notification::notfsForTenant))
       }
     })
 
-    val userIdsByTenant: Map[String, List[String]] =
-       notfsByTenant.mapValues(_.map(_.recipientUserId))
-
-    val usersByTenantAndId: Map[(String, String), User] =
-      loadUsers(userIdsByTenant)
-
-    NotfsToMail(notfsByTenant, usersByTenantAndId)
+    notfsByTenant
   }
 
 
@@ -731,7 +740,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_SETTINGS
       delete from DW1_ROLE_PAGE_SETTINGS
       delete from DW1_POSTS_READ_STATS
-      delete from DW1_NOTFS_PAGE_ACTIONS
+      delete from DW1_NOTIFICATIONS
       delete from DW1_EMAILS_OUT
       delete from DW1_PAGE_ACTIONS
       delete from DW1_PATHS

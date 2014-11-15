@@ -49,6 +49,7 @@ class RdbSiteDao(
   with UserActionInfoSiteDaoMixin
   with LoginSiteDaoMixin
   with PostsReadStatsSiteDaoMixin
+  with NotificationsSiteDaoMixin
   with SettingsSiteDaoMixin {
 
 
@@ -1100,94 +1101,10 @@ class RdbSiteDao(
   }
 
 
-  def saveNotfs(notfs: Seq[NotfOfPageAction]) {
-    db.transaction { implicit connection =>
-      saveNotfsImpl(notfs)(connection)
-    }
-  }
-
-
-  private def saveNotfsImpl(notfs: Seq[NotfOfPageAction])(implicit connection: js.Connection) {
-      val valss: List[List[AnyRef]] = for (notf <- notfs.toList) yield List(
-        siteId, notf.ctime, notf.pageId, notf.pageTitle take 80,
-        notf.recipientIdtySmplId.orNullVarchar,
-        notf.recipientRoleId.orNullVarchar,
-        notf.eventType.toString,
-        notf.eventActionId.asAnyRef,
-        notf.triggerActionId.asAnyRef,
-        notf.recipientActionId.asAnyRef,
-        notf.recipientUserDispName, notf.eventUserDispName,
-        notf.triggerUserDispName.orNullVarchar,
-        if (notf.emailPending) "P" else NullVarchar,
-        notf.debug.orNullVarchar)
-
-      db.batchUpdate("""
-        insert into DW1_NOTFS_PAGE_ACTIONS(
-            TENANT, CTIME, PAGE_ID, PAGE_TITLE,
-            RCPT_ID_SIMPLE, RCPT_ROLE_ID,
-            EVENT_TYPE, EVENT_PGA, TARGET_PGA, RCPT_PGA,
-            RCPT_USER_DISP_NAME, EVENT_USER_DISP_NAME, TARGET_USER_DISP_NAME,
-            EMAIL_STATUS, DEBUG)
-          values (
-            ?, ?, ?, ?,
-            ?, ?,
-            ?, ?, ?, ?,
-            ?, ?, ?,
-            ?, ?)
-        """, valss)
-  }
-
-
-  private def _connectNotfsToEmail(
-        notfs: Seq[NotfOfPageAction], emailId: Option[String],
-        debug: Option[String])
-        (implicit connection: js.Connection) {
-
-    val valss: List[List[AnyRef]] =
-      for (notf <- notfs.toList) yield List(
-         emailId.orNullVarchar, debug.orNullVarchar,
-         siteId, notf.pageId, notf.eventActionId.asAnyRef,
-         notf.recipientActionId.asAnyRef)
-
-    db.batchUpdate("""
-      update DW1_NOTFS_PAGE_ACTIONS
-      set MTIME = now(), EMAIL_STATUS = null, EMAIL_SENT = ?, DEBUG = ?
-      where
-        TENANT = ? and PAGE_ID = ? and EVENT_PGA = ? and RCPT_PGA = ?
-      """, valss)
-  }
-
-
-  def loadNotfsForRole(userId: UserId): Seq[NotfOfPageAction] = {
-    val numToLoad = 50 // for now
-    val notfsToMail = systemDaoSpi.loadNotfsImpl(   // SHOULD specify consumers
-       numToLoad, Some(siteId), userIdOpt = Some(userId))
-    // All loaded notifications are to userId only.
-    notfsToMail.notfsByTenant(siteId)
-  }
-
-
-  def loadNotfByEmailId(emailId: String): Option[NotfOfPageAction] = {
-    val notfsToMail =   // SHOULD specify consumers
-       systemDaoSpi.loadNotfsImpl(1, Some(siteId), emailIdOpt = Some(emailId))
-    val notfs = notfsToMail.notfsByTenant(siteId)
-    assert(notfs.length <= 1)
-    notfs.headOption
-  }
-
-
-  def skipEmailForNotfs(notfs: Seq[NotfOfPageAction], debug: String) {
-    db.transaction { implicit connection =>
-      _connectNotfsToEmail(notfs, emailId = None, debug = Some(debug))
-    }
-  }
-
-
-  def saveUnsentEmailConnectToNotfs(email: Email,
-        notfs: Seq[NotfOfPageAction]) {
+  def saveUnsentEmailConnectToNotfs(email: Email, notfs: Seq[Notification]) {
     db.transaction { implicit connection =>
       _saveUnsentEmail(email)
-      _connectNotfsToEmail(notfs, Some(email.id), debug = None)
+      updateNotificationConnectToEmail(notfs, Some(email))
     }
   }
 
@@ -1674,10 +1591,6 @@ class RdbSiteDao(
 
     // Save new actions.
     val actionsWithIds = insertActions(page.id, actions)
-
-    // Notify users whose posts were affected (e.g. if someone got a new reply).
-    val notfs = NotfGenerator(page.parts, actionsWithIds).generateNotfs
-    saveNotfsImpl(notfs)(conn)
 
     // Update cached post states (e.g. the current text of a comment).
     val newParts = page.parts ++ actionsWithIds

@@ -82,6 +82,11 @@ package specs {
   import tck.dao.specs._
 
 
+  /** In Play's console:   test-only com.debiki.dao.rdb.specs.NotificationsSpecRunner
+    */
+  class NotificationsSpecRunner extends NotificationsSpec(daoFactoryNoSearchEngine)
+    with DbDaoSpecShutdown
+
   /** In Play's console:   test-only com.debiki.dao.rdb.specs.UserInfoSpecRunner
     */
   class UserInfoSpecRunner extends UserInfoSpec(daoFactoryNoSearchEngine) with DbDaoSpecShutdown
