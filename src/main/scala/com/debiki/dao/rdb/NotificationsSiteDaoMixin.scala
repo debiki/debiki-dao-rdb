@@ -67,7 +67,30 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
 
 
   private def deleteNotf(notfToDelete: NotificationToDelete)(implicit connection: js.Connection) {
-    ???
+    val (sql, values: List[AnyRef]) = notfToDelete match {
+      case mentionToDelete: NotificationToDelete.MentionToDelete =>
+        val sql = """
+          delete from DW1_NOTIFICATIONS
+          where SITE_ID = ?
+            and NOTF_TYPE = 'M'
+            and PAGE_ID = ?
+            and POST_ID = ?
+            and TO_USER_ID = ?"""
+        val values = List(siteId, mentionToDelete.pageId, mentionToDelete.postId.asAnyRef,
+          mentionToDelete.toUserId)
+        (sql, values)
+      case postToDelete: NotificationToDelete.NewPostToDelete =>
+        val sql = """
+          delete from DW1_NOTIFICATIONS
+          where SITE_ID = ?
+            and NOTF_TYPE in ('M', 'R', 'N') -- for now
+            and PAGE_ID = ?
+            and POST_ID = ?"""
+        val values = List(siteId, postToDelete.pageId, postToDelete.postId.asAnyRef)
+        (sql, values)
+    }
+
+    db.update(sql, values)
   }
 
 
