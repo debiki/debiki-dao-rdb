@@ -639,6 +639,22 @@ trait UserSiteDaoMixin extends SiteDbDao {
   }
 
 
+  def loadUserIdsWatchingPage(pageId: PageId): Seq[UserId] = {
+    // For now, ignore users watching any parent categories, consider `pageId` itself only.
+    val sql = """
+      select ROLE_ID
+      from DW1_ROLE_PAGE_SETTINGS
+      where SITE_ID = ? and PAGE_ID = ? and NOTF_LEVEL = 'W'"""
+    var result = List[UserId]()
+    db.queryAtnms(sql, List(siteId, pageId), rs => {
+      while (rs.next()) {
+        result ::= rs.getString("ROLE_ID")
+      }
+    })
+    result
+  }
+
+
   private def notfLevelToFlag(notfLevel: PageNotfLevel) = notfLevel match {
     case PageNotfLevel.Watching => "W"
     case PageNotfLevel.Tracking => "T"
