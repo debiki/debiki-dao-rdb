@@ -22,6 +22,7 @@ import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
 import scala.collection.mutable
+import NotificationsSiteDaoMixin._
 import Rdb._
 
 
@@ -122,7 +123,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
         (connection: js.Connection) {
 
     val baseSql =
-      "update DW1_NOTIFICATIONS set EMAIL_ID = ?, EMAIL_CREATED_AT = ? where "
+      "update DW1_NOTIFICATIONS set EMAIL_ID = ?, EMAIL_STATUS = ? where "
 
     val tyype = notificationTypeToFlag(notification)
 
@@ -132,9 +133,13 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
           List(siteId, tyype, newPost.pageId, newPost.postId.asAnyRef, newPost.toUserId))
     }
 
+    val emailStatus =
+      if (email.isDefined) Notification.EmailStatus.Created
+      else Notification.EmailStatus.Skipped
+
     db.update(
       baseSql + whereClause,
-      email.map(_.id).orNullVarchar :: d2ts(new ju.Date) :: values)(connection)
+      email.map(_.id).orNullVarchar :: emailStatusToFlag(emailStatus) :: values)(connection)
   }
 
 
@@ -146,4 +151,24 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
         case Notification.NewPostNotfType.NewPost => "N"
       }).asAnyRef
   }
+
 }
+
+
+object NotificationsSiteDaoMixin {
+
+  def emailStatusToFlag(status: Notification.EmailStatus) = status match {
+    case Notification.EmailStatus.Created => "C"
+    case Notification.EmailStatus.Skipped => "S"
+    case Notification.EmailStatus.Undecided => "U"
+  }
+
+  def flagToEmailStatus(flag: String) = flag match {
+    case "C" => Notification.EmailStatus.Created
+    case "S" => Notification.EmailStatus.Skipped
+    case "U" => Notification.EmailStatus.Undecided
+    case _ => die("DwEKEF05W3", s"Bad email status: `$flag'")
+  }
+
+}
+

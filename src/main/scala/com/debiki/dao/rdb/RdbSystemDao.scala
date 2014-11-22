@@ -31,6 +31,7 @@ import scala.collection.{mutable => mut}
 import scala.collection.mutable.StringBuilder
 import Rdb._
 import RdbUtil._
+import NotificationsSiteDaoMixin.flagToEmailStatus
 
 
 class RdbSystemDao(val daoFactory: RdbDaoFactory)
@@ -529,7 +530,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         SITE_ID, NOTF_TYPE, CREATED_AT,
         PAGE_ID, POST_ID, ACTION_ID,
         BY_USER_ID, TO_USER_ID,
-        EMAIL_ID, EMAIL_CREATED_AT, SEEN_AT
+        EMAIL_ID, EMAIL_STATUS, SEEN_AT
       from DW1_NOTIFICATIONS
       where """
 
@@ -545,9 +546,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val vals = List(tenantIdOpt.get, emailId)
         (whereOrderBy, vals)
       case (None, None) =>
-        // Load notfs for which emails are to be sent, for all tenants.
+        // Load notfs for which emails perhaps are to be sent, for all tenants.
         val whereOrderBy =
-          "EMAIL_CREATED_AT is null and CREATED_AT <= ? order by CREATED_AT asc"
+          "EMAIL_STATUS = 'U' and CREATED_AT <= ? order by CREATED_AT asc"
         val nowInMillis = (new ju.Date).getTime
         val someMinsAgo =
           new ju.Date(nowInMillis - delayMinsOpt.get.toLong * 60 * 1000)
@@ -572,7 +573,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val byUserId = rs.getString("BY_USER_ID")
         val toUserId = rs.getString("TO_USER_ID")
         val emailId = Option(rs.getString("EMAIL_ID"))
-        val emailCreatedAt = ts2o(rs.getTimestamp("EMAIL_CREATED_AT"))
+        val emailStatus = flagToEmailStatus(rs.getString("EMAIL_STATUS"))
         val seenAt = ts2o(rs.getTimestamp("SEEN_AT"))
 
         val notification = notfTypeStr match {
@@ -591,7 +592,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
               byUserId = byUserId,
               toUserId = toUserId,
               emailId = emailId,
-              emailCreatedAt = emailCreatedAt,
+              emailStatus = emailStatus,
               seenAt = seenAt)
         }
 

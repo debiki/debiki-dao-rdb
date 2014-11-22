@@ -26,7 +26,7 @@ create table dw1_notifications (
   by_user_id varchar,
   to_user_id varchar not null,
   email_id varchar,
-  email_created_at timestamp,
+  email_status varchar default 'U' not null,
   seen_at timestamp,
   constraint dw1_notfs_type__c_in check (notf_type in (
     'M',   -- @mentioned
@@ -70,5 +70,5 @@ create unique index dw1_ntfs_action__u on dw1_notifications (
 create index dw1_ntfs_emailid on dw1_notifications (site_id, email_id);
 
 -- When loading notfs to mail out.
-create index dw1_ntfs_createdat on dw1_notifications (created_at) where email_created_at is null;
+create index dw1_ntfs_createdat on dw1_notifications (created_at) where email_status = 'U';
 
