@@ -104,6 +104,8 @@ DW2_PAGE_RATINGS.PAID -> POST_ID
 
 DW1_USERS.SUPERADMIN -> DW1_ROLES.IS_ADMIN
 
+Rename DW1_USERS.DISPLAY_NAME -> FULL_NAME?, set not null, remove null checks in  listUsernamesOnPage and  listUsernamesWithPrefix
+
 ??? TIME --> DATI (date time)?  CDATI, MDATI, PDATI (publ date time)
 
 Use PAGE.ID not SNO.

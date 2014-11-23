@@ -96,6 +96,11 @@ package specs {
   class UserPageSettingsSpecRunner extends UserPageSettingsSpec(daoFactoryNoSearchEngine)
     with DbDaoSpecShutdown
 
+  /** In Play's console:   test-only com.debiki.dao.rdb.specs.ListUsernamesSpecRunner
+    */
+  class ListUsernamesSpecRunner extends ListUsernamesSpec(daoFactoryNoSearchEngine)
+    with DbDaoSpecShutdown
+
   /** In Play's console:   test-only com.debiki.dao.rdb.specs.PostsReadStatsSpecRunner
     */
   class PostsReadStatsSpecRunner extends PostsReadStatsSpec(daoFactoryNoSearchEngine)

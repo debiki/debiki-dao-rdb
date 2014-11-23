@@ -530,6 +530,57 @@ trait UserSiteDaoMixin extends SiteDbDao {
   }
 
 
+  def listUsernames(pageId: PageId, prefix: String): Seq[NameAndUsername] = {
+    if (prefix.isEmpty) {
+      listUsernamesOnPage(pageId)
+    }
+    else {
+      listUsernamesWithPrefix(prefix)
+    }
+  }
+
+
+  def listUsernamesOnPage(pageId: PageId): Seq[NameAndUsername] = {
+    val sql = """
+      select u.DISPLAY_NAME, u.USERNAME
+      from DW1_POSTS p inner join DW1_USERS u
+         on p.SITE_ID = u.TENANT
+        and p.AUTHOR_ID = u.SNO
+        and u.USERNAME is not null
+      where p.SITE_ID = ? and p.PAGE_ID = ?"""
+    val values = List(siteId, pageId)
+    val result = mutable.ArrayBuffer[NameAndUsername]()
+    db.queryAtnms(sql, values, rs => {
+      while (rs.next()) {
+        val fullName = Option(rs.getString("DISPLAY_NAME")) getOrElse ""
+        val username = rs.getString("USERNAME")
+        dieIf(username eq null, "DwE5BKG1")
+        result += NameAndUsername(fullName = fullName, username = username)
+      }
+    })
+    result.to[immutable.Seq]
+  }
+
+
+  def listUsernamesWithPrefix(prefix: String): Seq[NameAndUsername] = {
+    val sql = """
+      select DISPLAY_NAME, USERNAME
+      from DW1_USERS
+      where TENANT = ? and USERNAME like ?
+      """
+    val values = List(siteId, prefix + "%")
+    val result = mutable.ArrayBuffer[NameAndUsername]()
+    db.queryAtnms(sql, values, rs => {
+      while (rs.next()) {
+        result += NameAndUsername(
+          fullName = Option(rs.getString("DISPLAY_NAME")) getOrElse "",
+          username = rs.getString("USERNAME"))
+      }
+    })
+    result.to[immutable.Seq]
+  }
+
+
   def configRole(roleId: RoleId,
         emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean],
         isOwner: Option[Boolean], emailVerifiedAt: Option[Option[ju.Date]]) {
