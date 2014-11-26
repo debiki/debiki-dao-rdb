@@ -8,7 +8,11 @@ create table dw1_role_page_settings (
   constraint dw1_ropgst_site_role_page__p primary key (site_id, role_id, page_id),
   constraint dw1_ropgst_site_page__r__pages foreign key (site_id, page_id) references dw1_pages(tenant, guid), -- index: dw1_ropgst_site_page
   constraint dw1_ropgst_site_role__r__roles foreign key (site_id, role_id) references dw1_users(tenant, sno), -- index: dw1_ropgst_site_role_page__p
-  constraint dw1_ropgst_notflevel__c_in check (notf_level in ('W', 'T', 'R', 'M'))
+  constraint dw1_ropgst_notflevel__c_in check (notf_level in (
+    'W', -- watching
+    'T', -- tracking
+    'R', -- regular
+    'M')) -- muted
 );
 
 create index dw1_ropgst_site_page on dw1_role_page_settings (site_id, page_id);
@@ -31,7 +35,7 @@ create table dw1_notifications (
   constraint dw1_notfs_type__c_in check (notf_type in (
     'M',   -- @mentioned
     'R',   -- direct reply
-    'r',   -- indirect reply
+    -- 'r',   -- indirect reply
     'N')), -- new post or topic in watched topic or category
     -- 'A' -- comment approved
     -- 'Q' -- quoted
