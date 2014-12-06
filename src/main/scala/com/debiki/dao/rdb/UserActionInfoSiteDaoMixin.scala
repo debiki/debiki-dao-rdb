@@ -166,6 +166,11 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
         var votedLike = false
         var votedWrong = false
         var votedOffTopic = false
+        var approved = false
+        var deleted = false
+        var pinned = false
+        var collapsed = false
+        var closed = false
 
         tyype match {
           case "Post" =>
@@ -176,6 +181,11 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
           case "VoteLike" => votedLike = true
           case "VoteWrong" => votedWrong = true
           case "VoteOffTopic" => votedOffTopic = true
+          case "Aprv" => approved = true
+          case "DelTree" | "DelPost" => deleted = true
+          case "PinAtPos" | "PinVotes" => pinned = true
+          case "CollapsePost" | "CollapseTree" => collapsed = true
+          case "CloseTree" => closed = true
           case _ => // ignore, for now
         }
 
@@ -195,6 +205,11 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
           createdNewPage = createdNewPage,
           repliedToPostId = repliedToPostId,
           editedPostId = editedPostId,
+          approved = approved,
+          deleted = deleted,
+          pinned = pinned,
+          collapsed = collapsed,
+          closed = closed,
           votedLike = votedLike,
           votedWrong = votedWrong,
           votedOffTopic = votedOffTopic)
