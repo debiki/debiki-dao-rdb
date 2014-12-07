@@ -706,6 +706,48 @@ trait UserSiteDaoMixin extends SiteDbDao {
   }
 
 
+  def loadRolePreferences(roleId: RoleId): Option[UserPreferences] = {
+    // In the future, I guess lists of forum categories that should be
+    // muted or watched will be loaded from DW1_ROLE_PAGE_SETTINGS here too.
+    val sql = s"""
+      select DISPLAY_NAME, USERNAME, EMAIL, WEBSITE
+      from DW1_USERS u
+      where TENANT = ? and SNO = ?"""
+    val values = List(siteId, roleId)
+    db.queryAtnms(sql, values, rs => {
+      if (!rs.next()) {
+        None
+      }
+      else {
+        val prefs = UserPreferences(
+          userId = roleId,
+          fullName = dn2e(rs.getString("DISPLAY_NAME")),
+          username = Option(rs.getString("USERNAME")),
+          emailAddress = dn2e(rs.getString("EMAIL")),
+          url = dn2e(rs.getString("WEBSITE")),
+          emailForEveryNewPost = false)
+        assErrIf(rs.next(), "DwE80ZQ2")
+        Some(prefs)
+      }
+    })
+  }
+
+
+  def saveRolePreferences(preferences: UserPreferences) {
+    // Lost updates bug here. Ignore, a single user is unlikely to update itself
+    // two times simultaneously.
+    val sql = """
+      update DW1_USERS
+      set DISPLAY_NAME = ?, USERNAME = ?, EMAIL = ?, WEBSITE = ?
+      where TENANT = ? and SNO = ?"""
+    val values = List(e2n(preferences.fullName), preferences.username.orNullVarchar,
+        e2n(preferences.emailAddress), e2n(preferences.url), siteId, preferences.userId)
+    db.transaction { connection =>
+      db.update(sql, values)(connection)
+    }
+  }
+
+
   private def notfLevelToFlag(notfLevel: PageNotfLevel) = notfLevel match {
     case PageNotfLevel.Watching => "W"
     case PageNotfLevel.Tracking => "T"
