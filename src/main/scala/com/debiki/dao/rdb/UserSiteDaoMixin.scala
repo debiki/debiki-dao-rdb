@@ -710,7 +710,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
     // In the future, I guess lists of forum categories that should be
     // muted or watched will be loaded from DW1_ROLE_PAGE_SETTINGS here too.
     val sql = s"""
-      select DISPLAY_NAME, USERNAME, EMAIL, WEBSITE
+      select DISPLAY_NAME, USERNAME, WEBSITE, EMAIL, EMAIL_FOR_EVERY_NEW_POST
       from DW1_USERS u
       where TENANT = ? and SNO = ?"""
     val values = List(siteId, roleId)
@@ -725,7 +725,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
           username = Option(rs.getString("USERNAME")),
           emailAddress = dn2e(rs.getString("EMAIL")),
           url = dn2e(rs.getString("WEBSITE")),
-          emailForEveryNewPost = false)
+          emailForEveryNewPost = rs.getBoolean("EMAIL_FOR_EVERY_NEW_POST"))
         assErrIf(rs.next(), "DwE80ZQ2")
         Some(prefs)
       }
@@ -738,10 +738,12 @@ trait UserSiteDaoMixin extends SiteDbDao {
     // two times simultaneously.
     val sql = """
       update DW1_USERS
-      set DISPLAY_NAME = ?, USERNAME = ?, EMAIL = ?, WEBSITE = ?
+      set DISPLAY_NAME = ?, USERNAME = ?, EMAIL = ?, WEBSITE = ?,
+        EMAIL_FOR_EVERY_NEW_POST = ?
       where TENANT = ? and SNO = ?"""
     val values = List(e2n(preferences.fullName), preferences.username.orNullVarchar,
-        e2n(preferences.emailAddress), e2n(preferences.url), siteId, preferences.userId)
+        e2n(preferences.emailAddress), e2n(preferences.url),
+        preferences.emailForEveryNewPost.asAnyRef, siteId, preferences.userId)
     db.transaction { connection =>
       db.update(sql, values)(connection)
     }

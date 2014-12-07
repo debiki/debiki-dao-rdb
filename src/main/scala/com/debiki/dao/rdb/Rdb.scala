@@ -406,13 +406,14 @@ class Rdb(val dataSource: jxs.DataSource){
         case l: jl.Long => pstmt.setLong(bindPos, l.longValue)
         case l: jl.Float => pstmt.setFloat(bindPos, l.floatValue)
         case l: jl.Double => pstmt.setDouble(bindPos, l.doubleValue)
+        case b: jl.Boolean => pstmt.setBoolean(bindPos, b.booleanValue)
         case s: String => pstmt.setString(bindPos, s)
         case d: js.Date => assErr("DwE0kiesE4", "Use Timestamp not Date")
         case t: js.Time => assErr("DwE96SK3X8", "Use Timestamp not Time")
         case t: js.Timestamp => pstmt.setTimestamp(bindPos, t)
         case d: ju.Date => pstmt.setTimestamp(bindPos, d2ts(d))
         case Null(sqlType) => pstmt.setNull(bindPos, sqlType)
-        case x => unimplemented("Binding this: "+ classNameOf(x))
+        case x => die("DwE60KF2F5", "Cannot bind this: "+ classNameOf(x))
       }
       bindPos += 1
     }
