@@ -691,18 +691,28 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
 
   def loadUserIdsWatchingPage(pageId: PageId): Seq[UserId] = {
+    // Load people watching pageId only.
     // For now, ignore users watching any parent categories, consider `pageId` itself only.
     val sql = """
       select ROLE_ID
       from DW1_ROLE_PAGE_SETTINGS
       where SITE_ID = ? and PAGE_ID = ? and NOTF_LEVEL = 'W'"""
-    var result = List[UserId]()
+    var result = mutable.ArrayBuffer[UserId]()
     db.queryAtnms(sql, List(siteId, pageId), rs => {
       while (rs.next()) {
-        result ::= rs.getString("ROLE_ID")
+        result += rs.getString("ROLE_ID")
       }
     })
-    result
+
+    // Load people watching the whole site.
+    val sqlWholeSite = """
+      select SNO from DW1_USERS where TENANT = ? and EMAIL_FOR_EVERY_NEW_POST = true"""
+    db.queryAtnms(sqlWholeSite, List(siteId), rs => {
+      while (rs.next()) {
+        result += rs.getString("SNO")
+      }
+    })
+    result.distinct.to[immutable.Seq]
   }
 
 
