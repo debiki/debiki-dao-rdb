@@ -101,7 +101,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao {
       (postId, roleIds.toSet)
     }).toMap
 
-    PostsReadStats(pageId, immutableIpsMap, immutableRolesMap)
+    PostsReadStats(immutableIpsMap, immutableRolesMap)
   }
 
 }

@@ -457,6 +457,8 @@ class RdbSiteDao(
 
     val users = loadUsersOnPage(pageId)
 
+    val postsReadStats = loadPostsReadStats(pageId)
+
     // Load page actions.
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
@@ -482,7 +484,7 @@ class RdbSiteDao(
         }
       }
 
-      Some(PageParts.fromActions(pageId, People(users), actions))
+      Some(PageParts.fromActions(pageId, postsReadStats, People(users), actions))
     })
   }
 
@@ -529,7 +531,7 @@ class RdbSiteDao(
       val people = People(users = loadUsersAsList(userIds.toList))
 
       val posts = states map { case (pageId, state) =>
-        val pageParts = PageParts(pageId, people, state::Nil)
+        val pageParts = PageParts(pageId, None, people, state::Nil)
         val post = pageParts.getPost_!(state.postId)
         post
       }
