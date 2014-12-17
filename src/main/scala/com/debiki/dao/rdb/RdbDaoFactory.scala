@@ -26,6 +26,7 @@ import com.debiki.core._
 class RdbDaoFactory(
   val db: Rdb,
   val actorSystem: ActorSystem,
+  val commonMarkRenderer: CommonMarkRenderer,
   val fullTextSearchDbDataPath: Option[String],
   val isTest: Boolean = false,
   val fastStartSkipSearch: Boolean = false) extends DbDaoFactory {

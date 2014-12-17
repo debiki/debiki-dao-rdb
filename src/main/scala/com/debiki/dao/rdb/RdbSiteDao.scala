@@ -65,6 +65,8 @@ class RdbSiteDao(
 
   def fullTextSearchIndexer = daoFactory.fullTextSearchIndexer
 
+  def commonMarkRenderer: CommonMarkRenderer = daoFactory.commonMarkRenderer
+
 
   /** Some SQL operations might cause harmless errors, then we try again.
     *
@@ -457,8 +459,6 @@ class RdbSiteDao(
 
     val users = loadUsersOnPage(pageId)
 
-    val postsReadStats = loadPostsReadStats(pageId)
-
     // Load page actions.
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
@@ -484,7 +484,7 @@ class RdbSiteDao(
         }
       }
 
-      Some(PageParts.fromActions(pageId, postsReadStats, People(users), actions))
+      Some(PageParts.fromActions(pageId, this, People(users), actions))
     })
   }
 
