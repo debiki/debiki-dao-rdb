@@ -193,7 +193,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
           userId = userId,
           pageId = pageId,
           pageTitle = "", // filled in later
-          pageRole = PageRole.Generic, // filled in later
+          pageRole = PageRole.WebPage, // filled in later
           postId = postId,
           postExcerpt = "?", // filled in later
           actionId = actionId,

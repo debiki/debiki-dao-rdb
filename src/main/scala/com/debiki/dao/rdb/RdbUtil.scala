@@ -403,8 +403,9 @@ object RdbUtil {
 
 
   def _toPageRole(pageRoleString: String): PageRole = pageRoleString match {
-    case null => PageRole.Generic
-    case "G" => PageRole.Generic
+    case null => PageRole.WebPage
+    case "H" => PageRole.HomePage
+    case "P" => PageRole.WebPage
     case "EC" => PageRole.EmbeddedComments
     case "B" => PageRole.Blog
     case "BP" => PageRole.BlogPost
@@ -418,12 +419,13 @@ object RdbUtil {
     case _ =>
       warnDbgDie(
         "Bad page role string: "+ pageRoleString +" [error DwE390KW8]")
-      PageRole.Generic
+      PageRole.WebPage
   }
 
 
   def _pageRoleToSql(pageRole: PageRole): AnyRef = pageRole match {
-    case PageRole.Generic => "G"
+    case PageRole.HomePage => "H"
+    case PageRole.WebPage => "P"
     case PageRole.EmbeddedComments => "EC"
     case PageRole.Blog => "B"
     case PageRole.BlogPost => "BP"

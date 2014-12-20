@@ -988,7 +988,7 @@ class RdbSiteDao(
 
     val pageRoleTestAnd = filterPageRole match {
       case Some(pageRole) =>
-        illArgIf(pageRole == PageRole.Generic, "DwE20kIR8")
+        illArgIf(pageRole == PageRole.WebPage, "DwE20kIR8")
         values :+= _pageRoleToSql(pageRole)
         "g.PAGE_ROLE = ? and"
       case None => ""
