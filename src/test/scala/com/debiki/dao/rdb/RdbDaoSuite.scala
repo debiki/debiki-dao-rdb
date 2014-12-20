@@ -28,6 +28,9 @@ import com.typesafe.config.{ConfigFactory, Config}
 /** The database test suite,  runs all database tests.
   *
   * Run like so:   test-only com.debiki.dao.rdb.RdbDaoSuite
+  *
+  * Run the old suite like so:   test-only com.debiki.dao.rdb.RdbDaoSpecOld
+  * (the one in RdbDaoSpecOld.scala)
   */
 class RdbDaoSuite extends tck.dao.DbDaoSuite(RdbDaoSuite.daoFactory)
 
@@ -59,11 +62,19 @@ object RdbDaoSuite {
     ds.setPassword(config.getString("db.test.password"))
 
     val db = new Rdb(ds)
-    val daoFactory = new RdbDaoFactory(db, ActorSystem("TestActorSystem"),
+    val daoFactory = new RdbDaoFactory(db, ActorSystem("TestActorSystem"), DummyCommonMarkRenderer,
       fullTextSearchDbDataPath = Some("target/elasticsearch-data"), isTest = true,
       fastStartSkipSearch = !withSearchEngine)
 
     daoFactory
+  }
+
+  object DummyCommonMarkRenderer extends CommonMarkRenderer {
+    def renderAndSanitizeCommonMark(commonMarkSource: String,
+          allowClassIdDataAttrs: Boolean, followLinks: Boolean) =
+      commonMarkSource.toUpperCase
+
+    def sanitizeHtml(text: String) = text.toUpperCase
   }
 
 }
