@@ -150,42 +150,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def checkInstallationStatus(): InstallationStatus = {
-    // If there is any single owner, there should be an owner for the very
-    // first site, because the very first owner created is the very
-    // first site's owner.
-
-    val sql = """
-      select
-        (select count(*) from DW1_TENANTS) num_sites,
-        (select count(*) from DW1_USERS where IS_OWNER = 'T') num_owners
-      """
-
-    db.queryAtnms(sql, Nil, rs => {
-      rs.next()
-      val numSites = rs.getInt("num_sites")
-      val numOwners = rs.getInt("num_owners")
-
-      if (numSites == 0)
-        return InstallationStatus.CreateFirstSite
-
-      if (numOwners == 0)
-        return InstallationStatus.CreateFirstSiteAdmin
-
-      InstallationStatus.AllDone
-    })
-  }
-
-
-  /** Is different from RdbSiteDao._createTenant() in that it doesn't fill in
-    * any CREATOR_... columns, because the database should be empty and there is then
-    * no creator to refer to.
-    */
-  def createFirstSite(firstSiteData: FirstSiteData): Tenant = {
-    createSiteImpl(firstSiteData)
-  }
-
-
   def loadTenants(tenantIds: Seq[String]): Seq[Tenant] = {
     // COULD change so uses 1 connection only, not 2 `queryAtnms`.
     // For now, load only 1 tenant.
@@ -251,7 +215,17 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
             on c.TENANT = t.TENANT and c.CANONICAL = 'C'
         where t.HOST = ?
         """, List(host), rs => {
-      if (!rs.next) return FoundNothing
+      if (!rs.next) {
+        if (Site.Ipv4AnyPortRegex.matches(host)) {
+          // Make it possible to assess the server before any domain has been connected
+          // to it and when we stil don't know its ip, just after installation.
+          return FoundAlias(Site.FirstSiteId, canonicalHostUrl = "",
+            role = TenantHost.RoleDuplicate)
+        }
+        else {
+          return FoundNothing
+        }
+      }
       val tenantId = rs.getString("TID")
       val thisHttps = rs.getString("THIS_HTTPS")
       val (thisRole, chost, chostHttps) = {
@@ -726,7 +700,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       // back.
       db.update("SET CONSTRAINTS ALL DEFERRED");
 
-      """
+      s"""
       delete from DW1_SETTINGS
       delete from DW1_ROLE_PAGE_SETTINGS
       delete from DW1_POSTS_READ_STATS
@@ -743,7 +717,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_QUOTAS
       delete from DW1_USERS
       delete from DW1_TENANT_HOSTS
-      delete from DW1_TENANTS
+      delete from DW1_TENANTS where ID <> '${Site.FirstSiteId}'
       alter sequence DW1_IDS_SNO restart
       alter sequence DW1_PAGES_SNO restart
       alter sequence DW1_TENANTS_ID restart
