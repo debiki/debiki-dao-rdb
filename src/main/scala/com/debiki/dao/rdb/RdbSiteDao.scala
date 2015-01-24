@@ -349,13 +349,15 @@ class RdbSiteDao(
         from dw1_pages
         where
           parent_page_id = ? and
-          page_role = 'FC'),
+          page_role = 'FC' and
+          tenant = ?),
       sub_categories as (
         select parent_page_id category_id, guid sub_categories, cached_title category_name
         from dw1_pages
         where
           parent_page_id in (select category_id from categories) and
-          page_role = 'FC')
+          page_role = 'FC' and
+          tenant = ?)
       select * from categories
       union
       select * from sub_categories
@@ -365,7 +367,7 @@ class RdbSiteDao(
     var allCategories = Vector[Category]()
     var anyCurrentCategory: Option[Category] = None
 
-    db.queryAtnms(sql, List[AnyRef](rootPageId), rs => {
+    db.queryAtnms(sql, List[AnyRef](rootPageId, siteId, siteId), rs => {
       while (rs.next()) {
         val categoryId = rs.getString("category_id")
         val anySubCategoryId = Option(rs.getString("sub_category_id"))
