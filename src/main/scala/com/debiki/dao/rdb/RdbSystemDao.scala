@@ -175,8 +175,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     var tenants = List[Tenant]()
     db.queryAtnms("""
-        select ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_TENANT_ID,
-            CREATOR_ROLE_ID
+        select ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS
         from DW1_TENANTS where ID = ?
         """,
         List(tenantIds.head),
@@ -188,8 +187,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           id = tenantId,
           name = Option(rs.getString("NAME")),
           creatorIp = rs.getString("CREATOR_IP"),
-          creatorTenantId = rs.getString("CREATOR_TENANT_ID"),
-          creatorRoleId = rs.getString("CREATOR_ROLE_ID"),
+          creatorEmailAddress = rs.getString("CREATOR_EMAIL_ADDRESS"),
           embeddingSiteUrl = Option(rs.getString("EMBEDDING_SITE_URL")),
           hosts = hosts)
       }

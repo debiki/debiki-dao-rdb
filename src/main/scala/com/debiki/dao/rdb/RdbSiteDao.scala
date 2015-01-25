@@ -788,59 +788,43 @@ class RdbSiteDao(
   }
 
 
-  // ? Should replace this function with a call to CreateSiteSystemDaoMixin.createSiteImpl ?
-  // And do everything in the same transaction!
-  def createWebsite(name: Option[String], address: Option[String],
-        embeddingSiteUrl: Option[String], ownerIp: String,
-        ownerIdentity: Option[Identity], ownerRole: User)
-        : Option[(Tenant, User)] = {
+  def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
+        creatorIp: String, creatorEmailAddress: String): Tenant = {
     try {
       db.transaction { implicit connection =>
         // Unless apparently testing from localhost, don't allow someone to create
         // very many sites.
-        if (ownerIp != LocalhostAddress) {
-          val websiteCount = _countWebsites(createdFromIp = ownerIp)
+        if (creatorIp != LocalhostAddress) {
+          val websiteCount = countWebsites(
+            createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress)
           if (websiteCount >= MaxWebsitesPerIp)
-            throw TooManySitesCreatedException(ownerIp)
+            throw TooManySitesCreatedException(creatorIp)
         }
 
-        val newTenantNoId = Tenant(id = "?", name = name,
-           creatorIp = ownerIp, creatorTenantId = siteId,
-           creatorRoleId = ownerRole.id,
-           embeddingSiteUrl = embeddingSiteUrl,
-           hosts = Nil)
-        val newTenant = _createTenant(newTenantNoId)
-        val newHosts = address match {
-          case None => Nil
-          case Some(adr) =>
-            val newHost = TenantHost(adr, TenantHost.RoleCanonical, TenantHost.HttpsNone)
-            val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
-            assErrIf(newHostCount != 1, "DwE09KRF3")
-            List(newHost)
-        }
-        val ownerRoleAtNewWebsite = _insertUser(newTenant.id,
-          ownerRole.copy(id = "?",
-            isAdmin = true, isOwner = true))
-        ownerIdentity foreach { identity =>
-          insertIdentity(identity, userId = ownerRoleAtNewWebsite.id,
-            otherSiteId = newTenant.id)(connection)
-        }
-        Some((newTenant.copy(hosts = newHosts), ownerRoleAtNewWebsite))
+        val newTenantNoId = Tenant(id = "?", name = Some(name), creatorIp = creatorIp,
+          creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
+          hosts = Nil)
+        val newTenant = insertSite(newTenantNoId)
+        val newHost = TenantHost(hostname, TenantHost.RoleCanonical, TenantHost.HttpsNone)
+        val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
+        assErrIf(newHostCount != 1, "DwE09KRF3")
+        newTenant.copy(hosts = List(newHost))
       }
     }
     catch {
       case ex: js.SQLException =>
         if (!isUniqueConstrViolation(ex)) throw ex
-        None
+        throw new SiteAlreadyExistsException(name)
     }
   }
 
 
-  private def _countWebsites(createdFromIp: String)
+  private def countWebsites(createdFromIp: String, creatorEmailAddress: String)
         (implicit connection: js.Connection): Int = {
     db.query("""
-        select count(*) WEBSITE_COUNT from DW1_TENANTS where CREATOR_IP = ?
-        """, createdFromIp::Nil, rs => {
+        select count(*) WEBSITE_COUNT from DW1_TENANTS
+        where CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?
+        """, createdFromIp::creatorEmailAddress::Nil, rs => {
       rs.next()
       val websiteCount = rs.getInt("WEBSITE_COUNT")
       websiteCount
@@ -848,19 +832,18 @@ class RdbSiteDao(
   }
 
 
-  private def _createTenant(tenantNoId: Tenant)
+  private def insertSite(tenantNoId: Tenant)
         (implicit connection: js.Connection): Tenant = {
     assErrIf(tenantNoId.id != "?", "DwE91KB2")
     val tenant = tenantNoId.copy(
       id = db.nextSeqNo("DW1_TENANTS_ID").toString)
     db.update("""
         insert into DW1_TENANTS (
-          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP,
-          CREATOR_TENANT_ID, CREATOR_ROLE_ID)
-        values (?, ?, ?, ?, ?, ?)""",
+          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS)
+        values (?, ?, ?, ?, ?)""",
       List[AnyRef](tenant.id, tenant.name.orNullVarchar,
         tenant.embeddingSiteUrl.orNullVarchar, tenant.creatorIp,
-        tenant.creatorTenantId, tenant.creatorRoleId))
+        tenant.creatorEmailAddress))
     tenant
   }
 
