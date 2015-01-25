@@ -788,6 +788,28 @@ class RdbSiteDao(
   }
 
 
+  def loadSiteStatus(): SiteStatus = {
+    val sql = """
+      select
+        exists(select 1 from DW1_USERS where SUPERADMIN = 'T' and TENANT = ?) as admin_exists,
+        exists(select 1 from DW1_PAGES where TENANT = ?) as content_exists,
+        (select CREATOR_EMAIL_ADDRESS from DW1_TENANTS where ID = ?) as admin_email"""
+    db.queryAtnms(sql, List(siteId, siteId, siteId), rs => {
+      rs.next()
+      val adminExists = rs.getBoolean("admin_exists")
+      val contentExists = rs.getBoolean("content_exists")
+      val adminEmail = rs.getString("admin_email")
+
+      if (!adminExists)
+        return SiteStatus.AdminCreationPending(adminEmail)
+
+      if (!contentExists)
+        return SiteStatus.ContentCreationPending
+    })
+    SiteStatus.SiteCreated
+  }
+
+
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
         creatorIp: String, creatorEmailAddress: String): Tenant = {
     try {
