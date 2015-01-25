@@ -716,6 +716,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_USERS
       delete from DW1_TENANT_HOSTS
       delete from DW1_TENANTS where ID <> '${Site.FirstSiteId}'
+      update DW1_TENANTS set NEXT_PAGE_ID = 1
       alter sequence DW1_IDS_SNO restart
       alter sequence DW1_PAGES_SNO restart
       alter sequence DW1_TENANTS_ID restart
