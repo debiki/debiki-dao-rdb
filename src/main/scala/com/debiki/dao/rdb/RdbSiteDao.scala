@@ -793,20 +793,26 @@ class RdbSiteDao(
       select
         exists(select 1 from DW1_USERS where SUPERADMIN = 'T' and TENANT = ?) as admin_exists,
         exists(select 1 from DW1_PAGES where TENANT = ?) as content_exists,
-        (select CREATOR_EMAIL_ADDRESS from DW1_TENANTS where ID = ?) as admin_email"""
-    db.queryAtnms(sql, List(siteId, siteId, siteId), rs => {
+        (select CREATOR_EMAIL_ADDRESS from DW1_TENANTS where ID = ?) as admin_email,
+        (select EMBEDDING_SITE_URL from DW1_TENANTS where ID = ?) as embedding_site_url"""
+    db.queryAtnms(sql, List(siteId, siteId, siteId, siteId), rs => {
       rs.next()
       val adminExists = rs.getBoolean("admin_exists")
       val contentExists = rs.getBoolean("content_exists")
       val adminEmail = rs.getString("admin_email")
+      val anyEmbeddingSiteUrl = Option(rs.getString("embedding_site_url"))
 
       if (!adminExists)
         return SiteStatus.AdminCreationPending(adminEmail)
 
+      if (!contentExists && anyEmbeddingSiteUrl.isDefined)
+        return SiteStatus.IsEmbeddedSite
+
       if (!contentExists)
         return SiteStatus.ContentCreationPending
+
+      return SiteStatus.IsSimpleSite
     })
-    SiteStatus.SiteCreated
   }
 
 
