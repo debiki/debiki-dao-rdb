@@ -803,7 +803,7 @@ class RdbSiteDao(
       val anyEmbeddingSiteUrl = Option(rs.getString("embedding_site_url"))
 
       if (!adminExists)
-        return SiteStatus.AdminCreationPending(adminEmail)
+        return SiteStatus.OwnerCreationPending(adminEmail)
 
       if (!contentExists && anyEmbeddingSiteUrl.isDefined)
         return SiteStatus.IsEmbeddedSite
