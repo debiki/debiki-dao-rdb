@@ -7,6 +7,7 @@ alter table dw1_tenants add constraint dw1_tnt_creatoremail
     check (creator_email_address like '%@%.%');
 
 update dw1_tenants set creator_email_address = 'unknown@example.com';
+update dw1_tenants set creator_ip = '0.0.0.0' where creator_ip is null;
 update dw1_tenants set name = 'embedded-site-' || id where name is null;
 
 alter table dw1_tenants alter creator_email_address set not null;
