@@ -829,7 +829,7 @@ class RdbSiteDao(
             throw TooManySitesCreatedException(creatorIp)
         }
 
-        val newTenantNoId = Tenant(id = "?", name = Some(name), creatorIp = creatorIp,
+        val newTenantNoId = Tenant(id = "?", name = name, creatorIp = creatorIp,
           creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
           hosts = Nil)
         val newTenant = insertSite(newTenantNoId)
@@ -843,6 +843,35 @@ class RdbSiteDao(
       case ex: js.SQLException =>
         if (!isUniqueConstrViolation(ex)) throw ex
         throw new SiteAlreadyExistsException(name)
+    }
+  }
+
+
+  def updateSite(changedSite: Tenant) {
+    val currentSite = loadTenant()
+    require(changedSite.id == this.siteId,
+      "Cannot change site id [DwE32KB80]")
+    require(changedSite.creatorEmailAddress == currentSite.creatorEmailAddress,
+      "Cannot change site creator email address [DwE32KB80]")
+    require(changedSite.creatorIp == currentSite.creatorIp,
+      "Cannot change site creator IP [DwE3BK777]")
+
+    val sql = """
+      update DW1_TENANTS
+      set NAME = ?, EMBEDDING_SITE_URL = ?
+      where ID = ?"""
+    val values =
+      List(changedSite.name, changedSite.embeddingSiteUrl.orNullVarchar, siteId)
+
+    try {
+      db.transaction { implicit connection =>
+        db.update(sql, values)
+      }
+    }
+    catch {
+      case ex: js.SQLException =>
+        if (!isUniqueConstrViolation(ex)) throw ex
+        throw new SiteAlreadyExistsException(changedSite.name)
     }
   }
 
@@ -869,7 +898,7 @@ class RdbSiteDao(
         insert into DW1_TENANTS (
           ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS)
         values (?, ?, ?, ?, ?)""",
-      List[AnyRef](tenant.id, tenant.name.orNullVarchar,
+      List[AnyRef](tenant.id, tenant.name,
         tenant.embeddingSiteUrl.orNullVarchar, tenant.creatorIp,
         tenant.creatorEmailAddress))
     tenant

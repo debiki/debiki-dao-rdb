@@ -185,7 +185,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val hosts = hostsByTenantId(tenantId)
         tenants ::= Tenant(
           id = tenantId,
-          name = Option(rs.getString("NAME")),
+          name = rs.getString("NAME"),
           creatorIp = rs.getString("CREATOR_IP"),
           creatorEmailAddress = rs.getString("CREATOR_EMAIL_ADDRESS"),
           embeddingSiteUrl = Option(rs.getString("EMBEDDING_SITE_URL")),
