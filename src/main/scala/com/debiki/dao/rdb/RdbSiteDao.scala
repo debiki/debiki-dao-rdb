@@ -309,7 +309,7 @@ class RdbSiteDao(
     // for each page, simply use the longest path found.
 
     val result = mut.Map[PageId, List[PageId]]()
-    db.transaction { implicit connection =>
+    db.withConnection { implicit connection =>
       db.query(sql, siteId :: pageIds, rs => {
         while (rs.next()) {
           val sqlArray: java.sql.Array = rs.getArray("path")

@@ -421,7 +421,9 @@ class Rdb(val dataSource: jxs.DataSource){
 
   private def _getConnection(): js.Connection = {
     val conn: js.Connection = dataSource.getConnection()
-    if (conn ne null) conn.setAutoCommit(false)
+    if (conn ne null) {
+      conn.setAutoCommit(false)
+    }
     conn
   }
 
