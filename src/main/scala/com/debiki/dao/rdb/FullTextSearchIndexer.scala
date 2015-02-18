@@ -279,7 +279,7 @@ private[rdb] class IndexingActor(
         // BUG: Race condition if the post is changed *here*. (See comment above.)
         // And, please note: this isn't the actor's thread. This is some thread
         // "controlled" by ElasticSearch.
-        val dao = relDbDaoFactory.newSiteDbDao(QuotaConsumers(siteId))
+        val dao = relDbDaoFactory.newSiteDbDao(siteId)
         dao.rememberPostsAreIndexed(IndexVersion, PagePostId(page.id, post.id))
       }
       def onFailure(throwable: Throwable) {

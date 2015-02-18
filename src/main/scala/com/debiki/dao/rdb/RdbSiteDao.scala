@@ -41,7 +41,7 @@ import RdbUtil._
   * it doesn't have any mutable state.
   */
 class RdbSiteDao(
-  val quotaConsumers: QuotaConsumers,
+  val siteId: SiteId,
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
   with FullTextSearchSiteDaoMixin
@@ -56,8 +56,6 @@ class RdbSiteDao(
   val MaxWebsitesPerIp = 6
 
   val LocalhostAddress = "127.0.0.1"
-
-  def siteId = quotaConsumers.tenantId
 
   def db = systemDaoSpi.db
 

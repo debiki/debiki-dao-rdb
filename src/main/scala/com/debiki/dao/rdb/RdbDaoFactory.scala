@@ -47,8 +47,8 @@ class RdbDaoFactory(
     else new FullTextSearchIndexer(this)
 
 
-  def newSiteDbDao(quotaConsumers: QuotaConsumers) =
-    new RdbSiteDao(quotaConsumers, this)
+  def newSiteDbDao(siteId: SiteId) =
+    new RdbSiteDao(siteId, this)
 
 
   /** Stops any background services started by this factory,
