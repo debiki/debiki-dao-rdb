@@ -33,7 +33,9 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
 
 
   def saveDeleteNotifications(notifications: Notifications) {
-    db.transaction { implicit connection =>
+    // Perhaps we'd better allow notifications to be created and deleted, so that any
+    // site-over-quota notifications get sent.
+    transactionAllowOverQuota { implicit connection =>
       notifications.toCreate foreach { createNotf(_)(connection) }
       notifications.toDelete foreach { deleteNotf(_)(connection) }
     }
@@ -105,7 +107,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
 
 
   def updateNotificationSkipEmail(notifications: Seq[Notification]) {
-    db.transaction { implicit connection =>
+    transactionAllowOverQuota { implicit connection =>
       updateNotificationConnectToEmail(notifications, email = None)
     }
   }

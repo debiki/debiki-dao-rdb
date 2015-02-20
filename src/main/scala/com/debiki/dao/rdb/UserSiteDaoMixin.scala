@@ -41,9 +41,9 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
 
   def createUserAndLogin(newUserData: NewUserData): LoginGrant = {
-    db.transaction(connection => {
+    transactionCheckQuota { connection =>
       createUserAndLoginImpl(newUserData)(connection)
-    })
+    }
   }
 
 
@@ -57,9 +57,9 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
 
   def createPasswordUser(userData: NewPasswordUserData): User = {
-    db.transaction(connection => {
+    transactionCheckQuota { connection =>
       _insertUser(siteId, userData.userNoId)(connection)
-    })
+    }
   }
 
 
@@ -347,7 +347,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
 
   def changePassword(user: User, newPasswordSaltHash: String): Boolean = {
-    db.transaction { implicit connection =>
+    transactionAllowOverQuota { implicit connection =>
       val sql = """
         update DW1_USERS
         set PASSWORD_HASH = ?
@@ -619,7 +619,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
     if (newValues.isEmpty)
       return
 
-    db.transaction { implicit connection =>
+    transactionAllowOverQuota { implicit connection =>
       val sql = s"update DW1_USERS set $changes where TENANT = ? and SNO = ?"
       db.update(sql, newValues.reverse ::: List(siteId, roleId))
     }
@@ -627,7 +627,10 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
 
   def configIdtySimple(ctime: ju.Date, emailAddr: String, emailNotfPrefs: EmailNotfPrefs) {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
+      // SECURITY should stop remembering old rows, or prune table if too many old rows. And after that,
+      // start allowing over quota here (since will be an update only).
+
       // Mark the current row as 'O' (old) -- unless EMAIL_NOTFS is 'F'
       // (Forbidden Forever). Then leave it as is, and let the insert
       // below fail.
@@ -684,7 +687,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
           NOTF_LEVEL, SITE_ID, ROLE_ID, PAGE_ID)
         values (?, ?, ?, ?)"""
     val values = List(notfLevelToFlag(settings.notfLevel), siteId, roleId, pageId)
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
       db.update(sql, values)
     }
   }
@@ -754,7 +757,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
     val values = List(e2n(preferences.fullName), preferences.username.orNullVarchar,
         e2n(preferences.emailAddress), e2n(preferences.url),
         preferences.emailForEveryNewPost.asAnyRef, siteId, preferences.userId)
-    db.transaction { connection =>
+    transactionCheckQuota { connection =>
       db.update(sql, values)(connection)
     }
   }

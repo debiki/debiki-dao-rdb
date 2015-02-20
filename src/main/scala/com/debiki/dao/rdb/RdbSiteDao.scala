@@ -66,6 +66,64 @@ class RdbSiteDao(
   def commonMarkRenderer: CommonMarkRenderer = daoFactory.commonMarkRenderer
 
 
+  def transactionCheckQuota[T](f: (js.Connection) => T): T = {
+    systemDaoSpi.db.transaction { connection =>
+      val resourceUsageBefore = loadResourceUsage(connection)
+      val result = f(connection)
+      val resourceUsageAfter = loadResourceUsage(connection)
+      resourceUsageAfter.quotaLimitMegabytes foreach { limit =>
+        val quotaExceededBytes = resourceUsageAfter.estimatedBytesUsed - limit * 1000L * 1000L
+        if (quotaExceededBytes > 0)
+          throw OverQuotaException(siteId, resourceUsageBefore, resourceUsageAfter)
+      }
+      result
+    }
+  }
+
+
+  def transactionAllowOverQuota[T](f: (js.Connection) => T): T = {
+    systemDaoSpi.db.transaction(f)
+  }
+
+
+  def loadResourceUsage(connection: js.Connection): ResourceUse = {
+    val sql = """
+      select
+        QUOTA_LIMIT_MBS,
+        NUM_GUESTS,
+        NUM_IDENTITIES,
+        NUM_ROLES,
+        NUM_ROLE_SETTINGS,
+        NUM_PAGES,
+        NUM_POSTS,
+        NUM_POST_TEXT_BYTES,
+        NUM_POSTS_READ,
+        NUM_ACTIONS,
+        NUM_ACTION_TEXT_BYTES,
+        NUM_NOTFS,
+        NUM_EMAILS_SENT
+      from DW1_TENANTS where ID = ?"""
+    db.query(sql, List(siteId), rs => {
+      rs.next()
+      dieUnless(rs.isLast(), "DwE59FKQ2")
+      ResourceUse(
+        quotaLimitMegabytes = getResultSetIntOption(rs, "QUOTA_LIMIT_MBS"),
+        numGuests = rs.getInt("NUM_GUESTS"),
+        numIdentities = rs.getInt("NUM_IDENTITIES"),
+        numRoles = rs.getInt("NUM_ROLES"),
+        numRoleSettings = rs.getInt("NUM_ROLE_SETTINGS"),
+        numPages = rs.getInt("NUM_PAGES"),
+        numPosts = rs.getInt("NUM_POSTS"),
+        numPostTextBytes = rs.getLong("NUM_POST_TEXT_BYTES"),
+        numPostsRead = rs.getInt("NUM_POSTS_READ"),
+        numActions = rs.getInt("NUM_ACTIONS"),
+        numActionTextBytes = rs.getLong("NUM_ACTION_TEXT_BYTES"),
+        numNotfs = rs.getInt("NUM_NOTFS"),
+        numEmailsSent = rs.getInt("NUM_EMAILS_SENT"))
+    })(connection)
+  }
+
+
   /** Some SQL operations might cause harmless errors, then we try again.
     *
     * One harmless error: Generating random ids and one happens to clash with
@@ -93,7 +151,7 @@ class RdbSiteDao(
 
 
   def nextPageId(): PageId = {
-    db.transaction { connection =>
+    transactionCheckQuota { connection =>
       nextPageIdImpl(connection)
     }
   }
@@ -111,7 +169,7 @@ class RdbSiteDao(
 
 
   def createPage(pagePerhapsId: Page): Page = {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
       createPageImpl(pagePerhapsId)(connection)
     }
   }
@@ -183,7 +241,7 @@ class RdbSiteDao(
 
 
   def updatePageMeta(meta: PageMeta, old: PageMeta) {
-    db.transaction {
+    transactionCheckQuota {
       _updatePageMeta(meta, anyOld = Some(old))(_)
     }
   }
@@ -399,7 +457,7 @@ class RdbSiteDao(
 
 
   def movePages(pageIds: Seq[PageId], fromFolder: String, toFolder: String) {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
       _movePages(pageIds, fromFolder = fromFolder, toFolder = toFolder)
     }
   }
@@ -440,7 +498,7 @@ class RdbSiteDao(
   def moveRenamePage(pageId: PageId,
         newFolder: Option[String], showId: Option[Boolean],
         newSlug: Option[String]): PagePath = {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
       moveRenamePageImpl(pageId, newFolder = newFolder, showId = showId,
          newSlug = newSlug)
     }
@@ -815,9 +873,9 @@ class RdbSiteDao(
 
 
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
-        creatorIp: String, creatorEmailAddress: String): Tenant = {
+        creatorIp: String, creatorEmailAddress: String, quotaLimitMegabytes: Option[Int]): Tenant = {
     try {
-      db.transaction { implicit connection =>
+      transactionCheckQuota { implicit connection =>
         // Unless apparently testing from localhost, don't allow someone to create
         // very many sites.
         if (creatorIp != LocalhostAddress) {
@@ -830,7 +888,7 @@ class RdbSiteDao(
         val newTenantNoId = Tenant(id = "?", name = name, creatorIp = creatorIp,
           creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
           hosts = Nil)
-        val newTenant = insertSite(newTenantNoId)
+        val newTenant = insertSite(newTenantNoId, quotaLimitMegabytes)
         val newHost = TenantHost(hostname, TenantHost.RoleCanonical, TenantHost.HttpsNone)
         val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
         assErrIf(newHostCount != 1, "DwE09KRF3")
@@ -862,7 +920,7 @@ class RdbSiteDao(
       List(changedSite.name, changedSite.embeddingSiteUrl.orNullVarchar, siteId)
 
     try {
-      db.transaction { implicit connection =>
+      transactionCheckQuota { implicit connection =>
         db.update(sql, values)
       }
     }
@@ -887,24 +945,24 @@ class RdbSiteDao(
   }
 
 
-  private def insertSite(tenantNoId: Tenant)
+  private def insertSite(tenantNoId: Tenant, quotaLimitMegabytes: Option[Int])
         (implicit connection: js.Connection): Tenant = {
     assErrIf(tenantNoId.id != "?", "DwE91KB2")
     val tenant = tenantNoId.copy(
       id = db.nextSeqNo("DW1_TENANTS_ID").toString)
     db.update("""
         insert into DW1_TENANTS (
-          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS)
-        values (?, ?, ?, ?, ?)""",
+          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS, QUOTA_LIMIT_MBS)
+        values (?, ?, ?, ?, ?, ?)""",
       List[AnyRef](tenant.id, tenant.name,
         tenant.embeddingSiteUrl.orNullVarchar, tenant.creatorIp,
-        tenant.creatorEmailAddress))
+        tenant.creatorEmailAddress, quotaLimitMegabytes.orNullInt))
     tenant
   }
 
 
   def addTenantHost(host: TenantHost) = {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
       systemDaoSpi.insertTenantHost(siteId, host)(connection)
     }
   }
@@ -1144,7 +1202,8 @@ class RdbSiteDao(
 
 
   def saveUnsentEmailConnectToNotfs(email: Email, notfs: Seq[Notification]) {
-    db.transaction { implicit connection =>
+    // Allow over quota, so you're over quota emails get sent.
+    transactionAllowOverQuota { implicit connection =>
       _saveUnsentEmail(email)
       updateNotificationConnectToEmail(notfs, Some(email))
     }
@@ -1152,7 +1211,8 @@ class RdbSiteDao(
 
 
   def saveUnsentEmail(email: Email) {
-    db.transaction { _saveUnsentEmail(email)(_) }
+    // Allow over quota, so you're over quota emails get sent.
+    transactionAllowOverQuota { _saveUnsentEmail(email)(_) }
   }
 
 
@@ -1184,7 +1244,7 @@ class RdbSiteDao(
 
 
   def updateSentEmail(email: Email) {
-    db.transaction { implicit connection =>
+    transactionAllowOverQuota { implicit connection =>
 
       val sentOn = email.sentOn.map(d2ts(_)) getOrElse NullTimestamp
       // 'O' means Other, use for now.
@@ -1497,7 +1557,7 @@ class RdbSiteDao(
 
 
   def movePageToItsPreviousLocation(pagePath: PagePath): Option[PagePath] = {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
       movePageToItsPreviousLocationImpl(pagePath)
     }
   }
@@ -1551,7 +1611,7 @@ class RdbSiteDao(
 
 
   def moveRenamePage(newPath: PagePath) {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
       moveRenamePageImpl(newPath)
     }
   }
@@ -1620,7 +1680,7 @@ class RdbSiteDao(
     // lock on the DW1_PAGES row that A's update statement is trying to grab.
     // An E2E test that fails without `tryManyTimes` here is `EditActivitySpec`.
     tryManyTimes(2) {
-      db.transaction { implicit connection =>
+      transactionCheckQuota { implicit connection =>
         savePageActionsImpl(page, actions)
       }
     }
@@ -1929,7 +1989,7 @@ class RdbSiteDao(
 
   def deleteVote(userIdData: UserIdData, pageId: PageId, postId: PostId,
         voteType: PostActionPayload.Vote) {
-    db.transaction { connection =>
+    transactionCheckQuota { connection =>
 
       def deleteVoteByUserId(): Int = {
         val (guestOrRoleSql, guestOrRoleId) =

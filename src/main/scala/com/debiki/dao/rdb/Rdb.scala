@@ -96,6 +96,20 @@ object Rdb {
 
   def tOrNull(bool: Boolean) = if (bool) "T" else NullVarchar
 
+  def getResultSetLongOption(rs: js.ResultSet, column: String): Option[Long] = {
+    // rs.getLong() returns 0 instead of null.
+    var value = rs.getLong(column)
+    if (rs.wasNull) None
+    else Some(value)
+  }
+
+  def getResultSetIntOption(rs: js.ResultSet, column: String): Option[Int] = {
+    // rs.getInt() returns 0 instead of null.
+    var value = rs.getInt(column)
+    if (rs.wasNull) None
+    else Some(value)
+  }
+
   def isUniqueConstrViolation(sqlException: js.SQLException): Boolean = {
     // This status code means "A violation of the constraint imposed
     // by a unique index or a unique constraint occurred".

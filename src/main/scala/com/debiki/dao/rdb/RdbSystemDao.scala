@@ -508,7 +508,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_IDS_SIMPLE_EMAIL
       delete from DW1_GUESTS
       delete from DW1_IDS_OPENID
-      delete from DW1_QUOTAS
       delete from DW1_USERS
       delete from DW1_TENANT_HOSTS
       delete from DW1_TENANTS where ID <> '${Site.FirstSiteId}'

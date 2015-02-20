@@ -49,7 +49,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao {
     // (If we'd like to avoid roundtrips for separate commits, we could enable autocommit?
     // Or insert via a stored procedure? Well, performance hardly matters.)
     for (postId <- postIdsRead) {
-      db.transaction { implicit connection =>
+      transactionCheckQuota { implicit connection =>
         val sql = s"""
           insert into DW1_POSTS_READ_STATS(
             SITE_ID, PAGE_ID, POST_ID, IP, USER_ID, READ_ACTION_ID, READ_AT)

@@ -51,7 +51,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
 
   override def loginAsGuest(loginAttempt: GuestLoginAttempt): GuestLoginResult = {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
       var idtyId = ""
       var emailNotfsStr = ""
       var isNewGuest = false
@@ -153,7 +153,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
 
   private def loginOpenId(loginAttempt: OpenIdLoginAttempt): LoginGrant = {
-    db.transaction { implicit connection =>
+    transactionCheckQuota { implicit connection =>
 
     // Load any matching Identity and the related User.
       val (identityInDb: Option[Identity], userInDb: Option[User]) =
@@ -216,7 +216,7 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
 
   private def loginOpenAuth(loginAttempt: OpenAuthLoginAttempt): LoginGrant = {
-    db.transaction { connection =>
+    transactionCheckQuota { connection =>
       loginOpenAuthImpl(loginAttempt)(connection)
     }
   }

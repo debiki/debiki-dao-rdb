@@ -34,7 +34,7 @@ trait SettingsSiteDaoMixin extends SiteDbDao {
 
 
   def saveSetting(target: SettingsTarget, setting: SettingNameValue[_]) {
-    db.transaction { connection =>
+    transactionCheckQuota { connection =>
       val settingName = setting._1
       deleteSettingImpl(target, settingName)(connection)
       insertSettingImpl(target, setting)(connection)
