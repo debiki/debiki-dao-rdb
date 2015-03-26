@@ -228,7 +228,7 @@ class Rdb(val dataSource: jxs.DataSource){
     var conn: js.Connection = null
     var committed = false
     try {
-      conn = _getConnection()
+      conn = getConnection(readOnly = !commit)
       val result = f(conn)
       if (commit) {
         conn.commit()
@@ -241,7 +241,7 @@ class Rdb(val dataSource: jxs.DataSource){
         //  classNameOf(e) +": "+ e.getMessage.trim)
         throw e
     } finally {
-      _closeEtc(conn, rollback = commit && !committed)
+      _closeEtc(conn, rollback = !committed)
     }
   }
 
@@ -301,7 +301,7 @@ class Rdb(val dataSource: jxs.DataSource){
     var pstmt: js.PreparedStatement = null
     var committed = false
     try {
-      conn2 = if (conn ne null) conn else _getConnection()
+      conn2 = if (conn ne null) conn else getConnection(readOnly = resultSetHandler ne null)
       pstmt = conn2.prepareStatement(query)
       _bind(binds, pstmt)
       //s.setPoolable(false)  // don't cache infrequently used statements
@@ -347,7 +347,7 @@ class Rdb(val dataSource: jxs.DataSource){
     var result = List[Array[Int]]()
     var committed = false
     try {
-      conn2 = if (conn ne null) conn else _getConnection()
+      conn2 = if (conn ne null) conn else getConnection(readOnly = false)
       pstmt = conn2.prepareStatement(stmt)
       var rowCount = 0
       for (values <- batchValues) {
@@ -433,10 +433,12 @@ class Rdb(val dataSource: jxs.DataSource){
     }
   }
 
-  private def _getConnection(): js.Connection = {
+  def getConnection(readOnly: Boolean): js.Connection = {
     val conn: js.Connection = dataSource.getConnection()
     if (conn ne null) {
+      conn.setReadOnly(readOnly)
       conn.setAutoCommit(false)
+      conn.setTransactionIsolation(js.Connection.TRANSACTION_SERIALIZABLE)
     }
     conn
   }
@@ -448,9 +450,17 @@ class Rdb(val dataSource: jxs.DataSource){
     // or rolls back an active transaction prior to calling the close method.
     // If the close method is called and there is an active transaction,
     // the results are implementation-defined."
-    if (conn eq null) return
-    if (rollback) conn.rollback()
-    conn.setAutoCommit(true)  // reset to default mode
+    if (conn eq null)
+      return
+
+    if (rollback) {
+      conn.rollback()
+    }
+
+    // Reset defaults.
+    conn.setReadOnly(false)
+    conn.setAutoCommit(true)
+
     conn.close()
   }
 
