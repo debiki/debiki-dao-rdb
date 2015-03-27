@@ -50,7 +50,8 @@ class RdbSiteDao(
   with LoginSiteDaoMixin
   with PostsReadStatsSiteDaoMixin
   with NotificationsSiteDaoMixin
-  with SettingsSiteDaoMixin {
+  with SettingsSiteDaoMixin
+  with SiteTransaction {
 
 
   val MaxWebsitesPerIp = 6
@@ -65,16 +66,45 @@ class RdbSiteDao(
 
   def commonMarkRenderer: CommonMarkRenderer = daoFactory.commonMarkRenderer
 
+  /** If set, should be the only connection that this dao uses. Some old code doesn't
+    * create it though, then different connections are used instead :-(
+    * I'll rename it to 'connection', when all that old code is gone and there's only
+    * one connection always.
+    */
+  private var theOneAndOnlyConnection: Option[js.Connection] = None
+
+
+  def createTheOneAndOnlyConnection(readOnly: Boolean): Unit = {
+    theOneAndOnlyConnection = Some(db.getConnection(readOnly))
+  }
+
+
+  def commit() {
+    if (theOneAndOnlyConnection.isEmpty)
+      throw new IllegalStateException("No permanent connection created [DwE5KF2]")
+    theOneAndOnlyConnection.get.commit()
+  }
+
+
+  def rollback() {
+    if (theOneAndOnlyConnection.isEmpty)
+      throw new IllegalStateException("No permanent connection created [DwE2K57]")
+    theOneAndOnlyConnection.get.rollback()
+  }
+
 
   def transactionCheckQuota[T](f: (js.Connection) => T): T = {
+    theOneAndOnlyConnection foreach { connection =>
+      // In this case I've moved the over quota check to com.debiki.core.DbDao2.
+      return f(connection)
+    }
     systemDaoSpi.db.transaction { connection =>
-      val resourceUsageBefore = loadResourceUsage(connection)
       val result = f(connection)
-      val resourceUsageAfter = loadResourceUsage(connection)
-      resourceUsageAfter.quotaLimitMegabytes foreach { limit =>
-        val quotaExceededBytes = resourceUsageAfter.estimatedBytesUsed - limit * 1000L * 1000L
+      val resourceUsage = loadResourceUsage(connection)
+      resourceUsage.quotaLimitMegabytes foreach { limit =>
+        val quotaExceededBytes = resourceUsage.estimatedBytesUsed - limit * 1000L * 1000L
         if (quotaExceededBytes > 0)
-          throw OverQuotaException(siteId, resourceUsageBefore, resourceUsageAfter)
+          throw OverQuotaException(siteId, resourceUsage)
       }
       result
     }
@@ -82,8 +112,14 @@ class RdbSiteDao(
 
 
   def transactionAllowOverQuota[T](f: (js.Connection) => T): T = {
+    theOneAndOnlyConnection foreach { connection =>
+      return f(connection)
+    }
     systemDaoSpi.db.transaction(f)
   }
+
+
+  def loadResourceUsage() = loadResourceUsage(theOneAndOnlyConnection.getOrDie("DwENOTOAOC"))
 
 
   def loadResourceUsage(connection: js.Connection): ResourceUse = {

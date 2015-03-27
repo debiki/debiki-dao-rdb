@@ -51,6 +51,18 @@ class RdbDaoFactory(
     new RdbSiteDao(siteId, this)
 
 
+  override def newSiteTransaction(siteId: SiteId, readOnly: Boolean): SiteTransaction = {
+    val dao = newSiteDbDao(siteId)
+    dao.createTheOneAndOnlyConnection(readOnly = readOnly)
+    dao
+  }
+
+
+  override def newSystemTransaction(readOnly: Boolean): SystemTransaction = {
+    ???
+  }
+
+
   /** Stops any background services started by this factory,
     * e.g. a full text search indexer.
     */
