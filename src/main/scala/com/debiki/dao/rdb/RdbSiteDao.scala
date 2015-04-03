@@ -61,13 +61,20 @@ class RdbSiteDao(
 
   def db = systemDaoSpi.db
 
-  def systemDaoSpi = daoFactory.systemDbDao
+  @deprecated("use systemDao instead", "now")
+  def systemDaoSpi = daoFactory.systemDbDao // why this weird name?
+
+  lazy val systemDao: RdbSystemDao = {
+    val transaction = new RdbSystemDao(daoFactory)
+    transaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
+    transaction
+  }
 
   def fullTextSearchIndexer = daoFactory.fullTextSearchIndexer
 
   def commonMarkRenderer: CommonMarkRenderer = daoFactory.commonMarkRenderer
 
-  def currentTime(): ju.Date = ???
+  lazy val currentTime: ju.Date = systemDao.currentTime
 
 
 

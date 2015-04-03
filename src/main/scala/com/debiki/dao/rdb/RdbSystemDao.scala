@@ -145,6 +145,14 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     daoFactory.newSiteDbDao(siteId)
 
 
+  lazy val currentTime: ju.Date = {
+    runQuery("select now() as current_time", Nil, rs => {
+      rs.next()
+      ts2d(rs.getTimestamp("current_time"))
+    })
+  }
+
+
   def loadUser(siteId: SiteId, userId: UserId): Option[User] = {
     val userBySiteUserId = loadUsers(Map(siteId -> List(userId)))
     userBySiteUserId.get((siteId, userId))

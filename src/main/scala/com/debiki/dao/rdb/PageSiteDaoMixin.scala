@@ -164,6 +164,102 @@ trait PageSiteDaoMixin extends SiteDbDao {
   }
 
 
+  def saveEditedPost(post: Post2) {
+    val statement = """
+      update dw2_posts set
+        parent_post_id = ?,
+        multireply = ?,
+
+        last_edited_at = ?,
+        last_edited_by_id = ?,
+        last_approved_edit_at = ?,
+        last_approved_edit_by_id = ?,
+        num_distinct_editors = ?,
+
+        approved_source = ?,
+        approved_html_sanitized = ?,
+        approved_at = ?,
+        approved_by_id = ?,
+        approved_version = ?,
+        current_source_patch = ?,
+        current_version = ?,
+
+        collapsed_status = ?,
+        collapsed_at = ?,
+        collapsed_by_id = ?,
+
+        closed_status = ?,
+        closed_at = ?,
+        closed_by_id = ?,
+
+        hidden_at = ?,
+        hidden_by_id = ?,
+        hidden_reason = ?,
+
+        deleted_status = ?,
+        deleted_at = ?,
+        deleted_by_id = ?,
+
+        pinned_position = ?,
+
+        num_pending_flags = ?,
+        num_handled_flags = ?,
+        num_edit_suggestions = ?,
+
+        num_like_votes = ?,
+        num_wrong_votes = ?,
+        num_collapse_votes = ?,
+        num_times_read = ?
+
+      where site_id = ? and page_id = ? and post_id = ?"""
+
+    val values = List[AnyRef](
+      post.parentId.orNullInt, toDbMultireply(post.multireplyPostIds),
+      o2ts(post.lastEditedAt), post.lastEditedById.orNullInt,
+      o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
+      post.numDistinctEditors.asAnyRef,
+
+      post.approvedSource.orNullVarchar,
+      post.approvedHtmlSanitized.orNullVarchar,
+      o2ts(post.approvedAt),
+      post.approvedById.orNullInt,
+      post.approvedVersion.orNullInt,
+      post.currentSourcePatch.orNullVarchar,
+      post.currentVersion.asAnyRef,
+
+      toCollapsedStatusString(post.collapsedStatus),
+      o2ts(post.collapsedAt),
+      post.collapsedById.orNullInt,
+
+      toClosedStatusString(post.closedStatus),
+      o2ts(post.closedAt),
+      post.closedById.orNullInt,
+
+      o2ts(post.hiddenAt),
+      post.hiddenById.orNullInt,
+      NullVarchar,
+
+      toDeletedStatusString(post.deletedStatus),
+      o2ts(post.deletedAt),
+      post.deletedById.orNullInt,
+
+      post.pinnedPosition.orNullInt,
+
+      post.numPendingFlags.asAnyRef,
+      post.numHandledFlags.asAnyRef,
+      post.numPendingEditSuggestions.asAnyRef,
+
+      post.numLikeVotes.asAnyRef,
+      post.numWrongVotes.asAnyRef,
+      post.numCollapseVotes.asAnyRef,
+      post.numTimesRead.asAnyRef,
+
+      post.siteId, post.pageId, post.id.asAnyRef)
+
+    runUpdate(statement, values)
+  }
+
+
   def readPost(rs: js.ResultSet, pageId: PageId): Post2 = {
     Post2(
       siteId = siteId,
