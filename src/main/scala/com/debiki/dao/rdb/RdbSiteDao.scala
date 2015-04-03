@@ -44,6 +44,7 @@ class RdbSiteDao(
   val siteId: SiteId,
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
+  with PageSiteDaoMixin
   with FullTextSearchSiteDaoMixin
   with UserSiteDaoMixin
   with UserActionInfoSiteDaoMixin
@@ -66,35 +67,64 @@ class RdbSiteDao(
 
   def commonMarkRenderer: CommonMarkRenderer = daoFactory.commonMarkRenderer
 
+  def currentTime(): ju.Date = ???
+
+
+
   /** If set, should be the only connection that this dao uses. Some old code doesn't
     * create it though, then different connections are used instead :-(
     * I'll rename it to 'connection', when all that old code is gone and there's only
     * one connection always.
     */
-  private var theOneAndOnlyConnection: Option[js.Connection] = None
+  def anyOneAndOnlyConnection =
+    _theOneAndOnlyConnection
 
-
-  def createTheOneAndOnlyConnection(readOnly: Boolean): Unit = {
-    theOneAndOnlyConnection = Some(db.getConnection(readOnly))
+  // COULD move to new superclass?
+  def theOneAndOnlyConnection = {
+    if (transactionEnded)
+      throw new IllegalStateException("Transaction has ended [DwE4GKP53]")
+    _theOneAndOnlyConnection getOrElse {
+      die("DwE83KV21")
+    }
   }
 
+  private var _theOneAndOnlyConnection: Option[js.Connection] = None
 
+  // COULD move to new superclass?
+  private var transactionEnded = false
+
+  // COULD move to new superclass?
+  def createTheOneAndOnlyConnection(readOnly: Boolean) {
+    require(_theOneAndOnlyConnection.isEmpty)
+    _theOneAndOnlyConnection = Some(db.getConnection(readOnly))
+  }
+
+  // COULD move to new superclass?
+  def setTheOneAndOnlyConnection(connection: js.Connection) {
+    require(_theOneAndOnlyConnection.isEmpty)
+    _theOneAndOnlyConnection = Some(connection)
+  }
+
+  // COULD move to new superclass?
   def commit() {
-    if (theOneAndOnlyConnection.isEmpty)
+    if (_theOneAndOnlyConnection.isEmpty)
       throw new IllegalStateException("No permanent connection created [DwE5KF2]")
-    theOneAndOnlyConnection.get.commit()
+    theOneAndOnlyConnection.commit()
+    transactionEnded = true
   }
 
 
+  // COULD move to new superclass?
   def rollback() {
-    if (theOneAndOnlyConnection.isEmpty)
+    if (_theOneAndOnlyConnection.isEmpty)
       throw new IllegalStateException("No permanent connection created [DwE2K57]")
-    theOneAndOnlyConnection.get.rollback()
+    theOneAndOnlyConnection.rollback()
+    transactionEnded = true
   }
 
 
   def transactionCheckQuota[T](f: (js.Connection) => T): T = {
-    theOneAndOnlyConnection foreach { connection =>
+    anyOneAndOnlyConnection foreach { connection =>
       // In this case I've moved the over quota check to com.debiki.core.DbDao2.
       return f(connection)
     }
@@ -112,14 +142,35 @@ class RdbSiteDao(
 
 
   def transactionAllowOverQuota[T](f: (js.Connection) => T): T = {
-    theOneAndOnlyConnection foreach { connection =>
+    anyOneAndOnlyConnection foreach { connection =>
       return f(connection)
     }
     systemDaoSpi.db.transaction(f)
   }
 
 
-  def loadResourceUsage() = loadResourceUsage(theOneAndOnlyConnection.getOrDie("DwENOTOAOC"))
+  // COULD move to new superclass?
+  def runQuery[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
+    db.query(query, values, resultSetHandler)(theOneAndOnlyConnection)
+  }
+
+
+  // COULD move to new superclass?
+  def runUpdate(statement: String, values: List[AnyRef] = Nil): Int = {
+    db.update(statement, values)(theOneAndOnlyConnection)
+  }
+
+
+  // COULD move to new superclass?
+  def queryAtnms[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
+    anyOneAndOnlyConnection foreach { connection =>
+      return db.query(query, values, resultSetHandler)(connection)
+    }
+    db.queryAtnms(query, values, resultSetHandler)
+  }
+
+
+  def loadResourceUsage() = loadResourceUsage(theOneAndOnlyConnection)
 
 
   def loadResourceUsage(connection: js.Connection): ResourceUse = {
@@ -240,6 +291,10 @@ class RdbSiteDao(
   }
 
 
+  def loadAllPageMetas(): immutable.Seq[PageMeta] =
+    loadPageMetaImpl(pageIds = Nil, all = true)(theOneAndOnlyConnection).values.to[immutable.Seq]
+
+
   def loadPageMeta(pageId: PageId): Option[PageMeta] = loadPageMeta(pageId, None)
 
 
@@ -251,19 +306,24 @@ class RdbSiteDao(
   def loadPageMetasAsMap(pageIds: Seq[PageId], anySiteId: Option[SiteId] = None)
         : Map[PageId, PageMeta] = {
     if (pageIds.isEmpty) return Map.empty
-    db.withConnection { loadPageMetaImpl(pageIds, anySiteId)(_) }
+    db.withConnection { loadPageMetaImpl(pageIds, all = false, anySiteId)(_) }
   }
 
 
-  def loadPageMetaImpl(pageIds: Seq[PageId], anySiteId: Option[SiteId] = None)(
-        connection: js.Connection): Map[PageId, PageMeta] = {
-    assErrIf(pageIds.isEmpty, "DwE84KF0")
-    val values = anySiteId.getOrElse(siteId) :: pageIds.toList
-    val sql = s"""
+  def loadPageMetaImpl(pageIds: Seq[PageId], all: Boolean = false,
+        anySiteId: Option[SiteId] = None)(connection: js.Connection): Map[PageId, PageMeta] = {
+    assErrIf(pageIds.nonEmpty == all, "DwE84KF0")
+    val values: List[AnyRef] =
+      if (all) List(anySiteId.getOrElse(siteId))
+      else anySiteId.getOrElse(siteId) :: pageIds.toList
+    var sql = s"""
         select g.GUID, ${_PageMetaSelectListItems}
         from DW1_PAGES g
-        where g.TENANT = ? and g.GUID in (${ makeInListFor(pageIds) })
+        where g.TENANT = ?
         """
+    if (!all) {
+      sql += s" and g.GUID in (${ makeInListFor(pageIds) })"
+    }
     var metaByPageId = Map[PageId, PageMeta]()
     db.query(sql, values, rs => {
       while (rs.next) {
@@ -271,7 +331,7 @@ class RdbSiteDao(
         val meta = _PageMeta(rs, pageId = pageId)
         metaByPageId += pageId -> meta
       }
-    })(connection)
+    })(anyOneAndOnlyConnection getOrElse connection)
     metaByPageId
   }
 
@@ -342,6 +402,10 @@ class RdbSiteDao(
       newMeta.parentPageId foreach { updateParentPageChildCount(_, +1) }
     }
   }
+
+
+  def loadAncestorPostIdsParentFirst(pageId: PageId): immutable.Seq[PageId] =
+    loadAncestorIdsParentFirstImpl(pageId)(theOneAndOnlyConnection)
 
 
   override def loadAncestorIdsParentFirst(pageId: PageId): List[PageId] = {
@@ -541,6 +605,9 @@ class RdbSiteDao(
   }
 
 
+  def loadPagePartsOld(pageId: PageId): Option[PageParts] = loadPageParts(pageId)
+
+
   override def loadPageParts(pageGuid: PageId, tenantId: Option[SiteId] = None)
         : Option[PageParts] =
     _loadPagePartsAnyTenant(
@@ -556,7 +623,7 @@ class RdbSiteDao(
     // Load page actions.
     // Order by TIME desc, because when the action list is constructed
     // the order is reversed again.
-    db.queryAtnms("""
+    queryAtnms("""
         select """+ ActionSelectListItems +"""
         from DW1_PAGE_ACTIONS a
         where a.TENANT = ? and a.PAGE_ID = ?
@@ -1326,6 +1393,7 @@ class RdbSiteDao(
         val anyGuestId = Option(rs.getString("TO_GUEST_ID"))
         val anyRoleId = Option(rs.getString("TO_ROLE_ID"))
         val toUserId: Option[UserId] = anyRoleId.orElse(anyGuestId.map("-" + _))
+        dieIf(anyGuestId == Some("1"), "DwE4GKS2", "Guest id matches system user id")
 
         val email = Email(
            id = emailId,

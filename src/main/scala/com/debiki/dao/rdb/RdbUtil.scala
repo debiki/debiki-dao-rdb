@@ -96,7 +96,9 @@ object RdbUtil {
       val anyGuestId = Option(rs.getString("GUEST_ID"))
       val anyRoleId = Option(rs.getString("ROLE_ID"))
       (anyGuestId, anyRoleId) match {
-        case (Some(guestId), None) => "-" + guestId
+        case (Some(guestId), None) =>
+          dieIf(guestId == "1", "DwE8PKB0", "Gusest id matches system user id")
+          "-" + guestId
         case (None, Some(roleId)) => roleId
         case (None, None) =>
           if (isSystemUser) SystemUser.User.id
@@ -204,7 +206,10 @@ object RdbUtil {
   }
 
 
-  def _dummyUserIdFor(identityId: String) = "-"+ identityId
+  def _dummyUserIdFor(identityId: String) = {
+    dieIf(identityId == "1", "DwE0GKf2", "Identity id matches system user id")
+    s"-$identityId"
+  }
 
 
   val _UserSelectListItems =

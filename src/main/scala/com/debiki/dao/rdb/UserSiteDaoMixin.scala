@@ -387,7 +387,55 @@ trait UserSiteDaoMixin extends SiteDbDao {
   }
 
 
-  // SHOULD reuse a `connection: js.Connection` but doesn't
+  def loadUsersOnPageAsMap2(pageId: PageId, siteId: Option[SiteId]): Map[UserId, User] = {
+    require(siteId.isEmpty || siteId.get == this.siteId, "DwE8YQB4") // for now
+    loadUsersOnPage2(pageId).groupBy(_.id).mapValues(_.head)
+  }
+
+
+  def loadUsersOnPage2(pageId: PageId): List[User] = {
+    val sql = s"""
+      select ${_UserSelectListItems}
+      from DW2_POSTS p left join DW1_USERS u
+        on p.SITE_ID = u.TENANT and '' || p.CREATED_BY_ID = u.SNO  -- UserId2 remove '' ||
+        where p.SITE_ID = ?
+          and p.PAGE_ID = ?
+          and p.CREATED_BY_ID >= ${User.LowestNonGuestId}
+      union
+      select
+        '-'||g.ID u_id,
+        g.NAME u_disp_name,
+        null u_username,
+        null u_created_at,
+        g.EMAIL_ADDR u_email,
+        e.EMAIL_NOTFS u_email_notfs,
+        null u_email_verified_at,
+        null u_password_hash,
+        g.LOCATION u_country,
+        g.URL u_website,
+        'F' u_superadmin,
+        'F' u_is_owner
+      from
+        DW2_POSTS p left join DW1_GUESTS g
+          on p.SITE_ID = g.SITE_ID and '' || p.CREATED_BY_ID = '-' || g.ID -- UserId2
+        left join DW1_IDS_SIMPLE_EMAIL e
+           on g.SITE_ID = e.TENANT and g.EMAIL_ADDR = e.EMAIL
+        where p.SITE_ID = ?
+          and p.PAGE_ID = ?
+          and p.CREATED_BY_ID <= ${User.MaxGuestId} """
+
+    val values = List[AnyRef](siteId, pageId, siteId, pageId)
+    var users: List[User] = Nil
+    runQuery(sql, values, rs => {
+      while (rs.next()) {
+        val user = _User(rs)
+        users ::= user
+      }
+    })
+    users
+  }
+
+
   def loadUsersOnPage(pageId: PageId): List[User] = {
     val sql = s"""
       select ${_UserSelectListItems}
@@ -421,7 +469,7 @@ trait UserSiteDaoMixin extends SiteDbDao {
 
     val values = List[AnyRef](siteId, pageId, siteId, pageId)
     var users: List[User] = Nil
-    db.queryAtnms(sql, values, rs => {
+    queryAtnms(sql, values, rs => {
       while (rs.next()) {
         val user = _User(rs)
         users ::= user

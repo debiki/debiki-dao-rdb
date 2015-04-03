@@ -27,7 +27,7 @@ import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
 import org.flywaydb.core.Flyway
 import scala.{collection => col}
-import scala.collection.{mutable => mut}
+import scala.collection.{mutable => mut, immutable}
 import scala.collection.mutable.StringBuilder
 import Rdb._
 import RdbUtil._
@@ -35,11 +35,106 @@ import NotificationsSiteDaoMixin.flagToEmailStatus
 
 
 class RdbSystemDao(val daoFactory: RdbDaoFactory)
-  extends SystemDbDao with CreateSiteSystemDaoMixin {
+  extends SystemDbDao with CreateSiteSystemDaoMixin with SystemTransaction {
 
   def db = daoFactory.db
 
   def close() { db.close() }
+
+
+  /** If set, should be the only connection that this dao uses. Some old code doesn't
+    * create it though, then different connections are used instead :-(
+    * I'll rename it to 'connection', when all that old code is gone and there's only
+    * one connection always.
+    */
+  def anyOneAndOnlyConnection =
+    _theOneAndOnlyConnection
+
+  // COULD move to new superclass?
+  def theOneAndOnlyConnection = {
+    if (transactionEnded)
+      throw new IllegalStateException("Transaction has ended [DwE5KD3W2]")
+    _theOneAndOnlyConnection getOrElse {
+      die("DwE83KV21")
+    }
+  }
+  private var _theOneAndOnlyConnection: Option[js.Connection] = None
+
+  // COULD move to new superclass?
+  private var transactionEnded = false
+
+  def setTheOneAndOnlyConnection(connection: js.Connection) {
+    require(_theOneAndOnlyConnection.isEmpty, "DwE7PKF2")
+    _theOneAndOnlyConnection = Some(connection)
+  }
+
+  def createTheOneAndOnlyConnection(readOnly: Boolean) {
+    require(_theOneAndOnlyConnection.isEmpty, "DwE8PKW2")
+    _theOneAndOnlyConnection = Some(db.getConnection(readOnly))
+  }
+
+
+  // COULD move to new superclass?
+  def commit() {
+    if (_theOneAndOnlyConnection.isEmpty)
+      throw new IllegalStateException("No permanent connection created [DwE5KF2]")
+    theOneAndOnlyConnection.commit()
+    transactionEnded = true
+  }
+
+
+  // COULD move to new superclass?
+  def rollback() {
+    if (_theOneAndOnlyConnection.isEmpty)
+      throw new IllegalStateException("No permanent connection created [DwE2K57]")
+    theOneAndOnlyConnection.rollback()
+    transactionEnded = true
+  }
+
+
+  def withConnection[T](f: (js.Connection) => T): T = {
+    anyOneAndOnlyConnection foreach { connection =>
+      return f(connection)
+    }
+    db.withConnection(f)
+  }
+
+
+  // COULD move to new superclass?
+  def runQuery[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
+    db.query(query, values, resultSetHandler)(theOneAndOnlyConnection)
+  }
+
+
+  // COULD move to new superclass?
+  def runUpdate(statement: String, values: List[AnyRef] = Nil): Int = {
+    db.update(statement, values)(theOneAndOnlyConnection)
+  }
+
+
+  // COULD move to new superclass?
+  def queryAtnms[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
+    anyOneAndOnlyConnection foreach { connection =>
+      return db.query(query, values, resultSetHandler)(connection)
+    }
+    db.queryAtnms(query, values, resultSetHandler)
+  }
+
+
+  def transaction[T](f: (js.Connection) => T): T = {
+    anyOneAndOnlyConnection foreach { connection =>
+      return f(connection)
+    }
+    db.transaction(f)
+  }
+
+
+  override def siteTransaction(siteId: SiteId): SiteTransaction = {
+    val siteTransaction = new RdbSiteDao(siteId, daoFactory)
+    siteTransaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
+    siteTransaction
+  }
+
 
   def checkRepoVersion() = unimplemented
 
@@ -118,9 +213,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     // Build query.
     for ((tenantId, userIds) <- userIdsByTenant.toList) {
-      // Split user ids into distinct authenticated and unauthenticated ids.
-      // Unauthenticated id starts with "-".
-      val (idsUnau, idsAu) = userIds.distinct.partition(_ startsWith "-")
+      val (idsUnau, idsAu) = userIds.distinct.partition(User.isGuestId)
 
       if (idsUnau nonEmpty) growQuery(mkQueryUnau(tenantId, idsUnau))
       if (idsAu nonEmpty) growQuery(mkQueryAu(tenantId, idsAu))
@@ -150,18 +243,28 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def loadTenants(tenantIds: Seq[String]): Seq[Tenant] = {
-    // COULD change so uses 1 connection only, not 2 `queryAtnms`.
+  override def loadSites(): immutable.Seq[Tenant] =
+    loadSitesImpl(all = true).to[immutable.Seq]
+
+
+  def loadTenants(tenantIds: Seq[String]): Seq[Tenant] =
+    if (tenantIds.isEmpty) Nil
+    else loadSitesImpl(tenantIds = tenantIds)
+
+
+  def loadSitesImpl(tenantIds: Seq[String] = Nil, all: Boolean = false): Seq[Tenant] = {
     // For now, load only 1 tenant.
-    require(tenantIds.length == 1)
+    require(tenantIds.length == 1 || all)
 
     var hostsByTenantId = Map[String, List[TenantHost]]().withDefaultValue(Nil)
-    db.queryAtnms("""
-        select TENANT, HOST, CANONICAL, HTTPS from DW1_TENANT_HOSTS
-        where TENANT = ?  -- in the future: where TENANT in (...)
-        """,
-      List(tenantIds.head),
-      rs => {
+    var hostsQuery = "select TENANT, HOST, CANONICAL, HTTPS from DW1_TENANT_HOSTS"
+    var hostsValues: List[AnyRef] = Nil
+    if (!all) {
+      UNTESTED
+      hostsQuery += " where TENANT = ?" // for now, later: in (...)
+      hostsValues = List(tenantIds.head)
+    }
+    queryAtnms(hostsQuery, hostsValues, rs => {
         while (rs.next) {
           val tenantId = rs.getString("TENANT")
           var hosts = hostsByTenantId(tenantId)
@@ -173,13 +276,15 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         }
       })
 
+    var sitesQuery =
+      "select ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS from DW1_TENANTS"
+    var sitesValues: List[AnyRef] = Nil
+    if (!all) {
+      sitesQuery += " where ID = ?"  // for now, later: in (...)
+      sitesValues = List(tenantIds.head)
+    }
     var tenants = List[Tenant]()
-    db.queryAtnms("""
-        select ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS
-        from DW1_TENANTS where ID = ?
-        """,
-        List(tenantIds.head),
-        rs => {
+    queryAtnms(sitesQuery, sitesValues, rs => {
       while (rs.next) {
         val tenantId = rs.getString("ID")
         val hosts = hostsByTenantId(tenantId)
@@ -482,6 +587,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     flyway.setSqlMigrationPrefix("v")
     // Warning: Don't clean() in production, could wipe out all data.
     flyway.setCleanOnValidationError(daoFactory.isTest)
+    // Make this DAO accessible to the Scala code in the Flyway migration.
+    _root_.db.migration.MigrationHelper.systemDbDao = this
     flyway.migrate()
   }
 
