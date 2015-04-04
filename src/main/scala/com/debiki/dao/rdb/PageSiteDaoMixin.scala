@@ -164,7 +164,7 @@ trait PageSiteDaoMixin extends SiteDbDao {
   }
 
 
-  def saveEditedPost(post: Post2) {
+  def saveUpdatedPost(post: Post2) {
     val statement = """
       update dw2_posts set
         parent_post_id = ?,
