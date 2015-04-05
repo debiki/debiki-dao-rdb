@@ -269,7 +269,8 @@ class RdbSiteDao(
   }
 
 
-  def createPageImpl(pagePerhapsId: Page)(connection: js.Connection): Page = {
+  def createPageImpl(pagePerhapsId: Page)(connection: js.Connection): Page = { ??? // TODO remove
+    /*
     // Could wrap this whole function in `tryManyTimes { ... }` because the id
     // might clash with an already existing id? (The ids in use are fairly short,
     // currently, because they're sometimes shown in the url)
@@ -295,6 +296,7 @@ class RdbSiteDao(
       savePageActionsImpl(emptyPage, page.parts.rawActions)(connection)
 
     Page(newPageNoPath.meta, page.path, page.ancestorIdsParentFirst, newPageNoPath.parts)
+    */
   }
 
 
@@ -1423,6 +1425,10 @@ class RdbSiteDao(
   }
 
 
+  def loadPagePath(pageId: PageId): Option[PagePath] =
+    lookupPagePathImpl(pageId)(theOneAndOnlyConnection)
+
+
   def lookupPagePath(pageId: PageId): Option[PagePath] =
     lookupPagePathImpl(pageId)(null)
 
@@ -1575,38 +1581,43 @@ class RdbSiteDao(
   }
 
 
-  private def _createPage[T](page: Page)(implicit conn: js.Connection) {
-    require(page.meta.creationDati == page.meta.modDati)
-    page.meta.pubDati.foreach(publDati =>
-      require(page.meta.creationDati.getTime <= publDati.getTime))
+  def insertPageMeta(pageMeta: PageMeta) {
+    require(pageMeta.creationDati == pageMeta.modDati)
+    pageMeta.pubDati.foreach(publDati =>
+      require(pageMeta.creationDati.getTime <= publDati.getTime))
 
     val sql = """
       insert into DW1_PAGES (
          SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
-         CDATI, MDATI, PUBL_DATI)
+         CDATI, MDATI, PUBL_DATI,
+         CACHED_AUTHOR_USER_ID, CACHED_LAST_VISIBLE_POST_DATI)
       values (
-         nextval('DW1_PAGES_SNO'), ?, ?, ?, ?, ?, ?, ?, ?)
-      """
+         nextval('DW1_PAGES_SNO'), ?, ?, ?, ?, ?,
+         ?, ?, ?,
+         ?, ?)"""
 
-    val values = List[AnyRef](page.tenantId, page.id,
-      _pageRoleToSql(page.role), page.parentPageId.orNullVarchar,
-      page.meta.embeddingPageUrl.orNullVarchar,
-      d2ts(page.meta.creationDati), d2ts(page.meta.modDati),
-      page.meta.pubDati.map(d2ts _).getOrElse(NullTimestamp))
+    val values = List[AnyRef](
+      siteId, pageMeta.pageId,
+      _pageRoleToSql(pageMeta.pageRole), pageMeta.parentPageId.orNullVarchar,
+      pageMeta.embeddingPageUrl.orNullVarchar,
+      d2ts(pageMeta.creationDati), d2ts(pageMeta.modDati), o2ts(pageMeta.pubDati),
+      pageMeta.cachedAuthorUserId, o2ts(pageMeta.cachedLastVisiblePostDati))
 
-    val numNewRows = db.update(sql, values)
+    val numNewRows = runUpdate(sql, values)
 
     if (numNewRows == 0) {
       // If the problem was a primary key violation, we wouldn't get to here.
-      runErr("DwE48GS3", o"""Cannot create a `${page.role}' page because
-        the parent page, id `${page.parentPageId}', has an incompatible role""")
+      runErr("DwE48GS3", o"""Cannot create a `${pageMeta.pageRole}' page because
+        the parent page, id `${pageMeta.parentPageId}', has an incompatible role""")
     }
 
     if (2 <= numNewRows)
-      assErr("DwE45UL8") // there's a primary key on site + page id
+      die("DwE45UL8") // there's a primary key on site + page id
+  }
 
-    _updatePageMeta(page.meta, anyOld = None)
-    insertPagePathOrThrow(page.path)
+
+  def insertPagePath(pagePath: PagePath): Unit = {
+    insertPagePathOrThrow(pagePath)(theOneAndOnlyConnection)
   }
 
 

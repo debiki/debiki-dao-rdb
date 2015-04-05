@@ -30,18 +30,31 @@ import RdbUtil._
 
 /** Loads pages and posts.
   */
-trait PageSiteDaoMixin extends SiteDbDao {
+trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
   def savePageMeta(newMeta: PageMeta): Unit = ???
 
 
-  override def loadPostsOnPage(pageId: PageId, siteId: Option[SiteId]): immutable.Seq[Post2] = {
-    val query = "select * from DW2_POSTS where SITE_ID = ? and PAGE_ID = ?"
-    val values = List[AnyRef](siteId.getOrElse(this.siteId), pageId)
+  override def loadPost(pageId: PageId, postId: PostId): Option[Post2] =
+    loadPostsOnPageImpl(pageId, postId = Some(postId), siteId = None).headOption
+
+
+  override def loadPostsOnPage(pageId: PageId, siteId: Option[SiteId]): immutable.Seq[Post2] =
+    loadPostsOnPageImpl(pageId, postId = None, siteId = None)
+
+
+  def loadPostsOnPageImpl(pageId: PageId, postId: Option[PostId], siteId: Option[SiteId])
+        : immutable.Seq[Post2] = {
+    var query = "select * from DW2_POSTS where SITE_ID = ? and PAGE_ID = ?"
+    val values = ArrayBuffer[AnyRef](siteId.getOrElse(this.siteId), pageId)
+    postId foreach { id =>
+      query += " and POST_ID = ?"
+      values.append(id.asAnyRef)
+    }
     var results = ArrayBuffer[Post2]()
-    runQuery(query, values, rs => {
+    runQuery(query, values.toList, rs => {
       while (rs.next()) {
         val post = readPost(rs, pageId)
         results += post
@@ -51,7 +64,7 @@ trait PageSiteDaoMixin extends SiteDbDao {
   }
 
 
-  override def saveNewPost(post: Post2) {
+  override def insertPost(post: Post2) {
     val statement = """
       insert into dw2_posts(
         site_id,
@@ -164,7 +177,7 @@ trait PageSiteDaoMixin extends SiteDbDao {
   }
 
 
-  def saveUpdatedPost(post: Post2) {
+  def updatePost(post: Post2) {
     val statement = """
       update dw2_posts set
         parent_post_id = ?,

@@ -31,7 +31,7 @@ class v14__migrate_posts extends JdbcMigration {
     val partsOld: PageParts = siteTransaction.loadPagePartsOld(pageMeta.pageId) getOrDie "DwE0Pk3W2"
     for (oldPost <- partsOld.getAllPosts) {
       val newPost = upgradePost(pageMeta.pageId, oldPost)
-      siteTransaction.saveNewPost(newPost)
+      siteTransaction.insertPost(newPost)
     }
   }
 
