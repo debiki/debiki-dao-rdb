@@ -1,23 +1,23 @@
 
--- Create a System and an Unknown user.
+-- Create a System and an Unknown user, ids -1 and -3.
+-- Reserving -2 for totally anonymous users.
 insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('2',  -1, 'System', 'T', 'system', now());
 insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('3',  -1, 'System', 'T', 'system', now());
 insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('18', -1, 'System', 'T', 'system', now());
 insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('49', -1, 'System', 'T', 'system', now());
 insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('35', -1, 'System', 'T', 'system', now());
--- Reserving -2 for totally anonymous user, if I'll ever implement that.
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('2',  -3, 'Unknown', 'T', 'unknown', now());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('3',  -3, 'Unknown', 'T', 'unknown', now());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('18', -3, 'Unknown', 'T', 'unknown', now());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('49', -3, 'Unknown', 'T', 'unknown', now());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('35', -3, 'Unknown', 'T', 'unknown', now());
+insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('2',  -3, 'Unknown', null, 'unknown', now());
+insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('3',  -3, 'Unknown', null, 'unknown', now());
+insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('18', -3, 'Unknown', null, 'unknown', now());
+insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('49', -3, 'Unknown', null, 'unknown', now());
+insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('35', -3, 'Unknown', null, 'unknown', now());
 
 drop function inc_next_per_page_reply_id(
     site_id character varying, page_id character varying, step integer);
 
 alter table dw1_pages drop column next_reply_id;
-alter table dw1_pages add column num_replies_incl_deleted int not null default 0;
-alter table dw1_pages add column num_replies_excl_deleted int not null default 0;
+alter table dw1_pages add column num_replies_incl_deleted int not null default 0; -- TODO fill in, when migrating
+alter table dw1_pages add column num_replies_excl_deleted int not null default 0; -- TODO fill in
 
 
 create table dw2_posts(
@@ -29,6 +29,7 @@ create table dw2_posts(
 
   created_at timestamp not null,
   created_by_id int not null,
+  updated_at timestamp,
 
   last_edited_at timestamp,
   last_edited_by_id int,
@@ -79,6 +80,30 @@ create table dw2_posts(
 );
 
 
+create table dw2_post_actions(
+  site_id varchar not null,
+  page_id varchar not null,
+  post_id int not null,
+  type smallint not null,
+  sub_id smallint not null,
+  created_by_id int not null,
+  created_at timestamp not null,
+  updated_at timestamp,
+  deleted_at timestamp,
+  deleted_by_id int,
+  constraint dw2_postacs__p primary key (site_id, page_id, post_id, type, created_by_id, sub_id),
+  constraint dw2_postacs__r__posts foreign key (site_id, page_id, post_id) references dw2_posts(site_id, page_id, post_id),
+  constraint dw2_postacs__c_type_in check (type in (
+    411, 412,             -- stars/bookmarks: yellow and blue
+    421, 422, 423, 424,   -- votes: like, wrong, rude?, boring?, sad?
+    431, 432, 433))       -- flags: inappropriate, spam, off-topic
+  -- del-at&by
+  -- del & upd > cre
+  -- upd >= del
+);
+
+
+
 /*
 Indexes:
     "dw1_posts_pending_edit_suggs" btree (site_id, last_acted_upon_at) WHERE post_deleted_at IS NULL AND tree_deleted_at IS NULL AND num_pending_flags = 0 AND (last_approval_type::text = ANY (ARRAY['W'::character varying::text, 'A'::character varying::text, 'M'::character varying::text])) AND num_edits_to_review = 0 AND num_collapses_to_review = 0 AND num_uncollapses_to_review = 0 AND num_deletes_to_review = 0 AND num_undeletes_to_review = 0 AND (num_edit_suggestions > 0 OR num_collapse_post_votes_pro > 0 AND post_collapsed_at IS NULL OR num_uncollapse_post_votes_pro > 0 AND post_collapsed_at IS NOT NULL OR num_collapse_tree_votes_pro > 0 AND tree_collapsed_at IS NULL OR num_uncollapse_tree_votes_pro > 0 AND tree_collapsed_at IS NOT NULL OR num_delete_post_votes_pro > 0 AND post_deleted_at IS NULL OR num_undelete_post_votes_pro > 0 AND post_deleted_at IS NOT NULL OR num_delete_tree_votes_pro > 0 AND tree_deleted_at IS NULL OR num_undelete_tree_votes_pro > 0 AND tree_deleted_at IS NOT NULL)
@@ -95,20 +120,7 @@ Triggers:
 
 */
 
-/* Later?
-create table dw2_audit_log(
-  site_id varchar,
-  doer_id varchar,
-  did_what varchar,
-  browser_ip varchar,
-  browser_id_cookie varchar,
-  browser_fingerprint int,
-  browser_name varchar, -- 'C'hrome, 'F'irefox, 'I'nternet Explorer, 'O'pera, 'T'or Browser
-  page_id int,
-  post_id int,
-  post_action_id int,
-  target_user_id varchar,
-)
-*/
 
--- FK from dw1_posts_read_stats to dw2_posts
+-- I'm removing the dw1_page_actions action id:
+alter table dw1_posts_read_stats drop column read_action_id;
+

@@ -35,7 +35,8 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao {
 
 
   def updatePostsReadStats(pageId: PageId, postIdsRead: Set[PostId],
-        actionMakingThemRead: RawPostAction[_]) {
+        readById: UserId2, readFromIp: String) {
+
     // There's an ignore-duplicate-inserts rule in the database (DW1_PSTSRD_IGNORE_DUPL_INS).
     // However, if two transactions insert the same PK data at the same time that rule
     // will have no effect, see:
@@ -52,11 +53,10 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao {
       transactionCheckQuota { implicit connection =>
         val sql = s"""
           insert into DW1_POSTS_READ_STATS(
-            SITE_ID, PAGE_ID, POST_ID, IP, USER_ID, READ_ACTION_ID, READ_AT)
-          values (?, ?, ?, ?, ?, ?, ?)"""
+            SITE_ID, PAGE_ID, POST_ID, IP, USER_ID, READ_AT)
+          values (?, ?, ?, ?, ?, ?)"""
         val values = List[AnyRef](siteId, pageId, postId.asAnyRef,
-          actionMakingThemRead.ip, actionMakingThemRead.userId,
-          actionMakingThemRead.id.asAnyRef, actionMakingThemRead.creationDati)
+          readFromIp, readById.toString, currentTime)  // UserId2
         try {
           db.update(sql, values)
         }

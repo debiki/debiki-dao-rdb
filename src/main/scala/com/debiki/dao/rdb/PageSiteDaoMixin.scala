@@ -20,7 +20,6 @@ package com.debiki.dao.rdb
 import collection.immutable
 import collection.mutable.ArrayBuffer
 import com.debiki.core._
-import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
 import scala.collection.mutable
@@ -32,9 +31,6 @@ import RdbUtil._
   */
 trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
-
-
-  def savePageMeta(newMeta: PageMeta): Unit = ???
 
 
   override def loadPost(pageId: PageId, postId: PostId): Option[Post2] =
@@ -317,6 +313,80 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
+  def deleteVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2) {
+    val statement = """
+      delete from dw2_post_actions
+      where site_id = ? and page_id = ? and post_id = ? and type = ? and created_by_id = ?
+      """
+    val values = List[AnyRef](siteId, pageId, postId.asAnyRef, toActionTypeInt(voteType),
+      voterId.asAnyRef)
+    val numDeleted = runUpdate(statement, values)
+    dieIf(numDeleted > 1, "DwE4YP24", s"Too many actions deleted: numDeleted = $numDeleted")
+
+    if (numDeleted == 1) {
+      updateVoteCount(pageId, postId, voteType, plusOrMinus = "-")
+    }
+  }
+
+
+  def insertVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2,
+        voterIp: IpAddress) {
+    val statement = """
+      insert into dw2_post_actions(site_id, page_id, post_id, type, created_by_id,
+          created_at, sub_id)
+      values (?, ?, ?, ?, ?, ?, 1)
+      """
+    val values = List[AnyRef](siteId, pageId, postId.asAnyRef, toActionTypeInt(voteType),
+      voterId.asAnyRef, currentTime)
+    val numInserted =
+      try { runUpdate(statement, values) }
+      catch {
+        case ex: js.SQLException if isUniqueConstrViolation(ex) =>
+          throw DbDao.DuplicateVoteException
+      }
+    dieIf(numInserted != 1, "DwE9FKw2", s"Error inserting vote: numInserted = $numInserted")
+
+    updateVoteCount(pageId, postId, voteType, plusOrMinus = "+")
+  }
+
+
+  def updateVoteCount(pageId: PageId, postId: PostId, voteType: PostVoteType, plusOrMinus: String) {
+    val numVotesColumn = voteType match {
+      case PostVoteType.Like => "num_like_votes"
+      case PostVoteType.Wrong => "num_wrong_votes"
+    }
+    val statement = s"""
+      update dw2_posts set $numVotesColumn = $numVotesColumn $plusOrMinus 1
+      where site_id = ? and page_id = ? and post_id = ?
+      """
+    val values = List[AnyRef](siteId, pageId, postId.asAnyRef)
+    val numUpdated = runUpdate(statement, values)
+    dieIf(numUpdated != 1, "DwE94KF54", s"Error updating vote sum: numUpdated = $numUpdated")
+  }
+
+
+  def loadVotesByUserOnPage(userId: UserId2, pageId: PageId): immutable.Seq[PostVote] = {
+    var query = """
+      select post_id, type, created_by_id
+      from dw2_post_actions
+      where site_id = ? and page_id = ? and created_by_id = ?
+      """
+    val values = List[AnyRef](siteId, pageId, userId.asAnyRef)
+    var results = Vector[PostVote]()
+    runQuery(query, values, rs => {
+      while (rs.next()) {
+        val postVote = PostVote(
+          pageId = pageId,
+          postId = rs.getInt("post_id"),
+          voterId = userId,
+          voteType = fromActionTypeInt(rs.getInt("type")))
+        results :+= postVote
+      }
+    })
+    results
+  }
+
+
   def toCollapsedStatusString(collapsedStatus: Option[CollapsedStatus]): AnyRef =
     collapsedStatus match {
       case None => NullVarchar
@@ -364,5 +434,17 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       case "T" => Some(DeletedStatus.TreeDeleted)
       case "A" => Some(DeletedStatus.AncestorDeleted)
     }
+
+
+  def toActionTypeInt(voteType: PostVoteType): AnyRef = (voteType match {
+    case PostVoteType.Like => 411
+    case PostVoteType.Wrong => 412
+  }).asAnyRef
+
+
+  def fromActionTypeInt(value: Int): PostVoteType = value match {
+    case 411 => PostVoteType.Like
+    case 412 => PostVoteType.Wrong
+  }
 
 }

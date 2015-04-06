@@ -36,7 +36,7 @@ import RdbUtil._
 
 /** Creates and updates users and identities.
   */
-trait UserSiteDaoMixin extends SiteDbDao {
+trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
