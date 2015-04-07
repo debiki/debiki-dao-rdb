@@ -443,6 +443,11 @@ class Rdb(val dataSource: jxs.DataSource){
     conn
   }
 
+  def closeConnection(connection: js.Connection) {
+    // Already rolled back or committed by the caller.
+    _closeEtc(connection, rollback = false)
+  }
+
   private def _closeEtc(conn: js.Connection, rollback: Boolean) {
     // Need to rollback before closing? Read:
     // http://download.oracle.com/javase/6/docs/api/java/sql/Connection.html:

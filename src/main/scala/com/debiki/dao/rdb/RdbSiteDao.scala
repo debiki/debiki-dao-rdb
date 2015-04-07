@@ -117,6 +117,7 @@ class RdbSiteDao(
     if (_theOneAndOnlyConnection.isEmpty)
       throw new IllegalStateException("No permanent connection created [DwE5KF2]")
     theOneAndOnlyConnection.commit()
+    db.closeConnection(theOneAndOnlyConnection)
     transactionEnded = true
   }
 
@@ -126,6 +127,7 @@ class RdbSiteDao(
     if (_theOneAndOnlyConnection.isEmpty)
       throw new IllegalStateException("No permanent connection created [DwE2K57]")
     theOneAndOnlyConnection.rollback()
+    db.closeConnection(theOneAndOnlyConnection)
     transactionEnded = true
   }
 
