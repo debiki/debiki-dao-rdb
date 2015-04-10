@@ -94,9 +94,9 @@ create table dw2_post_actions(
   constraint dw2_postacs__p primary key (site_id, page_id, post_id, type, created_by_id, sub_id),
   constraint dw2_postacs__r__posts foreign key (site_id, page_id, post_id) references dw2_posts(site_id, page_id, post_id),
   constraint dw2_postacs__c_type_in check (type in (
-    411, 412,             -- stars/bookmarks: yellow and blue
-    421, 422, 423, 424,   -- votes: like, wrong, rude?, boring?, sad?
-    431, 432, 433))       -- flags: inappropriate, spam, off-topic
+    31, 32,          -- stars/bookmarks: yellow and blue
+    41, 42, 43, 44,  -- votes: like, wrong, rude?, boring?, ?
+    51, 52, 53))     -- flags: inappropriate, spam, off-topic
   -- del-at&by
   -- del & upd > cre
   -- upd >= del

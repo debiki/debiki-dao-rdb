@@ -331,21 +331,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def insertVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2,
         voterIp: IpAddress) {
-    val statement = """
-      insert into dw2_post_actions(site_id, page_id, post_id, type, created_by_id,
-          created_at, sub_id)
-      values (?, ?, ?, ?, ?, ?, 1)
-      """
-    val values = List[AnyRef](siteId, pageId, postId.asAnyRef, toActionTypeInt(voteType),
-      voterId.asAnyRef, currentTime)
-    val numInserted =
-      try { runUpdate(statement, values) }
-      catch {
-        case ex: js.SQLException if isUniqueConstrViolation(ex) =>
-          throw DbDao.DuplicateVoteException
-      }
-    dieIf(numInserted != 1, "DwE9FKw2", s"Error inserting vote: numInserted = $numInserted")
-
+    insertPostAction(pageId, postId, actionType = voteType, doerId = voterId)
     updateVoteCount(pageId, postId, voteType, plusOrMinus = "+")
   }
 
@@ -362,28 +348,55 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val values = List[AnyRef](siteId, pageId, postId.asAnyRef)
     val numUpdated = runUpdate(statement, values)
     dieIf(numUpdated != 1, "DwE94KF54", s"Error updating vote sum: numUpdated = $numUpdated")
+
+    // TODO split e.g. num_like_votes into ..._total and ..._unique? And update num_times_read too,
+    // but probably not from here.
   }
 
 
-  def loadVotesByUserOnPage(userId: UserId2, pageId: PageId): immutable.Seq[PostVote] = {
+  def loadActionsByUserOnPage(userId: UserId2, pageId: PageId): immutable.Seq[PostAction2] = {
     var query = """
       select post_id, type, created_by_id
       from dw2_post_actions
       where site_id = ? and page_id = ? and created_by_id = ?
       """
     val values = List[AnyRef](siteId, pageId, userId.asAnyRef)
-    var results = Vector[PostVote]()
+    var results = Vector[PostAction2]()
     runQuery(query, values, rs => {
       while (rs.next()) {
-        val postVote = PostVote(
+        val postAction = PostAction2(
           pageId = pageId,
           postId = rs.getInt("post_id"),
-          voterId = userId,
-          voteType = fromActionTypeInt(rs.getInt("type")))
-        results :+= postVote
+          doerId = userId,
+          actionType = fromActionTypeInt(rs.getInt("type")))
+        results :+= postAction
       }
     })
     results
+  }
+
+
+  def insertFlag(pageId: PageId, postId: PostId, flagType: PostFlagType,
+        flaggerId: UserId2): Unit = {
+    insertPostAction(pageId, postId, actionType = flagType, doerId = flaggerId)
+  }
+
+
+  def insertPostAction(pageId: PageId, postId: PostId, actionType: PostActionType, doerId: UserId2) {
+    val statement = """
+      insert into dw2_post_actions(site_id, page_id, post_id, type, created_by_id,
+          created_at, sub_id)
+      values (?, ?, ?, ?, ?, ?, 1)
+      """
+    val values = List[AnyRef](siteId, pageId, postId.asAnyRef, toActionTypeInt(actionType),
+      doerId.asAnyRef, currentTime)
+    val numInserted =
+      try { runUpdate(statement, values) }
+      catch {
+        case ex: js.SQLException if isUniqueConstrViolation(ex) =>
+          throw DbDao.DuplicateVoteException
+      }
+    dieIf(numInserted != 1, "DwE9FKw2", s"Error inserting action: numInserted = $numInserted")
   }
 
 
@@ -436,15 +449,21 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     }
 
 
-  def toActionTypeInt(voteType: PostVoteType): AnyRef = (voteType match {
-    case PostVoteType.Like => 411
-    case PostVoteType.Wrong => 412
+  def toActionTypeInt(actionType: PostActionType): AnyRef = (actionType match {
+    case PostVoteType.Like => 41
+    case PostVoteType.Wrong => 42
+    case PostFlagType.Spam => 51
+    case PostFlagType.Inapt => 52
+    case PostFlagType.Other => 53
   }).asAnyRef
 
 
-  def fromActionTypeInt(value: Int): PostVoteType = value match {
-    case 411 => PostVoteType.Like
-    case 412 => PostVoteType.Wrong
+  def fromActionTypeInt(value: Int): PostActionType = value match {
+    case 41 => PostVoteType.Like
+    case 42 => PostVoteType.Wrong
+    case 51 => PostFlagType.Spam
+    case 52 => PostFlagType.Inapt
+    case 53 => PostFlagType.Other
   }
 
 }
