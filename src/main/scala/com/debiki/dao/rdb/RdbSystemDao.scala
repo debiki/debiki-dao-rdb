@@ -55,7 +55,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     if (transactionEnded)
       throw new IllegalStateException("Transaction has ended [DwE5KD3W2]")
     _theOneAndOnlyConnection getOrElse {
-      die("DwE83KV21")
+      die("DwE4HKG81")
     }
   }
   private var _theOneAndOnlyConnection: Option[js.Connection] = None

@@ -37,6 +37,7 @@ create table dw2_posts(
   last_approved_edit_by_id int,
   num_distinct_editors int not null,
 
+  safe_version int,
   approved_source text,
   approved_html_sanitized text,
   approved_at timestamp,
@@ -77,6 +78,10 @@ create table dw2_posts(
   constraint dw2_posts_site_page_post__p primary key (site_id, page_id, post_id),
   constraint dw2_posts__r__pages foreign key (site_id, page_id) references dw1_pages (tenant, guid),
   constraint dw2_posts__c_post_not_its_parent check (parent_post_id is null or post_id <> parent_post_id)
+
+  -- safe_version is not null --> approved_version is not null
+  -- prevent approved_version is null and current_source_patch is null
+  -- prevent approved_version = ''
 );
 
 

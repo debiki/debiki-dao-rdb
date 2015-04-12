@@ -32,6 +32,11 @@ import RdbUtil._
 trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
+  private val VoteValueLike = 41
+  private val VoteValueWrong = 42
+  private val FlagValueSpam = 51
+  private val FlagValueInapt = 52
+  private val FlagValueOther = 53
 
   override def loadPost(pageId: PageId, postId: PostId): Option[Post2] =
     loadPostsOnPageImpl(pageId, postId = Some(postId), siteId = None).headOption
@@ -52,11 +57,45 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     var results = ArrayBuffer[Post2]()
     runQuery(query, values.toList, rs => {
       while (rs.next()) {
-        val post = readPost(rs, pageId)
+        val post = readPost(rs, pageId = Some(pageId))
         results += post
       }
     })
     results.to[immutable.Seq]
+  }
+
+
+  def loadPostsToReview(): immutable.Seq[Post2] = {
+    val flaggedPosts = loadPostsToReviewImpl("""
+      deleted_status is null and
+      num_pending_flags > 0
+      """)
+    val unapprovedPosts = loadPostsToReviewImpl("""
+      deleted_status is null and
+      num_pending_flags = 0 and
+      (approved_version is null or approved_version < current_version)
+      """)
+    val postsWithSuggestions = loadPostsToReviewImpl("""
+      deleted_status is null and
+      num_pending_flags = 0 and
+      approved_version = current_version and
+      num_edit_suggestions > 0
+      """)
+    (flaggedPosts ++ unapprovedPosts ++ postsWithSuggestions).to[immutable.Seq]
+  }
+
+
+  private def loadPostsToReviewImpl(whereTests: String): ArrayBuffer[Post2] = {
+    var query = s"select * from dw2_posts where site_id = ? and $whereTests"
+    val values = List(siteId)
+    var results = ArrayBuffer[Post2]()
+    runQuery(query, values.toList, rs => {
+      while (rs.next()) {
+        val post = readPost(rs)
+        results += post
+      }
+    })
+    results
   }
 
 
@@ -78,6 +117,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         last_approved_edit_by_id,
         num_distinct_editors,
 
+        safe_version,
         approved_source,
         approved_html_sanitized,
         approved_at,
@@ -117,7 +157,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         ?, ?, ?, ?, ?,
         ?, ?,
         ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
@@ -134,6 +174,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
       post.numDistinctEditors.asAnyRef,
 
+      post.safeVersion.orNullInt,
       post.approvedSource.orNullVarchar,
       post.approvedHtmlSanitized.orNullVarchar,
       o2ts(post.approvedAt),
@@ -185,6 +226,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         last_approved_edit_by_id = ?,
         num_distinct_editors = ?,
 
+        safe_version = ?,
         approved_source = ?,
         approved_html_sanitized = ?,
         approved_at = ?,
@@ -228,6 +270,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
       post.numDistinctEditors.asAnyRef,
 
+      post.safeVersion.orNullInt,
       post.approvedSource.orNullVarchar,
       post.approvedHtmlSanitized.orNullVarchar,
       o2ts(post.approvedAt),
@@ -269,10 +312,10 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def readPost(rs: js.ResultSet, pageId: PageId): Post2 = {
+  def readPost(rs: js.ResultSet, pageId: Option[PageId] = None): Post2 = {
     Post2(
       siteId = siteId,
-      pageId = pageId,
+      pageId = pageId.getOrElse(rs.getString("PAGE_ID")),
       id = rs.getInt("POST_ID"),
       parentId = getResultSetIntOption(rs, "PARENT_POST_ID"),
       multireplyPostIds = fromDbMultireply(rs.getString("MULTIREPLY")),
@@ -283,6 +326,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       lastApprovedEditAt = ts2o(rs.getTimestamp("LAST_APPROVED_EDIT_AT")),
       lastApprovedEditById = getResultSetIntOption(rs, "LAST_APPROVED_EDIT_BY_ID"),
       numDistinctEditors = rs.getInt("NUM_DISTINCT_EDITORS"),
+      safeVersion = getResultSetIntOption(rs, "SAFE_VERSION"),
       approvedSource = Option(rs.getString("APPROVED_SOURCE")),
       approvedHtmlSanitized = Option(rs.getString("APPROVED_HTML_SANITIZED")),
       approvedAt = ts2o(rs.getTimestamp("APPROVED_AT")),
@@ -376,9 +420,44 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def insertFlag(pageId: PageId, postId: PostId, flagType: PostFlagType,
-        flaggerId: UserId2): Unit = {
+  def loadFlagsFor(postIds: immutable.Seq[PostId]): immutable.Seq[PostFlag] = {
+    var query = s"""
+      select page_id, post_id, type, created_by_id
+      from dw2_post_actions
+      where site_id = ?
+        and post_id in (${ makeInListFor(postIds) })
+        and type in ($FlagValueSpam, $FlagValueInapt, $FlagValueOther)
+      """
+    val values: List[AnyRef] = siteId :: postIds.map(_.asAnyRef).toList
+    var results = Vector[PostFlag]()
+    runQuery(query, values, rs => {
+      while (rs.next()) {
+        val postAction = PostFlag(
+          pageId = rs.getString("page_id"),
+          postId = rs.getInt("post_id"),
+          flaggerId = rs.getInt("created_by_id"),
+          flagType = fromActionTypeIntToFlagType(rs.getInt("type")))
+        dieIf(!postAction.actionType.isInstanceOf[PostFlagType], "DwE2dpg4")
+        results :+= postAction
+      }
+    })
+    results
+  }
+
+
+  def insertFlag(pageId: PageId, postId: PostId, flagType: PostFlagType, flaggerId: UserId2) {
     insertPostAction(pageId, postId, actionType = flagType, doerId = flaggerId)
+  }
+
+
+  def clearFlags(pageId: PageId, postId: PostId, clearedById: UserId2) {
+    var statement = s"""
+      update dw2_post_actions
+      set deleted_at = ?, deleted_by_id = ?
+      where site_id = ? and page_id = ? and post_id = ?
+      """
+    val values = List(d2ts(currentTime), clearedById.asAnyRef, siteId, pageId, postId.asAnyRef)
+    runUpdate(statement, values)
   }
 
 
@@ -450,20 +529,26 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   def toActionTypeInt(actionType: PostActionType): AnyRef = (actionType match {
-    case PostVoteType.Like => 41
-    case PostVoteType.Wrong => 42
-    case PostFlagType.Spam => 51
-    case PostFlagType.Inapt => 52
-    case PostFlagType.Other => 53
+    case PostVoteType.Like => VoteValueLike
+    case PostVoteType.Wrong => VoteValueWrong
+    case PostFlagType.Spam => FlagValueSpam
+    case PostFlagType.Inapt => FlagValueInapt
+    case PostFlagType.Other => FlagValueOther
   }).asAnyRef
 
 
   def fromActionTypeInt(value: Int): PostActionType = value match {
-    case 41 => PostVoteType.Like
-    case 42 => PostVoteType.Wrong
-    case 51 => PostFlagType.Spam
-    case 52 => PostFlagType.Inapt
-    case 53 => PostFlagType.Other
+    case VoteValueLike => PostVoteType.Like
+    case VoteValueWrong => PostVoteType.Wrong
+    case FlagValueSpam => PostFlagType.Spam
+    case FlagValueInapt => PostFlagType.Inapt
+    case FlagValueOther => PostFlagType.Other
+  }
+
+  def fromActionTypeIntToFlagType(value: Int): PostFlagType = {
+    val tyype = fromActionTypeInt(value)
+    require(tyype.isInstanceOf[PostFlagType], "DwE4GKP52")
+    tyype.asInstanceOf[PostFlagType]
   }
 
 }

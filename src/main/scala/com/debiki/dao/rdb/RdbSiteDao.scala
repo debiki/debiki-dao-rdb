@@ -306,6 +306,10 @@ class RdbSiteDao(
     loadPageMetaImpl(pageIds = Nil, all = true)(theOneAndOnlyConnection).values.to[immutable.Seq]
 
 
+  def loadPageMetas(pageIds: Seq[PageId]): immutable.Seq[PageMeta] =
+    loadPageMetaImpl(pageIds, all = false)(theOneAndOnlyConnection).values.to[immutable.Seq]
+
+
   def loadPageMeta(pageId: PageId): Option[PageMeta] = loadPageMeta(pageId, None)
 
 

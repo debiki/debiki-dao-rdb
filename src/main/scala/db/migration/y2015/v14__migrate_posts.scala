@@ -51,6 +51,9 @@ class v14__migrate_posts extends JdbcMigration {
       else if (oldPost.isPostDeleted) Some(DeletedStatus.PostDeleted)
       else None
 
+    val safeVersion =
+      if (oldPost.lastApprovalDati.isDefined) Some(Post2.FirstVersion) else None
+
     val longAgo = new ju.Date(0)
 
     Post2(
@@ -66,12 +69,13 @@ class v14__migrate_posts extends JdbcMigration {
       lastApprovedEditAt = oldPost.lastEditAppliedAt,   // for simplicity
       lastApprovedEditById = Some(SystemUser.User.id2), //
       numDistinctEditors = oldPost.numDistinctEditors,
+      safeVersion = safeVersion,
       approvedSource = oldPost.approvedText,
       approvedHtmlSanitized = oldPost.approvedHtmlSanitized,
       approvedAt = oldPost.lastApprovalDati,
       approvedById = oldPost.lastManuallyApprovedById.map(_.toInt) orElse
                       oldPost.lastApprovalDati.map(_ => SystemUser.User.id2),
-      approvedVersion = if (oldPost.lastApprovalDati.isDefined) Some(Post2.FirstVersion) else None,
+      approvedVersion = safeVersion,
       currentSourcePatch = None, // ignore unapproved edits
       currentVersion = Post2.FirstVersion,
       collapsedStatus = collapsedStatus,
