@@ -25,18 +25,13 @@ import java.{sql => js, util => ju}
 import scala.collection.mutable
 import Rdb._
 import RdbUtil._
+import PageSiteDaoMixin._
 
 
 /** Loads pages and posts.
   */
 trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
-
-  private val VoteValueLike = 41
-  private val VoteValueWrong = 42
-  private val FlagValueSpam = 51
-  private val FlagValueInapt = 52
-  private val FlagValueOther = 53
 
   override def loadPost(pageId: PageId, postId: PostId): Option[Post2] =
     loadPostsOnPageImpl(pageId, postId = Some(postId), siteId = None).headOption
@@ -421,6 +416,9 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   def loadFlagsFor(postIds: immutable.Seq[PostId]): immutable.Seq[PostFlag] = {
+    if (postIds.isEmpty)
+      return Nil
+
     var query = s"""
       select page_id, post_id, type, created_by_id
       from dw2_post_actions
@@ -477,6 +475,17 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       }
     dieIf(numInserted != 1, "DwE9FKw2", s"Error inserting action: numInserted = $numInserted")
   }
+
+}
+
+
+object PageSiteDaoMixin {
+
+  private val VoteValueLike = 41
+  private val VoteValueWrong = 42
+  private val FlagValueSpam = 51
+  private val FlagValueInapt = 52
+  private val FlagValueOther = 53
 
 
   def toCollapsedStatusString(collapsedStatus: Option[CollapsedStatus]): AnyRef =

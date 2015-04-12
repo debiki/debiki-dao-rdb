@@ -129,3 +129,33 @@ Triggers:
 -- I'm removing the dw1_page_actions action id:
 alter table dw1_posts_read_stats drop column read_action_id;
 
+
+-- The notifications table should reference the new tables instead of the old ones:
+
+delete from dw1_notifications;
+alter table dw1_notifications drop constraint dw1_ntfs__r__actions;
+alter table dw1_notifications drop constraint dw1_ntfs__r__posts;
+
+alter table dw1_notifications alter column by_user_id set not null;
+
+alter table dw1_notifications drop column action_id;
+alter table dw1_notifications add column action_type smallint;
+alter table dw1_notifications add column action_sub_id smallint;
+
+alter table dw1_notifications alter column by_user_id type int using (by_user_id::int);
+alter table dw1_notifications alter column to_user_id type int using (to_user_id::int);
+
+alter table dw1_notifications add constraint dw1_ntfs__r__posts
+  foreign key (site_id, page_id, post_id) references dw2_posts(site_id, page_id, post_id);
+  -- ix: dw1_ntfs_post__u
+
+alter table dw1_notifications add constraint dw1_ntfs__r__postacs
+  foreign key (site_id, page_id, post_id, action_type, by_user_id, action_sub_id) references
+    dw2_post_actions(site_id, page_id, post_id, type, created_by_id, sub_id);
+  -- ix: dw1_ntfs_post__u (covers most fields, not all)
+
+alter table dw1_notifications add constraint dw1_ntfs__c_action check(
+    action_type is not null = action_sub_id is not null)
+
+
+-- TODO I've added new foreign keys so I should add indexes

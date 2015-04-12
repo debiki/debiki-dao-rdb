@@ -32,6 +32,7 @@ import scala.collection.mutable.StringBuilder
 import Rdb._
 import RdbUtil._
 import NotificationsSiteDaoMixin.flagToEmailStatus
+import PageSiteDaoMixin.fromActionTypeInt
 
 
 class RdbSystemDao(val daoFactory: RdbDaoFactory)
@@ -411,7 +412,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val baseQuery = """
       select
         SITE_ID, NOTF_TYPE, CREATED_AT,
-        PAGE_ID, POST_ID, ACTION_ID,
+        PAGE_ID, POST_ID, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID,
         EMAIL_ID, EMAIL_STATUS, SEEN_AT
       from DW1_NOTIFICATIONS
@@ -422,7 +423,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         // Later on, could choose to load only those not yet seen.
         var whereOrderBy =
           "SITE_ID = ? and TO_USER_ID = ? order by CREATED_AT desc"
-        val vals = List(tenantIdOpt.get, uid)
+        val vals = List(tenantIdOpt.get, uid.toInt.asAnyRef)  // UserId2
         (whereOrderBy, vals)
       case (None, Some(emailId)) =>
         val whereOrderBy = "SITE_ID = ? and EMAIL_ID = ?"
@@ -452,9 +453,10 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val createdAt = ts2d(rs.getTimestamp("CREATED_AT"))
         val pageId = rs.getString("PAGE_ID")
         val postId = rs.getInt("POST_ID")
-        val actionId = rs.getInt("ACTION_ID")
-        val byUserId = rs.getString("BY_USER_ID")
-        val toUserId = rs.getString("TO_USER_ID")
+        val actionType = getResultSetIntOption(rs, "ACTION_TYPE").map(fromActionTypeInt)
+        val actionSubId = getResultSetIntOption(rs, "ACTION_SUB_ID")
+        val byUserId = rs.getInt("BY_USER_ID").toString // UserId2
+        val toUserId = rs.getInt("TO_USER_ID").toString // UserId2
         val emailId = Option(rs.getString("EMAIL_ID"))
         val emailStatus = flagToEmailStatus(rs.getString("EMAIL_STATUS"))
         val seenAt = ts2o(rs.getTimestamp("SEEN_AT"))
@@ -617,11 +619,11 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_POSTS_READ_STATS
       delete from DW1_NOTIFICATIONS
       delete from DW1_EMAILS_OUT
-      delete from DW1_PAGE_ACTIONS
+      delete from DW2_POST_ACTIONS
       delete from DW1_PATHS
       delete from DW1_PAGE_PATHS
       delete from DW1_PAGES
-      delete from DW1_POSTS
+      delete from DW2_POSTS
       delete from DW1_IDS_SIMPLE_EMAIL
       delete from DW1_GUESTS
       delete from DW1_IDS_OPENID

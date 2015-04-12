@@ -28,7 +28,7 @@ import Rdb._
 
 /** Saves and deletes notifications.
   */
-trait NotificationsSiteDaoMixin extends SiteDbDao {
+trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
@@ -46,9 +46,9 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
     val sql = """
       insert into DW1_NOTIFICATIONS(
         SITE_ID, CREATED_AT, NOTF_TYPE,
-        PAGE_ID, POST_ID, ACTION_ID,
+        PAGE_ID, POST_ID, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID)
-      values (?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
     val values = mutable.ArrayBuffer[AnyRef](
@@ -60,9 +60,10 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
       case postNotf: Notification.NewPost =>
         values += postNotf.pageId
         values += postNotf.postId.asAnyRef
-        values += NullInt
-        values += postNotf.byUserId
-        values += postNotf.toUserId
+        values += NullInt // no related post action
+        values += NullInt //
+        values += postNotf.byUserId.toInt.asAnyRef  // UserId2
+        values += postNotf.toUserId.toInt.asAnyRef  // UserId2
     }
 
     db.update(sql, values.toList)
@@ -80,7 +81,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
             and POST_ID = ?
             and TO_USER_ID = ?"""
         val values = List(siteId, mentionToDelete.pageId, mentionToDelete.postId.asAnyRef,
-          mentionToDelete.toUserId)
+          mentionToDelete.toUserId.toInt.asAnyRef)  // UserId2
         (sql, values)
       case postToDelete: NotificationToDelete.NewPostToDelete =>
         val sql = """
@@ -124,6 +125,10 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
   def connectNotificationToEmail(notification: Notification, email: Option[Email])
         (connection: js.Connection) {
 
+    // Note! This won't work if the notification is related to a post action, not a post,
+    // because I'm not including action_type and action_sub_id in the where clause below.
+    // I added a comment about this in NotificationGenerator.generateForVote.
+
     val baseSql =
       "update DW1_NOTIFICATIONS set EMAIL_ID = ?, EMAIL_STATUS = ? where "
 
@@ -132,7 +137,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao {
     val (whereClause, values): (String, List[AnyRef]) = notification match {
       case newPost: Notification.NewPost =>
         ("SITE_ID = ? and NOTF_TYPE = ? and PAGE_ID = ? and POST_ID = ? and TO_USER_ID = ?",
-          List(siteId, tyype, newPost.pageId, newPost.postId.asAnyRef, newPost.toUserId))
+          List(siteId, tyype, newPost.pageId, newPost.postId.asAnyRef, newPost.toUserId.toInt.asAnyRef)) // UserId2
     }
 
     val emailStatus =

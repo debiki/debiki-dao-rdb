@@ -327,7 +327,9 @@ class RdbSiteDao(
 
   def loadPageMetaImpl(pageIds: Seq[PageId], all: Boolean = false,
         anySiteId: Option[SiteId] = None)(connection: js.Connection): Map[PageId, PageMeta] = {
-    assErrIf(pageIds.nonEmpty == all, "DwE84KF0")
+    if (!all && pageIds.isEmpty)
+      return Map.empty
+
     val values: List[AnyRef] =
       if (all) List(anySiteId.getOrElse(siteId))
       else anySiteId.getOrElse(siteId) :: pageIds.toList
