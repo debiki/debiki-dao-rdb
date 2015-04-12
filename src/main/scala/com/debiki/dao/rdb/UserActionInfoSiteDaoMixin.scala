@@ -115,9 +115,10 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
 
     // Load excerpts (well, whole posts right now).
     val postsById: Map[PagePostId, PostState] = db.withConnection { connection =>
-      loadPostStatesById(
+      unimplemented("Loading posts, DW1_POSTS gone", "DwE6PKG74") /* deleted: loadPostStatesById(
         incompleteInfos.map(info => PagePostId(pageId = info.pageId, postId = info.postId)))(
         connection)
+        */
     }
 
     // Update the incomplete action infos.
