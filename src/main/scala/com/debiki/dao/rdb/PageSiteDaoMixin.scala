@@ -215,6 +215,8 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         parent_post_id = ?,
         multireply = ?,
 
+        updated_at = now(),
+
         last_edited_at = ?,
         last_edited_by_id = ?,
         last_approved_edit_at = ?,
@@ -451,7 +453,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   def clearFlags(pageId: PageId, postId: PostId, clearedById: UserId2) {
     var statement = s"""
       update dw2_post_actions
-      set deleted_at = ?, deleted_by_id = ?
+      set deleted_at = ?, deleted_by_id = ?, updated_at = now()
       where site_id = ? and page_id = ? and post_id = ?
       """
     val values = List(d2ts(currentTime), clearedById.asAnyRef, siteId, pageId, postId.asAnyRef)

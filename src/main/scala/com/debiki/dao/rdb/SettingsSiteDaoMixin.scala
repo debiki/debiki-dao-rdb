@@ -29,7 +29,7 @@ import RdbUtil._
 /** Creates, updates, deletes and loads settings for e.g. the whole webite, a section
   * of the site (e.g. a blog or a forum), single pages, and roles (users/groups).
   */
-trait SettingsSiteDaoMixin extends SiteDbDao {
+trait SettingsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
