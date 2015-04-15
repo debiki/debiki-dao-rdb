@@ -509,7 +509,14 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  private[rdb] def loadUsersAsMap(userIds: Seq[UserId]): Map[UserId, User] = {
+  def loadUsersAsMap2(userIds: Iterable[UserId2]): Map[UserId2, User] = {
+    loadUsersAsMap(userIds.map(_.toString)) map {
+      case (userId, user) => (userId.toInt, user)
+    }
+  }
+
+
+  private[rdb] def loadUsersAsMap(userIds: Iterable[UserId]): Map[UserId, User] = {
     val usersBySiteAndId =  // SHOULD specify quota consumers
       systemDaoSpi.loadUsers(Map(siteId -> userIds.toList))
     usersBySiteAndId map { case (siteAndUserId, user) =>

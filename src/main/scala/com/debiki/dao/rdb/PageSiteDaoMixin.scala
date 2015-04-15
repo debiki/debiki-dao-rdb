@@ -46,6 +46,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     var query = "select * from DW2_POSTS where SITE_ID = ? and PAGE_ID = ?"
     val values = ArrayBuffer[AnyRef](siteId.getOrElse(this.siteId), pageId)
     postId foreach { id =>
+      // WOULD simplify: remove this block, use loadPosts(Iterable[PagePostId]) instead.
       query += " and POST_ID = ?"
       values.append(id.asAnyRef)
     }
@@ -53,6 +54,32 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     runQuery(query, values.toList, rs => {
       while (rs.next()) {
         val post = readPost(rs, pageId = Some(pageId))
+        results += post
+      }
+    })
+    results.to[immutable.Seq]
+  }
+
+
+  def loadPosts(pagePostIds: Iterable[PagePostId]): immutable.Seq[Post2] = {
+    if (pagePostIds.isEmpty)
+      return Nil
+
+    val values = ArrayBuffer[AnyRef](siteId)
+    val queryBuilder = new StringBuilder(256, "select * from DW2_POSTS where SITE_ID = ? and (")
+    for (pagePostId <- pagePostIds) {
+      if (pagePostId != pagePostIds.head) {
+        queryBuilder.append(" or ")
+      }
+      queryBuilder.append("(page_id = ? and post_id = ?)")
+      values.append(pagePostId.pageId, pagePostId.postId.asAnyRef)
+    }
+    queryBuilder.append(")")
+
+    var results = ArrayBuffer[Post2]()
+    runQuery(queryBuilder.toString, values.toList, rs => {
+      while (rs.next()) {
+        val post = readPost(rs)
         results += post
       }
     })

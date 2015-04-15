@@ -282,6 +282,8 @@ class RdbSiteDao(
   def loadPageMetas(pageIds: Seq[PageId]): immutable.Seq[PageMeta] =
     loadPageMetaImpl(pageIds, all = false)(theOneAndOnlyConnection).values.to[immutable.Seq]
 
+  def loadPageMetasAsMap(pageIds: Iterable[PageId]): Map[PageId, PageMeta] =
+    loadPageMetaImpl(pageIds.toSeq, all = false)(theOneAndOnlyConnection)
 
   def loadPageMeta(pageId: PageId): Option[PageMeta] = loadPageMeta(pageId, None)
 
@@ -637,34 +639,6 @@ class RdbSiteDao(
 
       Some(PageParts.fromActions(pageId, this, People(users), actions))
     })
-  }
-
-
-  def loadPageBodiesTitles(pageIds: Seq[PageId]): Map[PageId, PageParts] = {
-
-    if (pageIds isEmpty)
-      return Map.empty
-
-    val bodyOrTitle = s"${PageParts.BodyId}, ${PageParts.TitleId}"
-    val sql = """
-      select a.PAGE_ID, """+ ActionSelectListItems +"""
-      from DW1_PAGE_ACTIONS a
-      where a.TENANT = ?
-        and a.PAGE_ID in ("""+ makeInListFor(pageIds) +""")
-        and (
-          a.POST_ID in ("""+ bodyOrTitle +""") and
-          a.type in (
-              'Post', 'Edit', 'EditApp', 'Aprv', 'DelPost', 'DelTree'))"""
-
-    val values = siteId :: pageIds.toList
-
-    val (
-      people: People,
-      pagesById: mut.Map[PageId, PageParts],
-      pageIdsAndActions) =
-        _loadPeoplePagesActions(sql, values)
-
-    Map[PageId, PageParts](pagesById.toList: _*)
   }
 
 
