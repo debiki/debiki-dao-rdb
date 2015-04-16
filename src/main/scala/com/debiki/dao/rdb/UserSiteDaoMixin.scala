@@ -479,21 +479,6 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  /**
-   * Loads many users, for example, to send to the Admin app so user
-   * names can be listed with comments and edits.
-   *
-   * Also loads Login:s and IdentityOpenId:s, so each action can be
-   * associated with the relevant user.
-   */
-  private[rdb] def _loadUsersWhoDid(actions: List[RawPostAction[_]])
-        (implicit connection: js.Connection): People = {
-    val userIds: List[UserId] = actions map (_.userIdData.userId)
-    val users = loadUsersAsList(userIds)
-    People(users)
-  }
-
-
   def loadUser(userId: UserId): Option[User] =
     loadUsersAsList(userId::Nil).headOption
 
