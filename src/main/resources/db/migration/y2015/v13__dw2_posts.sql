@@ -19,6 +19,11 @@ alter table dw1_pages drop column next_reply_id;
 alter table dw1_pages add column num_replies_incl_deleted int not null default 0; -- TODO fill in, when migrating
 alter table dw1_pages add column num_replies_excl_deleted int not null default 0; -- TODO fill in
 
+-- Delete all old super complicated page config posts.
+delete from dw1_posts_read_stats where post_id = 65503;
+delete from dw1_page_actions where post_id = 65503;
+delete from dw1_posts where post_id = 65503;
+
 
 create table dw2_posts(
   site_id varchar not null,
