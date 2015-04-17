@@ -444,20 +444,30 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadFlagsFor(postIds: immutable.Seq[PostId]): immutable.Seq[PostFlag] = {
-    if (postIds.isEmpty)
+  def loadFlagsFor(pagePostIds: immutable.Seq[PagePostId]): immutable.Seq[PostFlag] = {
+    if (pagePostIds.isEmpty)
       return Nil
 
-    var query = s"""
+    val queryBuilder = new StringBuilder(256, s"""
       select page_id, post_id, type, created_by_id
       from dw2_post_actions
       where site_id = ?
-        and post_id in (${ makeInListFor(postIds) })
         and type in ($FlagValueSpam, $FlagValueInapt, $FlagValueOther)
-      """
-    val values: List[AnyRef] = siteId :: postIds.map(_.asAnyRef).toList
+        and (
+      """)
+    val values = ArrayBuffer[AnyRef](siteId)
+    var first = true
+    pagePostIds foreach { pagePostId =>
+      if (!first) {
+        queryBuilder.append(" or ")
+      }
+      first = false
+      queryBuilder.append("(page_id = ? and post_id = ?)")
+      values.append(pagePostId.pageId, pagePostId.postId.asAnyRef)
+    }
+    queryBuilder.append(")")
     var results = Vector[PostFlag]()
-    runQuery(query, values, rs => {
+    runQuery(queryBuilder.toString, values.toList, rs => {
       while (rs.next()) {
         val postAction = PostFlag(
           pageId = rs.getString("page_id"),
@@ -481,7 +491,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     var statement = s"""
       update dw2_post_actions
       set deleted_at = ?, deleted_by_id = ?, updated_at = now()
-      where site_id = ? and page_id = ? and post_id = ?
+      where site_id = ? and page_id = ? and post_id = ? and deleted_at is null
       """
     val values = List(d2ts(currentTime), clearedById.asAnyRef, siteId, pageId, postId.asAnyRef)
     runUpdate(statement, values)
