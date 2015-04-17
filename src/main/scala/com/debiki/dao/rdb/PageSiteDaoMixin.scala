@@ -422,6 +422,28 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
+  def loadActionsDoneToPost(pageId: PageId, postId: PostId): immutable.Seq[PostAction2] = {
+    var query = """
+      select type, created_by_id
+      from dw2_post_actions
+      where site_id = ? and page_id = ? and post_id = ?
+      """
+    val values = List[AnyRef](siteId, pageId, postId.asAnyRef)
+    var results = Vector[PostAction2]()
+    runQuery(query, values, rs => {
+      while (rs.next()) {
+        val postAction = PostAction2(
+          pageId = pageId,
+          postId = postId,
+          doerId = rs.getInt("created_by_id"),
+          actionType = fromActionTypeInt(rs.getInt("type")))
+        results :+= postAction
+      }
+    })
+    results
+  }
+
+
   def loadFlagsFor(postIds: immutable.Seq[PostId]): immutable.Seq[PostFlag] = {
     if (postIds.isEmpty)
       return Nil

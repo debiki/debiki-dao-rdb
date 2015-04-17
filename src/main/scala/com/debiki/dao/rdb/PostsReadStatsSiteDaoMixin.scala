@@ -70,15 +70,23 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadPostsReadStats(pageId: PageId): PostsReadStats = {
-    val sql = s"""
+  def loadPostsReadStats(pageId: PageId): PostsReadStats =
+    loadPostsReadStats(pageId, postId = None)
+
+
+  def loadPostsReadStats(pageId: PageId, postId: Option[PostId]): PostsReadStats = {
+    var sql = s"""
       select POST_ID, IP, USER_ID from DW1_POSTS_READ_STATS
       where SITE_ID = ? and PAGE_ID = ?"""
-    val values = List[AnyRef](siteId, pageId)
+    val values = ArrayBuffer[AnyRef](siteId, pageId)
+    postId foreach { id =>
+      sql += " and POST_ID = ?"
+      values.append(id.asAnyRef)
+    }
     val ipsByPostId = mutable.HashMap[PostId, ArrayBuffer[String]]()
     val roleIdsByPostId = mutable.HashMap[PostId, ArrayBuffer[RoleId]]()
 
-    db.queryAtnms(sql, values, rs => {
+    db.queryAtnms(sql, values.toList, rs => {
       while (rs.next) {
         val postId = rs.getInt("POST_ID")
         val ip = rs.getString("IP")
