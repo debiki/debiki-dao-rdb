@@ -381,7 +381,8 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def deleteVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2) {
+  def deleteVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2)
+        : Boolean = {
     val statement = """
       delete from dw2_post_actions
       where site_id = ? and page_id = ? and post_id = ? and type = ? and created_by_id = ?
@@ -390,35 +391,12 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       voterId.asAnyRef)
     val numDeleted = runUpdate(statement, values)
     dieIf(numDeleted > 1, "DwE4YP24", s"Too many actions deleted: numDeleted = $numDeleted")
-
-    if (numDeleted == 1) {
-      updateVoteCount(pageId, postId, voteType, plusOrMinus = "-")
-    }
+    numDeleted == 1
   }
 
 
-  def insertVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2,
-        voterIp: IpAddress) {
+  def insertVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2) {
     insertPostAction(pageId, postId, actionType = voteType, doerId = voterId)
-    updateVoteCount(pageId, postId, voteType, plusOrMinus = "+")
-  }
-
-
-  def updateVoteCount(pageId: PageId, postId: PostId, voteType: PostVoteType, plusOrMinus: String) {
-    val numVotesColumn = voteType match {
-      case PostVoteType.Like => "num_like_votes"
-      case PostVoteType.Wrong => "num_wrong_votes"
-    }
-    val statement = s"""
-      update dw2_posts set $numVotesColumn = $numVotesColumn $plusOrMinus 1
-      where site_id = ? and page_id = ? and post_id = ?
-      """
-    val values = List[AnyRef](siteId, pageId, postId.asAnyRef)
-    val numUpdated = runUpdate(statement, values)
-    dieIf(numUpdated != 1, "DwE94KF54", s"Error updating vote sum: numUpdated = $numUpdated")
-
-    // TODO split e.g. num_like_votes into ..._total and ..._unique? And update num_times_read too,
-    // but probably not from here.
   }
 
 

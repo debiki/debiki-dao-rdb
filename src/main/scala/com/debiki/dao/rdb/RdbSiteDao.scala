@@ -1487,6 +1487,7 @@ class RdbSiteDao(
     val pagesAndPostsClause =
       pageAndPostIds.map(_ => "(PAGE_ID = ? and PAID = ?)").mkString(" or ")
 
+    unimplemented("Indexing posts in DW2_POSTS", "DwE0GIK3") // this uses a deleted table:
     val sql = s"""
       update DW1_PAGE_ACTIONS set INDEX_VERSION = ?
       where TENANT = ?

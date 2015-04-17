@@ -584,12 +584,12 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def listUsernamesOnPage(pageId: PageId): Seq[NameAndUsername] = {
+  private def listUsernamesOnPage(pageId: PageId): Seq[NameAndUsername] = {
     val sql = """
       select u.DISPLAY_NAME, u.USERNAME
-      from DW1_POSTS p inner join DW1_USERS u
+      from DW2_POSTS p inner join DW1_USERS u
          on p.SITE_ID = u.TENANT
-        and p.AUTHOR_ID = u.SNO
+        and '' || p.CREATED_BY_ID = u.SNO  -- UserId2
         and u.USERNAME is not null
       where p.SITE_ID = ? and p.PAGE_ID = ?"""
     val values = List(siteId, pageId)
@@ -606,7 +606,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def listUsernamesWithPrefix(prefix: String): Seq[NameAndUsername] = {
+  private def listUsernamesWithPrefix(prefix: String): Seq[NameAndUsername] = {
     val sql = """
       select DISPLAY_NAME, USERNAME
       from DW1_USERS

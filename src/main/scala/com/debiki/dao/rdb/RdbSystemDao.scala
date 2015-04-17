@@ -520,6 +520,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val postIdsByPageBySite = mut.Map[SiteId, mut.Map[PageId, mut.ArrayBuffer[PostId]]]()
 
     // `currentIndexVersion` shouldn't change until server restarted.
+    unimplemented("Indexing posts in DW2_POSTS", "DwE4KUPY8") // this uses a deleted table:
     val sql = s"""
       select TENANT, PAGE_ID, POST_ID from DW1_PAGE_ACTIONS
       where TYPE = 'Post' and INDEX_VERSION <> $currentIndexVersion
