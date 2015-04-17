@@ -602,6 +602,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     flyway.setCleanOnValidationError(daoFactory.isTest)
     // Make this DAO accessible to the Scala code in the Flyway migration.
     _root_.db.migration.MigrationHelper.systemDbDao = this
+    _root_.db.migration.MigrationHelper.scalaBasedMigrations = daoFactory.migrations
     flyway.migrate()
   }
 

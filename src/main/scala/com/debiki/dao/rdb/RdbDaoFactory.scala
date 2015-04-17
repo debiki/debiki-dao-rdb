@@ -25,6 +25,7 @@ import com.debiki.core._
   */
 class RdbDaoFactory(
   val db: Rdb,
+  val migrations: ScalaBasedDatabaseMigrations,
   val actorSystem: ActorSystem,
   val commonMarkRenderer: CommonMarkRenderer,
   val fullTextSearchDbDataPath: Option[String],
