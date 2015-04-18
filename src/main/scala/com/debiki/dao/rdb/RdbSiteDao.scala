@@ -195,7 +195,6 @@ class RdbSiteDao(
         NUM_POST_TEXT_BYTES,
         NUM_POSTS_READ,
         NUM_ACTIONS,
-        NUM_ACTION_TEXT_BYTES,
         NUM_NOTFS,
         NUM_EMAILS_SENT
       from DW1_TENANTS where ID = ?"""
@@ -213,7 +212,6 @@ class RdbSiteDao(
         numPostTextBytes = rs.getLong("NUM_POST_TEXT_BYTES"),
         numPostsRead = rs.getInt("NUM_POSTS_READ"),
         numActions = rs.getInt("NUM_ACTIONS"),
-        numActionTextBytes = rs.getLong("NUM_ACTION_TEXT_BYTES"),
         numNotfs = rs.getInt("NUM_NOTFS"),
         numEmailsSent = rs.getInt("NUM_EMAILS_SENT"))
     })(connection)

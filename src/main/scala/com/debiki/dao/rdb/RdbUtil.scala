@@ -318,7 +318,6 @@ object RdbUtil {
       numPostTextBytes = rs.getLong("NUM_POST_TEXT_BYTES"),
       numPostsRead = rs.getLong("NUM_POSTS_READ"),
       numActions = rs.getInt("NUM_ACTIONS"),
-      numActionTextBytes = rs.getLong("NUM_ACTION_TEXT_BYTES"),
       numNotfs = rs.getInt("NUM_NOTFS"),
       numEmailsSent = rs.getInt("NUM_EMAILS_SENT"))
 

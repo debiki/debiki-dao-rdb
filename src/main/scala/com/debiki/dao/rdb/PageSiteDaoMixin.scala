@@ -172,7 +172,6 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
         num_like_votes,
         num_wrong_votes,
-        num_collapse_votes,
         num_times_read)
 
       values (
@@ -186,7 +185,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         ?, ?, ?,
         ?,
         ?, ?, ?,
-        ?, ?, ?, ?)"""
+        ?, ?, ?)"""
 
     val values = List[AnyRef](
       post.siteId, post.pageId, post.id.asAnyRef,
@@ -229,7 +228,6 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
       post.numLikeVotes.asAnyRef,
       post.numWrongVotes.asAnyRef,
-      post.numCollapseVotes.asAnyRef,
       post.numTimesRead.asAnyRef)
 
     runUpdate(statement, values)
@@ -242,7 +240,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         parent_post_id = ?,
         multireply = ?,
 
-        updated_at = now(),
+        updated_at = now_utc(),
 
         last_edited_at = ?,
         last_edited_by_id = ?,
@@ -283,7 +281,6 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
         num_like_votes = ?,
         num_wrong_votes = ?,
-        num_collapse_votes = ?,
         num_times_read = ?
 
       where site_id = ? and page_id = ? and post_id = ?"""
@@ -327,7 +324,6 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
       post.numLikeVotes.asAnyRef,
       post.numWrongVotes.asAnyRef,
-      post.numCollapseVotes.asAnyRef,
       post.numTimesRead.asAnyRef,
 
       post.siteId, post.pageId, post.id.asAnyRef)
@@ -376,7 +372,6 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       numPendingEditSuggestions = rs.getInt("NUM_EDIT_SUGGESTIONS"),
       numLikeVotes = rs.getInt("NUM_LIKE_VOTES"),
       numWrongVotes = rs.getInt("NUM_WRONG_VOTES"),
-      numCollapseVotes = rs.getInt("NUM_COLLAPSE_VOTES"),
       numTimesRead = rs.getInt("NUM_TIMES_READ"))
   }
 
@@ -490,7 +485,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   def clearFlags(pageId: PageId, postId: PostId, clearedById: UserId2) {
     var statement = s"""
       update dw2_post_actions
-      set deleted_at = ?, deleted_by_id = ?, updated_at = now()
+      set deleted_at = ?, deleted_by_id = ?, updated_at = now_utc()
       where site_id = ? and page_id = ? and post_id = ? and deleted_at is null
       """
     val values = List(d2ts(currentTime), clearedById.asAnyRef, siteId, pageId, postId.asAnyRef)

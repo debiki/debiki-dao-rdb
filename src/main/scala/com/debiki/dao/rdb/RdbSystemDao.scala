@@ -149,7 +149,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   lazy val currentTime: ju.Date = {
-    runQuery("select now() as current_time", Nil, rs => {
+    runQuery("select now_utc() as current_time", Nil, rs => {
       rs.next()
       ts2d(rs.getTimestamp("current_time"))
     })
