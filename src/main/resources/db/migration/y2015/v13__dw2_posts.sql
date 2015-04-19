@@ -59,21 +59,19 @@ create table dw2_posts(
   current_source_patch text,
   current_version int not null,
 
-  collapsed_status varchar, -- 'R'ecursively / 'A'ncestor / 'O'nly this post
+  collapsed_status smallint not null,
   collapsed_at timestamp,
   collapsed_by_id int,
 
-  closed_status varchar, -- 'R'ecursively / 'A'ncestor
+  closed_status smallint not null,
   closed_at timestamp,
   closed_by_id int,
 
-  -- If a post has been flagged, it gets hidden. People can click to view it anyway, so that
-  -- they can notify moderators if posts are being flagged and hidden inappropriately.
   hidden_at timestamp,
   hidden_by_id int,
   hidden_reason varchar,
 
-  deleted_status varchar, -- 'R'ecursively / 'A'ncestor / 'O'nly this post
+  deleted_status smallint not null,
   deleted_at timestamp,
   deleted_by_id int,
 
@@ -139,18 +137,18 @@ create table dw2_posts(
 
   constraint dw2_posts__c_collapsed check (
     (collapsed_at is null or collapsed_at >= created_at) and
-    (collapsed_status is null = collapsed_at is null) and
-    (collapsed_status is null = collapsed_by_id is null)),
+    ((collapsed_status = 0) = collapsed_at is null) and
+    ((collapsed_status = 0) = collapsed_by_id is null)),
 
   constraint dw2_posts__c_closed check (
     (closed_at is null or closed_at >= created_at) and
-    (closed_status is null = closed_at is null) and
-    (closed_status is null = closed_by_id is null)),
+    ((closed_status = 0) = closed_at is null) and
+    ((closed_status = 0) = closed_by_id is null)),
 
   constraint dw2_posts__c_deleted check (
     (deleted_at is null or deleted_at >= created_at) and
-    (deleted_status is null = deleted_at is null) and
-    (deleted_status is null = deleted_by_id is null)),
+    ((deleted_status = 0) = deleted_at is null) and
+    ((deleted_status = 0) = deleted_by_id is null)),
 
   constraint dw2_posts__c_hidden check (
     (hidden_at is null or hidden_at >= created_at) and
@@ -169,16 +167,16 @@ create table dw2_posts(
 
 
 create index dw2_posts_numflags__i on dw2_posts(site_id, num_pending_flags) where
-  deleted_status is null and
+  deleted_status = 0 and
   num_pending_flags > 0;
 
 create index dw2_posts_unapproved__i on dw2_posts(site_id, last_edited_at) where
-  deleted_status is null and
+  deleted_status = 0 and
   num_pending_flags = 0 and
   (approved_version is null or approved_version < current_version);
 
 create index dw2_posts_pendingedits__i on dw2_posts(site_id, last_edit_suggestion_at) where
-  deleted_at is null and
+  deleted_status = 0 and
   num_pending_flags = 0 and
   approved_version = current_version and
   num_edit_suggestions > 0;

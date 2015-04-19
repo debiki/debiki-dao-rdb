@@ -89,16 +89,16 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def loadPostsToReview(): immutable.Seq[Post2] = {
     val flaggedPosts = loadPostsToReviewImpl("""
-      deleted_status is null and
+      deleted_status = 0 and
       num_pending_flags > 0
       """)
     val unapprovedPosts = loadPostsToReviewImpl("""
-      deleted_status is null and
+      deleted_status = 0 and
       num_pending_flags = 0 and
       (approved_version is null or approved_version < current_version)
       """)
     val postsWithSuggestions = loadPostsToReviewImpl("""
-      deleted_status is null and
+      deleted_status = 0 and
       num_pending_flags = 0 and
       approved_version = current_version and
       num_edit_suggestions > 0
@@ -204,11 +204,11 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       post.currentSourcePatch.orNullVarchar,
       post.currentVersion.asAnyRef,
 
-      toCollapsedStatusString(post.collapsedStatus),
+      post.collapsedStatus.underlying.asAnyRef,
       o2ts(post.collapsedAt),
       post.collapsedById.orNullInt,
 
-      toClosedStatusString(post.closedStatus),
+      post.closedStatus.underlying.asAnyRef,
       o2ts(post.closedAt),
       post.closedById.orNullInt,
 
@@ -216,7 +216,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       post.hiddenById.orNullInt,
       NullVarchar,
 
-      toDeletedStatusString(post.deletedStatus),
+      post.deletedStatus.underlying.asAnyRef,
       o2ts(post.deletedAt),
       post.deletedById.orNullInt,
 
@@ -300,11 +300,11 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       post.currentSourcePatch.orNullVarchar,
       post.currentVersion.asAnyRef,
 
-      toCollapsedStatusString(post.collapsedStatus),
+      post.collapsedStatus.underlying.asAnyRef,
       o2ts(post.collapsedAt),
       post.collapsedById.orNullInt,
 
-      toClosedStatusString(post.closedStatus),
+      post.closedStatus.underlying.asAnyRef,
       o2ts(post.closedAt),
       post.closedById.orNullInt,
 
@@ -312,7 +312,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       post.hiddenById.orNullInt,
       NullVarchar,
 
-      toDeletedStatusString(post.deletedStatus),
+      post.deletedStatus.underlying.asAnyRef,
       o2ts(post.deletedAt),
       post.deletedById.orNullInt,
 
@@ -354,16 +354,16 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       approvedVersion = getResultSetIntOption(rs, "APPROVED_VERSION"),
       currentSourcePatch = Option(rs.getString("CURRENT_SOURCE_PATCH")),
       currentVersion = rs.getInt("CURRENT_VERSION"),
-      collapsedStatus = fromCollapsedStatusString(rs.getString("COLLAPSED_STATUS")),
+      collapsedStatus = new CollapsedStatus(rs.getInt("COLLAPSED_STATUS")),
       collapsedAt = ts2o(rs.getTimestamp("COLLAPSED_AT")),
       collapsedById = getResultSetIntOption(rs, "COLLAPSED_BY_ID"),
-      closedStatus = fromClosedStatusString(rs.getString("CLOSED_STATUS")),
+      closedStatus = new ClosedStatus(rs.getInt("CLOSED_STATUS")),
       closedAt = ts2o(rs.getTimestamp("CLOSED_AT")),
       closedById = getResultSetIntOption(rs, "CLOSED_BY_ID"),
       hiddenAt = ts2o(rs.getTimestamp("HIDDEN_AT")),
       hiddenById = getResultSetIntOption(rs, "HIDDEN_BY_ID"),
       // later: hidden_reason
-      deletedStatus = fromDeletedStatusString(rs.getString("DELETED_STATUS")),
+      deletedStatus = new DeletedStatus(rs.getInt("DELETED_STATUS")),
       deletedAt = ts2o(rs.getTimestamp("DELETED_AT")),
       deletedById = getResultSetIntOption(rs, "DELETED_BY_ID"),
       pinnedPosition = getResultSetIntOption(rs, "PINNED_POSITION"),
@@ -520,55 +520,6 @@ object PageSiteDaoMixin {
   private val FlagValueSpam = 51
   private val FlagValueInapt = 52
   private val FlagValueOther = 53
-
-
-  def toCollapsedStatusString(collapsedStatus: Option[CollapsedStatus]): AnyRef =
-    collapsedStatus match {
-      case None => NullVarchar
-      case Some(CollapsedStatus.PostCollapsed) => "P"
-      case Some(CollapsedStatus.TreeCollapsed) => "T"
-      case Some(CollapsedStatus.AncestorCollapsed) => "A"
-    }
-
-  def fromCollapsedStatusString(value: String): Option[CollapsedStatus] =
-    value match {
-      case null => None
-      case "P" => Some(CollapsedStatus.PostCollapsed)
-      case "T" => Some(CollapsedStatus.TreeCollapsed)
-      case "A" => Some(CollapsedStatus.AncestorCollapsed)
-    }
-
-
-  def toClosedStatusString(closedStatus: Option[ClosedStatus]): AnyRef =
-    closedStatus match {
-      case None => NullVarchar
-      case Some(ClosedStatus.TreeClosed) => "T"
-      case Some(ClosedStatus.AncestorClosed) => "A"
-    }
-
-  def fromClosedStatusString(value: String): Option[ClosedStatus] =
-    value match {
-      case null => None
-      case "T" => Some(ClosedStatus.TreeClosed)
-      case "A" => Some(ClosedStatus.AncestorClosed)
-    }
-
-
-  def toDeletedStatusString(deletedStatus: Option[DeletedStatus]): AnyRef =
-    deletedStatus match {
-      case None => NullVarchar
-      case Some(DeletedStatus.PostDeleted) => "P"
-      case Some(DeletedStatus.TreeDeleted) => "T"
-      case Some(DeletedStatus.AncestorDeleted) => "A"
-    }
-
-  def fromDeletedStatusString(value: String): Option[DeletedStatus] =
-    value match {
-      case null => None
-      case "P" => Some(DeletedStatus.PostDeleted)
-      case "T" => Some(DeletedStatus.TreeDeleted)
-      case "A" => Some(DeletedStatus.AncestorDeleted)
-    }
 
 
   def toActionTypeInt(actionType: PostActionType): AnyRef = (actionType match {
