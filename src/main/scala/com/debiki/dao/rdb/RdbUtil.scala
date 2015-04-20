@@ -258,52 +258,38 @@ object RdbUtil {
 
 
   val _PageMetaSelectListItems = i"""
-      |g.CDATI,
-      |g.MDATI,
-      |g.PUBL_DATI,
-      |g.SGFNT_MDATI,
+      |g.CREATED_AT,
+      |g.UPDATED_AT,
+      |g.PUBLISHED_AT,
+      |g.BUMPED_AT,
       |g.PAGE_ROLE,
       |g.PARENT_PAGE_ID,
       |g.EMBEDDING_PAGE_URL,
-      |g.CACHED_TITLE,
-      |g.CACHED_AUTHOR_DISPLAY_NAME,
-      |g.CACHED_AUTHOR_USER_ID,
-      |g.CACHED_NUM_POSTERS,
-      |g.CACHED_NUM_ACTIONS,
-      |g.CACHED_NUM_LIKES,
-      |g.CACHED_NUM_WRONGS,
-      |g.CACHED_NUM_POSTS_DELETED,
-      |g.CACHED_NUM_REPLIES_VISIBLE,
-      |g.CACHED_NUM_POSTS_TO_REVIEW,
-      |g.CACHED_LAST_VISIBLE_POST_DATI,
-      |g.CACHED_NUM_CHILD_PAGES
+      |g.AUTHOR_ID,
+      |g.NUM_LIKES,
+      |g.NUM_WRONGS,
+      |g.NUM_REPLIES_INCL_DELETED,
+      |g.NUM_REPLIES_EXCL_DELETED,
+      |g.NUM_CHILD_PAGES
       |"""
 
 
   def _PageMeta(resultSet: js.ResultSet, pageId: String = null) = {
     PageMeta(
-      pageId = if (pageId ne null) pageId else
-          unimplemented, // wrong column name: resultSet.getString("PAGE_ID"),
+      pageId = if (pageId ne null) pageId else resultSet.getString("PAGE_ID"),
       pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
       embeddingPageUrl = Option(resultSet.getString("EMBEDDING_PAGE_URL")),
-      creationDati = ts2d(resultSet.getTimestamp("CDATI")),
-      modDati = ts2d(resultSet.getTimestamp("MDATI")),
-      pubDati = Option(ts2d(resultSet.getTimestamp("PUBL_DATI"))),
-      sgfntModDati = Option(ts2d(resultSet.getTimestamp("SGFNT_MDATI"))),
-      cachedTitle = Option(resultSet.getString(("CACHED_TITLE"))),
-      cachedAuthorDispName = n2e(resultSet.getString("CACHED_AUTHOR_DISPLAY_NAME")),
-      cachedAuthorUserId = n2e(resultSet.getString("CACHED_AUTHOR_USER_ID")),
-      cachedNumPosters = n20(resultSet.getInt("CACHED_NUM_POSTERS")),
-      cachedNumActions = n20(resultSet.getInt("CACHED_NUM_ACTIONS")),
-      cachedNumLikes = n20(resultSet.getInt("CACHED_NUM_LIKES")),
-      cachedNumWrongs = n20(resultSet.getInt("CACHED_NUM_WRONGS")),
-      cachedNumPostsDeleted = n20(resultSet.getInt("CACHED_NUM_POSTS_DELETED")),
-      cachedNumRepliesVisible = n20(resultSet.getInt("CACHED_NUM_REPLIES_VISIBLE")),
-      cachedNumPostsToReview = n20(resultSet.getInt("CACHED_NUM_POSTS_TO_REVIEW")),
-      cachedLastVisiblePostDati =
-        Option(ts2d(resultSet.getTimestamp("CACHED_LAST_VISIBLE_POST_DATI"))),
-      cachedNumChildPages = resultSet.getInt("CACHED_NUM_CHILD_PAGES"))
+      createdAt = ts2d(resultSet.getTimestamp("CREATED_AT")),
+      updatedAt = ts2d(resultSet.getTimestamp("UPDATED_AT")),
+      publishedAt = Option(ts2d(resultSet.getTimestamp("PUBLISHED_AT"))),
+      bumpedAt = Option(ts2d(resultSet.getTimestamp("BUMPED_AT"))),
+      authorId = resultSet.getInt("AUTHOR_ID"),
+      numLikes = n20(resultSet.getInt("NUM_LIKES")),
+      numWrongs = n20(resultSet.getInt("NUM_WRONGS")),
+      numRepliesInclDeleted = n20(resultSet.getInt("NUM_REPLIES_INCL_DELETED")),
+      numRepliesExclDeleted = n20(resultSet.getInt("NUM_REPLIES_EXCL_DELETED")),
+      numChildPages = resultSet.getInt("NUM_CHILD_PAGES"))
   }
 
 

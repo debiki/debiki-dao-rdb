@@ -132,7 +132,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
           else text.take(197) + "..."
         }
         actionInfo.copy(
-          pageTitle = pageMeta.cachedTitle.getOrElse("(Unnamed page)"),
+          pageTitle = "SHOULD load page title",
           pageRole = pageMeta.pageRole,
           postExcerpt = anyExcerpt.getOrElse("(Text not yet approved)"),
           actingUserDisplayName = anyActingUser.map(_.displayName) getOrElse "(Unnamed user)")

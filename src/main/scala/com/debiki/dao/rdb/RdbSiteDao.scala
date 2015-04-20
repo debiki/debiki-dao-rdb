@@ -307,17 +307,17 @@ class RdbSiteDao(
       if (all) List(anySiteId.getOrElse(siteId))
       else anySiteId.getOrElse(siteId) :: pageIds.toList
     var sql = s"""
-        select g.GUID, ${_PageMetaSelectListItems}
+        select g.PAGE_ID, ${_PageMetaSelectListItems}
         from DW1_PAGES g
-        where g.TENANT = ?
+        where g.SITE_ID = ?
         """
     if (!all) {
-      sql += s" and g.GUID in (${ makeInListFor(pageIds) })"
+      sql += s" and g.PAGE_ID in (${ makeInListFor(pageIds) })"
     }
     var metaByPageId = Map[PageId, PageMeta]()
     db.query(sql, values, rs => {
       while (rs.next) {
-        val pageId = rs.getString("GUID")
+        val pageId = rs.getString("PAGE_ID")
         val meta = _PageMeta(rs, pageId = pageId)
         metaByPageId += pageId -> meta
       }
@@ -338,21 +338,15 @@ class RdbSiteDao(
     val values = List(
       newMeta.parentPageId.orNullVarchar,
       newMeta.embeddingPageUrl.orNullVarchar,
-      d2ts(newMeta.modDati),
-      o2ts(newMeta.pubDati),
-      o2ts(newMeta.sgfntModDati),
-      newMeta.cachedTitle.orNullVarchar,
-      newMeta.cachedAuthorDispName orIfEmpty NullVarchar,
-      newMeta.cachedAuthorUserId orIfEmpty NullVarchar,
-      newMeta.cachedNumPosters.asInstanceOf[AnyRef],
-      newMeta.cachedNumActions.asInstanceOf[AnyRef],
-      newMeta.cachedNumLikes.asAnyRef,
-      newMeta.cachedNumWrongs.asAnyRef,
-      newMeta.cachedNumPostsToReview.asInstanceOf[AnyRef],
-      newMeta.cachedNumPostsDeleted.asInstanceOf[AnyRef],
-      newMeta.cachedNumRepliesVisible.asInstanceOf[AnyRef],
-      o2ts(newMeta.cachedLastVisiblePostDati),
-      newMeta.cachedNumChildPages.asInstanceOf[AnyRef],
+      d2ts(newMeta.updatedAt),
+      o2ts(newMeta.publishedAt),
+      o2ts(newMeta.bumpedAt),
+      newMeta.authorId.asAnyRef,
+      newMeta.numLikes.asAnyRef,
+      newMeta.numWrongs.asAnyRef,
+      newMeta.numRepliesInclDeleted.asAnyRef,
+      newMeta.numRepliesExclDeleted.asAnyRef,
+      newMeta.numChildPages.asAnyRef,
       siteId,
       newMeta.pageId,
       _pageRoleToSql(newMeta.pageRole))
@@ -360,22 +354,16 @@ class RdbSiteDao(
       update DW1_PAGES set
         PARENT_PAGE_ID = ?,
         EMBEDDING_PAGE_URL = ?,
-        MDATI = ?,
-        PUBL_DATI = ?,
-        SGFNT_MDATI = ?,
-        CACHED_TITLE = ?,
-        CACHED_AUTHOR_DISPLAY_NAME = ?,
-        CACHED_AUTHOR_USER_ID = ?,
-        CACHED_NUM_POSTERS = ?,
-        CACHED_NUM_ACTIONS = ?,
-        CACHED_NUM_LIKES = ?,
-        CACHED_NUM_WRONGS = ?,
-        CACHED_NUM_POSTS_TO_REVIEW = ?,
-        CACHED_NUM_POSTS_DELETED = ?,
-        CACHED_NUM_REPLIES_VISIBLE = ?,
-        CACHED_LAST_VISIBLE_POST_DATI = ?,
-        CACHED_NUM_CHILD_PAGES = ?
-      where TENANT = ? and GUID = ? and PAGE_ROLE = ?
+        UPDATED_AT = ?,
+        PUBLISHED_AT = ?,
+        BUMPED_AT = ?,
+        AUTHOR_ID = ?,
+        NUM_LIKES = ?,
+        NUM_WRONGS = ?,
+        NUM_REPLIES_INCL_DELETED = ?,
+        NUM_REPLIES_EXCL_DELETED = ?,
+        NUM_CHILD_PAGES = ?
+      where SITE_ID = ? and PAGE_ID = ? and PAGE_ROLE = ?
       """
 
     val numChangedRows = db.update(sql, values)
@@ -416,25 +404,25 @@ class RdbSiteDao(
     val pageIdList = makeInListFor(pageIds)
 
     val sql = s"""
-      with recursive ancestor_page_ids(child_id, parent_id, tenant, path, cycle) as (
+      with recursive ancestor_page_ids(child_id, parent_id, site_id, path, cycle) as (
           select
-            guid::varchar child_id,
+            page_id::varchar child_id,
             parent_page_id::varchar parent_id,
-            tenant,
+            site_id,
             -- `|| ''` needed otherwise conversion to varchar[] doesn't work, weird
-            array[guid || '']::varchar[],
+            array[page_id || '']::varchar[],
             false
-          from dw1_pages where tenant = ? and guid in ($pageIdList)
+          from dw1_pages where site_id = ? and page_id in ($pageIdList)
         union all
           select
-            guid::varchar child_id,
+            page_id::varchar child_id,
             parent_page_id::varchar parent_id,
-            dw1_pages.tenant,
-            path || guid,
+            dw1_pages.site_id,
+            path || page_id,
             parent_page_id = any(path) -- aborts if cycle, don't know if works (never tested)
           from dw1_pages join ancestor_page_ids
-          on dw1_pages.guid = ancestor_page_ids.parent_id and
-             dw1_pages.tenant = ancestor_page_ids.tenant
+          on dw1_pages.page_id = ancestor_page_ids.parent_id and
+             dw1_pages.site_id = ancestor_page_ids.site_id
           where not cycle
       )
       select path from ancestor_page_ids
@@ -491,14 +479,14 @@ class RdbSiteDao(
 
     val sql = i"""
       with categories as (
-        select guid category_id, null::varchar sub_category_id, cached_title category_name
+        select page_id category_id, null::varchar sub_category_id, cached_title category_name
         from dw1_pages
         where
           parent_page_id = ? and
           page_role = 'FC' and
           tenant = ?),
       sub_categories as (
-        select parent_page_id category_id, guid sub_categories, cached_title category_name
+        select parent_page_id category_id, page_id sub_categories, cached_title category_name
         from dw1_pages
         where
           parent_page_id in (select category_id from categories) and
@@ -650,7 +638,7 @@ class RdbSiteDao(
     val sql = """
       select
         exists(select 1 from DW1_USERS where SUPERADMIN = 'T' and TENANT = ?) as admin_exists,
-        exists(select 1 from DW1_PAGES where TENANT = ?) as content_exists,
+        exists(select 1 from DW1_PAGES where SITE_ID = ?) as content_exists,
         (select CREATOR_EMAIL_ADDRESS from DW1_TENANTS where ID = ?) as admin_email,
         (select EMBEDDING_SITE_URL from DW1_TENANTS where ID = ?) as embedding_site_url"""
     db.queryAtnms(sql, List(siteId, siteId, siteId, siteId), rs => {
@@ -809,7 +797,7 @@ class RdbSiteDao(
 
     val filterStatusClauses =
       if (includeStatuses.contains(PageStatus.Draft)) "true"
-      else "g.PUBL_DATI is not null"
+      else "g.PUBLISHED_AT is not null"
 
     val values = siteId :: pageRangeValues
     val sql = s"""
@@ -819,7 +807,7 @@ class RdbSiteDao(
             t.PAGE_SLUG,
             ${_PageMetaSelectListItems}
         from DW1_PAGE_PATHS t left join DW1_PAGES g
-          on t.TENANT = g.TENANT and t.PAGE_ID = g.GUID
+          on t.TENANT = g.SITE_ID and t.PAGE_ID = g.PAGE_ID
         where t.CANONICAL = 'C'
           and t.TENANT = ?
           and ($pageRangeClauses)
@@ -903,11 +891,11 @@ class RdbSiteDao(
             t.PAGE_SLUG,
             ${_PageMetaSelectListItems}
         from DW1_PAGES g left join DW1_PAGE_PATHS t
-          on g.TENANT = t.TENANT and g.GUID = t.PAGE_ID
+          on g.SITE_ID = t.TENANT and g.PAGE_ID = t.PAGE_ID
           and t.CANONICAL = 'C'
         where
           $offsetTestAnd
-          g.TENANT = ? and
+          g.SITE_ID = ? and
           $pageRoleTestAnd
           g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) })
         $orderByStr
@@ -981,7 +969,7 @@ class RdbSiteDao(
 
     val isPageAuthor =
       (for (user <- reqInfo.user; pageMeta <- reqInfo.pageMeta) yield {
-        user.id == pageMeta.cachedAuthorUserId
+        user.id2 == pageMeta.authorId
       }) getOrElse false
 
 
@@ -1191,12 +1179,12 @@ class RdbSiteDao(
         query += s" and PAGE_ID = ? order by $CanonicalFirst"
         binds ::= id
       case None =>
-        // SHOW_ID = 'F' means that the page guid must not be part
-        // of the page url. ((So you cannot look up [a page that has its guid
+        // SHOW_ID = 'F' means that the page page id must not be part
+        // of the page url. ((So you cannot look up [a page that has its id
         // as part of its url] by searching for its url without including
-        // the guid. Had that been possible, many pages could have been found
-        // since pages with different guids can have the same name.
-        // Hmm, could search for all pages, as if the guid hadn't been
+        // the id. Had that been possible, many pages could have been found
+        // since pages with different ids can have the same name.
+        // Hmm, could search for all pages, as if the id hadn't been
         // part of their name, and list all pages with matching names?))
         query += """
             and SHOW_ID = 'F'
@@ -1272,26 +1260,24 @@ class RdbSiteDao(
 
 
   def insertPageMeta(pageMeta: PageMeta) {
-    require(pageMeta.creationDati == pageMeta.modDati)
-    pageMeta.pubDati.foreach(publDati =>
-      require(pageMeta.creationDati.getTime <= publDati.getTime))
+    require(pageMeta.createdAt == pageMeta.updatedAt)
+    pageMeta.publishedAt.foreach(publDati =>
+      require(pageMeta.createdAt.getTime <= publDati.getTime))
 
     val sql = """
       insert into DW1_PAGES (
-         SNO, TENANT, GUID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
-         CDATI, MDATI, PUBL_DATI,
-         CACHED_AUTHOR_USER_ID, CACHED_LAST_VISIBLE_POST_DATI)
+         SITE_ID, PAGE_ID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
+         CREATED_AT, UPDATED_AT, PUBLISHED_AT, AUTHOR_ID)
       values (
-         nextval('DW1_PAGES_SNO'), ?, ?, ?, ?, ?,
-         ?, ?, ?,
-         ?, ?)"""
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?)"""
 
     val values = List[AnyRef](
       siteId, pageMeta.pageId,
       _pageRoleToSql(pageMeta.pageRole), pageMeta.parentPageId.orNullVarchar,
       pageMeta.embeddingPageUrl.orNullVarchar,
-      d2ts(pageMeta.creationDati), d2ts(pageMeta.modDati), o2ts(pageMeta.pubDati),
-      pageMeta.cachedAuthorUserId, o2ts(pageMeta.cachedLastVisiblePostDati))
+      d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
+      pageMeta.authorId.asAnyRef)
 
     val numNewRows = runUpdate(sql, values)
 
@@ -1359,8 +1345,8 @@ class RdbSiteDao(
     require(change == 1 || change == -1)
     val sql = i"""
       |update DW1_PAGES
-      |set CACHED_NUM_CHILD_PAGES = CACHED_NUM_CHILD_PAGES + ($change)
-      |where TENANT = ? and GUID = ?
+      |set NUM_CHILD_PAGES = NUM_CHILD_PAGES + ($change)
+      |where SITE_ID = ? and PAGE_ID = ?
       """
     val values = List(siteId, parentId)
     val rowsUpdated = db.update(sql, values)

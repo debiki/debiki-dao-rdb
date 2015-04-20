@@ -21,9 +21,6 @@ insert into dw1_users(tenant, sno, display_name, superadmin, username, created_a
 drop function inc_next_per_page_reply_id(
     site_id character varying, page_id character varying, step integer);
 
-alter table dw1_pages drop column next_reply_id;
-alter table dw1_pages add column num_replies_incl_deleted int not null default 0; -- TODO fill in, when migrating
-alter table dw1_pages add column num_replies_excl_deleted int not null default 0; -- TODO fill in
 
 -- Delete all old super complicated page config posts.
 delete from dw1_posts_read_stats where post_id = 65503;
@@ -239,5 +236,42 @@ alter table dw1_notifications add constraint dw1_ntfs__r__postacs
   -- ix: dw1_ntfs_post__u (covers most fields, not all)
 
 alter table dw1_notifications add constraint dw1_ntfs__c_action check(
-    action_type is not null = action_sub_id is not null)
+    action_type is not null = action_sub_id is not null);
 
+
+-- Removes unneeded stuff from the pages table, renames columns, and adds num-replies columns.
+
+alter table dw1_page_actions drop constraint dw1_pactions__r__pages; -- the 'sno' column
+
+alter table dw1_pages drop column sno;
+alter table dw1_pages rename column tenant to site_id;
+alter table dw1_pages rename column guid to page_id;
+alter table dw1_pages rename column cdati to created_at;
+alter table dw1_pages rename column mdati to updated_at;
+alter table dw1_pages rename column publ_dati to published_at;
+alter table dw1_pages drop column cached_title;
+alter table dw1_pages rename column sgfnt_mdati to bumped_at;
+
+alter table dw1_pages drop column cached_author_display_name;
+alter table dw1_pages rename column cached_author_user_id to author_id;
+alter table dw1_pages alter column author_id set not null;
+alter table dw1_pages alter column author_id type int using (author_id::int);
+
+alter table dw1_pages drop column cached_num_posters;
+alter table dw1_pages drop column cached_num_actions;
+alter table dw1_pages drop column cached_num_posts_to_review;
+alter table dw1_pages drop column cached_num_posts_deleted;
+alter table dw1_pages drop column cached_num_replies_visible;
+alter table dw1_pages drop column cached_last_visible_post_dati;
+
+alter table dw1_pages rename column cached_num_child_pages to num_child_pages;
+alter table dw1_pages rename column cached_num_likes to num_likes;
+alter table dw1_pages rename column cached_num_wrongs to num_wrongs;
+
+alter table dw1_pages add column num_replies_incl_deleted int not null default 0;
+alter table dw1_pages add column num_replies_excl_deleted int not null default 0;
+
+drop sequence dw1_pages_sno;
+
+
+-- Rename 'tenant' columns to 'site_id'.
