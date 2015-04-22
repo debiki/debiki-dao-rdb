@@ -338,14 +338,13 @@ class RdbSiteDao(
     val values = List(
       newMeta.parentPageId.orNullVarchar,
       newMeta.embeddingPageUrl.orNullVarchar,
-      d2ts(newMeta.updatedAt),
       o2ts(newMeta.publishedAt),
       o2ts(newMeta.bumpedAt),
       newMeta.authorId.asAnyRef,
       newMeta.numLikes.asAnyRef,
       newMeta.numWrongs.asAnyRef,
-      newMeta.numRepliesInclDeleted.asAnyRef,
-      newMeta.numRepliesExclDeleted.asAnyRef,
+      newMeta.numRepliesVisible.asAnyRef,
+      newMeta.numRepliesTotal.asAnyRef,
       newMeta.numChildPages.asAnyRef,
       siteId,
       newMeta.pageId,
@@ -354,14 +353,14 @@ class RdbSiteDao(
       update DW1_PAGES set
         PARENT_PAGE_ID = ?,
         EMBEDDING_PAGE_URL = ?,
-        UPDATED_AT = ?,
+        UPDATED_AT = now_utc(),
         PUBLISHED_AT = ?,
         BUMPED_AT = ?,
         AUTHOR_ID = ?,
         NUM_LIKES = ?,
         NUM_WRONGS = ?,
-        NUM_REPLIES_INCL_DELETED = ?,
-        NUM_REPLIES_EXCL_DELETED = ?,
+        NUM_REPLIES_VISIBLE = ?,
+        NUM_REPLIES_TOTAL = ?,
         NUM_CHILD_PAGES = ?
       where SITE_ID = ? and PAGE_ID = ? and PAGE_ROLE = ?
       """
@@ -479,19 +478,19 @@ class RdbSiteDao(
 
     val sql = i"""
       with categories as (
-        select page_id category_id, null::varchar sub_category_id, cached_title category_name
+        select page_id category_id, null::varchar sub_category_id
         from dw1_pages
         where
           parent_page_id = ? and
           page_role = 'FC' and
-          tenant = ?),
+          site_id = ?),
       sub_categories as (
-        select parent_page_id category_id, page_id sub_categories, cached_title category_name
+        select parent_page_id category_id, page_id sub_categories
         from dw1_pages
         where
           parent_page_id in (select category_id from categories) and
           page_role = 'FC' and
-          tenant = ?)
+          site_id = ?)
       select * from categories
       union
       select * from sub_categories
@@ -505,7 +504,6 @@ class RdbSiteDao(
       while (rs.next()) {
         val categoryId = rs.getString("category_id")
         val anySubCategoryId = Option(rs.getString("sub_category_id"))
-        val categoryName = Option(rs.getString("category_name")) getOrElse ""
 
         if (Some(categoryId) != anyCurrentCategory.map(_.pageId)) {
           // The category is always listed before any sub categories.
@@ -514,11 +512,11 @@ class RdbSiteDao(
           if (anyCurrentCategory.isDefined) {
             allCategories = allCategories :+ anyCurrentCategory.get
           }
-          anyCurrentCategory = Some(Category(categoryName, pageId = categoryId, Vector.empty))
+          anyCurrentCategory = Some(Category(pageId = categoryId, Vector.empty))
         }
         else {
           alwaysAssert(anySubCategoryId.isDefined, "DwE77Gb91")
-          val newSubCategory = Category(categoryName, pageId = anySubCategoryId.get, Vector.empty)
+          val newSubCategory = Category(pageId = anySubCategoryId.get, Vector.empty)
           anyCurrentCategory = anyCurrentCategory map { curCat =>
             curCat.copy(subCategories = curCat.subCategories :+ newSubCategory)
           }
@@ -564,7 +562,7 @@ class RdbSiteDao(
     val sql = """
       update DW1_PAGE_PATHS
       set PARENT_FOLDER = REGEXP_REPLACE(PARENT_FOLDER, ?, ?)
-      where TENANT = ?
+      where SITE_ID = ?
         and PAGE_ID in (""" + makeInListFor(pageIds) + ")"
     val values = fromFolderEscaped :: toFolder :: siteId :: pageIds.toList
 
@@ -604,7 +602,7 @@ class RdbSiteDao(
     queryAtnms("""
         select """+ ActionSelectListItems +"""
         from DW1_PAGE_ACTIONS a
-        where a.TENANT = ? and a.PAGE_ID = ?
+        where a.SITE_ID = ? and a.PAGE_ID = ?
         order by a.TIME desc""",
         List(tenantId, pageId), rs => {
       var actions = List[AnyRef]()
@@ -630,14 +628,13 @@ class RdbSiteDao(
 
   def loadTenant(): Tenant = {
     systemDaoSpi.loadTenants(List(siteId)).head
-    // Should tax quotaConsumer with 2 db IO requests: tenant + tenant hosts.
   }
 
 
   def loadSiteStatus(): SiteStatus = {
     val sql = """
       select
-        exists(select 1 from DW1_USERS where SUPERADMIN = 'T' and TENANT = ?) as admin_exists,
+        exists(select 1 from DW1_USERS where SUPERADMIN = 'T' and SITE_ID = ?) as admin_exists,
         exists(select 1 from DW1_PAGES where SITE_ID = ?) as content_exists,
         (select CREATOR_EMAIL_ADDRESS from DW1_TENANTS where ID = ?) as admin_email,
         (select EMBEDDING_SITE_URL from DW1_TENANTS where ID = ?) as embedding_site_url"""
@@ -807,9 +804,9 @@ class RdbSiteDao(
             t.PAGE_SLUG,
             ${_PageMetaSelectListItems}
         from DW1_PAGE_PATHS t left join DW1_PAGES g
-          on t.TENANT = g.SITE_ID and t.PAGE_ID = g.PAGE_ID
+          on t.SITE_ID = g.SITE_ID and t.PAGE_ID = g.PAGE_ID
         where t.CANONICAL = 'C'
-          and t.TENANT = ?
+          and t.SITE_ID = ?
           and ($pageRangeClauses)
           and ($filterStatusClauses)
           and g.PAGE_ROLE <> 'SP' -- skip Special Content
@@ -848,15 +845,15 @@ class RdbSiteDao(
       case PageOrderOffset.Any =>
         ("", "")
       case PageOrderOffset.ByPublTime =>
-        ("order by g.PUBL_DATI desc", "")
+        ("order by g.PUBLISHED_AT desc", "")
       case PageOrderOffset.ByBumpTime(anyDate) =>
         val offsetTestAnd = anyDate match {
           case None => ""
           case Some(date) =>
             values :+= d2ts(date)
-            "g.CACHED_LAST_VISIBLE_POST_DATI <= ? and"
+            "g.BUMPED_AT <= ? and"
         }
-        ("order by g.CACHED_LAST_VISIBLE_POST_DATI desc", offsetTestAnd)
+        ("order by g.BUMPED_AT desc", offsetTestAnd)
       case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
         val offsetTestAnd = anyLikesAndDate match {
           case None => ""
@@ -864,10 +861,10 @@ class RdbSiteDao(
             values :+= maxNumLikes.asAnyRef
             values :+= d2ts(date)
             values :+= maxNumLikes.asAnyRef
-            """((g.CACHED_NUM_LIKES <= ? and g.CACHED_LAST_VISIBLE_POST_DATI <= ?) or
-                (g.CACHED_NUM_LIKES < ?)) and"""
+            """((g.NUM_LIKES <= ? and g.BUMPED_AT <= ?) or
+                (g.NUM_LIKES < ?)) and"""
         }
-        ("order by g.CACHED_NUM_LIKES desc, CACHED_LAST_VISIBLE_POST_DATI desc", offsetTestAnd)
+        ("order by g.NUM_LIKES desc, BUMPED_AT desc", offsetTestAnd)
       case _ =>
         unimplemented(s"Sort order unsupported: $orderOffset [DwE2GFU06]")
     }
@@ -891,7 +888,7 @@ class RdbSiteDao(
             t.PAGE_SLUG,
             ${_PageMetaSelectListItems}
         from DW1_PAGES g left join DW1_PAGE_PATHS t
-          on g.SITE_ID = t.TENANT and g.PAGE_ID = t.PAGE_ID
+          on g.SITE_ID = t.SITE_ID and g.PAGE_ID = t.PAGE_ID
           and t.CANONICAL = 'C'
         where
           $offsetTestAnd
@@ -1026,7 +1023,7 @@ class RdbSiteDao(
 
     db.update("""
       insert into DW1_EMAILS_OUT(
-        TENANT, ID, TYPE, SENT_TO, TO_GUEST_ID, TO_ROLE_ID, CREATED_AT, SUBJECT, BODY_HTML)
+        SITE_ID, ID, TYPE, SENT_TO, TO_GUEST_ID, TO_ROLE_ID, CREATED_AT, SUBJECT, BODY_HTML)
       values (
         ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """, vals)
@@ -1052,7 +1049,7 @@ class RdbSiteDao(
         update DW1_EMAILS_OUT
         set SENT_ON = ?, PROVIDER_EMAIL_ID = ?,
             FAILURE_TYPE = ?, FAILURE_TEXT = ?, FAILURE_TIME = ?
-        where TENANT = ? and ID = ?
+        where SITE_ID = ? and ID = ?
         """, vals)
     }
   }
@@ -1063,7 +1060,7 @@ class RdbSiteDao(
       select TYPE, SENT_TO, TO_GUEST_ID, TO_ROLE_ID, SENT_ON, CREATED_AT, SUBJECT,
         BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
       from DW1_EMAILS_OUT
-      where TENANT = ? and ID = ?
+      where SITE_ID = ? and ID = ?
       """
     val emailOpt = db.queryAtnms(query, List(siteId, emailId), rs => {
       var allEmails = List[Email]()
@@ -1131,7 +1128,7 @@ class RdbSiteDao(
         -- For debug assertions:
         CANONICAL, CANONICAL_DATI
       from DW1_PAGE_PATHS
-      where TENANT = ? and PAGE_ID = ? $andOnlyCanonical
+      where SITE_ID = ? and PAGE_ID = ? $andOnlyCanonical
       order by $CanonicalLast, CANONICAL_DATI asc"""
 
     var pagePaths = List[PagePath]()
@@ -1170,7 +1167,7 @@ class RdbSiteDao(
     var query = """
         select PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL
         from DW1_PAGE_PATHS
-        where TENANT = ?
+        where SITE_ID = ?
         """
 
     var binds = List(pagePathIn.tenantId)
@@ -1304,7 +1301,7 @@ class RdbSiteDao(
     try {
       db.update("""
         insert into DW1_PAGE_PATHS (
-          TENANT, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL)
+          SITE_ID, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL)
         values (?, ?, ?, ?, ?, 'C')
         """,
         List(pagePath.tenantId, pagePath.folder, pagePath.pageId.get,
@@ -1435,7 +1432,7 @@ class RdbSiteDao(
       val stmt = """
         update DW1_PAGE_PATHS
         set CANONICAL = 'R'
-        where TENANT = ? and PAGE_ID = ?
+        where SITE_ID = ? and PAGE_ID = ?
         """
       val numRowsChanged = db.update(stmt, vals)
       if (numRowsChanged == 0)
@@ -1448,7 +1445,7 @@ class RdbSiteDao(
       var vals = List(siteId, newPath.folder, e2d(newPath.pageSlug), showPageId)
       var stmt = """
         delete from DW1_PAGE_PATHS
-        where TENANT = ? and PARENT_FOLDER = ? and PAGE_SLUG = ?
+        where SITE_ID = ? and PARENT_FOLDER = ? and PAGE_SLUG = ?
           and SHOW_ID = ? and CANONICAL = 'R'
         """
       if (newPath.showId) {
@@ -1474,7 +1471,7 @@ class RdbSiteDao(
     unimplemented("Indexing posts in DW2_POSTS", "DwE0GIK3") // this uses a deleted table:
     val sql = s"""
       update DW1_PAGE_ACTIONS set INDEX_VERSION = ?
-      where TENANT = ?
+      where SITE_ID = ?
         and ($pagesAndPostsClause)
         and TYPE = 'Post'
       """

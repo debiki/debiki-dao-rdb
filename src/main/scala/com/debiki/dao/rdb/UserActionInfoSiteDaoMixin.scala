@@ -50,7 +50,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
     val query = s"""
       select TYPE, PAID = ${PageParts.BodyId} is_new_page, count(*) num
       from DW1_PAGE_ACTIONS
-      where TENANT = ? and $userIdColumn = ?
+      where SITE_ID = ? and $userIdColumn = ?
       group by TYPE, is_new_page"""
 
     val values = List(siteId, guestOrRoleId)
@@ -148,7 +148,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
     val query = s"""
       select PAGE_ID, POST_ID, PAID, TIME, TYPE, RELPA, TIME
       from DW1_PAGE_ACTIONS
-      where TENANT = ? and $userIdColumn = ?
+      where SITE_ID = ? and $userIdColumn = ?
       order by time desc
       limit 40"""
     val values = List[AnyRef](siteId, guestOrRoleId)

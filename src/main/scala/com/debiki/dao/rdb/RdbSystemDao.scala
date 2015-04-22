@@ -182,7 +182,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       // Use "u_*" select list item names, so works with _User(result-set).
       val q = """
          select
-            g.SITE_ID TENANT, '-'||g.ID u_id, g.NAME u_disp_name, null u_username,
+            g.SITE_ID SITE_ID, '-'||g.ID u_id, g.NAME u_disp_name, null u_username,
             null u_created_at,
             g.EMAIL_ADDR u_email, e.EMAIL_NOTFS u_email_notfs,
             null u_email_verified_at,
@@ -191,7 +191,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
             g.URL u_website, 'F' u_superadmin, 'F' u_is_owner
          from
            DW1_GUESTS g left join DW1_IDS_SIMPLE_EMAIL e
-           on g.SITE_ID = e.TENANT and g.EMAIL_ADDR = e.EMAIL
+           on g.SITE_ID = e.SITE_ID and g.EMAIL_ADDR = e.EMAIL
          where
            g.SITE_ID = ? and
            g.ID in (""" + inList +")"
@@ -205,9 +205,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       incIdCount(idsAu)
       val inList = idsAu.map(_ => "?").mkString(",")
       val q = """
-         select u.TENANT, """+ _UserSelectListItems +"""
+         select u.SITE_ID, """+ _UserSelectListItems +"""
          from DW1_USERS u
-         where u.TENANT = ?
+         where u.SITE_ID = ?
          and u.SNO in (""" + inList +")"
       (q, tenantId :: idsAu)
     }
@@ -240,7 +240,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     db.queryAtnms(totalQuery.toString, allValsReversed.reverse, rs => {
       while (rs.next) {
-        val tenantId = rs.getString("TENANT")
+        val tenantId = rs.getString("SITE_ID")
         // Sometimes convert both "-" and null to "", because unauthenticated
         // users use "-" as placeholder for "nothing specified" -- so those
         // values are indexed (since sql null isn't).
@@ -268,16 +268,16 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     require(tenantIds.length == 1 || all)
 
     var hostsByTenantId = Map[String, List[TenantHost]]().withDefaultValue(Nil)
-    var hostsQuery = "select TENANT, HOST, CANONICAL, HTTPS from DW1_TENANT_HOSTS"
+    var hostsQuery = "select SITE_ID, HOST, CANONICAL, HTTPS from DW1_TENANT_HOSTS"
     var hostsValues: List[AnyRef] = Nil
     if (!all) {
       UNTESTED
-      hostsQuery += " where TENANT = ?" // for now, later: in (...)
+      hostsQuery += " where SITE_ID = ?" // for now, later: in (...)
       hostsValues = List(tenantIds.head)
     }
     queryAtnms(hostsQuery, hostsValues, rs => {
         while (rs.next) {
-          val tenantId = rs.getString("TENANT")
+          val tenantId = rs.getString("SITE_ID")
           var hosts = hostsByTenantId(tenantId)
           hosts ::= TenantHost(
              address = rs.getString("HOST"),
@@ -321,12 +321,12 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val HttpsAllowed = "A"
     val HttpsNo = "N"
     db.queryAtnms("""
-        select t.TENANT TID,
+        select t.SITE_ID TID,
             t.CANONICAL THIS_CANONICAL, t.HTTPS THIS_HTTPS,
             c.HOST CANONICAL_HOST, c.HTTPS CANONICAL_HTTPS
         from DW1_TENANT_HOSTS t -- this host, the one connected to
             left join DW1_TENANT_HOSTS c  -- the cannonical host
-            on c.TENANT = t.TENANT and c.CANONICAL = 'C'
+            on c.SITE_ID = t.SITE_ID and c.CANONICAL = 'C'
         where t.HOST = ?
         """, List(host), rs => {
       if (!rs.next) {
@@ -522,15 +522,15 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     // `currentIndexVersion` shouldn't change until server restarted.
     unimplemented("Indexing posts in DW2_POSTS", "DwE4KUPY8") // this uses a deleted table:
     val sql = s"""
-      select TENANT, PAGE_ID, POST_ID from DW1_PAGE_ACTIONS
+      select SITE_ID, PAGE_ID, POST_ID from DW1_PAGE_ACTIONS
       where TYPE = 'Post' and INDEX_VERSION <> $currentIndexVersion
-      order by TENANT, PAGE_ID
+      order by SITE_ID, PAGE_ID
       limit $limit
       """
 
     db.query(sql, Nil, rs => {
       while (rs.next) {
-        val siteId = rs.getString("TENANT")
+        val siteId = rs.getString("SITE_ID")
         val pageId = rs.getString("PAGE_ID")
         val postId = rs.getInt("POST_ID")
         if (postIdsByPageBySite.get(siteId).isEmpty) {

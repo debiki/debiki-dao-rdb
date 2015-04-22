@@ -44,7 +44,7 @@ trait CreateSiteSystemDaoMixin {
       case TenantHost.HttpsNone => "N"
     }
     val sql = """
-      insert into DW1_TENANT_HOSTS (TENANT, HOST, CANONICAL, HTTPS)
+      insert into DW1_TENANT_HOSTS (SITE_ID, HOST, CANONICAL, HTTPS)
       values (?, ?, ?, ?)
       """
     db.update(sql, List(tenantId, host.address, cncl, https))(connection)

@@ -212,6 +212,7 @@ alter table dw1_posts_read_stats drop column read_action_id;
 
 
 -- The notifications table should reference the new tables instead of the old ones:
+-----------------------------------
 
 delete from dw1_notifications;
 alter table dw1_notifications drop constraint dw1_ntfs__r__actions;
@@ -240,6 +241,7 @@ alter table dw1_notifications add constraint dw1_ntfs__c_action check(
 
 
 -- Removes unneeded stuff from the pages table, renames columns, and adds num-replies columns.
+-----------------------------------
 
 alter table dw1_page_actions drop constraint dw1_pactions__r__pages; -- the 'sno' column
 
@@ -257,6 +259,7 @@ alter table dw1_pages rename column cached_author_user_id to author_id;
 alter table dw1_pages alter column author_id set not null;
 alter table dw1_pages alter column author_id type int using (author_id::int);
 
+alter table dw1_pages drop column next_reply_id;
 alter table dw1_pages drop column cached_num_posters;
 alter table dw1_pages drop column cached_num_actions;
 alter table dw1_pages drop column cached_num_posts_to_review;
@@ -268,10 +271,191 @@ alter table dw1_pages rename column cached_num_child_pages to num_child_pages;
 alter table dw1_pages rename column cached_num_likes to num_likes;
 alter table dw1_pages rename column cached_num_wrongs to num_wrongs;
 
-alter table dw1_pages add column num_replies_incl_deleted int not null default 0;
-alter table dw1_pages add column num_replies_excl_deleted int not null default 0;
+alter table dw1_pages add column num_replies_visible int not null default 0;
+alter table dw1_pages add column num_replies_to_review int not null default 0;
+alter table dw1_pages add column num_replies_total int not null default 0;
 
 drop sequence dw1_pages_sno;
 
 
 -- Rename 'tenant' columns to 'site_id'.
+-----------------------------------
+
+alter table dw1_paths rename tenant to site_id;
+alter table dw1_page_paths rename tenant to site_id;
+alter table dw1_emails_out rename tenant to site_id;
+alter table dw1_tenant_hosts rename tenant to site_id;
+alter table dw1_ids_openid rename tenant to site_id;
+alter table dw1_users rename tenant to site_id;
+alter table dw1_ids_simple_email rename tenant to site_id;
+alter table dw1_settings rename tenant_id to site_id;
+alter table dw1_page_actions rename tenant to site_id;
+
+
+-- Should have done long ago:
+-----------------------------------
+
+drop table dw1_ids_simple;
+drop table dw1_paths;
+
+
+-- Recreate triggers ('tenant' renamed to 'site_id').
+-----------------------------------
+
+alter table dw1_tenants drop column num_action_text_bytes;
+
+
+create or replace function dw2_posts_summary() returns trigger as $dw2_posts_summary$
+    declare
+        delta_rows integer;
+        delta_text_bytes integer;
+        site_id varchar;
+    begin
+        if (tg_op = 'DELETE') then
+            delta_rows = -1;
+            delta_text_bytes =
+                - coalesce(length(old.approved_source), 0)
+                - coalesce(length(old.current_source_patch), 0);
+            site_id = old.site_id;
+        elsif (tg_op = 'UPDATE') then
+            delta_rows = 0;
+            delta_text_bytes =
+                + coalesce(length(new.approved_source), 0)
+                + coalesce(length(new.current_source_patch), 0)
+                - coalesce(length(old.approved_source), 0)
+                - coalesce(length(old.current_source_patch), 0);
+            site_id = new.site_id;
+        elsif (tg_op = 'INSERT') then
+            delta_rows = 1;
+            delta_text_bytes =
+                + coalesce(length(new.approved_source), 0)
+                + coalesce(length(new.current_source_patch), 0);
+            site_id = new.site_id;
+        end if;
+        update dw1_tenants
+            set num_posts = num_posts + delta_rows,
+                num_post_text_bytes = num_post_text_bytes + delta_text_bytes
+            where id = site_id;
+        return null;
+    end;
+$dw2_posts_summary$ language plpgsql;
+
+create trigger dw2_posts_summary
+after insert or update or delete on dw2_posts
+    for each row execute procedure dw2_posts_summary();
+
+
+create or replace function dw2_post_actions_summary() returns trigger as $dw2_post_actions_summary$
+    declare
+        delta_rows integer;
+        site_id varchar;
+    begin
+        if (tg_op = 'DELETE') then
+            delta_rows = -1;
+            site_id = old.site_id;
+        elsif (tg_op = 'UPDATE') then
+            return null;
+        elsif (tg_op = 'INSERT') then
+            delta_rows = 1;
+            site_id = new.site_id;
+        end if;
+        update dw1_tenants
+            set num_actions = num_actions + delta_rows
+            where id = site_id;
+        return null;
+    end;
+$dw2_post_actions_summary$ language plpgsql;
+
+create trigger dw2_actions_summary
+after insert or update or delete on dw2_post_actions
+    for each row execute procedure dw2_post_actions_summary();
+
+
+create or replace function dw1_identities_summary() returns trigger as $dw1_identities_summary$
+    declare
+        delta_rows integer;
+        site_id varchar;
+    begin
+        if (tg_op = 'DELETE') then
+            delta_rows = -1;
+            site_id = old.site_id;
+        elsif (tg_op = 'UPDATE') then
+            delta_rows = 0;
+            site_id = new.site_id;
+        elsif (tg_op = 'INSERT') then
+            delta_rows = 1;
+            site_id = new.site_id;
+        end if;
+        update dw1_tenants
+            set num_identities = num_identities + delta_rows
+            where id = site_id;
+        return null;
+    end;
+$dw1_identities_summary$ language plpgsql;
+
+
+create or replace function dw1_roles_summary() returns trigger as $dw1_roles_summary$
+    declare
+        delta_rows integer;
+        site_id varchar;
+    begin
+        if (tg_op = 'DELETE') then
+            delta_rows = -1;
+            site_id = old.site_id;
+        elsif (tg_op = 'UPDATE') then
+            delta_rows = 0;
+            site_id = new.site_id;
+        elsif (tg_op = 'INSERT') then
+            delta_rows = 1;
+            site_id = new.site_id;
+        end if;
+        update dw1_tenants
+            set num_roles = num_roles + delta_rows
+            where id = site_id;
+        return null;
+    end;
+$dw1_roles_summary$ language plpgsql;
+
+
+create or replace function dw1_pages_summary() returns trigger as $dw1_pages_summary$
+    declare
+        delta_rows integer;
+        site_id varchar;
+    begin
+        if (tg_op = 'DELETE') then
+            delta_rows = -1;
+            site_id = old.site_id;
+        elsif (tg_op = 'UPDATE') then
+            delta_rows = 0;
+            site_id = new.site_id;
+        elsif (tg_op = 'INSERT') then
+            delta_rows = 1;
+            site_id = new.site_id;
+        end if;
+        update dw1_tenants
+            set num_pages = num_pages + delta_rows
+            where id = site_id;
+        return null;
+    end;
+$dw1_pages_summary$ language plpgsql;
+
+
+create or replace function dw1_emails_summary() returns trigger as $dw1_emails_summary$
+    begin
+        -- Sent emails cannot be made unset, so ignore deletes.
+        if (tg_op = 'UPDATE') then
+            if (old.sent_on is null and new.sent_on is not null) then
+                update dw1_tenants
+                    set num_emails_sent = num_emails_sent + 1
+                    where id = new.site_id;
+            end if;
+        elsif (tg_op = 'INSERT') then
+            if (new.sent_on is not null) then
+                update dw1_tenants
+                    set num_emails_sent = num_emails_sent + 1
+                    where id = new.site_id;
+            end if;
+        end if;
+        return null;
+    end;
+$dw1_emails_summary$ language plpgsql;
