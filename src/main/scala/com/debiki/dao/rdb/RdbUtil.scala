@@ -233,7 +233,7 @@ object RdbUtil {
       // Use dn2e not n2e. ((So works if joined w/ DW1_IDS_SIMPLE, which
       // uses '-' instead of null to indicate absence of email address etc.
       // See usage of this function in RdbSystemDao.loadUsers(). ))
-      id = rs.getString("u_id"),
+      id = rs.getInt("u_id"),
       displayName = dn2e(rs.getString("u_disp_name")),
       username = Option(rs.getString("u_username")),
       createdAt = ts2o(rs.getTimestamp("u_created_at")),

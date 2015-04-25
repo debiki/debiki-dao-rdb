@@ -163,9 +163,10 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   // private [this dao package]
-  def loadUsers(userIdsByTenant: Map[String, List[String]])
-        : Map[(String, String), User] = {
+  def loadUsers(userIdsByTenant: Map[String, List[UserId]])
+        : Map[(String, UserId), User] = {
 
+    unimplemented("loading users int")//TODo
     var idCount = 0
     var longestInList = 0
 
@@ -236,7 +237,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     // Could log warning if longestInList > 1000, would break in Oracle
     // (max in list size is 1000).
 
-    var usersByTenantAndId = Map[(String, String), User]()
+    var usersByTenantAndId = Map[(String, UserId), User]()
 
     db.queryAtnms(totalQuery.toString, allValsReversed.reverse, rs => {
       while (rs.next) {
@@ -396,7 +397,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
    * tenantIdOpt + emailIdOpt --> loads a single email and notf
    */
   def loadNotfsImpl(numToLoad: Int, tenantIdOpt: Option[String] = None,
-        delayMinsOpt: Option[Int] = None, userIdOpt: Option[String] = None,
+        delayMinsOpt: Option[Int] = None, userIdOpt: Option[UserId] = None,
         emailIdOpt: Option[String] = None): Map[SiteId, Seq[Notification]] = {
 
     require(emailIdOpt.isEmpty, "looking up by email id not tested after rewrite")
@@ -423,7 +424,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         // Later on, could choose to load only those not yet seen.
         var whereOrderBy =
           "SITE_ID = ? and TO_USER_ID = ? order by CREATED_AT desc"
-        val vals = List(tenantIdOpt.get, uid.toInt.asAnyRef)  // UserId2
+        val vals = List(tenantIdOpt.get, uid.asAnyRef)
         (whereOrderBy, vals)
       case (None, Some(emailId)) =>
         val whereOrderBy = "SITE_ID = ? and EMAIL_ID = ?"
@@ -455,8 +456,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val postId = rs.getInt("POST_ID")
         val actionType = getResultSetIntOption(rs, "ACTION_TYPE").map(fromActionTypeInt)
         val actionSubId = getResultSetIntOption(rs, "ACTION_SUB_ID")
-        val byUserId = rs.getInt("BY_USER_ID").toString // UserId2
-        val toUserId = rs.getInt("TO_USER_ID").toString // UserId2
+        val byUserId = rs.getInt("BY_USER_ID")
+        val toUserId = rs.getInt("TO_USER_ID")
         val emailId = Option(rs.getString("EMAIL_ID"))
         val emailStatus = flagToEmailStatus(rs.getString("EMAIL_STATUS"))
         val seenAt = ts2o(rs.getTimestamp("SEEN_AT"))

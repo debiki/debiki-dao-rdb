@@ -966,7 +966,7 @@ class RdbSiteDao(
 
     val isPageAuthor =
       (for (user <- reqInfo.user; pageMeta <- reqInfo.pageMeta) yield {
-        user.id2 == pageMeta.authorId
+        user.id == pageMeta.authorId
       }) getOrElse false
 
 
