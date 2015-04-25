@@ -129,9 +129,11 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
 
   /** Currently indexes each post directly.
     */
-  def indexNewPostsSoon(page: PageNoPath, posts: Seq[Post], siteId: String) {
+  /*
+  def indexNewPostsSoon(page: PageNoPath, posts: Seq[Post2], siteId: String) {
     indexingActorRef ! PostsToIndex(siteId, page, posts.toVector)
   }
+  */
 
 
   /** The index can be deleted like so:  curl -XDELETE localhost:9200/sites_v0
@@ -211,7 +213,7 @@ class FullTextSearchIndexer(private val relDbDaoFactory: RdbDaoFactory) {
 
 private[rdb] case object ReplyWhenDoneIndexing
 private[rdb] case object IndexPendingPosts
-private[rdb] case class PostsToIndex(siteId: String, page: PageNoPath, posts: Vector[Post])
+private[rdb] case class PostsToIndex(siteId: String) // , page: PageNoPath, posts: Vector[Post])
 
 
 
@@ -249,13 +251,16 @@ private[rdb] class IndexingActor(
   }
 
   private def indexPosts(postsToIndex: PostsToIndex) {
+    unimplemented("indexing posts [DwE2UYJ7]") /*
     postsToIndex.posts foreach { post =>
       indexPost(post, postsToIndex.page, postsToIndex.siteId)
     }
+    */
   }
 
 
-  private def indexPost(post: Post, page: PageNoPath, siteId: String) {
+  /*
+  private def indexPost(post: Post2, page: PageNoPath, siteId: String) {
     val json = makeJsonToIndex(post, page, siteId)
     val idString = elasticSearchIdFor(siteId, post)
     val indexRequest: es.action.index.IndexRequest =
@@ -287,9 +292,11 @@ private[rdb] class IndexingActor(
       }
     })
   }
+    */
 
 
-  private def makeJsonToIndex(post: Post, page: PageNoPath, siteId: String): JsValue = {
+  /*
+  private def makeJsonToIndex(post: Post2, page: PageNoPath, siteId: String): JsValue = {
     var sectionPageIds = page.ancestorIdsParentFirst
     if (page.meta.pageRole.isSection) {
       sectionPageIds ::= page.id
@@ -300,6 +307,7 @@ private[rdb] class IndexingActor(
     json += JsonKeys.SiteId -> JsString(siteId)
     json
   }
+    */
 
 }
 
@@ -330,8 +338,10 @@ object FullTextSearchIndexer {
   val PostMappingName = "post"
 
 
-  def elasticSearchIdFor(siteId: String, post: Post): String =
+  def elasticSearchIdFor(siteId: String, post: Post2): String =
+    unimplemented("indexing Post2 [DwE7KEP23]")/*
     elasticSearchIdFor(siteId, pageId = post.page.id, postId = post.id)
+    */
 
   def elasticSearchIdFor(siteId: String, pageId: PageId, postId: PostId): String =
     s"$siteId:$pageId:$postId"

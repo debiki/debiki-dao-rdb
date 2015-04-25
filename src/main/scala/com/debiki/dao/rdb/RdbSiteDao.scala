@@ -581,51 +581,6 @@ class RdbSiteDao(
   }
 
 
-  def loadPagePartsOld(pageId: PageId): Option[PageParts] = loadPageParts(pageId)
-
-
-  override def loadPageParts(pageGuid: PageId, tenantId: Option[SiteId] = None)
-        : Option[PageParts] =
-    _loadPagePartsAnyTenant(
-      tenantId = tenantId getOrElse this.siteId,
-      pageId = pageGuid)
-
-
-  private def _loadPagePartsAnyTenant(tenantId: SiteId, pageId: PageId)
-        : Option[PageParts] = {
-
-    val users = loadUsersOnPage(pageId)
-
-    // Load page actions.
-    // Order by TIME desc, because when the action list is constructed
-    // the order is reversed again.
-    queryAtnms("""
-        select """+ ActionSelectListItems +"""
-        from DW1_PAGE_ACTIONS a
-        where a.SITE_ID = ? and a.PAGE_ID = ?
-        order by a.TIME desc""",
-        List(tenantId, pageId), rs => {
-      var actions = List[AnyRef]()
-      while (rs.next) {
-        val action = _Action(rs)
-        actions ::= action  // this reverses above `order by TIME desc'
-      }
-
-      if (actions.isEmpty) {
-        // BUG Race condition, if page just created in other thread. COULD fix by
-        // joining with DW1_PAGES in the query above somehow.
-        val anyMeta = loadPageMeta(pageId, anySiteId = Some(tenantId))
-        if (anyMeta.isEmpty) {
-          // The page doesn't exist.
-          return None
-        }
-      }
-
-      Some(PageParts.fromActions(pageId, this, People(users), actions))
-    })
-  }
-
-
   def loadTenant(): Tenant = {
     systemDaoSpi.loadTenants(List(siteId)).head
   }
@@ -1469,8 +1424,9 @@ class RdbSiteDao(
       pageAndPostIds.map(_ => "(PAGE_ID = ? and PAID = ?)").mkString(" or ")
 
     unimplemented("Indexing posts in DW2_POSTS", "DwE0GIK3") // this uses a deleted table:
+    /*
     val sql = s"""
-      update DW1_PAGE_ACTIONS set INDEX_VERSION = ?
+      update DW1_ PAGE_ACTIONS set INDEX_VERSION = ?
       where SITE_ID = ?
         and ($pagesAndPostsClause)
         and TYPE = 'Post'
@@ -1481,6 +1437,7 @@ class RdbSiteDao(
 
     val numPostsUpdated = db.updateAtnms(sql, values.asInstanceOf[List[AnyRef]])
     assert(numPostsUpdated <= pageAndPostIds.length)
+    */
   }
 
 }

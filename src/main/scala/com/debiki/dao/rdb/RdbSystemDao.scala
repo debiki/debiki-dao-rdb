@@ -550,9 +550,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   private def loadPostsToIndex(
         postIdsByPageBySite: col.Map[SiteId, col.Map[PageId, col.Seq[PostId]]])(
         connection: js.Connection): Vector[PostsToIndex] = {
-
+    unimplemented("Loading posts to index [DwE7FKEf2]") /*
     var chunksOfPostsToIndex = Vector[PostsToIndex]()
-
     for ((siteId, postIdsByPage) <- postIdsByPageBySite.iterator) {
       val siteDao: RdbSiteDao = newSiteDao(siteId)
       val pageIds = postIdsByPage.keySet.toList
@@ -581,6 +580,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     }
 
     chunksOfPostsToIndex
+    */
   }
 
 
