@@ -7,16 +7,13 @@ $$ language plpgsql;
 
 -- Create a System and an Unknown user, ids -1 and -3.
 -- Reserving -2 for totally anonymous users.
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('2',  -1, 'System', 'T', 'system', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('3',  -1, 'System', 'T', 'system', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('18', -1, 'System', 'T', 'system', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('49', -1, 'System', 'T', 'system', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('35', -1, 'System', 'T', 'system', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('2',  -3, 'Unknown', null, 'unknown', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('3',  -3, 'Unknown', null, 'unknown', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('18', -3, 'Unknown', null, 'unknown', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('49', -3, 'Unknown', null, 'unknown', now_utc());
-insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at) values ('35', -3, 'Unknown', null, 'unknown', now_utc());
+insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at)
+   select id,  -1, 'System', 'T', 'system', now_utc() from dw1_tenants;
+insert into dw1_users(tenant, sno, display_name, superadmin, username, created_at)
+   select id,  -3, 'Unknown', null, 'unknown', now_utc() from dw1_tenants;
+
+-- Previously, the system user id was 1. Seems 1 was inserted only in one table.
+update dw1_pages set cached_author_user_id = '-1' where cached_author_user_id = '1';
 
 drop function inc_next_per_page_reply_id(
     site_id character varying, page_id character varying, step integer);
@@ -73,6 +70,8 @@ create table dw2_posts(
   deleted_by_id int,
 
   pinned_position smallint,
+  pinned_at timestamp,
+  pinned_by_id int,
 
   num_pending_flags smallint not null default 0,
   num_handled_flags smallint not null default 0,
