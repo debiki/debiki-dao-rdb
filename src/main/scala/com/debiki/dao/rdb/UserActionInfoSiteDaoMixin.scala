@@ -101,7 +101,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
 
 
   def listUserActions(userId: UserId): Seq[UserActionInfo] = {
-
+    unimplemented("Loading user actions [DwE6PKG74]") /*
     // Load incomplete action infos, which lack user display names, page
     // titles and page roles.
     val incompleteInfos: Seq[UserActionInfo] = loadIncompleteActionInfos(userId)
@@ -139,6 +139,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
       }
     }
     infos
+    */
   }
 
 

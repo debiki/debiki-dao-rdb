@@ -18,18 +18,13 @@
 package com.debiki.dao.rdb
 
 import com.debiki.core._
-import com.debiki.core.DbDao._
 import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
-import com.debiki.core.PagePath._
-import com.debiki.core.{PostActionPayload => PAP}
 import com.debiki.core.Prelude._
-import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
 import scala.collection.{immutable, mutable}
 import scala.collection.{mutable => mut}
 import scala.collection.mutable.StringBuilder
-import DbDao._
 import Rdb._
 import RdbUtil._
 
@@ -427,49 +422,6 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val values = List[AnyRef](siteId, pageId, siteId, pageId)
     var users: List[User] = Nil
     runQuery(sql, values, rs => {
-      while (rs.next()) {
-        val user = _User(rs)
-        users ::= user
-      }
-    })
-    users
-  }
-
-
-  def loadUsersOnPage(pageId: PageId): List[User] = {
-    val sql = s"""
-      select ${_UserSelectListItems}
-      from DW1_PAGE_ACTIONS a left join DW1_USERS u
-        on a.SITE_ID = u.SITE_ID and a.ROLE_ID = u.SNO
-        where a.SITE_ID = ?
-          and a.PAGE_ID = ?
-          and a.ROLE_ID is not null
-      union
-      select
-        '-'||g.ID u_id,
-        g.NAME u_disp_name,
-        null u_username,
-        null u_created_at,
-        g.EMAIL_ADDR u_email,
-        e.EMAIL_NOTFS u_email_notfs,
-        null u_email_verified_at,
-        null u_password_hash,
-        g.LOCATION u_country,
-        g.URL u_website,
-        'F' u_superadmin,
-        'F' u_is_owner
-      from
-        DW1_PAGE_ACTIONS a left join DW1_GUESTS g
-          on a.SITE_ID = g.SITE_ID and a.GUEST_ID = g.ID
-        left join DW1_IDS_SIMPLE_EMAIL e
-           on g.SITE_ID = e.SITE_ID and g.EMAIL_ADDR = e.EMAIL
-        where a.SITE_ID = ?
-          and a.PAGE_ID = ?
-          and a.GUEST_ID is not null """
-
-    val values = List[AnyRef](siteId, pageId, siteId, pageId)
-    var users: List[User] = Nil
-    queryAtnms(sql, values, rs => {
       while (rs.next()) {
         val user = _User(rs)
         users ::= user

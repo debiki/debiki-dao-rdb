@@ -150,7 +150,7 @@ trait FullTextSearchSiteDaoMixin extends SiteDbDao {
       val textAndHtmlMarks = textAndMarks.map(
           _.replaceAllLiterally(HighlightPreMark, HighlightPreTag)
             .replaceAllLiterally(HighlightPostMark, HighlightPostTag))
-      val post = Post.fromJson(json)
+      val post: Post = unimplemented("Search-engine-hitting-Post2 [DwE4JGU8]") // Post.fromJson(json)
       FullTextSearchHit(post, hit.getScore, safeHighlightsHtml = textAndHtmlMarks)
     }
 
