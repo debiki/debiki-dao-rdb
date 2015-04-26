@@ -338,7 +338,7 @@ object FullTextSearchIndexer {
   val PostMappingName = "post"
 
 
-  def elasticSearchIdFor(siteId: String, post: Post2): String =
+  def elasticSearchIdFor(siteId: String, post: Post): String =
     unimplemented("indexing Post2 [DwE7KEP23]")/*
     elasticSearchIdFor(siteId, pageId = post.page.id, postId = post.id)
     */

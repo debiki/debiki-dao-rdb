@@ -33,16 +33,16 @@ import PageSiteDaoMixin._
 trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
-  override def loadPost(pageId: PageId, postId: PostId): Option[Post2] =
+  override def loadPost(pageId: PageId, postId: PostId): Option[Post] =
     loadPostsOnPageImpl(pageId, postId = Some(postId), siteId = None).headOption
 
 
-  override def loadPostsOnPage(pageId: PageId, siteId: Option[SiteId]): immutable.Seq[Post2] =
+  override def loadPostsOnPage(pageId: PageId, siteId: Option[SiteId]): immutable.Seq[Post] =
     loadPostsOnPageImpl(pageId, postId = None, siteId = None)
 
 
   def loadPostsOnPageImpl(pageId: PageId, postId: Option[PostId], siteId: Option[SiteId])
-        : immutable.Seq[Post2] = {
+        : immutable.Seq[Post] = {
     var query = "select * from DW2_POSTS where SITE_ID = ? and PAGE_ID = ?"
     val values = ArrayBuffer[AnyRef](siteId.getOrElse(this.siteId), pageId)
     postId foreach { id =>
@@ -50,7 +50,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       query += " and POST_ID = ?"
       values.append(id.asAnyRef)
     }
-    var results = ArrayBuffer[Post2]()
+    var results = ArrayBuffer[Post]()
     runQuery(query, values.toList, rs => {
       while (rs.next()) {
         val post = readPost(rs, pageId = Some(pageId))
@@ -61,7 +61,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadPosts(pagePostIds: Iterable[PagePostId]): immutable.Seq[Post2] = {
+  def loadPosts(pagePostIds: Iterable[PagePostId]): immutable.Seq[Post] = {
     if (pagePostIds.isEmpty)
       return Nil
 
@@ -76,7 +76,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     }
     queryBuilder.append(")")
 
-    var results = ArrayBuffer[Post2]()
+    var results = ArrayBuffer[Post]()
     runQuery(queryBuilder.toString, values.toList, rs => {
       while (rs.next()) {
         val post = readPost(rs)
@@ -87,7 +87,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadPostsToReview(): immutable.Seq[Post2] = {
+  def loadPostsToReview(): immutable.Seq[Post] = {
     val flaggedPosts = loadPostsToReviewImpl("""
       deleted_status = 0 and
       num_pending_flags > 0
@@ -107,10 +107,10 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  private def loadPostsToReviewImpl(whereTests: String): ArrayBuffer[Post2] = {
+  private def loadPostsToReviewImpl(whereTests: String): ArrayBuffer[Post] = {
     var query = s"select * from dw2_posts where site_id = ? and $whereTests"
     val values = List(siteId)
-    var results = ArrayBuffer[Post2]()
+    var results = ArrayBuffer[Post]()
     runQuery(query, values.toList, rs => {
       while (rs.next()) {
         val post = readPost(rs)
@@ -121,7 +121,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  override def insertPost(post: Post2) {
+  override def insertPost(post: Post) {
     val statement = """
       insert into dw2_posts(
         site_id,
@@ -234,7 +234,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def updatePost(post: Post2) {
+  def updatePost(post: Post) {
     val statement = """
       update dw2_posts set
         parent_post_id = ?,
@@ -332,8 +332,8 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def readPost(rs: js.ResultSet, pageId: Option[PageId] = None): Post2 = {
-    Post2(
+  def readPost(rs: js.ResultSet, pageId: Option[PageId] = None): Post = {
+    Post(
       siteId = siteId,
       pageId = pageId.getOrElse(rs.getString("PAGE_ID")),
       id = rs.getInt("POST_ID"),
