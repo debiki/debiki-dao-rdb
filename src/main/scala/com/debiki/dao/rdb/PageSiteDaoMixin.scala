@@ -395,17 +395,17 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadActionsByUserOnPage(userId: UserId2, pageId: PageId): immutable.Seq[PostAction2] = {
+  def loadActionsByUserOnPage(userId: UserId2, pageId: PageId): immutable.Seq[PostAction] = {
     var query = """
       select post_id, type, created_by_id
       from dw2_post_actions
       where site_id = ? and page_id = ? and created_by_id = ?
       """
     val values = List[AnyRef](siteId, pageId, userId.asAnyRef)
-    var results = Vector[PostAction2]()
+    var results = Vector[PostAction]()
     runQuery(query, values, rs => {
       while (rs.next()) {
-        val postAction = PostAction2(
+        val postAction = PostAction(
           pageId = pageId,
           postId = rs.getInt("post_id"),
           doerId = userId,
@@ -417,17 +417,17 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadActionsDoneToPost(pageId: PageId, postId: PostId): immutable.Seq[PostAction2] = {
+  def loadActionsDoneToPost(pageId: PageId, postId: PostId): immutable.Seq[PostAction] = {
     var query = """
       select type, created_by_id
       from dw2_post_actions
       where site_id = ? and page_id = ? and post_id = ?
       """
     val values = List[AnyRef](siteId, pageId, postId.asAnyRef)
-    var results = Vector[PostAction2]()
+    var results = Vector[PostAction]()
     runQuery(query, values, rs => {
       while (rs.next()) {
-        val postAction = PostAction2(
+        val postAction = PostAction(
           pageId = pageId,
           postId = postId,
           doerId = rs.getInt("created_by_id"),

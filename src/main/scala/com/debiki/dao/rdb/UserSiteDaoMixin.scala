@@ -18,18 +18,13 @@
 package com.debiki.dao.rdb
 
 import com.debiki.core._
-import com.debiki.core.DbDao._
 import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
-import com.debiki.core.PagePath._
-import com.debiki.core.{PostActionPayload => PAP}
 import com.debiki.core.Prelude._
-import _root_.scala.xml.{NodeSeq, Text}
 import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
 import scala.collection.{immutable, mutable}
 import scala.collection.{mutable => mut}
 import scala.collection.mutable.StringBuilder
-import DbDao._
 import Rdb._
 import RdbUtil._
 
