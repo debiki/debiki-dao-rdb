@@ -163,10 +163,18 @@ alter table dw1_ids_openid rename sno to id;
 alter table dw1_ids_openid alter id type int using (id::int);
 
 
+-- Rename some stuff.
+
+alter table dw1_ids_simple_email rename to dw1_guest_prefs;
+alter table dw1_ids_openid rename to dw1_identities;
+
+
 -- No longer needed.
 
 drop sequence dw1_ids_sno;
 drop sequence dw1_users_sno;
+drop table dw1_guests;
+drop table dw0_version;
 
 
 -- TODO add indexes on user_id columns because now they're FKs.
@@ -175,51 +183,3 @@ drop sequence dw1_users_sno;
 --   created_at
 
 
-/*
- public | dw1_emails_out         | table    | debiki_dev
- to_guest_id
- to_role_id
- public | dw1_guests             | table    | debiki_dev
- id
- public | dw1_ids_openid         | table    | debiki_dev
- usr
- usr_orig
- public | dw1_ids_simple_email   | table    | debiki_dev
- -
- public | dw1_notifications      | table    | debiki_dev
- by_user_id
- to_user_id
- public | dw1_page_paths         | table    | debiki_dev
- -
- public | dw1_pages              | table    | debiki_dev
- author_id
- deleted_by_id
- public | dw1_posts_read_stats   | table    | debiki_dev
- user_id
- public | dw1_role_page_settings | table    | debiki_dev
- role_id
- public | dw1_settings           | table    | debiki_dev
- -
- public | dw1_tenant_hosts       | table    | debiki_dev
- -
- public | dw1_tenants            | table    | debiki_dev
- -
- public | dw1_users              | table    | debiki_dev
- sno -> user_id
- public | dw2_post_actions       | table    | debiki_dev
- created_by_id
- deleted_by_id
- public | dw2_posts              | table    | debiki_dev
- created_by_id
- last_edited_by_id
- last_approved_edit_by_id
- approved_by_id
- collapsed_by_id
- closed_by_id
- hidden_by_id
- deleted_by_id
- pinned_by_id
- public | schema_version         | table    | debiki_dev
- -
-
-*/

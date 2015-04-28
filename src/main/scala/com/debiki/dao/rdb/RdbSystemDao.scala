@@ -176,7 +176,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       val q = s"""
          select u.SITE_ID, $UserSelectListItemsWithGuests
          from DW1_USERS u
-         left join DW1_IDS_SIMPLE_EMAIL e on u.site_id = e.site_id and u.email = e.email
+         left join DW1_GUEST_PREFS e on u.site_id = e.site_id and u.email = e.email
          where u.SITE_ID = ?
          and u.USER_ID in (""" + inList +")"
       (q, siteId :: idsAu.map(_.asAnyRef))
@@ -588,9 +588,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_PAGE_PATHS
       delete from DW1_PAGES
       delete from DW2_POSTS
-      delete from DW1_IDS_SIMPLE_EMAIL
+      delete from DW1_GUEST_PREFS
       delete from DW1_GUESTS
-      delete from DW1_IDS_OPENID
+      delete from DW1_IDENTITIES
       delete from DW1_USERS
       delete from DW1_TENANT_HOSTS
       delete from DW1_TENANTS where ID <> '${Site.FirstSiteId}'

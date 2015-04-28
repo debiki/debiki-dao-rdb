@@ -51,7 +51,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def nextIdentityId: IdentityId = {
     val query = s"""
-      select max(id) max_id from dw1_ids_openid
+      select max(id) max_id from dw1_identities
       where site_id = ?
       """
     runQuery(query, List(siteId), rs => {
@@ -110,7 +110,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   private[rdb] def insertOpenIdIdentity(tenantId: SiteId, identity: IdentityOpenId) {
     val details = identity.openIdDetails
     runUpdate("""
-            insert into DW1_IDS_OPENID(
+            insert into DW1_IDENTITIES(
                 SNO, SITE_ID, USER_ID, USER_ID_ORIG, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
                 OID_REALM, OID_ENDPOINT, OID_VERSION,
                 FIRST_NAME, EMAIL, COUNTRY)
@@ -127,7 +127,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         (implicit connection: js.Connection) {
     val details = identity.openIdDetails
     db.update("""
-      update DW1_IDS_OPENID set
+      update DW1_IDENTITIES set
           USER_ID = ?, OID_CLAIMED_ID = ?,
           OID_OP_LOCAL_ID = ?, OID_REALM = ?,
           OID_ENDPOINT = ?, OID_VERSION = ?,
@@ -145,7 +145,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   private def insertOpenAuthIdentity(
         otherSiteId: SiteId, identity: OpenAuthIdentity) {
     val sql = """
-        insert into DW1_IDS_OPENID(
+        insert into DW1_IDENTITIES(
             SNO, SITE_ID, USER_ID, USER_ID_ORIG,
             FIRST_NAME, LAST_NAME, FULL_NAME, EMAIL, AVATAR_URL,
             AUTH_METHOD, SECURESOCIAL_PROVIDER_ID, SECURESOCIAL_USER_ID)
@@ -167,7 +167,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   private[rdb] def updateOpenAuthIdentity(identity: OpenAuthIdentity)
         (implicit connection: js.Connection) {
     val sql = """
-      update DW1_IDS_OPENID set
+      update DW1_IDENTITIES set
         USER_ID = ?, AUTH_METHOD = ?,
         FIRST_NAME = ?, LAST_NAME = ?, FULL_NAME = ?, EMAIL = ?, AVATAR_URL = ?
       where SNO = ? and SITE_ID = ?"""
@@ -224,7 +224,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
             i.EMAIL i_email,
             i.COUNTRY i_country,
             i.AVATAR_URL i_avatar_url
-          from DW1_IDS_OPENID i inner join DW1_USERS u
+          from DW1_IDENTITIES i inner join DW1_USERS u
             on i.SITE_ID = u.SITE_ID
             and i.USER_ID = u.USER_ID
         """
@@ -312,7 +312,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
               avatarUrl = Option(rs.getString("i_avatar_url"))))
         }
         else {
-          assErr("DwE77GJ2", s"Unknown identity in DW1_IDS_OPENID, site: $siteId, id: $id")
+          assErr("DwE77GJ2", s"Unknown identity in DW1_IDENTITIES, site: $siteId, id: $id")
         }
       }
 
@@ -377,7 +377,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       select $UserSelectListItemsWithGuests
       from DW2_POSTS p left join DW1_USERS u
         on p.SITE_ID = u.SITE_ID and p.CREATED_BY_ID = u.USER_ID
-        left join DW1_IDS_SIMPLE_EMAIL e
+        left join DW1_GUEST_PREFS e
         on u.SITE_ID = e.SITE_ID and u.EMAIL = e.EMAIL
         where p.SITE_ID = ?
           and p.PAGE_ID = ?
@@ -438,9 +438,9 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         i.OID_ENDPOINT i_endpoint
       from
         DW1_USERS u
-        left join DW1_IDS_OPENID i
+        left join DW1_IDENTITIES i
           on u.USER_ID = i.USER_ID and u.SITE_ID = i.SITE_ID
-        left join DW1_IDS_SIMPLE_EMAIL e
+        left join DW1_GUEST_PREFS e
           on u.EMAIL = e.EMAIL and u.SITE_ID = e.SITE_ID
       where
         u.SITE_ID = ?
@@ -571,7 +571,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       // below fail.
       // COULD check # rows updated? No, there might be no rows to update.
       db.update("""
-          update DW1_IDS_SIMPLE_EMAIL
+          update DW1_GUEST_PREFS
           set VERSION = 'O' -- old
           where SITE_ID = ? and EMAIL = ? and VERSION = 'C'
             and EMAIL_NOTFS != 'F'
@@ -583,7 +583,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       // for this `emailAddr' -- since there'll be a primary key violation,
       // see the update statement above.
       db.update("""
-          insert into DW1_IDS_SIMPLE_EMAIL (
+          insert into DW1_GUEST_PREFS (
               SITE_ID, CTIME, VERSION, EMAIL, EMAIL_NOTFS)
           values (?, ?, 'C', ?, ?)
           """,

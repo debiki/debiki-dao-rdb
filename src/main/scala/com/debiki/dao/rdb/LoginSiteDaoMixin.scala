@@ -55,7 +55,7 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
       for (i <- 1 to 2 if userId == 0) {
         runQuery("""
           select u.USER_ID, e.EMAIL_NOTFS from DW1_USERS u
-            left join DW1_IDS_SIMPLE_EMAIL e
+            left join DW1_GUEST_PREFS e
             on u.EMAIL = e.EMAIL and e.VERSION = 'C'
           where u.SITE_ID = ?
             and u.DISPLAY_NAME = ?
