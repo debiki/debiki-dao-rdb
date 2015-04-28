@@ -20,6 +20,7 @@ package com.debiki.dao.rdb
 import com.debiki.core._
 import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.Prelude._
+import com.debiki.core.User.{LowestNonGuestId, LowestAuthenticatedUserId}
 import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
 import scala.collection.{immutable, mutable}
@@ -35,48 +36,48 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
-  def createUserAndLogin(newUserData: NewUserData): LoginGrant = {
-    transactionCheckQuota { connection =>
-      createUserAndLoginImpl(newUserData)(connection)
-    }
+  def nextAuthenticatedUserId: UserId = {
+    val query = s"""
+      select max(user_id) max_id from dw1_users
+      where site_id = ? and user_id >= $LowestAuthenticatedUserId
+      """
+    runQuery(query, List(siteId), rs => {
+      rs.next()
+      val maxId = rs.getInt("max_id")
+      maxId + 1
+    })
   }
 
 
-  private def createUserAndLoginImpl(newUserData: NewUserData)(connection: js.Connection)
-        : LoginGrant = {
-    val user = _insertUser(siteId, newUserData.userNoId)(connection)
-    val identityNoId = newUserData.identityNoId
-    val identity = insertIdentity(identityNoId, userId = user.id, siteId)(connection)
-    LoginGrant(Some(identity), user, isNewIdentity = true, isNewRole = true)
+  def nextIdentityId: IdentityId = {
+    val query = s"""
+      select max(id) max_id from dw1_ids_openid
+      where site_id = ?
+      """
+    runQuery(query, List(siteId), rs => {
+      rs.next()
+      val maxId = rs.getInt("max_id")
+      (maxId + 1).toString
+    })
   }
 
 
-  def createPasswordUser(userData: NewPasswordUserData): User = {
-    transactionCheckQuota { connection =>
-      _insertUser(siteId, userData.userNoId)(connection)
-    }
-  }
-
-
-  private[rdb] def _insertUser(tenantId: SiteId, userNoId: User)
-        (implicit connection: js.Connection): User = {
-    val createdAt = userNoId.createdAt.getOrElse(new ju.Date)
-    val userSno = db.nextSeqNo("DW1_USERS_SNO")
-    val user = userNoId.copy(id = userSno.toString, createdAt = Some(createdAt))
+  def insertAuthenticatedUser(user: User) {
+    val createdAt = user.createdAt getOrDie "DwE7KFE3"
     try {
-      db.update("""
+      runUpdate("""
         insert into DW1_USERS(
-            SITE_ID, SNO, DISPLAY_NAME, USERNAME, CREATED_AT,
+            SITE_ID, USER_ID, DISPLAY_NAME, USERNAME, CREATED_AT,
             EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, PASSWORD_HASH,
             COUNTRY, SUPERADMIN, IS_OWNER)
         values (
             ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?)""",
-        List[AnyRef](tenantId, user.id, e2n(user.displayName), user.username.orNullVarchar,
-           createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
-           userNoId.passwordHash.orNullVarchar, e2n(user.country),
-           tOrNull(user.isAdmin), tOrNull(user.isOwner)))
+        List[AnyRef](siteId, user.id.asAnyRef, e2n(user.displayName), user.username.orNullVarchar,
+          createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs),
+          o2ts(user.emailVerifiedAt), user.passwordHash.orNullVarchar, e2n(user.country),
+          tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     }
     catch {
       case ex: js.SQLException =>
@@ -89,47 +90,36 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         if (uniqueConstrViolatedIs("DW1_USERS_SITE_USERNAME__U", ex))
           throw DbDao.DuplicateUsername
 
-        assErr("DwE6ZP21")
+        die("DwE6ZP21")
     }
-    user
   }
 
 
-  private[rdb] def insertIdentity(identityNoId: Identity, userId: UserId, otherSiteId: SiteId)
-        (connection: js.Connection): Identity = {
-    identityNoId match {
+  def insertIdentity(identity: Identity) {
+    identity match {
       case x: IdentityOpenId =>
-        insertOpenIdIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
+        insertOpenIdIdentity(siteId, x)
       case x: OpenAuthIdentity =>
-        insertOpenAuthIdentity(otherSiteId, x.copy(id = "?", userId = userId))(connection)
+        insertOpenAuthIdentity(siteId, x)
       case x =>
-        assErr(s"Don't know how to insert identity of type: ${classNameOf(x)}")
+        die("DwE8UYM0", s"Unknown identity type: ${classNameOf(x)}")
     }
   }
 
 
-  private[rdb] def insertOpenIdIdentity(tenantId: SiteId, idtyNoId: Identity)
-        (implicit connection: js.Connection): Identity = {
-    val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
-    idtyNoId match {
-      case oidIdtyNoId: IdentityOpenId =>
-        val idty = oidIdtyNoId.copy(id = newIdentityId)
-        val details = oidIdtyNoId.openIdDetails
-        db.update("""
+  private[rdb] def insertOpenIdIdentity(tenantId: SiteId, identity: IdentityOpenId) {
+    val details = identity.openIdDetails
+    runUpdate("""
             insert into DW1_IDS_OPENID(
-                SNO, SITE_ID, USR, USR_ORIG, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
+                SNO, SITE_ID, USER_ID, USER_ID_ORIG, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
                 OID_REALM, OID_ENDPOINT, OID_VERSION,
                 FIRST_NAME, EMAIL, COUNTRY)
             values (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            List[AnyRef](idty.id, tenantId, idty.userId, idty.userId,
+            List[AnyRef](identity.id, tenantId, identity.userId.asAnyRef, identity.userId.asAnyRef,
               details.oidClaimedId, e2d(details.oidOpLocalId), e2d(details.oidRealm),
               e2d(details.oidEndpoint), e2d(details.oidVersion),
               e2d(details.firstName), details.email.orNullVarchar, e2d(details.country)))
-        idty
-      case _ =>
-        assErr("DwE03IJL2")
-    }
   }
 
 
@@ -138,13 +128,13 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val details = identity.openIdDetails
     db.update("""
       update DW1_IDS_OPENID set
-          USR = ?, OID_CLAIMED_ID = ?,
+          USER_ID = ?, OID_CLAIMED_ID = ?,
           OID_OP_LOCAL_ID = ?, OID_REALM = ?,
           OID_ENDPOINT = ?, OID_VERSION = ?,
           FIRST_NAME = ?, EMAIL = ?, COUNTRY = ?
       where SNO = ? and SITE_ID = ?
       """,
-      List[AnyRef](identity.userId, details.oidClaimedId,
+      List[AnyRef](identity.userId.asAnyRef, details.oidClaimedId,
         e2d(details.oidOpLocalId), e2d(details.oidRealm),
         e2d(details.oidEndpoint), e2d(details.oidVersion),
         e2d(details.firstName), details.email.orNullVarchar, e2d(details.country),
@@ -152,14 +142,11 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  private[rdb] def insertOpenAuthIdentity(
-        otherSiteId: SiteId, identityNoId: OpenAuthIdentity)
-        (implicit connection: js.Connection): OpenAuthIdentity = {
-    val newIdentityId = db.nextSeqNo("DW1_IDS_SNO").toString
-    val identity = identityNoId.copy(id = newIdentityId)
+  private def insertOpenAuthIdentity(
+        otherSiteId: SiteId, identity: OpenAuthIdentity) {
     val sql = """
         insert into DW1_IDS_OPENID(
-            SNO, SITE_ID, USR, USR_ORIG,
+            SNO, SITE_ID, USER_ID, USER_ID_ORIG,
             FIRST_NAME, LAST_NAME, FULL_NAME, EMAIL, AVATAR_URL,
             AUTH_METHOD, SECURESOCIAL_PROVIDER_ID, SECURESOCIAL_USER_ID)
         values (
@@ -169,12 +156,11 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val ds = identity.openAuthDetails
     val method = "OAuth" // should probably remove this column
     val values = List[AnyRef](
-      identity.id, otherSiteId, identity.userId, identity.userId,
+      identity.id, otherSiteId, identity.userId.asAnyRef, identity.userId.asAnyRef,
       ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
       ds.fullName.orNullVarchar, ds.email.orNullVarchar, ds.avatarUrl.orNullVarchar,
       method, ds.providerId, ds.providerKey)
-    db.update(sql, values)
-    identity
+    runUpdate(sql, values)
   }
 
 
@@ -182,13 +168,13 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         (implicit connection: js.Connection) {
     val sql = """
       update DW1_IDS_OPENID set
-        USR = ?, AUTH_METHOD = ?,
+        USER_ID = ?, AUTH_METHOD = ?,
         FIRST_NAME = ?, LAST_NAME = ?, FULL_NAME = ?, EMAIL = ?, AVATAR_URL = ?
       where SNO = ? and SITE_ID = ?"""
     val ds = identity.openAuthDetails
     val method = "OAuth" // should probably remove this column
     val values = List[AnyRef](
-      identity.userId, method, ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
+      identity.userId.asAnyRef, method, ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
       ds.fullName.orNullVarchar, ds.email.orNullVarchar, ds.avatarUrl.orNullVarchar,
       identity.id, siteId)
     db.update(sql, values)
@@ -197,7 +183,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def loadIdtyDetailsAndUser(userId: UserId): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
-      _loadIdtyDetailsAndUser(forUserId = userId) match {
+      _loadIdtyDetailsAndUser(forUserId = Some(userId)) match {
         case (None, None) => None
         case (Some(idty), Some(user)) => Some(idty, user)
         case (None, user) => assErr("DwE257IV2")
@@ -211,22 +197,19 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     */
   // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
   private[rdb] def _loadIdtyDetailsAndUser(
-        forUserId: UserId = null,
+        forUserId: Option[UserId] = None,
         forOpenIdDetails: OpenIdDetails = null,
         forOpenAuthProfile: OpenAuthProviderIdKey = null)(implicit connection: js.Connection)
         : (Option[Identity], Option[User]) = {
-
     val anyOpenIdDetails = Option(forOpenIdDetails)
     val anyOpenAuthKey = Option(forOpenAuthProfile)
 
-    val anyUserId: Option[UserId] =
-      if (forUserId eq null) None
-      else Some(forUserId)
+    val anyUserId = forUserId
 
     var sqlSelectFrom = """
         select
-            """+ _UserSelectListItems +""",
-            i.SNO i_id,
+            """+ UserSelectListItemsNoGuests +""",
+            i.ID i_id,
             i.OID_CLAIMED_ID,
             i.OID_OP_LOCAL_ID,
             i.OID_REALM,
@@ -243,14 +226,14 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
             i.AVATAR_URL i_avatar_url
           from DW1_IDS_OPENID i inner join DW1_USERS u
             on i.SITE_ID = u.SITE_ID
-            and i.USR = u.SNO
+            and i.USER_ID = u.USER_ID
         """
 
     val (whereClause, bindVals) = (anyUserId, anyOpenIdDetails, anyOpenAuthKey) match {
 
       case (Some(userId: UserId), None, None) =>
-        ("""where i.SITE_ID = ? and i.USR = ?""",
-           List(siteId, userId))
+        ("""where i.SITE_ID = ? and i.USER_ID = ?""",
+           List(siteId, userId.asAnyRef))
 
       case (None, Some(openIdDetails: OpenIdDetails), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
@@ -294,7 +277,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
       val userInDb = _User(rs)
 
-      val id = rs.getLong("i_id").toString
+      val id = rs.getInt("i_id").toString
       val email = Option(rs.getString("i_email"))
       val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
       val anyOpenAuthProviderId = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
@@ -346,10 +329,10 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       val sql = """
         update DW1_USERS
         set PASSWORD_HASH = ?
-        where SITE_ID = ? and SNO = ?
-                """
-      val numRowsChanged = db.update(sql, List(newPasswordSaltHash, siteId, user.id))
-      assert(numRowsChanged <= 1, "DwE87GMf0")
+        where SITE_ID = ? and USER_ID = ?
+        """
+      val numRowsChanged = db.update(sql, List(newPasswordSaltHash, siteId, user.id.asAnyRef))
+      dieIf(numRowsChanged > 1, "DwE87GMf0")
       numRowsChanged == 1
     }
   }
@@ -365,9 +348,10 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   def loadUserByEmailOrUsernameImpl(emailOrUsername: String)
         (implicit connection: js.Connection): Option[User] = {
     val sql = s"""
-      select ${_UserSelectListItems}
+      select ${UserSelectListItemsNoGuests}
       from DW1_USERS u
-      where u.SITE_ID = ? and (u.EMAIL = ? or u.USERNAME = ?)"""
+      where u.SITE_ID = ? and u.USER_ID >= $LowestNonGuestId and (u.EMAIL = ? or u.USERNAME = ?)
+      """
     val values = List(siteId, emailOrUsername, emailOrUsername)
     db.query(sql, values, rs => {
       if (!rs.next()) {
@@ -390,36 +374,15 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def loadUsersOnPage2(pageId: PageId): List[User] = {
     val sql = s"""
-      select ${_UserSelectListItems}
+      select $UserSelectListItemsWithGuests
       from DW2_POSTS p left join DW1_USERS u
-        on p.SITE_ID = u.SITE_ID and '' || p.CREATED_BY_ID = u.SNO  -- UserId2 remove '' ||
-        where p.SITE_ID = ?
-          and p.PAGE_ID = ?
-          and p.CREATED_BY_ID >= ${User.LowestNonGuestId}
-      union
-      select
-        '-'||g.ID u_id,
-        g.NAME u_disp_name,
-        null u_username,
-        null u_created_at,
-        g.EMAIL_ADDR u_email,
-        e.EMAIL_NOTFS u_email_notfs,
-        null u_email_verified_at,
-        null u_password_hash,
-        g.LOCATION u_country,
-        g.URL u_website,
-        'F' u_superadmin,
-        'F' u_is_owner
-      from
-        DW2_POSTS p left join DW1_GUESTS g
-          on p.SITE_ID = g.SITE_ID and '' || p.CREATED_BY_ID = '-' || g.ID -- UserId2
+        on p.SITE_ID = u.SITE_ID and p.CREATED_BY_ID = u.USER_ID
         left join DW1_IDS_SIMPLE_EMAIL e
-           on g.SITE_ID = e.SITE_ID and g.EMAIL_ADDR = e.EMAIL
+        on u.SITE_ID = e.SITE_ID and u.EMAIL = e.EMAIL
         where p.SITE_ID = ?
           and p.PAGE_ID = ?
-          and p.CREATED_BY_ID <= ${User.MaxGuestId} """
-
-    val values = List[AnyRef](siteId, pageId, siteId, pageId)
+      """
+    val values = List[AnyRef](siteId, pageId)
     var users: List[User] = Nil
     runQuery(sql, values, rs => {
       while (rs.next()) {
@@ -435,8 +398,8 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     loadUsersAsList(userId::Nil).headOption
 
 
-  def loadUsers(userIds: Seq[UserId2]): immutable.Seq[User] =
-    loadUsersAsList(userIds.map(_.toString).toList) // UserId2
+  def loadUsers(userIds: Seq[UserId]): immutable.Seq[User] =
+    loadUsersAsList(userIds.toList)
 
 
   private[rdb] def loadUsersAsList(userIds: List[UserId]): List[User] = {
@@ -446,14 +409,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadUsersAsMap2(userIds: Iterable[UserId2]): Map[UserId2, User] = {
-    loadUsersAsMap(userIds.map(_.toString)) map {
-      case (userId, user) => (userId.toInt, user)
-    }
-  }
-
-
-  private[rdb] def loadUsersAsMap(userIds: Iterable[UserId]): Map[UserId, User] = {
+  def loadUsersAsMap(userIds: Iterable[UserId]): Map[UserId, User] = {
     val usersBySiteAndId =  // SHOULD specify quota consumers
       systemDaoSpi.loadUsers(Map(siteId -> userIds.toList))
     usersBySiteAndId map { case (siteAndUserId, user) =>
@@ -474,40 +430,24 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
    */
   private def listUsersImp(userQuery: UserQuery)(implicit connection: js.Connection)
         : Seq[(User, Seq[String])] = {
-
     // For now, simply list all users (guests union roles).
     val query =
-      i"""select
-        '-' || g.ID as u_id,
-        g.NAME u_disp_name,
-        null u_username,
-        null u_created_at,
-        g.EMAIL_ADDR u_email,
-        e.EMAIL_NOTFS u_email_notfs,
-        null u_email_verified_at,
-        null u_password_hash,
-        g.LOCATION u_country,
-        g.URL u_website,
-        'F' u_superadmin,
-        'F' u_is_owner,
-        'Guest' i_endpoint
-      from DW1_GUESTS g left join DW1_IDS_SIMPLE_EMAIL e
-      on g.EMAIL_ADDR = e.EMAIL and g.SITE_ID = e.SITE_ID
-      where g.SITE_ID = ?
-      union
+      i"""
       select
-        ${_UserSelectListItems},
+        $UserSelectListItemsWithGuests,
         i.OID_ENDPOINT i_endpoint
       from
-        DW1_USERS u left join DW1_IDS_OPENID i
-      on
-        u.SNO = i.USR and u.SITE_ID = i.SITE_ID
+        DW1_USERS u
+        left join DW1_IDS_OPENID i
+          on u.USER_ID = i.USER_ID and u.SITE_ID = i.SITE_ID
+        left join DW1_IDS_SIMPLE_EMAIL e
+          on u.EMAIL = e.EMAIL and u.SITE_ID = e.SITE_ID
       where
         u.SITE_ID = ?
       """
 
     val values = List(siteId, siteId)
-    val result: mut.Map[String, (User, List[String])] = mut.Map.empty
+    val result: mut.Map[UserId, (User, List[String])] = mut.Map.empty
 
     db.queryAtnms(query, values, rs => {
       while (rs.next) {
@@ -538,10 +478,10 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   private def listUsernamesOnPage(pageId: PageId): Seq[NameAndUsername] = {
     val sql = """
-      select u.DISPLAY_NAME, u.USERNAME
+      select distinct u.DISPLAY_NAME, u.USERNAME
       from DW2_POSTS p inner join DW1_USERS u
          on p.SITE_ID = u.SITE_ID
-        and '' || p.CREATED_BY_ID = u.SNO  -- UserId2
+        and p.CREATED_BY_ID = u.USER_ID
         and u.USERNAME is not null
       where p.SITE_ID = ? and p.PAGE_ID = ?"""
     val values = List(siteId, pageId)
@@ -559,10 +499,10 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   private def listUsernamesWithPrefix(prefix: String): Seq[NameAndUsername] = {
-    val sql = """
-      select DISPLAY_NAME, USERNAME
+    val sql = s"""
+      select distinct DISPLAY_NAME, USERNAME
       from DW1_USERS
-      where SITE_ID = ? and USERNAME like ?
+      where SITE_ID = ? and USERNAME like ? and USER_ID >= $LowestNonGuestId
       """
     val values = List(siteId, prefix + "%")
     val result = mutable.ArrayBuffer[NameAndUsername]()
@@ -580,7 +520,6 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   def configRole(roleId: RoleId,
         emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean],
         isOwner: Option[Boolean], emailVerifiedAt: Option[Option[ju.Date]]) {
-    require(!roleId.startsWith("-") && !roleId.startsWith("?"))
 
     var changes = StringBuilder.newBuilder
     var newValues: List[AnyRef] = Nil
@@ -616,8 +555,8 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       return
 
     transactionAllowOverQuota { implicit connection =>
-      val sql = s"update DW1_USERS set $changes where SITE_ID = ? and SNO = ?"
-      db.update(sql, newValues.reverse ::: List(siteId, roleId))
+      val sql = s"update DW1_USERS set $changes where SITE_ID = ? and USER_ID = ?"
+      db.update(sql, newValues.reverse ::: List(siteId, roleId.asAnyRef))
     }
   }
 
@@ -658,7 +597,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       select NOTF_LEVEL
       from DW1_ROLE_PAGE_SETTINGS
       where SITE_ID = ? and ROLE_ID = ? and PAGE_ID = ?"""
-    val values = List(siteId, roleId, pageId)
+    val values = List(siteId, roleId.asAnyRef, pageId)
     db.queryAtnms(query, values, rs => {
       if (!rs.next)
         return None
@@ -682,7 +621,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         insert into DW1_ROLE_PAGE_SETTINGS(
           NOTF_LEVEL, SITE_ID, ROLE_ID, PAGE_ID)
         values (?, ?, ?, ?)"""
-    val values = List(notfLevelToFlag(settings.notfLevel), siteId, roleId, pageId)
+    val values = List(notfLevelToFlag(settings.notfLevel), siteId, roleId.asAnyRef, pageId)
     transactionCheckQuota { implicit connection =>
       db.update(sql, values)
     }
@@ -699,16 +638,16 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     var result = mutable.ArrayBuffer[UserId]()
     db.queryAtnms(sql, List(siteId, pageId), rs => {
       while (rs.next()) {
-        result += rs.getString("ROLE_ID")
+        result += rs.getInt("ROLE_ID")
       }
     })
 
     // Load people watching the whole site.
     val sqlWholeSite = """
-      select SNO from DW1_USERS where SITE_ID = ? and EMAIL_FOR_EVERY_NEW_POST = true"""
+      select USER_ID from DW1_USERS where SITE_ID = ? and EMAIL_FOR_EVERY_NEW_POST = true"""
     db.queryAtnms(sqlWholeSite, List(siteId), rs => {
       while (rs.next()) {
-        result += rs.getString("SNO")
+        result += rs.getInt("USER_ID")
       }
     })
     result.distinct.to[immutable.Seq]
@@ -721,8 +660,8 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val sql = s"""
       select DISPLAY_NAME, USERNAME, WEBSITE, EMAIL, EMAIL_FOR_EVERY_NEW_POST
       from DW1_USERS u
-      where SITE_ID = ? and SNO = ?"""
-    val values = List(siteId, roleId)
+      where SITE_ID = ? and USER_ID = ?"""
+    val values = List(siteId, roleId.asAnyRef)
     db.queryAtnms(sql, values, rs => {
       if (!rs.next()) {
         None
@@ -749,10 +688,10 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       update DW1_USERS
       set DISPLAY_NAME = ?, USERNAME = ?, EMAIL = ?, WEBSITE = ?,
         EMAIL_FOR_EVERY_NEW_POST = ?
-      where SITE_ID = ? and SNO = ?"""
+      where SITE_ID = ? and USER_ID = ?"""
     val values = List(e2n(preferences.fullName), preferences.username.orNullVarchar,
         e2n(preferences.emailAddress), e2n(preferences.url),
-        preferences.emailForEveryNewPost.asAnyRef, siteId, preferences.userId)
+        preferences.emailForEveryNewPost.asAnyRef, siteId, preferences.userId.asAnyRef)
     transactionCheckQuota { connection =>
       db.update(sql, values)(connection)
     }

@@ -42,9 +42,9 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
 
 
   def loadUserStats(userId: UserId): UserStats = {
+    unimplemented("Loading user statistics via new DW2... tables", "DwE4PIW5") /* wrong tables below
     val (guestOrRoleId, userIdColumn) = RdbUtil.userIdAndColumnFor(userId)
 
-    unimplemented("Loading user statistics via new DW2... tables", "DwE4PIW5") // wrong tables below
     // The action that creates a new page should have id PageParts.BodyId,
     // so PAID = PageParts.BodyId means a new page was created.
     val query = s"""
@@ -97,6 +97,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
       numWrongsReceived = 0, // not yet loaded
       numOffTopicsGiven = numOffTopicsGiven,
       numOffTopicsReceived = 0) // not yet loaded
+      */
   }
 
 
@@ -145,6 +146,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
 
   private def loadIncompleteActionInfos(userId: UserId): Seq[UserActionInfo] = {
     unimplemented("Loading user action infos via new DW2... tables", "DwE6PK52") // wrong tbls below
+    /*
     val (guestOrRoleId, userIdColumn) = RdbUtil.userIdAndColumnFor(userId)
     val query = s"""
       select PAGE_ID, POST_ID, PAID, TIME, TYPE, RELPA, TIME
@@ -223,6 +225,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
     })
 
     result
+    */
   }
 
 }

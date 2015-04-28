@@ -162,60 +162,30 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  // private [this dao package]
-  def loadUsers(userIdsByTenant: Map[String, List[String]])
-        : Map[(String, String), User] = {
-
+  def loadUsers(userIdsByTenant: Map[SiteId, List[UserId]]): Map[(SiteId, UserId), User] = {
     var idCount = 0
-    var longestInList = 0
 
-    def incIdCount(ids: List[String]) {
+    def incIdCount(ids: List[UserId]) {
       val len = ids.length
       idCount += len
-      if (len > longestInList) longestInList = len
     }
 
-    def mkQueryUnau(tenantId: String, idsUnau: List[String])
-          : (String, List[String]) = {
-      incIdCount(idsUnau)
-      val inList = idsUnau.map(_ => "?").mkString(",")
-      // Use "u_*" select list item names, so works with _User(result-set).
-      val q = """
-         select
-            g.SITE_ID SITE_ID, '-'||g.ID u_id, g.NAME u_disp_name, null u_username,
-            null u_created_at,
-            g.EMAIL_ADDR u_email, e.EMAIL_NOTFS u_email_notfs,
-            null u_email_verified_at,
-            null u_password_hash,
-            g.LOCATION u_country,
-            g.URL u_website, 'F' u_superadmin, 'F' u_is_owner
-         from
-           DW1_GUESTS g left join DW1_IDS_SIMPLE_EMAIL e
-           on g.SITE_ID = e.SITE_ID and g.EMAIL_ADDR = e.EMAIL
-         where
-           g.SITE_ID = ? and
-           g.ID in (""" + inList +")"
-      // A guest user id starts with '-', drop it.
-      val vals = tenantId :: idsUnau.map(_.drop(1))
-      (q, vals)
-    }
-
-    def mkQueryAu(tenantId: String, idsAu: List[String])
-          : (String, List[String]) = {
+    def makeSingleSiteQuery(siteId: SiteId, idsAu: List[UserId]): (String, List[AnyRef]) = {
       incIdCount(idsAu)
       val inList = idsAu.map(_ => "?").mkString(",")
-      val q = """
-         select u.SITE_ID, """+ _UserSelectListItems +"""
+      val q = s"""
+         select u.SITE_ID, $UserSelectListItemsWithGuests
          from DW1_USERS u
+         left join DW1_IDS_SIMPLE_EMAIL e on u.site_id = e.site_id and u.email = e.email
          where u.SITE_ID = ?
-         and u.SNO in (""" + inList +")"
-      (q, tenantId :: idsAu)
+         and u.USER_ID in (""" + inList +")"
+      (q, siteId :: idsAu.map(_.asAnyRef))
     }
 
     val totalQuery = StringBuilder.newBuilder
-    var allValsReversed = List[String]()
+    var allValsReversed = List[AnyRef]()
 
-    def growQuery(moreQueryAndVals: (String, List[String])) {
+    def growQuery(moreQueryAndVals: (String, List[AnyRef])) {
       if (totalQuery.nonEmpty)
         totalQuery ++= " union "
       totalQuery ++= moreQueryAndVals._1
@@ -224,27 +194,19 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     // Build query.
     for ((tenantId, userIds) <- userIdsByTenant.toList) {
-      val (idsUnau, idsAu) = userIds.distinct.partition(User.isGuestId)
-
-      if (idsUnau nonEmpty) growQuery(mkQueryUnau(tenantId, idsUnau))
-      if (idsAu nonEmpty) growQuery(mkQueryAu(tenantId, idsAu))
+      if (userIds nonEmpty) {
+        growQuery(makeSingleSiteQuery(tenantId, userIds))
+      }
     }
 
     if (idCount == 0)
       return Map.empty
 
-    // Could log warning if longestInList > 1000, would break in Oracle
-    // (max in list size is 1000).
-
-    var usersByTenantAndId = Map[(String, String), User]()
+    var usersByTenantAndId = Map[(SiteId, UserId), User]()
 
     db.queryAtnms(totalQuery.toString, allValsReversed.reverse, rs => {
       while (rs.next) {
         val tenantId = rs.getString("SITE_ID")
-        // Sometimes convert both "-" and null to "", because unauthenticated
-        // users use "-" as placeholder for "nothing specified" -- so those
-        // values are indexed (since sql null isn't).
-        // Authenticated users, however, currently use sql null for nothing.
         val user = _User(rs)
         usersByTenantAndId = usersByTenantAndId + ((tenantId, user.id) -> user)
       }
@@ -396,7 +358,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
    * tenantIdOpt + emailIdOpt --> loads a single email and notf
    */
   def loadNotfsImpl(numToLoad: Int, tenantIdOpt: Option[String] = None,
-        delayMinsOpt: Option[Int] = None, userIdOpt: Option[String] = None,
+        delayMinsOpt: Option[Int] = None, userIdOpt: Option[UserId] = None,
         emailIdOpt: Option[String] = None): Map[SiteId, Seq[Notification]] = {
 
     require(emailIdOpt.isEmpty, "looking up by email id not tested after rewrite")
@@ -423,7 +385,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         // Later on, could choose to load only those not yet seen.
         var whereOrderBy =
           "SITE_ID = ? and TO_USER_ID = ? order by CREATED_AT desc"
-        val vals = List(tenantIdOpt.get, uid.toInt.asAnyRef)  // UserId2
+        val vals = List(tenantIdOpt.get, uid.asAnyRef)
         (whereOrderBy, vals)
       case (None, Some(emailId)) =>
         val whereOrderBy = "SITE_ID = ? and EMAIL_ID = ?"
@@ -455,8 +417,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val postId = rs.getInt("POST_ID")
         val actionType = getResultSetIntOption(rs, "ACTION_TYPE").map(fromActionTypeInt)
         val actionSubId = getResultSetIntOption(rs, "ACTION_SUB_ID")
-        val byUserId = rs.getInt("BY_USER_ID").toString // UserId2
-        val toUserId = rs.getInt("TO_USER_ID").toString // UserId2
+        val byUserId = rs.getInt("BY_USER_ID")
+        val toUserId = rs.getInt("TO_USER_ID")
         val emailId = Option(rs.getString("EMAIL_ID"))
         val emailStatus = flagToEmailStatus(rs.getString("EMAIL_STATUS"))
         val seenAt = ts2o(rs.getTimestamp("SEEN_AT"))

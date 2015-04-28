@@ -70,23 +70,8 @@ object RdbUtil {
   }
 
 
-  def userIdAndColumnFor(userId: UserId) = {
-    if (User.isRoleId(userId))
-      (userId, "ROLE_ID")
-    else
-      (userId.drop(1), "GUEST_ID")
-  }
-
-
-  def _dummyUserIdFor(identityId: String) = {
-    dieIf(identityId == "1", "DwE0GKf2", "Identity id matches system user id")
-    s"-$identityId"
-  }
-
-
-  val _UserSelectListItems =
-    // (These u_* item names are relied on e.g. by RdbSystemDao.loadUsers.)
-    """u.SNO u_id,
+  val UserSelectListItemsNoGuests =
+    """u.USER_ID u_id,
       |u.DISPLAY_NAME u_disp_name,
       |u.USERNAME u_username,
       |u.CREATED_AT u_created_at,
@@ -99,24 +84,34 @@ object RdbUtil {
       |u.SUPERADMIN u_superadmin,
       |u.IS_OWNER u_is_owner""".stripMargin
 
+  val UserSelectListItemsWithGuests =
+    s"$UserSelectListItemsNoGuests, e.EMAIL_NOTFS g_email_notfs"
 
-  def _User(rs: js.ResultSet) =
+  def _User(rs: js.ResultSet) = {
+    val userId = rs.getInt("u_id")
+    val emailNotfPrefs = {
+      if (User.isGuestId(userId))
+        _toEmailNotfs(rs.getString("g_email_notfs"))
+      else
+        _toEmailNotfs(rs.getString("u_email_notfs"))
+    }
     User(
       // Use dn2e not n2e. ((So works if joined w/ DW1_IDS_SIMPLE, which
       // uses '-' instead of null to indicate absence of email address etc.
       // See usage of this function in RdbSystemDao.loadUsers(). ))
-      id = rs.getString("u_id"),
+      id = userId,
       displayName = dn2e(rs.getString("u_disp_name")),
       username = Option(rs.getString("u_username")),
       createdAt = ts2o(rs.getTimestamp("u_created_at")),
       email = dn2e(rs.getString("u_email")),
-      emailNotfPrefs = _toEmailNotfs(rs.getString("u_email_notfs")),
+      emailNotfPrefs = emailNotfPrefs,
       emailVerifiedAt = ts2o(rs.getTimestamp("u_email_verified_at")),
       passwordHash = Option(rs.getString("u_password_hash")),
       country = dn2e(rs.getString("u_country")),
       website = dn2e(rs.getString("u_website")),
       isAdmin = rs.getString("u_superadmin") == "T",
       isOwner = rs.getString("u_is_owner") == "T")
+  }
 
 
   def _PagePath(resultSet: js.ResultSet, tenantId: String,
@@ -310,16 +305,6 @@ object RdbUtil {
   }
 
 
-  /** Adds a can be Empty Prefix.
-   *
-   * Oracle converts the empty string to NULL, so prefix strings that might
-   * be empty with a magic value, and remove it when reading data from
-   * the db.
-   */
-  //private def _aep(str: String) = "-"+ str
-
-  /** Removes a can be Empty Prefix. */
-  //private def _rep(str: String) = str drop 1
 
   // COULD do this:
   /*
@@ -380,15 +365,3 @@ object RdbUtil {
    */
 }
 
-/*
-class AllStatements(con: js.Connection) {
-  con.setAutoCommit(false)
-  con.setAutoCommit(true)
-  // "It is advisable to disable the auto-commit mode only during th
-  // transaction mode. This way, you avoid holding database locks for
-  // multiple statements, which increases the likelihood of conflicts
-  // with other users."
-  // <http://download.oracle.com/javase/tutorial/jdbc/basics/transactions.html>
-*/
-
-// vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
