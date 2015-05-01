@@ -35,7 +35,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   def updatePostsReadStats(pageId: PageId, postIdsRead: Set[PostId],
-        readById: UserId2, readFromIp: String) {
+        readById: UserId, readFromIp: String) {
 
     // There's an ignore-duplicate-inserts rule in the database (DW1_PSTSRD_IGNORE_DUPL_INS).
     // However, if two transactions insert the same PK data at the same time that rule
@@ -56,7 +56,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao with SiteTransaction {
             SITE_ID, PAGE_ID, POST_ID, IP, USER_ID, READ_AT)
           values (?, ?, ?, ?, ?, ?)"""
         val values = List[AnyRef](siteId, pageId, postId.asAnyRef,
-          readFromIp, readById.toString, currentTime)  // UserId2
+          readFromIp, readById.asAnyRef, currentTime)
         try {
           db.update(sql, values)
         }
@@ -90,7 +90,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       while (rs.next) {
         val postId = rs.getInt("POST_ID")
         val ip = rs.getString("IP")
-        val anyUserId = Option(rs.getString("USER_ID"))
+        val anyUserId = getOptionalIntNoneNot0(rs, "USER_ID")
         anyUserId match {
           case Some(id) if User.isRoleId(id) =>
             val buffer = roleIdsByPostId.getOrElseUpdate(postId, new ArrayBuffer[RoleId])

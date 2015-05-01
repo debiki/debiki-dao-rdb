@@ -20,9 +20,7 @@ package com.debiki.dao.rdb
 import com.debiki.core._
 import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
-import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
-import com.debiki.core.Prelude._
-//import com.debiki.core.SecureSocialIdentity.displayNameFor
+import com.debiki.core.User.MaxCustomGuestId
 import java.{sql => js, util => ju}
 import Rdb._
 import RdbUtil._
@@ -35,7 +33,7 @@ object LoginSiteDaoMixin {
 
 
 
-trait LoginSiteDaoMixin extends SiteDbDao {
+trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
@@ -51,67 +49,67 @@ trait LoginSiteDaoMixin extends SiteDbDao {
 
 
   override def loginAsGuest(loginAttempt: GuestLoginAttempt): GuestLoginResult = {
-    transactionCheckQuota { implicit connection =>
-      var idtyId = ""
+      var userId = 0
       var emailNotfsStr = ""
       var isNewGuest = false
-      for (i <- 1 to 2 if idtyId.isEmpty) {
-        db.query("""
-            select g.ID, e.EMAIL_NOTFS from DW1_GUESTS g
-              left join DW1_IDS_SIMPLE_EMAIL e
-              on g.EMAIL_ADDR = e.EMAIL and e.VERSION = 'C'
-            where g.SITE_ID = ?
-              and g.NAME = ?
-              and g.EMAIL_ADDR = ?
-              and g.LOCATION = ?
-              and g.URL = ?
-                 """,
+      for (i <- 1 to 2 if userId == 0) {
+        runQuery("""
+          select u.USER_ID, e.EMAIL_NOTFS from DW1_USERS u
+            left join DW1_GUEST_PREFS e
+            on u.EMAIL = e.EMAIL and e.VERSION = 'C'
+          where u.SITE_ID = ?
+            and u.DISPLAY_NAME = ?
+            and u.EMAIL = ?
+            and u.GUEST_LOCATION = ?
+            and u.WEBSITE = ?
+          """,
           List(siteId, e2d(loginAttempt.name), e2d(loginAttempt.email),
             e2d(loginAttempt.location), e2d(loginAttempt.website)),
           rs => {
             if (rs.next) {
-              idtyId = rs.getString("ID")
+              userId = rs.getInt("USER_ID")
               emailNotfsStr = rs.getString("EMAIL_NOTFS")
             }
           })
-        if (idtyId isEmpty) {
-          // Create simple user info.
+
+        if (userId == 0) {
+          // We need to create a new guest user.
           // There is a unique constraint on SITE_ID, NAME, EMAIL, LOCATION, URL,
           // so this insert might fail (if another thread does
           // the insert, just before). Should it fail, the above `select'
           // is run again and finds the row inserted by the other thread.
           // Could avoid logging any error though!
           isNewGuest = true
-          db.update("""
-              insert into DW1_GUESTS(
-                  SITE_ID, ID, NAME, EMAIL_ADDR, LOCATION, URL)
-              values (?, nextval('DW1_IDS_SNO'), ?, ?, ?, ?)""",
+          runUpdate(i"""
+            insert into dw1_users(
+              site_id, user_id, display_name, email, guest_location, website)
+            select
+              ?, least(min(user_id) - 1, $MaxCustomGuestId), ?, ?, ?, ?
+            from
+              dw1_users where site_id = ?
+            """,
             List(siteId, loginAttempt.name, e2d(loginAttempt.email),
-              e2d(loginAttempt.location), e2d(loginAttempt.website)))
+              e2d(loginAttempt.location), e2d(loginAttempt.website), siteId))
           // (Could fix: `returning ID into ?`, saves 1 roundtrip.)
           // Loop one more lap to read ID.
         }
       }
-      assErrIf3(idtyId.isEmpty, "DwE3kRhk20")
-      val notfPrefs: EmailNotfPrefs = _toEmailNotfs(emailNotfsStr)
+      dieIf(userId == 0, "DwE3kRhk20")
 
-      // Derive a temporary user from the identity, see
-      // Debiki for Developers #9xdF21.
-      val user = User(id = _dummyUserIdFor(idtyId),
+      val user = User(
+        id = userId,
         displayName = loginAttempt.name,
         username = None,
         createdAt = None,
         email = loginAttempt.email,
-        emailNotfPrefs = notfPrefs,
+        emailNotfPrefs = _toEmailNotfs(emailNotfsStr),
         emailVerifiedAt = None,
         country = "",
         website = loginAttempt.website,
         isAdmin = false,
         isOwner = false)
 
-      // Quota already consumed (in the `for` loop above).
       GuestLoginResult(user, isNewGuest)
-    }
   }
 
 

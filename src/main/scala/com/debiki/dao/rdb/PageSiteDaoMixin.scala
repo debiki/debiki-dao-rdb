@@ -376,7 +376,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def deleteVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2)
+  def deleteVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId)
         : Boolean = {
     val statement = """
       delete from dw2_post_actions
@@ -390,12 +390,12 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def insertVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2) {
+  def insertVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId) {
     insertPostAction(pageId, postId, actionType = voteType, doerId = voterId)
   }
 
 
-  def loadActionsByUserOnPage(userId: UserId2, pageId: PageId): immutable.Seq[PostAction] = {
+  def loadActionsByUserOnPage(userId: UserId, pageId: PageId): immutable.Seq[PostAction] = {
     var query = """
       select post_id, type, created_by_id
       from dw2_post_actions
@@ -477,12 +477,12 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def insertFlag(pageId: PageId, postId: PostId, flagType: PostFlagType, flaggerId: UserId2) {
+  def insertFlag(pageId: PageId, postId: PostId, flagType: PostFlagType, flaggerId: UserId) {
     insertPostAction(pageId, postId, actionType = flagType, doerId = flaggerId)
   }
 
 
-  def clearFlags(pageId: PageId, postId: PostId, clearedById: UserId2) {
+  def clearFlags(pageId: PageId, postId: PostId, clearedById: UserId) {
     var statement = s"""
       update dw2_post_actions
       set deleted_at = ?, deleted_by_id = ?, updated_at = now_utc()
@@ -493,7 +493,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def insertPostAction(pageId: PageId, postId: PostId, actionType: PostActionType, doerId: UserId2) {
+  def insertPostAction(pageId: PageId, postId: PostId, actionType: PostActionType, doerId: UserId) {
     val statement = """
       insert into dw2_post_actions(site_id, page_id, post_id, type, created_by_id,
           created_at, sub_id)

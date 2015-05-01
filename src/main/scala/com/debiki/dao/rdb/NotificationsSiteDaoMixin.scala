@@ -62,8 +62,8 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
         values += postNotf.postId.asAnyRef
         values += NullInt // no related post action
         values += NullInt //
-        values += postNotf.byUserId.toInt.asAnyRef  // UserId2
-        values += postNotf.toUserId.toInt.asAnyRef  // UserId2
+        values += postNotf.byUserId.asAnyRef
+        values += postNotf.toUserId.asAnyRef
     }
 
     db.update(sql, values.toList)
@@ -81,7 +81,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
             and POST_ID = ?
             and TO_USER_ID = ?"""
         val values = List(siteId, mentionToDelete.pageId, mentionToDelete.postId.asAnyRef,
-          mentionToDelete.toUserId.toInt.asAnyRef)  // UserId2
+          mentionToDelete.toUserId.asAnyRef)
         (sql, values)
       case postToDelete: NotificationToDelete.NewPostToDelete =>
         val sql = """
@@ -137,7 +137,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val (whereClause, values): (String, List[AnyRef]) = notification match {
       case newPost: Notification.NewPost =>
         ("SITE_ID = ? and NOTF_TYPE = ? and PAGE_ID = ? and POST_ID = ? and TO_USER_ID = ?",
-          List(siteId, tyype, newPost.pageId, newPost.postId.asAnyRef, newPost.toUserId.toInt.asAnyRef)) // UserId2
+          List(siteId, tyype, newPost.pageId, newPost.postId.asAnyRef, newPost.toUserId.asAnyRef))
     }
 
     val emailStatus =

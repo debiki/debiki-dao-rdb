@@ -920,7 +920,7 @@ class RdbSiteDao(
 
     val isPageAuthor =
       (for (user <- reqInfo.user; pageMeta <- reqInfo.pageMeta) yield {
-        user.id2 == pageMeta.authorId
+        user.id == pageMeta.authorId
       }) getOrElse false
 
 
@@ -959,7 +959,6 @@ class RdbSiteDao(
 
   private def _saveUnsentEmail(email: Email)
         (implicit connection: js.Connection) {
-
     require(email.id != "?")
     require(email.failureText isEmpty)
     require(email.providerEmailId isEmpty)
@@ -972,21 +971,20 @@ class RdbSiteDao(
     }
 
     val vals = List(siteId, email.id, emailTypeToString(email.tyype), email.sentTo,
-      email.toGuestId.orNullVarchar, email.toRoleId.orNullVarchar,
+      email.toUserId.orNullInt,
       d2ts(email.createdAt), email.subject, email.bodyHtmlText)
 
     db.update("""
       insert into DW1_EMAILS_OUT(
-        SITE_ID, ID, TYPE, SENT_TO, TO_GUEST_ID, TO_ROLE_ID, CREATED_AT, SUBJECT, BODY_HTML)
+        SITE_ID, ID, TYPE, SENT_TO, TO_USER_ID, CREATED_AT, SUBJECT, BODY_HTML)
       values (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ?, ?, ?, ?, ?, ?, ?, ?)
       """, vals)
   }
 
 
   def updateSentEmail(email: Email) {
     transactionAllowOverQuota { implicit connection =>
-
       val sentOn = email.sentOn.map(d2ts(_)) getOrElse NullTimestamp
       // 'O' means Other, use for now.
       val failureType = email.failureText.isDefined ?
@@ -1011,7 +1009,7 @@ class RdbSiteDao(
 
   def loadEmailById(emailId: String): Option[Email] = {
     val query = """
-      select TYPE, SENT_TO, TO_GUEST_ID, TO_ROLE_ID, SENT_ON, CREATED_AT, SUBJECT,
+      select TYPE, SENT_TO, TO_USER_ID, SENT_ON, CREATED_AT, SUBJECT,
         BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
       from DW1_EMAILS_OUT
       where SITE_ID = ? and ID = ?
@@ -1027,12 +1025,7 @@ class RdbSiteDao(
             "DwE840FSIE", s"Bad email type: $typeString, email id: $emailId")
             EmailType.Notification
         }
-
-        val anyGuestId = Option(rs.getString("TO_GUEST_ID"))
-        val anyRoleId = Option(rs.getString("TO_ROLE_ID"))
-        val toUserId: Option[UserId] = anyRoleId.orElse(anyGuestId.map("-" + _))
-        dieIf(anyGuestId == Some("1"), "DwE4GKS2", "Guest id matches system user id")
-
+        val toUserId = getOptionalIntNoneNot0(rs, "TO_USER_ID")
         val email = Email(
            id = emailId,
            tyype = parseEmailType(rs.getString("TYPE")),
