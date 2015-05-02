@@ -85,19 +85,6 @@ alter table dw1_users add constraint dw1_users_id__c check (user_id < 0 or 100 <
 drop index dw1_users_site_email__u;
 create unique index dw1_users_site_email__u on dw1_users(site_id, email) where user_id >= -1;
 
--- TODO move from v13 to here:
--- insert into dw1_users(site_id, user_id, display_name, guest_location, website)
---   select id,  -3, 'Unknown', '-', '-' from dw1_tenants;
-update dw1_users set email = '-', guest_location = '-', website = '-'
-    where user_id = -3;  -- for now instead
-
-
-alter table dw1_users add constraint dw1_users_guest__c_nn check (
-    user_id >= -1 or (
-        display_name is not null and
-        email is not null and
-        guest_location is not null and
-        website is not null));
 create unique index dw1_user_guest__u on dw1_users(
     site_id, display_name, email, guest_location, website)
     where user_id < -1;
@@ -105,37 +92,77 @@ create unique index dw1_user_guest__u on dw1_users(
 insert into dw1_users(site_id, user_id, display_name, email, guest_location, website)
     select site_id, id::int, name, email_addr, location, url from dw1_guests;
 
+-- The unknown user shouldn't have any authenticated-user-data.
+update dw1_users set email = '-', guest_location = '-', website = '-',
+    username = null, created_at = null
+    where user_id = -3;
+
+alter table dw1_users drop constraint dw1_users_sno_not_0__c;
+alter table dw1_users alter column email_for_every_new_post drop not null;
+
+update dw1_users set email_for_every_new_post = null
+    where user_id < -1;
+
 
 -- Add foreign keys.
 
+-- ix index dw2_emlot_touser__i
 alter table dw1_emails_out add constraint dw1_emlot__r__users foreign key (
     site_id, to_user_id) references dw1_users(site_id, user_id);
 
+create index dw2_emlot_touser__i on dw1_emails_out(site_id, to_user_id);
+
+
+-- ix dw1_idsoid_tnt_usr
 alter table dw1_ids_openid add constraint dw1_ids_userid__r__users foreign key (
     site_id, user_id) references dw1_users(site_id, user_id);
+-- skip index
 alter table dw1_ids_openid add constraint dw1_ids_useridorig__r__users foreign key (
     site_id, user_id_orig) references dw1_users(site_id, user_id);
 
+
+-- ix: dw2_ntfs_byuserid__i
 alter table dw1_notifications add constraint dw1_ntfs_byuserid__r__users foreign key (
     site_id, by_user_id) references dw1_users(site_id, user_id);
+-- ix: dw2_ntfs_touserid__i
 alter table dw1_notifications add constraint dw1_ntfs_touserid__r__users foreign key (
     site_id, to_user_id) references dw1_users(site_id, user_id);
 
+create index dw2_ntfs_byuserid__i on dw1_notifications(site_id, by_user_id);
+create index dw2_ntfs_touserid__i on dw1_notifications(site_id, to_user_id);
+
+
+-- ix: dw2_pages_createdby__i
 alter table dw1_pages add constraint dw1_pages_createdbyid__r__users foreign key (
     site_id, author_id) references dw1_users(site_id, user_id);
+-- ix: dw2_pages_deletedby__i
 alter table dw1_pages add constraint dw1_pages_deletedbyid__r__users foreign key (
     site_id, deleted_by_id) references dw1_users(site_id, user_id);
 
+create index dw2_pages_createdby__i on dw1_pages(site_id, author_id);
+create index dw2_pages_deletedby__i on dw1_pages(site_id, deleted_by_id) where deleted_by_id is not null;
+
+
+-- ix: dw1_pstsrd_user__i
 alter table dw1_posts_read_stats add constraint dw1_pstsrd__r__users foreign key (
     site_id, user_id) references dw1_users(site_id, user_id);
 
+create index dw1_pstsrd_user__i on dw1_posts_read_stats(site_id, user_id);
+
+
+-- ix dw1_ropgst_site_role_page__p
 alter table dw1_role_page_settings add constraint dw1_ropgst__r__users foreign key (
     site_id, role_id) references dw1_users(site_id, user_id);
+
 
 alter table dw2_post_actions add constraint dw2_postacs_createdbyid__r__users foreign key (
     site_id, created_by_id) references dw1_users(site_id, user_id);
 alter table dw2_post_actions add constraint dw2_postacs_deletedbyid__r__users foreign key (
     site_id, deleted_by_id) references dw1_users(site_id, user_id);
+
+create index dw2_postacs_createdby__i on dw2_post_actions(site_id, created_by_id);
+create index dw2_postacs_deletedby__i on dw2_post_actions(site_id, deleted_by_id) where deleted_by_id is not null;
+
 
 alter table dw2_posts add constraint dw2_posts_createdbyid__r__users foreign key (
     site_id, created_by_id) references dw1_users(site_id, user_id);
@@ -156,8 +183,19 @@ alter table dw2_posts add constraint dw2_posts_deletedbyid__r__users foreign key
 alter table dw2_posts add constraint dw2_posts_pinnedbyid__r__users foreign key (
     site_id, pinned_by_id) references dw1_users(site_id, user_id);
 
+create index dw2_posts_createdby__i on dw2_posts(site_id, created_by_id);
+create index dw2_posts_lasteditedbyid__i on dw2_posts(site_id, last_edited_by_id) where last_edited_by_id is not null;
+create index dw2_posts_lastapprovededitbyid__i on dw2_posts(site_id, last_approved_edit_by_id) where last_approved_edit_by_id is not null;
+create index dw2_posts_approvedbyid__i on dw2_posts(site_id, approved_by_id) where approved_by_id is not null;
+create index dw2_posts_collapsedbyid__i on dw2_posts(site_id, collapsed_by_id) where collapsed_by_id is not null;
+create index dw2_posts_closedbyid__i on dw2_posts(site_id, closed_by_id) where closed_by_id is not null;
+create index dw2_posts_hiddenbyid__i on dw2_posts(site_id, hidden_by_id) where hidden_by_id is not null;
+create index dw2_posts_deletedbyid__i on dw2_posts(site_id, deleted_by_id) where deleted_by_id is not null;
+create index dw2_posts_pinnedbyid__i on dw2_posts(site_id, pinned_by_id) where pinned_by_id is not null;
 
--- Change identity id from text to int.
+
+-- Change identity id from text to int, but in one table only right now
+-- (because using text email ids).
 
 alter table dw1_ids_openid rename sno to id;
 alter table dw1_ids_openid alter id type int using (id::int);
@@ -177,9 +215,31 @@ drop table dw1_guests;
 drop table dw0_version;
 
 
--- TODO add indexes on user_id columns because now they're FKs.
--- user id < -1 --> not admin, not owner, ..
--- user id >= 100 -->
---   created_at
+alter table dw1_users add constraint dw1_users_guest__c_nn check (
+    user_id >= -1 or (
+        display_name is not null and
+        email is not null and
+        guest_location is not null and
+        website is not null));
 
+alter table dw1_users add constraint dw1_users_guest__c_nulls check (
+    user_id >= -1 or (
+        country is null and
+        superadmin is null and
+        is_owner is null and
+        username is null and
+        email_notfs is null and
+        email_verified_at is null and
+        created_at is null and
+        password_hash is null and
+        email_for_every_new_post is null));
+
+alter table dw1_users add constraint dw1_users_auth__c_nulls check (
+    user_id < -1 or (
+        guest_location is null));
+
+alter table dw1_users add constraint dw1_users_auth__c_notnulls check (
+    user_id < -1 or (
+        created_at is not null and
+        email_for_every_new_post is not null));
 
