@@ -128,7 +128,7 @@ alter table dw1_notifications add constraint dw1_ntfs_byuserid__r__users foreign
 alter table dw1_notifications add constraint dw1_ntfs_touserid__r__users foreign key (
     site_id, to_user_id) references dw1_users(site_id, user_id);
 
-create index dw2_ntfs_byuserid__i on dw1_notifications(site_id, by_user_id);
+-- create index dw2_ntfs_byuserid__i on dw1_notifications(site_id, by_user_id);
 create index dw2_ntfs_touserid__i on dw1_notifications(site_id, to_user_id);
 
 
@@ -146,8 +146,8 @@ create index dw2_pages_deletedby__i on dw1_pages(site_id, deleted_by_id) where d
 -- ix: dw1_pstsrd_user__i
 alter table dw1_posts_read_stats add constraint dw1_pstsrd__r__users foreign key (
     site_id, user_id) references dw1_users(site_id, user_id);
-
-create index dw1_pstsrd_user__i on dw1_posts_read_stats(site_id, user_id);
+-- Skip index.
+-- create index dw1_pstsrd_user__i on dw1_posts_read_stats(site_id, user_id);
 
 
 -- ix dw1_ropgst_site_role_page__p
@@ -215,6 +215,38 @@ drop table dw1_guests;
 drop table dw0_version;
 
 
+-- Approved and suspended columns.
+
+alter table dw1_users add column is_approved boolean;
+alter table dw1_users add column approved_at timestamp;
+alter table dw1_users add column approved_by_id int;
+alter table dw1_users add column suspended_at timestamp;
+alter table dw1_users add column suspended_till timestamp;
+alter table dw1_users add column suspended_by_id int;
+
+alter table dw1_users add constraint dw1_users_approvedbyid__r__users foreign key (
+    site_id, approved_by_id) references dw1_users(site_id, user_id);
+
+create index dw1_users_approvedbyid__i on dw1_users(site_id, approved_by_id)
+    where approved_by_id is not null;
+
+alter table dw1_users add constraint dw1_users_approved__c_null check(
+    approved_by_id is null = is_approved is null and
+    approved_by_id is null = approved_at is null);
+
+alter table dw1_users add constraint dw1_users_suspendebyid__r__users foreign key (
+    site_id, suspended_by_id) references dw1_users(site_id, user_id);
+
+create index dw1_users_suspendebyid__i on dw1_users(site_id, suspended_by_id)
+    where suspended_by_id is not null;
+
+alter table dw1_users add constraint dw1_users_suspended__c_null check(
+    suspended_by_id is null = suspended_at is null and
+    suspended_by_id is null = suspended_till is null);
+
+
+-- Guset and non-guest checks.
+
 alter table dw1_users add constraint dw1_users_guest__c_nn check (
     user_id >= -1 or (
         display_name is not null and
@@ -224,13 +256,19 @@ alter table dw1_users add constraint dw1_users_guest__c_nn check (
 
 alter table dw1_users add constraint dw1_users_guest__c_nulls check (
     user_id >= -1 or (
+        created_at is null and
+        is_approved is null and
+        approved_at is null and
+        approved_by_id is null and
+        suspended_at is null and
+        suspended_till is null and
+        suspended_by_id is null and
         country is null and
         superadmin is null and
         is_owner is null and
         username is null and
         email_notfs is null and
         email_verified_at is null and
-        created_at is null and
         password_hash is null and
         email_for_every_new_post is null));
 
