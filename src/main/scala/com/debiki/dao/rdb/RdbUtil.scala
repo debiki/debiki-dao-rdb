@@ -65,7 +65,7 @@ object RdbUtil {
    */
   def getOptionalIntNoneNot0(rs: js.ResultSet, column: String): Option[Int] = {
     val i = rs.getInt(column)
-    if (i == 0) None
+    if (rs.wasNull()) None
     else Some(i)
   }
 
