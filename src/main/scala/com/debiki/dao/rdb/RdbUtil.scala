@@ -69,6 +69,14 @@ object RdbUtil {
     else Some(i)
   }
 
+  /** `rs.getBoolean` returns false instead of null.
+    */
+  def getOptionalBoolean(rs: js.ResultSet, column: String): Option[Boolean] = {
+    val b = rs.getBoolean(column)
+    if (rs.wasNull()) None
+    else Some(b)
+  }
+
 
   val UserSelectListItemsNoGuests =
     """u.USER_ID u_id,
@@ -106,17 +114,67 @@ object RdbUtil {
       displayName = dn2e(rs.getString("u_disp_name")),
       username = Option(rs.getString("u_username")),
       createdAt = ts2o(rs.getTimestamp("u_created_at")),
-      isApproved = rs.getBoolean("u_is_approved"),
-      approvedAt = ts2o(rs.getTimestamp("u_approved_at")),
-      approvedById = getOptionalIntNoneNot0(rs, "u_approved_by_id"),
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = emailNotfPrefs,
       emailVerifiedAt = ts2o(rs.getTimestamp("u_email_verified_at")),
       passwordHash = Option(rs.getString("u_password_hash")),
       country = dn2e(rs.getString("u_country")),
       website = dn2e(rs.getString("u_website")),
+      isApproved = getOptionalBoolean(rs, "u_is_approved"),
+      isSuspended = false, // for now
       isAdmin = rs.getString("u_superadmin") == "T",
       isOwner = rs.getString("u_is_owner") == "T")
+  }
+
+
+  val CompleteUserSelectListItemsNoUserId = i"""
+    |display_name,
+    |email,
+    |country,
+    |website,
+    |superadmin,
+    |email_notfs,
+    |is_owner,
+    |username,
+    |email_verified_at,
+    |created_at,
+    |password_hash,
+    |email_for_every_new_post,
+    |guest_location,
+    |is_approved,
+    |approved_at,
+    |approved_by_id,
+    |suspended_at,
+    |suspended_till,
+    |suspended_by_id
+    """
+
+  val CompleteUserSelectListItemsWithUserId =
+    s"user_id, $CompleteUserSelectListItemsNoUserId"
+
+
+  def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): CompleteUser = {
+    val theUserId = userId getOrElse rs.getInt("user_id")
+    CompleteUser(
+      id = theUserId,
+      fullName = dn2e(rs.getString("display_name")),
+      username = rs.getString("username"),
+      createdAt = ts2o(rs.getTimestamp("created_at")),
+      emailAddress = dn2e(rs.getString("email")),
+      emailNotfPrefs = _toEmailNotfs(rs.getString("email_notfs")),
+      emailVerifiedAt = ts2o(rs.getTimestamp("email_verified_at")),
+      emailForEveryNewPost = rs.getBoolean("email_for_every_new_post"),
+      passwordHash = Option(rs.getString("password_hash")),
+      country = dn2e(rs.getString("country")),
+      website = dn2e(rs.getString("website")),
+      isApproved = getOptionalBoolean(rs, "is_approved"),
+      approvedAt = ts2o(rs.getTimestamp("approved_at")),
+      approvedById = getOptionalIntNoneNot0(rs, "approved_by_id"),
+      isAdmin = rs.getString("superadmin") == "T",
+      isOwner = rs.getString("is_owner") == "T",
+      suspendedAt = None,
+      suspendedTill = None,
+      suspendedById = None)
   }
 
 

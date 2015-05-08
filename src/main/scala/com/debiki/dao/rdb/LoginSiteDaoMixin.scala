@@ -101,14 +101,13 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
         displayName = loginAttempt.name,
         username = None,
         createdAt = None,
-        isApproved = false,
-        approvedAt = None,
-        approvedById = None,
         email = loginAttempt.email,
         emailNotfPrefs = _toEmailNotfs(emailNotfsStr),
         emailVerifiedAt = None,
         country = "",
         website = loginAttempt.website,
+        isApproved = None,
+        isSuspended = false,
         isAdmin = false,
         isOwner = false)
 

@@ -215,6 +215,12 @@ drop table dw1_guests;
 drop table dw0_version;
 
 
+-- Usernames to all authenticated users
+
+update dw1_users set username = 'user_' || user_id
+  where username is null and user_id >= -1;
+
+
 -- Approved and suspended columns.
 
 alter table dw1_users add column is_approved boolean;
@@ -223,6 +229,7 @@ alter table dw1_users add column approved_by_id int;
 alter table dw1_users add column suspended_at timestamp;
 alter table dw1_users add column suspended_till timestamp;
 alter table dw1_users add column suspended_by_id int;
+alter table dw1_users add column updated_at timestamp;
 
 alter table dw1_users add constraint dw1_users_approvedbyid__r__users foreign key (
     site_id, approved_by_id) references dw1_users(site_id, user_id);
@@ -231,8 +238,8 @@ create index dw1_users_approvedbyid__i on dw1_users(site_id, approved_by_id)
     where approved_by_id is not null;
 
 alter table dw1_users add constraint dw1_users_approved__c_null check(
-    approved_by_id is null = is_approved is null and
-    approved_by_id is null = approved_at is null);
+    approved_by_id is null = approved_at is null and (
+        is_approved is null or approved_by_id is not null));
 
 alter table dw1_users add constraint dw1_users_suspendebyid__r__users foreign key (
     site_id, suspended_by_id) references dw1_users(site_id, user_id);
@@ -279,5 +286,6 @@ alter table dw1_users add constraint dw1_users_auth__c_nulls check (
 alter table dw1_users add constraint dw1_users_auth__c_notnulls check (
     user_id < -1 or (
         created_at is not null and
+        username is not null and
         email_for_every_new_post is not null));
 

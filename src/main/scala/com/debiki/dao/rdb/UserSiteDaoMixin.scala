@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2013 Kaj Magnus Lindberg (born 1979)
+ * Copyright (C) 2011-2015 Kaj Magnus Lindberg (born 1979)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -25,7 +25,7 @@ import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
 import scala.collection.{immutable, mutable}
 import scala.collection.{mutable => mut}
-import scala.collection.mutable.StringBuilder
+import scala.collection.mutable.{ArrayBuffer, StringBuilder}
 import Rdb._
 import RdbUtil._
 
@@ -74,9 +74,10 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
             ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?)""",
-        List[AnyRef](siteId, user.id.asAnyRef, e2n(user.displayName), user.username.orNullVarchar,
-          createdAt, e2n(user.email), _toFlag(user.emailNotfPrefs),
-          o2ts(user.emailVerifiedAt), user.passwordHash.orNullVarchar, e2n(user.country),
+        List[AnyRef](siteId, user.id.asAnyRef, user.displayName.trimNullVarcharIfBlank,
+          user.username.orNullVarchar, createdAt, user.email.trimNullVarcharIfBlank,
+          _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
+          user.passwordHash.orNullVarchar, user.country.trimNullVarcharIfBlank,
           tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     }
     catch {
@@ -324,20 +325,6 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def changePassword(user: User, newPasswordSaltHash: String): Boolean = {
-    transactionAllowOverQuota { implicit connection =>
-      val sql = """
-        update DW1_USERS
-        set PASSWORD_HASH = ?
-        where SITE_ID = ? and USER_ID = ?
-        """
-      val numRowsChanged = db.update(sql, List(newPasswordSaltHash, siteId, user.id.asAnyRef))
-      dieIf(numRowsChanged > 1, "DwE87GMf0")
-      numRowsChanged == 1
-    }
-  }
-
-
   def loadUserByEmailOrUsername(emailOrUsername: String): Option[User] = {
     db.withConnection(connection => {
       loadUserByEmailOrUsernameImpl(emailOrUsername)(connection)
@@ -417,52 +404,121 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     }
   }
 
-  override def listUsers(userQuery: UserQuery): Seq[(User, Seq[String])] = {
-    db.withConnection(implicit connection => {
-      listUsersImp(userQuery)
+
+  def loadUsers(): immutable.Seq[User] = {
+    val query = i"""
+      select $UserSelectListItemsWithGuests
+      from
+        DW1_USERS u
+      left join DW1_GUEST_PREFS e
+        on u.EMAIL = e.EMAIL and u.SITE_ID = e.SITE_ID
+      where
+        u.SITE_ID = ?
+      """
+    val values = List(siteId)
+    val result = ArrayBuffer[User]()
+    db.queryAtnms(query, values, rs => {
+      while (rs.next) {
+        val user = _User(rs)
+        result.append(user)
+      }
+    })
+    result.to[Vector]
+  }
+
+
+  def loadCompleteUser(userId: UserId): Option[CompleteUser] = {
+    val sql = s"""
+      select $CompleteUserSelectListItemsNoUserId
+      from dw1_users
+      where site_id = ? and user_id = ?
+      """
+    val values = List(siteId, userId.asAnyRef)
+    runQuery(sql, values, rs => {
+      if (!rs.next())
+        return None
+
+      val user = getCompleteUser(rs, userId = Some(userId))
+      dieIf(rs.next(), "DwE80ZQ2")
+      Some(user)
     })
   }
 
 
-  /**
-   * Looks up people by user details. List details and all endpoints via which
-   * the user has connected.
-   */
-  private def listUsersImp(userQuery: UserQuery)(implicit connection: js.Connection)
-        : Seq[(User, Seq[String])] = {
-    // For now, simply list all users (guests union roles).
-    val query =
-      i"""
-      select
-        $UserSelectListItemsWithGuests,
-        i.OID_ENDPOINT i_endpoint
-      from
-        DW1_USERS u
-        left join DW1_IDENTITIES i
-          on u.USER_ID = i.USER_ID and u.SITE_ID = i.SITE_ID
-        left join DW1_GUEST_PREFS e
-          on u.EMAIL = e.EMAIL and u.SITE_ID = e.SITE_ID
+  def loadCompleteUsers(onlyThosePendingApproval: Boolean = false): immutable.Seq[CompleteUser] = {
+    val andOnlyThosePendingReview =
+      if (onlyThosePendingApproval) "and is_approved is null"
+      else ""
+    val anyOrderBy =
+      if (onlyThosePendingApproval) "order by created_at desc, user_id desc"
+      else ""
+    val query = s"""
+      select $CompleteUserSelectListItemsWithUserId
+      from dw1_users u
       where
-        u.SITE_ID = ?
+        u.site_id = ? and
+        u.user_id >= ${User.LowestAuthenticatedUserId}
+        $andOnlyThosePendingReview
+        $anyOrderBy
       """
-
-    val values = List(siteId, siteId)
-    val result: mut.Map[UserId, (User, List[String])] = mut.Map.empty
-
+    val values = List(siteId)
+    val result = ArrayBuffer[CompleteUser]()
     db.queryAtnms(query, values, rs => {
       while (rs.next) {
-        val endpoint = rs.getString("i_endpoint")
-        val user = _User(rs)
-        result.get(user.id) match {
-          case Some((user, endpoints)) =>
-            result(user.id) = (user, endpoint :: endpoints)
-          case None =>
-            result(user.id) = (user, endpoint :: Nil)
-        }
+        val user = getCompleteUser(rs)
+        result.append(user)
       }
     })
+    result.to[Vector]
+  }
 
-    result.values.toList
+
+  def updateCompleteUser(user: CompleteUser): Boolean = {
+    val statement = """
+      update dw1_users set
+        updated_at = now_utc(),
+        display_name = ?,
+        username = ?,
+        email = ?,
+        email_verified_at = ?,
+        email_for_every_new_post = ?,
+        email_notfs = ?,
+        password_hash = ?,
+        country = ?,
+        website = ?,
+        is_approved = ?,
+        approved_at = ?,
+        approved_by_id = ?,
+        suspended_at = ?,
+        suspended_till = ?,
+        suspended_by_id = ?,
+        superadmin = ?,
+        is_owner = ?
+      where site_id = ? and user_id = ?
+                    """
+
+    val values = List(
+      user.fullName.trimNullVarcharIfBlank,
+      user.username,
+      user.emailAddress.trimNullVarcharIfBlank,
+      user.emailVerifiedAt.orNullTimestamp,
+      user.emailForEveryNewPost.asAnyRef,
+      _toFlag(user.emailNotfPrefs),
+      user.passwordHash.orNullVarchar,
+      user.country.trimNullVarcharIfBlank,
+      user.website.trimNullVarcharIfBlank,
+      user.isApproved.orNullBoolean,
+      user.approvedAt.orNullTimestamp,
+      user.approvedById.orNullInt,
+      user.suspendedAt.orNullTimestamp,
+      user.suspendedTill.orNullTimestamp,
+      user.suspendedById.orNullInt,
+      tOrNull(user.isAdmin),
+      tOrNull(user.isOwner),
+      siteId,
+      user.id.asAnyRef)
+
+    runUpdateSingleRow(statement, values)
   }
 
 
@@ -514,50 +570,6 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       }
     })
     result.to[immutable.Seq]
-  }
-
-
-  def configRole(roleId: RoleId,
-        emailNotfPrefs: Option[EmailNotfPrefs], isAdmin: Option[Boolean],
-        isOwner: Option[Boolean], emailVerifiedAt: Option[Option[ju.Date]]) {
-
-    var changes = StringBuilder.newBuilder
-    var newValues: List[AnyRef] = Nil
-
-    emailNotfPrefs foreach { prefs =>
-      // Don't overwrite notifications-'F'orbidden-forever flag.
-      changes ++= """EMAIL_NOTFS = case
-          when EMAIL_NOTFS is null or EMAIL_NOTFS <> 'F' then ?
-          else EMAIL_NOTFS
-        end"""
-      newValues ::= _toFlag(prefs)
-    }
-
-    isAdmin foreach { isAdmin =>
-      if (changes.nonEmpty) changes ++= ", "
-      changes ++= "SUPERADMIN = ?"
-      newValues ::= (if (isAdmin) "T" else NullVarchar)
-    }
-
-    isOwner foreach { isOwner =>
-      if (changes.nonEmpty) changes ++= ", "
-      changes ++= "IS_OWNER = ?"
-      newValues ::= (if (isOwner) "T" else NullVarchar)
-    }
-
-    emailVerifiedAt foreach { verifiedAt =>
-      if (changes.nonEmpty) changes ++= ", "
-      changes ++= "EMAIL_VERIFIED_AT = ?"
-      newValues ::= o2ts(verifiedAt)
-    }
-
-    if (newValues.isEmpty)
-      return
-
-    transactionAllowOverQuota { implicit connection =>
-      val sql = s"update DW1_USERS set $changes where SITE_ID = ? and USER_ID = ?"
-      db.update(sql, newValues.reverse ::: List(siteId, roleId.asAnyRef))
-    }
   }
 
 
@@ -651,50 +663,6 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       }
     })
     result.distinct.to[immutable.Seq]
-  }
-
-
-  def loadRolePreferences(roleId: RoleId): Option[UserPreferences] = {
-    // In the future, I guess lists of forum categories that should be
-    // muted or watched will be loaded from DW1_ROLE_PAGE_SETTINGS here too.
-    val sql = s"""
-      select DISPLAY_NAME, USERNAME, WEBSITE, EMAIL, EMAIL_FOR_EVERY_NEW_POST
-      from DW1_USERS u
-      where SITE_ID = ? and USER_ID = ?"""
-    val values = List(siteId, roleId.asAnyRef)
-    db.queryAtnms(sql, values, rs => {
-      if (!rs.next()) {
-        None
-      }
-      else {
-        val prefs = UserPreferences(
-          userId = roleId,
-          fullName = dn2e(rs.getString("DISPLAY_NAME")),
-          username = Option(rs.getString("USERNAME")),
-          emailAddress = dn2e(rs.getString("EMAIL")),
-          url = dn2e(rs.getString("WEBSITE")),
-          emailForEveryNewPost = rs.getBoolean("EMAIL_FOR_EVERY_NEW_POST"))
-        assErrIf(rs.next(), "DwE80ZQ2")
-        Some(prefs)
-      }
-    })
-  }
-
-
-  def saveRolePreferences(preferences: UserPreferences) {
-    // Lost updates bug here. Ignore, a single user is unlikely to update itself
-    // two times simultaneously.
-    val sql = """
-      update DW1_USERS
-      set DISPLAY_NAME = ?, USERNAME = ?, EMAIL = ?, WEBSITE = ?,
-        EMAIL_FOR_EVERY_NEW_POST = ?
-      where SITE_ID = ? and USER_ID = ?"""
-    val values = List(e2n(preferences.fullName), preferences.username.orNullVarchar,
-        e2n(preferences.emailAddress), e2n(preferences.url),
-        preferences.emailForEveryNewPost.asAnyRef, siteId, preferences.userId.asAnyRef)
-    transactionCheckQuota { connection =>
-      db.update(sql, values)(connection)
-    }
   }
 
 

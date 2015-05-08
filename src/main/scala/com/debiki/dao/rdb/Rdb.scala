@@ -28,6 +28,7 @@ object Rdb {
 
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
+  val NullBoolean = Null(js.Types.BOOLEAN)
   val NullInt = Null(js.Types.INTEGER)
   val NullDouble = Null(js.Types.DOUBLE)
   val NullTimestamp = Null(js.Types.TIMESTAMP)
@@ -47,6 +48,22 @@ object Rdb {
     def orNullInt: AnyRef = opt.map(_.asInstanceOf[Integer]).getOrElse(NullInt)
   }
 
+  implicit class PimpOptionWithNullBoolean(opt: Option[Boolean]) {
+    def orNullBoolean: AnyRef = opt.map(_.asAnyRef).getOrElse(NullBoolean)
+  }
+
+  implicit class PimpOptionWithNullDate(opt: Option[ju.Date]) {
+    def orNullTimestamp: AnyRef = opt.map(d2ts).getOrElse(NullTimestamp)
+  }
+
+  implicit class PimpStringWithNullIfBlank(string: String) {
+    def trimNullVarcharIfBlank: AnyRef = {
+      val trimmed = string.trim
+      if (trimmed.nonEmpty) trimmed
+      else NullVarchar
+    }
+  }
+
   /** Useful when converting Int:s to AnyRef, which the JDBC driver wants. */
   implicit class AnyAsAnyRef(a: Any) {
     def asAnyRef = a.asInstanceOf[AnyRef]
@@ -62,9 +79,6 @@ object Rdb {
   /** Converts empty to SQL NULL. */
   def e2n(o: Option[String]) = o.getOrElse(Null(js.Types.VARCHAR))
     // Oracle: use NVARCHAR ?
-
-  /** Converts empty to SQL NULL. */
-  def e2n(s: String) = if (s != "") s else Null(js.Types.VARCHAR)
 
   /** Converts a dash to the empty string ("Dash To Empty"). */
   def d2e(s: String) = if (s == "-") "" else s
