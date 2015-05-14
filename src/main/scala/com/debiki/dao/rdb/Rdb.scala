@@ -56,6 +56,10 @@ object Rdb {
     def orNullTimestamp: AnyRef = opt.map(d2ts).getOrElse(NullTimestamp)
   }
 
+  implicit class PimpDateWithTimestamp(date: ju.Date) {
+    def asTimestamp: js.Timestamp = d2ts(date)
+  }
+
   implicit class PimpStringWithNullIfBlank(string: String) {
     def trimNullVarcharIfBlank: AnyRef = {
       val trimmed = string.trim

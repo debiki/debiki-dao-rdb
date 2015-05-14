@@ -36,6 +36,92 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
+  def insertInvite(invite: Invite) {
+    val statement = """
+      insert into dw2_invites(
+        site_id, secret_key, email_address, created_by_id, created_at)
+      values (?, ?, ?, ?, ?)
+      """
+    val values = List(
+      siteId, invite.secretKey, invite.emailAddress,
+      invite.createdById.asAnyRef, invite.createdAt.asTimestamp)
+    try {
+      runUpdate(statement, values)
+    }
+    catch {
+      case ex: js.SQLException =>
+        if (!isUniqueConstrViolation(ex))
+          throw ex
+
+        if (uniqueConstrViolatedIs("dw2_invites_email__u", ex))
+          throw DbDao.DuplicateUserEmail
+
+        die("DwE7PKF4")
+    }
+  }
+
+
+  def updateInvite(invite: Invite): Boolean = {
+    val statement = """
+      update dw2_invites set
+        accepted_at = ?,
+        user_id = ?,
+        deleted_at = ?,
+        deleted_by_id = ?,
+        invalidated_at = ?
+      where
+        site_id = ? and
+        secret_key = ?
+      """
+    val values = List(
+      invite.acceptedAt.orNullTimestamp,
+      invite.userId.orNullInt,
+      invite.deletedAt.orNullTimestamp,
+      invite.deletedById.orNullInt,
+      invite.invalidatedAt.orNullTimestamp,
+      siteId,
+      invite.secretKey)
+    runUpdateSingleRow(statement, values)
+  }
+
+
+  def loadInvite(secretKey: String): Option[Invite] = {
+    val query = s"""
+      select $InviteSelectListItems
+      from dw2_invites
+      where site_id = ? and secret_key = ?
+      """
+    val values = List(siteId, secretKey)
+    runQuery(query, values, rs => {
+      if (!rs.next())
+        return None
+
+      val invite = getInvite(rs)
+      dieIf(rs.next(), "DwE7PK3W4")
+      Some(invite)
+    })
+  }
+
+
+  def loadInvites(createdById: UserId): immutable.Seq[Invite] = {
+    val query = s"""
+      select $InviteSelectListItems
+      from dw2_invites
+      where site_id = ? and created_by_id = ?
+      order by created_at desc
+      """
+    val values = List(siteId, createdById.asAnyRef)
+    val result = ArrayBuffer[Invite]()
+    runQuery(query, values, rs => {
+      while (rs.next()) {
+        val invite = getInvite(rs)
+        result.append(invite)
+      }
+    })
+    result.toVector
+  }
+
+
   def nextAuthenticatedUserId: UserId = {
     val query = s"""
       select max(user_id) max_id from dw1_users
@@ -62,23 +148,27 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def insertAuthenticatedUser(user: User) {
-    val createdAt = user.createdAt getOrDie "DwE7KFE3"
+  def insertAuthenticatedUser(user: CompleteUser) {
     try {
       runUpdate("""
         insert into DW1_USERS(
             SITE_ID, USER_ID, DISPLAY_NAME, USERNAME, CREATED_AT,
             EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, PASSWORD_HASH,
+            IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
             COUNTRY, SUPERADMIN, IS_OWNER)
         values (
+            ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?,
-            ?, ?, ?, ?)""",
-        List[AnyRef](siteId, user.id.asAnyRef, user.displayName.trimNullVarcharIfBlank,
-          user.username.orNullVarchar, createdAt, user.email.trimNullVarcharIfBlank,
+            ?, ?, ?,
+            ?, ?, ?)
+        """,
+        List[AnyRef](siteId, user.id.asAnyRef, user.fullName.trimNullVarcharIfBlank,
+          user.username, user.createdAt, user.emailAddress.trimNullVarcharIfBlank,
           _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
-          user.passwordHash.orNullVarchar, user.country.trimNullVarcharIfBlank,
-          tOrNull(user.isAdmin), tOrNull(user.isOwner)))
+          user.passwordHash.orNullVarchar,
+          user.isApproved.orNullBoolean, user.approvedAt.orNullTimestamp,
+          user.approvedById.orNullInt,
+          user.country.trimNullVarcharIfBlank, tOrNull(user.isAdmin), tOrNull(user.isOwner)))
     }
     catch {
       case ex: js.SQLException =>
@@ -445,22 +535,30 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadCompleteUsers(onlyThosePendingApproval: Boolean = false): immutable.Seq[CompleteUser] = {
-    val andOnlyThosePendingReview =
-      if (onlyThosePendingApproval) "and is_approved is null"
+  def loadCompleteUsers(
+        onlyApproved: Boolean = false,
+        onlyPendingApproval: Boolean = false): immutable.Seq[CompleteUser] = {
+    require(!onlyApproved || !onlyPendingApproval)
+
+    val andIsApprovedEqWhatever =
+      if (onlyPendingApproval) "and is_approved is null"
+      else if (onlyApproved) "and is_approved = true"
       else ""
+
     val anyOrderBy =
-      if (onlyThosePendingApproval) "order by created_at desc, user_id desc"
+      if (onlyPendingApproval) "order by created_at desc, user_id desc"
       else ""
+
     val query = s"""
       select $CompleteUserSelectListItemsWithUserId
       from dw1_users u
       where
         u.site_id = ? and
         u.user_id >= ${User.LowestAuthenticatedUserId}
-        $andOnlyThosePendingReview
+        $andIsApprovedEqWhatever
         $anyOrderBy
       """
+
     val values = List(siteId)
     val result = ArrayBuffer[CompleteUser]()
     db.queryAtnms(query, values, rs => {
