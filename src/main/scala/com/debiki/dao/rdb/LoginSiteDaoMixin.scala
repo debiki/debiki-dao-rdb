@@ -147,6 +147,9 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
         runErr("DwE2XKw5", o"""User `${email.toUserId}"' not found
            when logging in with email id `$emailId'.""")
     }
+    if (user.email != email.sentTo)
+      throw new EmailAddressChangedException(email, user)
+
     val idtyWithId = IdentityEmailId(id = emailId, userId = user.id, emailSent = Some(email))
     LoginGrant(Some(idtyWithId), user, isNewIdentity = false, isNewRole = false)
   }

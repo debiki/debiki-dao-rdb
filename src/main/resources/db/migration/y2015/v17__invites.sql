@@ -17,10 +17,11 @@ create table dw2_invites(
   constraint dw2_invites_secretkey__c_len check (length(secret_key) > 20),
   constraint dw2_invites_accepted_user__c check (accepted_at is null = user_id is null),
   constraint dw2_invites_deleted__c check (deleted_at is null = deleted_by_id is null),
-  constraint dw2_invites_deleted__c2 check (deleted_at is null or accepted_at is not null),
+  constraint dw2_invites_deleted__c2 check (deleted_at is null or accepted_at is null),
   constraint dw2_invites_deleted__c3 check (deleted_at >= created_at),
   constraint dw2_invites_invalidated__c check (invalidated_at >= created_at),
-  constraint dw2_invites_invalidated__c2 check (invalidated_at is null or accepted_at is not null)
+  constraint dw2_invites_invalidated__c2 check (invalidated_at is null or accepted_at is null),
+  constraint dw2_invites_invalidated_deleted__c check (invalidated_at is null or deleted_at is null)
 );
 
 create unique index dw2_invites_email__u on dw2_invites(site_id, email_address, created_by_id)
