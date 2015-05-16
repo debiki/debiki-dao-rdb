@@ -35,6 +35,19 @@ import NotificationsSiteDaoMixin.flagToEmailStatus
 import PageSiteDaoMixin.fromActionTypeInt
 
 
+object RdbSystemDao {
+
+  // Calendar is very thread unsafe, and reportedly slow, because of creation of
+  // the TimeZone and Locale objects, so cache them.
+  // (Source: http://stackoverflow.com/questions/6245053/how-to-make-a-static-calendar-thread-safe#comment24522525_6245117 )
+  def calendarUtcTimeZone = ju.Calendar.getInstance(UtcTimeZone, DefaultLocale)
+
+  // These are not thread safe (at least not TimeZone), but we never modify them.
+  private val UtcTimeZone = ju.TimeZone.getTimeZone("UTC")
+  private val DefaultLocale = ju.Locale.getDefault(ju.Locale.Category.FORMAT)
+}
+
+
 class RdbSystemDao(val daoFactory: RdbDaoFactory)
   extends SystemDbDao with CreateSiteSystemDaoMixin with SystemTransaction {
 
@@ -151,7 +164,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   lazy val currentTime: ju.Date = {
     runQuery("select now_utc() as current_time", Nil, rs => {
       rs.next()
-      ts2d(rs.getTimestamp("current_time"))
+      ts2d(rs.getTimestamp("current_time", RdbSystemDao.calendarUtcTimeZone))
     })
   }
 

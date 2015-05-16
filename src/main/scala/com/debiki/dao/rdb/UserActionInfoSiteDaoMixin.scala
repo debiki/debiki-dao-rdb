@@ -42,8 +42,8 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
 
 
   def loadUserStats(userId: UserId): UserStats = {
-    unimplemented("Loading user statistics via new DW2... tables", "DwE4PIW5") /* wrong tables below
-    val (guestOrRoleId, userIdColumn) = RdbUtil.userIdAndColumnFor(userId)
+    //unimplemented("Loading user statistics via new DW2... tables", "DwE4PIW5") /* wrong tables below
+    /*val (guestOrRoleId, userIdColumn) = RdbUtil.userIdAndColumnFor(userId)
 
     // The action that creates a new page should have id PageParts.BodyId,
     // so PAID = PageParts.BodyId means a new page was created.
@@ -54,6 +54,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
       group by TYPE, is_new_page"""
 
     val values = List(siteId, guestOrRoleId)
+    */
 
     var numPages = 0
     var numPosts = 0
@@ -64,6 +65,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
     var numOffTopicsGiven = 0
     var numOffTopicsReceived = 0
 
+    /*
     db.queryAtnms(query, values, rs => {
       while (rs.next) {
         val num = rs.getInt("num")
@@ -86,6 +88,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
         }
       }
     })
+    */
 
     UserStats(
       numPages = numPages,
@@ -97,7 +100,6 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
       numWrongsReceived = 0, // not yet loaded
       numOffTopicsGiven = numOffTopicsGiven,
       numOffTopicsReceived = 0) // not yet loaded
-      */
   }
 
 

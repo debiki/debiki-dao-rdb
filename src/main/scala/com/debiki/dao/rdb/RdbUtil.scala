@@ -78,6 +78,32 @@ object RdbUtil {
   }
 
 
+  val InviteSelectListItems = i"""
+      |site_id,
+      |secret_key,
+      |email_address,
+      |created_by_id,
+      |created_at,
+      |accepted_at,
+      |user_id,
+      |deleted_at,
+      |deleted_by_id,
+      |invalidated_at
+      |"""
+
+
+  def getInvite(rs: js.ResultSet) = Invite(
+    emailAddress = rs.getString("email_address"),
+    secretKey = rs.getString("secret_key"),
+    createdById = rs.getInt("created_by_id"),
+    createdAt = ts2d(rs.getTimestamp("created_at")),
+    acceptedAt = ts2o(rs.getTimestamp("accepted_at")),
+    userId = getOptionalIntNoneNot0(rs, "user_id"),
+    deletedAt = ts2o(rs.getTimestamp("deleted_at")),
+    deletedById = getOptionalIntNoneNot0(rs, "deleted_by_id"),
+    invalidatedAt = ts2o(rs.getTimestamp("invalidated_at")))
+
+
   val UserSelectListItemsNoGuests =
     """u.USER_ID u_id,
       |u.DISPLAY_NAME u_disp_name,
@@ -159,7 +185,7 @@ object RdbUtil {
       id = theUserId,
       fullName = dn2e(rs.getString("display_name")),
       username = rs.getString("username"),
-      createdAt = ts2o(rs.getTimestamp("created_at")),
+      createdAt = ts2d(rs.getTimestamp("created_at")),
       emailAddress = dn2e(rs.getString("email")),
       emailNotfPrefs = _toEmailNotfs(rs.getString("email_notfs")),
       emailVerifiedAt = ts2o(rs.getTimestamp("email_verified_at")),

@@ -976,6 +976,9 @@ class RdbSiteDao(
       case EmailType.Notification => "Notf"
       case EmailType.CreateAccount => "CrAc"
       case EmailType.ResetPassword => "RsPw"
+      case EmailType.Invite => "Invt"
+      case EmailType.InviteAccepted => "InAc"
+      case EmailType.InvitePassword => "InPw"
     }
 
     val vals = List(siteId, email.id, emailTypeToString(email.tyype), email.sentTo,
@@ -1029,6 +1032,9 @@ class RdbSiteDao(
           case "Notf" => EmailType.Notification
           case "CrAc" => EmailType.CreateAccount
           case "RsPw" => EmailType.ResetPassword
+          case "Invt" => EmailType.Invite
+          case "InAc" => EmailType.InviteAccepted
+          case "InPw" => EmailType.InvitePassword
           case _ => throwBadDatabaseData(
             "DwE840FSIE", s"Bad email type: $typeString, email id: $emailId")
             EmailType.Notification
