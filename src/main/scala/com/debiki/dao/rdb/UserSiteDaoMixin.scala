@@ -50,13 +50,10 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     }
     catch {
       case ex: js.SQLException =>
-        if (!isUniqueConstrViolation(ex))
-          throw ex
-
-        if (uniqueConstrViolatedIs("dw2_invites_email__u", ex))
+        if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw2_invites_email__u", ex))
           throw DbDao.DuplicateUserEmail
 
-        die("DwE7PKF4")
+        throw ex
     }
   }
 
@@ -181,7 +178,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         if (uniqueConstrViolatedIs("DW1_USERS_SITE_USERNAME__U", ex))
           throw DbDao.DuplicateUsername
 
-        die("DwE6ZP21")
+        throw ex
     }
   }
 
@@ -619,6 +616,28 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       user.id.asAnyRef)
 
     runUpdateSingleRow(statement, values)
+  }
+
+
+  def updateGuest(user: User): Boolean = {
+    val statement = """
+      update dw1_users set
+        updated_at = now_utc(),
+        display_name = ?,
+        website = ?
+      where site_id = ? and user_id = ?
+      """
+    val values = List(user.displayName, e2d(user.website), siteId, user.id.asAnyRef)
+    try {
+      runUpdateSingleRow(statement, values)
+    }
+    catch {
+      case ex: js.SQLException =>
+        if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw1_user_guest__u", ex))
+          throw DbDao.DuplicateGuest
+
+        throw ex
+    }
   }
 
 
