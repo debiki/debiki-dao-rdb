@@ -112,6 +112,7 @@ object RdbUtil {
       |u.IS_APPROVED u_is_approved,
       |u.APPROVED_AT u_approved_at,
       |u.APPROVED_BY_ID u_approved_by_id,
+      |u.SUSPENDED_TILL u_suspended_till,
       |u.EMAIL u_email,
       |u.EMAIL_NOTFS u_email_notfs,
       |u.EMAIL_VERIFIED_AT u_email_verified_at,
@@ -147,7 +148,7 @@ object RdbUtil {
       country = dn2e(rs.getString("u_country")),
       website = dn2e(rs.getString("u_website")),
       isApproved = getOptionalBoolean(rs, "u_is_approved"),
-      isSuspended = false, // for now
+      suspendedTill = ts2o(rs.getTimestamp("u_suspended_till")),
       isAdmin = rs.getString("u_superadmin") == "T",
       isOwner = rs.getString("u_is_owner") == "T")
   }
@@ -172,7 +173,8 @@ object RdbUtil {
     |approved_by_id,
     |suspended_at,
     |suspended_till,
-    |suspended_by_id
+    |suspended_by_id,
+    |suspended_reason
     """
 
   val CompleteUserSelectListItemsWithUserId =
@@ -196,11 +198,12 @@ object RdbUtil {
       isApproved = getOptionalBoolean(rs, "is_approved"),
       approvedAt = ts2o(rs.getTimestamp("approved_at")),
       approvedById = getOptionalIntNoneNot0(rs, "approved_by_id"),
+      suspendedAt = ts2o(rs.getTimestamp("suspended_at")),
+      suspendedTill = ts2o(rs.getTimestamp("suspended_till")),
+      suspendedById = getOptionalIntNoneNot0(rs, "suspended_by_id"),
+      suspendedReason = Option(rs.getString("suspended_reason")),
       isAdmin = rs.getString("superadmin") == "T",
-      isOwner = rs.getString("is_owner") == "T",
-      suspendedAt = None,
-      suspendedTill = None,
-      suspendedById = None)
+      isOwner = rs.getString("is_owner") == "T")
   }
 
 

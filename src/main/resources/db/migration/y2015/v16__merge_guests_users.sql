@@ -229,6 +229,7 @@ alter table dw1_users add column approved_by_id int;
 alter table dw1_users add column suspended_at timestamp;
 alter table dw1_users add column suspended_till timestamp;
 alter table dw1_users add column suspended_by_id int;
+alter table dw1_users add column suspended_reason varchar;
 alter table dw1_users add column updated_at timestamp;
 
 alter table dw1_users add constraint dw1_users_approvedbyid__r__users foreign key (
@@ -249,7 +250,11 @@ create index dw1_users_suspendebyid__i on dw1_users(site_id, suspended_by_id)
 
 alter table dw1_users add constraint dw1_users_suspended__c_null check(
     suspended_by_id is null = suspended_at is null and
-    suspended_by_id is null = suspended_till is null);
+    suspended_by_id is null = suspended_till is null and
+    suspended_by_id is null = suspended_reason is null);
+
+alter table dw1_users add constraint dw1_users_suspreason__c_len check(
+    length(suspended_reason) <= 255);
 
 
 -- Guset and non-guest checks.

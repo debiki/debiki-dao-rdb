@@ -590,10 +590,11 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         suspended_at = ?,
         suspended_till = ?,
         suspended_by_id = ?,
+        suspended_reason = ?,
         superadmin = ?,
         is_owner = ?
       where site_id = ? and user_id = ?
-                    """
+      """
 
     val values = List(
       user.fullName.trimNullVarcharIfBlank,
@@ -611,6 +612,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       user.suspendedAt.orNullTimestamp,
       user.suspendedTill.orNullTimestamp,
       user.suspendedById.orNullInt,
+      user.suspendedReason.orNullVarchar,
       tOrNull(user.isAdmin),
       tOrNull(user.isOwner),
       siteId,
