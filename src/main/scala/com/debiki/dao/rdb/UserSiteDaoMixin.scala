@@ -515,6 +515,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   def loadCompleteUser(userId: UserId): Option[CompleteUser] = {
+    require(User.isRoleId(userId), "DwE5FKE2")
     val sql = s"""
       select $CompleteUserSelectListItemsNoUserId
       from dw1_users
