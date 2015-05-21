@@ -176,7 +176,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
       values (
         ?, ?, ?, ?, ?,
-        ?, ?,
+        ? at time zone 'UTC', ?,
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?,

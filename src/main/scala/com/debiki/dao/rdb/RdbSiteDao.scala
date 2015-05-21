@@ -51,6 +51,7 @@ class RdbSiteDao(
   with PostsReadStatsSiteDaoMixin
   with NotificationsSiteDaoMixin
   with SettingsSiteDaoMixin
+  with AuditLogSiteDaoMixin
   with SiteTransaction {
 
 

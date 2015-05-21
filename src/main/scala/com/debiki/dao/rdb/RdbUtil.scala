@@ -183,6 +183,7 @@ object RdbUtil {
 
   def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): CompleteUser = {
     val theUserId = userId getOrElse rs.getInt("user_id")
+    dieIf(User.isGuestId(theUserId), "DwE6P4K3")
     CompleteUser(
       id = theUserId,
       fullName = dn2e(rs.getString("display_name")),
@@ -324,7 +325,7 @@ object RdbUtil {
   }
 
 
-  def _pageRoleToSql(pageRole: PageRole): AnyRef = pageRole match {
+  def _pageRoleToSql(pageRole: PageRole): String = pageRole match {
     case PageRole.HomePage => "H"
     case PageRole.WebPage => "P"
     case PageRole.EmbeddedComments => "EC"
