@@ -27,6 +27,7 @@ delete from dw1_posts where post_id = 65503;
 
 create table dw2_posts(
   site_id varchar not null,
+  unique_post_id int not null,
   page_id varchar not null,
   post_id int not null,
   parent_post_id int,
@@ -80,8 +81,8 @@ create table dw2_posts(
   num_wrong_votes int not null default 0,
   num_times_read int not null default 0,
 
-  constraint dw2_posts_site_page_post__p primary key (site_id, page_id, post_id),
-  constraint dw2_posts__r__pages foreign key (site_id, page_id) references dw1_pages(tenant, guid), -- ix: pk
+  constraint dw2_posts_id__p primary key (site_id, unique_post_id),
+  constraint dw2_posts__r__pages foreign key (site_id, page_id) references dw1_pages(tenant, guid), -- ix: dw2_posts_page_postnr__u
 
   constraint dw2_posts__c_not_its_parent check (parent_post_id is null or post_id <> parent_post_id),
   constraint dw2_posts_multireply__c_num check (multireply ~ '[0-9,]'),
@@ -162,6 +163,9 @@ create table dw2_posts(
 );
 
 
+create unique index dw2_posts_page_postnr__u on dw2_posts(site_id, page_id, post_id);
+create index dw2_posts_page_parentnr__i on dw2_posts(site_id, page_id, parent_post_id);
+
 create index dw2_posts_numflags__i on dw2_posts(site_id, num_pending_flags) where
   deleted_status = 0 and
   num_pending_flags > 0;
@@ -181,7 +185,10 @@ create index dw2_posts_pendingedits__i on dw2_posts(site_id, last_edit_suggestio
 
 create table dw2_post_actions(
   site_id varchar not null,
+  action_id int, -- perhaps I'll want it in the future and then nice to have it listed first.
+  unique_post_id int not null,
   page_id varchar not null,
+  -- Remove post_id later.
   post_id int not null,
   type smallint not null,
   sub_id smallint not null,
@@ -190,8 +197,8 @@ create table dw2_post_actions(
   updated_at timestamp,
   deleted_at timestamp,
   deleted_by_id int,
-  constraint dw2_postacs__p primary key (site_id, page_id, post_id, type, created_by_id, sub_id),
-  constraint dw2_postacs__r__posts foreign key (site_id, page_id, post_id) references dw2_posts(site_id, page_id, post_id), -- ix: pk
+  constraint dw2_postacs__p primary key (site_id, unique_post_id, type, created_by_id, sub_id),
+  constraint dw2_postacs__r__posts foreign key (site_id, unique_post_id) references dw2_posts(site_id, unique_post_id), -- ix: pk
   constraint dw2_postacs__c_type_in check (type in (
     31, 32,          -- stars/bookmarks: yellow and blue
     41, 42, 43, 44,  -- votes: like, wrong, rude?, boring?, ?
@@ -217,6 +224,16 @@ delete from dw1_notifications;
 alter table dw1_notifications drop constraint dw1_ntfs__r__actions;
 alter table dw1_notifications drop constraint dw1_ntfs__r__posts;
 
+alter table dw1_notifications add column unique_post_id int;
+
+drop index dw1_ntfs_post__u;
+
+create index dw1_ntfs_postid__i on dw1_notifications(site_id, unique_post_id)
+  where unique_post_id is not null;
+
+create index dw1_ntfs_page_postnr__i on dw1_notifications(site_id, page_id, post_id)
+  where page_id is not null and post_id is not null;
+
 alter table dw1_notifications alter column by_user_id set not null;
 
 alter table dw1_notifications drop column action_id;
@@ -226,14 +243,18 @@ alter table dw1_notifications add column action_sub_id smallint;
 alter table dw1_notifications alter column by_user_id type int using (by_user_id::int);
 alter table dw1_notifications alter column to_user_id type int using (to_user_id::int);
 
-alter table dw1_notifications add constraint dw1_ntfs__r__posts
+alter table dw1_notifications add constraint dw1_ntfs_postid__r__posts
+  foreign key (site_id, unique_post_id) references dw2_posts(site_id, unique_post_id);
+  -- ix: dw1_ntfs_postid__i
+
+alter table dw1_notifications add constraint dw1_ntfs_page_postnr__r__posts
   foreign key (site_id, page_id, post_id) references dw2_posts(site_id, page_id, post_id);
-  -- ix: dw1_ntfs_post__u
+  -- ix: dw1_ntfs_page_postnr__i
 
 alter table dw1_notifications add constraint dw1_ntfs__r__postacs
-  foreign key (site_id, page_id, post_id, action_type, by_user_id, action_sub_id) references
-    dw2_post_actions(site_id, page_id, post_id, type, created_by_id, sub_id);
-  -- ix: dw1_ntfs_post__u (covers most fields, not all)
+  foreign key (site_id, unique_post_id, action_type, by_user_id, action_sub_id) references
+    dw2_post_actions(site_id, unique_post_id, type, created_by_id, sub_id);
+  -- ix: dw1_ntfs_postid__i (covers most fields, not all)
 
 alter table dw1_notifications add constraint dw1_ntfs__c_action check(
     action_type is not null = action_sub_id is not null);
