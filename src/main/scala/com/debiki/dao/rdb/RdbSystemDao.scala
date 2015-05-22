@@ -412,7 +412,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val baseQuery = """
       select
         SITE_ID, NOTF_TYPE, CREATED_AT,
-        PAGE_ID, POST_ID, ACTION_TYPE, ACTION_SUB_ID,
+        UNIQUE_POST_ID, PAGE_ID, POST_ID, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID,
         EMAIL_ID, EMAIL_STATUS, SEEN_AT
       from DW1_NOTIFICATIONS
@@ -451,6 +451,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val siteId = rs.getString("SITE_ID")
         val notfTypeStr = rs.getString("NOTF_TYPE")
         val createdAt = ts2d(rs.getTimestamp("CREATED_AT"))
+        val uniquePostId = rs.getInt("UNIQUE_POST_ID")
         val pageId = rs.getString("PAGE_ID")
         val postId = rs.getInt("POST_ID")
         val actionType = getResultSetIntOption(rs, "ACTION_TYPE").map(fromActionTypeInt)
@@ -472,6 +473,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
               notfType = newPostType,
               siteId = siteId,
               createdAt = createdAt,
+              uniquePostId = uniquePostId,
               pageId = pageId,
               postId = postId,
               byUserId = byUserId,

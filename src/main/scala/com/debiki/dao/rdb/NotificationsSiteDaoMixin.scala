@@ -46,9 +46,9 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val sql = """
       insert into DW1_NOTIFICATIONS(
         SITE_ID, CREATED_AT, NOTF_TYPE,
-        PAGE_ID, POST_ID, ACTION_TYPE, ACTION_SUB_ID,
+        UNIQUE_POST_ID, PAGE_ID, POST_ID, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
     val values = mutable.ArrayBuffer[AnyRef](
@@ -58,6 +58,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
     notf match {
       case postNotf: Notification.NewPost =>
+        values += postNotf.uniquePostId.asAnyRef
         values += postNotf.pageId
         values += postNotf.postId.asAnyRef
         values += NullInt // no related post action

@@ -121,10 +121,23 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
+  override def nextPostId(): UniquePostId = {
+    val query = """
+      select max(unique_post_id) max_id from dw2_posts where site_id = ?
+      """
+    runQuery(query, List(siteId), rs => {
+      rs.next()
+      val maxId = rs.getInt("max_id") // null becomes 0, fine
+      maxId + 1
+    })
+  }
+
+
   override def insertPost(post: Post2) {
     val statement = """
       insert into dw2_posts(
         site_id,
+        unique_post_id,
         page_id,
         post_id,
         parent_post_id,
@@ -175,7 +188,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         num_times_read)
 
       values (
-        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
         ?, ?,
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?,
@@ -188,7 +201,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         ?, ?, ?)"""
 
     val values = List[AnyRef](
-      post.siteId, post.pageId, post.id.asAnyRef,
+      post.siteId, post.uniqueId.asAnyRef, post.pageId, post.id.asAnyRef,
       post.parentId.orNullInt, toDbMultireply(post.multireplyPostIds),
       d2ts(post.createdAt), post.createdById.asAnyRef,
       o2ts(post.lastEditedAt), post.lastEditedById.orNullInt,
@@ -332,9 +345,10 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def readPost(rs: js.ResultSet, pageId: Option[PageId] = None): Post2 = {
+  private def readPost(rs: js.ResultSet, pageId: Option[PageId] = None): Post2 = {
     Post2(
       siteId = siteId,
+      uniqueId = rs.getInt("UNIQUE_POST_ID"),
       pageId = pageId.getOrElse(rs.getString("PAGE_ID")),
       id = rs.getInt("POST_ID"),
       parentId = getResultSetIntOption(rs, "PARENT_POST_ID"),
@@ -390,14 +404,14 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def insertVote(pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2) {
-    insertPostAction(pageId, postId, actionType = voteType, doerId = voterId)
+  def insertVote(uniquePostId: UniquePostId, pageId: PageId, postId: PostId, voteType: PostVoteType, voterId: UserId2) {
+    insertPostAction(uniquePostId, pageId, postId, actionType = voteType, doerId = voterId)
   }
 
 
   def loadActionsByUserOnPage(userId: UserId2, pageId: PageId): immutable.Seq[PostAction2] = {
     var query = """
-      select post_id, type, created_by_id
+      select unique_post_id, post_id, type, created_by_id
       from dw2_post_actions
       where site_id = ? and page_id = ? and created_by_id = ?
       """
@@ -406,6 +420,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     runQuery(query, values, rs => {
       while (rs.next()) {
         val postAction = PostAction2(
+          uniqueId = rs.getInt("unique_post_id"),
           pageId = pageId,
           postId = rs.getInt("post_id"),
           doerId = userId,
@@ -419,7 +434,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def loadActionsDoneToPost(pageId: PageId, postId: PostId): immutable.Seq[PostAction2] = {
     var query = """
-      select type, created_by_id
+      select unique_post_id, type, created_by_id
       from dw2_post_actions
       where site_id = ? and page_id = ? and post_id = ?
       """
@@ -428,6 +443,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     runQuery(query, values, rs => {
       while (rs.next()) {
         val postAction = PostAction2(
+          uniqueId = rs.getInt("unique_post_id"),
           pageId = pageId,
           postId = postId,
           doerId = rs.getInt("created_by_id"),
@@ -444,7 +460,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       return Nil
 
     val queryBuilder = new StringBuilder(256, s"""
-      select page_id, post_id, type, created_by_id
+      select unique_post_id, page_id, post_id, type, created_by_id
       from dw2_post_actions
       where site_id = ?
         and type in ($FlagValueSpam, $FlagValueInapt, $FlagValueOther)
@@ -465,6 +481,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     runQuery(queryBuilder.toString, values.toList, rs => {
       while (rs.next()) {
         val postAction = PostFlag(
+          uniqueId = rs.getInt("unique_post_id"),
           pageId = rs.getString("page_id"),
           postId = rs.getInt("post_id"),
           flaggerId = rs.getInt("created_by_id"),
@@ -477,8 +494,8 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def insertFlag(pageId: PageId, postId: PostId, flagType: PostFlagType, flaggerId: UserId2) {
-    insertPostAction(pageId, postId, actionType = flagType, doerId = flaggerId)
+  def insertFlag(uniquePostId: UniquePostId, pageId: PageId, postId: PostId, flagType: PostFlagType, flaggerId: UserId2) {
+    insertPostAction(uniquePostId, pageId, postId, actionType = flagType, doerId = flaggerId)
   }
 
 
@@ -493,14 +510,14 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def insertPostAction(pageId: PageId, postId: PostId, actionType: PostActionType, doerId: UserId2) {
+  def insertPostAction(uniquePostId: UniquePostId, pageId: PageId, postId: PostId, actionType: PostActionType, doerId: UserId2) {
     val statement = """
-      insert into dw2_post_actions(site_id, page_id, post_id, type, created_by_id,
+      insert into dw2_post_actions(site_id, unique_post_id, page_id, post_id, type, created_by_id,
           created_at, sub_id)
-      values (?, ?, ?, ?, ?, ?, 1)
+      values (?, ?, ?, ?, ?, ?, ?, 1)
       """
-    val values = List[AnyRef](siteId, pageId, postId.asAnyRef, toActionTypeInt(actionType),
-      doerId.asAnyRef, currentTime)
+    val values = List[AnyRef](siteId, uniquePostId.asAnyRef, pageId, postId.asAnyRef,
+      toActionTypeInt(actionType), doerId.asAnyRef, currentTime)
     val numInserted =
       try { runUpdate(statement, values) }
       catch {
