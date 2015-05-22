@@ -185,6 +185,7 @@ create index dw2_posts_pendingedits__i on dw2_posts(site_id, last_edit_suggestio
 
 create table dw2_post_actions(
   site_id varchar not null,
+  action_id int, -- perhaps I'll want it in the future and then nice to have it listed first.
   unique_post_id int not null,
   page_id varchar not null,
   -- Remove post_id later.
