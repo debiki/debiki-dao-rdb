@@ -12,21 +12,24 @@ create table dw2_blocked_things(
   constraint dw2_blkdthngs_blockedby__r__users foreign key(site_id, blocked_by_id) references dw1_users(site_id, user_id),
   constraint dw2_blkdthngs_blockedat_till__c check(blocked_at <= blocked_till),
   constraint dw2_blkdthngs__c_something_blocked check(
-      (case when id_cookie is null then 0 else 1 end) +
-      (case when ip is null then 0 else 1 end) +
-      (case when fingerprint is null then 0 else 1 end) +
-      (case when country is null then 0 else 1 end)
-         >= 1)
+    id_cookie is not null or ip is not null or fingerprint is not null or country is not null)
 );
 
-create unique index dw2_blkdthngs_ip__u on dw2_blocked_things(site_id, ip) where ip is not null;
-create unique index dw2_blkdthngs_browseridcookie__u on dw2_blocked_things(site_id, id_cookie) where id_cookie is not null;
 create index dw2_blkdthngs_blockedby__i on dw2_blocked_things(site_id, blocked_by_id);
+
+create unique index dw2_blkdthngs_ip__u on dw2_blocked_things(site_id, ip)
+  where ip is not null and fingerprint is null;
+
+create unique index dw2_blkdthngs_ip_fingerprint__u on dw2_blocked_things(site_id, ip, fingerprint)
+  where ip is not null and fingerprint is not null;
+
+create unique index dw2_blkdthngs_browseridcookie__u on dw2_blocked_things(site_id, id_cookie)
+  where id_cookie is not null;
 
 
 create table dw2_audit_log(
   site_id varchar not null,
-  audit_id int not null,
+  audit_id bigint not null,
   doer_id int not null,
   done_at timestamp not null,
   did_what varchar not null,
@@ -41,24 +44,33 @@ create table dw2_audit_log(
   page_id varchar,
   page_role varchar,
   post_id int,
+  post_nr int,
   post_action_type int,
   post_action_sub_id int,
-  target_post_id int,
   target_page_id varchar,
+  target_post_id int,
+  target_post_nr int,
   target_user_id int,
   constraint dw2_auditlog__p primary key (site_id, audit_id),
   constraint dw2_auditlog_doer__r__users foreign key (site_id, doer_id) references dw1_users(site_id, user_id),
   constraint dw2_auditlog_targetuser__r__users foreign key (site_id, target_user_id) references dw1_users(site_id, user_id),
-  constraint dw2_auditlog_post__r__posts foreign key (site_id, page_id, post_id) references dw2_posts(site_id, page_id, post_id),
-  constraint dw2_auditlog_page_post__c check (post_id is null or page_id is not null),
-  constraint dw2_auditlog_postaction__c check (post_action_type is null = post_action_sub_id is null)
+  constraint dw2_auditlog__r__posts foreign key (site_id, post_id) references dw2_posts(site_id, unique_post_id),
+  constraint dw2_auditlog__r__pages foreign key (site_id, page_id) references dw1_pages(site_id, page_id),
+  constraint dw2_auditlog_pagerole_pageid__c check (page_role is null or page_id is not null),
+  constraint dw2_auditlog_page_post__c check (post_nr is null or page_id is not null),
+  constraint dw2_auditlog_post__c check (post_nr is null = post_id is null),
+  constraint dw2_auditlog_postaction__c check (post_action_type is null = post_action_sub_id is null),
+  constraint dw2_auditlog_postaction__c2 check (post_action_type is null or post_id is not null),
+  constraint dw2_auditlog_tgtpost__c check (target_post_nr is null = target_post_id is null),
+  constraint dw2_auditlog_tgtpost_tgtuser__c check (target_post_nr is null or target_user_id is not null),
+  constraint dw2_auditlog_tgtpage_tgtuser__c check (target_page_id is null or target_user_id is not null)
 );
 
-create index dw2_auditlog_doneat on dw2_audit_log(site_id, done_at);
-create index dw2_auditlog_doer_doneat on dw2_audit_log(site_id, doer_id, done_at);
-create index dw2_auditlog_post_doneat on dw2_audit_log(site_id, page_id, post_id, done_at) where post_id is not null;
-create index dw2_auditlog_page_doneat on dw2_audit_log(site_id, page_id, done_at) where page_id is not null;
-create index dw2_auditlog_ip_doneat on dw2_audit_log(site_id, ip, done_at);
-create index dw2_auditlog_brwsrid_doneat on dw2_audit_log(site_id, id_cookie, done_at);
-create index dw2_auditlog_brwsrfp_doneat on dw2_audit_log(site_id, fingerprint, done_at);
+create index dw2_auditlog_doneat__i on dw2_audit_log(site_id, done_at);
+create index dw2_auditlog_doer_doneat__i on dw2_audit_log(site_id, doer_id, done_at);
+create index dw2_auditlog_post_doneat__i on dw2_audit_log(site_id, page_id, post_nr, done_at) where post_nr is not null;
+create index dw2_auditlog_page_doneat__i on dw2_audit_log(site_id, page_id, done_at) where page_id is not null;
+create index dw2_auditlog_ip_doneat__i on dw2_audit_log(site_id, ip, done_at);
+create index dw2_auditlog_idcookie_doneat__i on dw2_audit_log(site_id, id_cookie, done_at);
+create index dw2_auditlog_fingerprint_doneat__i on dw2_audit_log(site_id, fingerprint, done_at);
 

@@ -64,13 +64,18 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         page_id,
         page_role,
         post_id,
+        post_nr,
         post_action_type,
         post_action_sub_id,
-        target_user_id,
-        target_post_id)
+        target_page_id,
+        target_post_id,
+        target_post_nr,
+        target_user_id)
       values (
-        ?, ?, ?, ?, ?, ?, ?::inet, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       """
+        ?, ?, ?, ? at time zone 'UTC',
+        ?, ?, ?::inet,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """
 
     val values = List[AnyRef](
       entry.siteId,
@@ -88,11 +93,14 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       NullVarchar,
       entry.pageId.orNullVarchar,
       entry.pageRole.map(_pageRoleToSql).orNullVarchar,
-      entry.postId.orNullInt,
+      entry.uniquePostId.orNullInt,
+      entry.postNr.orNullInt,
       NullInt,
       NullInt,
-      NullInt,
-      entry.targetPostId.orNullInt)
+      entry.targetPageId.orNullVarchar,
+      entry.targetUniquePostId.orNullInt,
+      entry.targetPostNr.orNullInt,
+      entry.targetUserId.orNullInt)
 
     runUpdateSingleRow(statement, values)
   }
