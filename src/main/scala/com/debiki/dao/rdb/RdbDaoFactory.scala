@@ -52,9 +52,10 @@ class RdbDaoFactory(
     new RdbSiteDao(siteId, this)
 
 
-  override def newSiteTransaction(siteId: SiteId, readOnly: Boolean): SiteTransaction = {
+  override def newSiteTransaction(siteId: SiteId, readOnly: Boolean, mustBeSerializable: Boolean)
+      : SiteTransaction = {
     val dao = newSiteDbDao(siteId)
-    dao.createTheOneAndOnlyConnection(readOnly = readOnly)
+    dao.createTheOneAndOnlyConnection(readOnly = readOnly, mustBeSerializable = mustBeSerializable)
     dao
   }
 

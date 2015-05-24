@@ -258,7 +258,7 @@ class Rdb(val dataSource: jxs.DataSource){
     var conn: js.Connection = null
     var committed = false
     try {
-      conn = getConnection(readOnly = !commit)
+      conn = getConnection(readOnly = !commit, mustBeSerializable = true)
       val result = f(conn)
       if (commit) {
         conn.commit()
@@ -331,7 +331,9 @@ class Rdb(val dataSource: jxs.DataSource){
     var pstmt: js.PreparedStatement = null
     var committed = false
     try {
-      conn2 = if (conn ne null) conn else getConnection(readOnly = resultSetHandler ne null)
+      conn2 =
+        if (conn ne null) conn
+        else getConnection(readOnly = resultSetHandler ne null, mustBeSerializable = true)
       pstmt = conn2.prepareStatement(query)
       _bind(binds, pstmt)
       //s.setPoolable(false)  // don't cache infrequently used statements
@@ -377,7 +379,9 @@ class Rdb(val dataSource: jxs.DataSource){
     var result = List[Array[Int]]()
     var committed = false
     try {
-      conn2 = if (conn ne null) conn else getConnection(readOnly = false)
+      conn2 =
+        if (conn ne null) conn
+        else getConnection(readOnly = false, mustBeSerializable = true)
       pstmt = conn2.prepareStatement(stmt)
       var rowCount = 0
       for (values <- batchValues) {
@@ -463,12 +467,17 @@ class Rdb(val dataSource: jxs.DataSource){
     }
   }
 
-  def getConnection(readOnly: Boolean): js.Connection = {
+  def getConnection(readOnly: Boolean, mustBeSerializable: Boolean): js.Connection = {
     val conn: js.Connection = dataSource.getConnection()
     if (conn ne null) {
       conn.setReadOnly(readOnly)
       conn.setAutoCommit(false)
-      conn.setTransactionIsolation(js.Connection.TRANSACTION_SERIALIZABLE)
+      if (mustBeSerializable) {
+        conn.setTransactionIsolation(js.Connection.TRANSACTION_SERIALIZABLE)
+      }
+      else {
+        // Read Committed is the default isolation level in PostgreSQL.
+      }
     }
     conn
   }
@@ -495,6 +504,8 @@ class Rdb(val dataSource: jxs.DataSource){
     // Reset defaults.
     conn.setReadOnly(false)
     conn.setAutoCommit(true)
+    // Read Committed is the default isolation level in PostgreSQL:
+    conn.setTransactionIsolation(js.Connection.TRANSACTION_READ_COMMITTED)
 
     conn.close()
   }

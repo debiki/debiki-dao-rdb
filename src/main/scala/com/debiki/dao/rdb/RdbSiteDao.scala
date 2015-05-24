@@ -102,9 +102,10 @@ class RdbSiteDao(
   private var transactionEnded = false
 
   // COULD move to new superclass?
-  def createTheOneAndOnlyConnection(readOnly: Boolean) {
+  def createTheOneAndOnlyConnection(readOnly: Boolean, mustBeSerializable: Boolean) {
     require(_theOneAndOnlyConnection.isEmpty)
-    _theOneAndOnlyConnection = Some(db.getConnection(readOnly))
+    _theOneAndOnlyConnection = Some(db.getConnection(
+      readOnly = readOnly, mustBeSerializable = mustBeSerializable))
   }
 
   // COULD move to new superclass?

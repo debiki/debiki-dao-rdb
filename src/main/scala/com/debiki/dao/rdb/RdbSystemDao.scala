@@ -84,7 +84,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
   def createTheOneAndOnlyConnection(readOnly: Boolean) {
     require(_theOneAndOnlyConnection.isEmpty, "DwE8PKW2")
-    _theOneAndOnlyConnection = Some(db.getConnection(readOnly))
+    _theOneAndOnlyConnection = Some(db.getConnection(readOnly, mustBeSerializable = true))
   }
 
 
