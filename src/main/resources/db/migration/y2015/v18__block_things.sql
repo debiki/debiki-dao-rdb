@@ -1,30 +1,25 @@
 
-create table dw2_blocked_things(
+create table dw2_blocks(
   site_id varchar not null,
   block_type varchar,
   blocked_at timestamp not null,
   blocked_till timestamp,
   blocked_by_id int not null,
-  id_cookie varchar,
   ip inet,
-  fingerprint int,
-  country varchar,
-  constraint dw2_blkdthngs_blockedby__r__users foreign key(site_id, blocked_by_id) references dw1_users(site_id, user_id),
-  constraint dw2_blkdthngs_blockedat_till__c check(blocked_at <= blocked_till),
-  constraint dw2_blkdthngs__c_something_blocked check(
-    id_cookie is not null or ip is not null or fingerprint is not null or country is not null)
+  browser_id_cookie varchar,
+  constraint dw2_blocks_blockedby__r__users foreign key(site_id, blocked_by_id) references dw1_users(site_id, user_id),
+  constraint dw2_blocks_blockedat_till__c check(blocked_at <= blocked_till),
+  constraint dw2_blocks__c_something_blocked check(
+    browser_id_cookie is not null or ip is not null)
 );
 
-create index dw2_blkdthngs_blockedby__i on dw2_blocked_things(site_id, blocked_by_id);
+create index dw2_blocks_blockedby__i on dw2_blocks(site_id, blocked_by_id);
 
-create unique index dw2_blkdthngs_ip__u on dw2_blocked_things(site_id, ip)
-  where ip is not null and fingerprint is null;
+create unique index dw2_blocks_ip__u on dw2_blocks(site_id, ip)
+  where ip is not null;
 
-create unique index dw2_blkdthngs_ip_fingerprint__u on dw2_blocked_things(site_id, ip, fingerprint)
-  where ip is not null and fingerprint is not null;
-
-create unique index dw2_blkdthngs_browseridcookie__u on dw2_blocked_things(site_id, id_cookie)
-  where id_cookie is not null;
+create unique index dw2_blocks_browseridcookie__u on dw2_blocks(site_id, browser_id_cookie)
+  where browser_id_cookie is not null;
 
 
 create table dw2_audit_log(
@@ -35,8 +30,8 @@ create table dw2_audit_log(
   did_what varchar not null,
   details varchar,
   ip inet,
-  id_cookie varchar,
-  fingerprint int,
+  browser_id_cookie varchar,
+  browser_fingerprint int,
   anonymity_network varchar,
   country varchar,
   region varchar,
@@ -68,9 +63,13 @@ create table dw2_audit_log(
 
 create index dw2_auditlog_doneat__i on dw2_audit_log(site_id, done_at);
 create index dw2_auditlog_doer_doneat__i on dw2_audit_log(site_id, doer_id, done_at);
-create index dw2_auditlog_post_doneat__i on dw2_audit_log(site_id, page_id, post_nr, done_at) where post_nr is not null;
+create index dw2_auditlog_post_doneat__i on dw2_audit_log(site_id, post_id, done_at) where post_id is not null;
 create index dw2_auditlog_page_doneat__i on dw2_audit_log(site_id, page_id, done_at) where page_id is not null;
 create index dw2_auditlog_ip_doneat__i on dw2_audit_log(site_id, ip, done_at);
-create index dw2_auditlog_idcookie_doneat__i on dw2_audit_log(site_id, id_cookie, done_at);
-create index dw2_auditlog_fingerprint_doneat__i on dw2_audit_log(site_id, fingerprint, done_at);
+create index dw2_auditlog_idcookie_doneat__i on dw2_audit_log(site_id, browser_id_cookie, done_at);
+create index dw2_auditlog_fingerprint_doneat__i on dw2_audit_log(site_id, browser_fingerprint, done_at);
+
+
+-- Fix users table bug.
+alter table dw1_users alter email_for_every_new_post set default null;
 

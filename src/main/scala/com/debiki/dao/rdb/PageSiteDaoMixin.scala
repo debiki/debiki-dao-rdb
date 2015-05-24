@@ -33,6 +33,10 @@ import PageSiteDaoMixin._
 trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
+  override def loadPost(uniquePostId: UniquePostId): Option[Post] =
+    loadPostsById(Seq(uniquePostId)).headOption
+
+
   override def loadPost(pageId: PageId, postId: PostId): Option[Post] =
     loadPostsOnPageImpl(pageId, postId = Some(postId), siteId = None).headOption
 
@@ -54,6 +58,30 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     runQuery(query, values.toList, rs => {
       while (rs.next()) {
         val post = readPost(rs, pageId = Some(pageId))
+        results += post
+      }
+    })
+    results.to[immutable.Seq]
+  }
+
+
+  private def loadPostsById(postIds: Iterable[UniquePostId]): immutable.Seq[Post] = {
+    if (postIds.isEmpty)
+      return Nil
+    val values = ArrayBuffer[AnyRef](siteId)
+    val queryBuilder = new StringBuilder(127, "select * from DW2_POSTS where SITE_ID = ? and (")
+    for (postId <- postIds) {
+      if (postId != postIds.head) {
+        queryBuilder.append(" or ")
+      }
+      queryBuilder.append("post_id = ?")
+      values.append(postId.asAnyRef)
+    }
+    queryBuilder.append(")")
+    var results = ArrayBuffer[Post]()
+    runQuery(queryBuilder.toString, values.toList, rs => {
+      while (rs.next()) {
+        val post = readPost(rs)
         results += post
       }
     })

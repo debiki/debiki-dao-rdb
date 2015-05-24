@@ -150,12 +150,12 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       runUpdate("""
         insert into DW1_USERS(
             SITE_ID, USER_ID, DISPLAY_NAME, USERNAME, CREATED_AT,
-            EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, PASSWORD_HASH,
+            EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
             COUNTRY, SUPERADMIN, IS_OWNER)
         values (
             ?, ?, ?, ?, ?,
-            ?, ?, ?, ?,
+            ?, ?, ?, false, ?,
             ?, ?, ?,
             ?, ?, ?)
         """,

@@ -105,10 +105,12 @@ object Rdb {
    * to the database, it throws away the fractional seconds value,
    * when saving and loading.)
    */
+  @deprecated("Use 'getDate' instead, or time zone problems!?", "Now")
   def ts2d(ts: js.Timestamp) =
      (ts eq null) ? (null: ju.Date) | (new ju.Date(ts.getTime))
 
   /** Converts java.sql.Timestamp to Some(java.util.Date) or None if null. */
+  @deprecated("Use 'getOptionalDate' instead, or time zone problems!?", "Now")
   def ts2o(ts: js.Timestamp): Option[ju.Date] =
     if (ts eq null) None else Some(new ju.Date(ts.getTime))
 
@@ -126,6 +128,16 @@ object Rdb {
     var value = rs.getInt(column)
     if (rs.wasNull) None
     else Some(value)
+  }
+
+  def getDate(rs: js.ResultSet, column: String): ju.Date = {
+    ts2d(rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone))
+  }
+
+  def getOptionalDate(rs: js.ResultSet, column: String): Option[ju.Date] = {
+    val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
+    if (timestamp eq null) None
+    else Some(new ju.Date(timestamp.getTime))
   }
 
   def isUniqueConstrViolation(sqlException: js.SQLException): Boolean = {

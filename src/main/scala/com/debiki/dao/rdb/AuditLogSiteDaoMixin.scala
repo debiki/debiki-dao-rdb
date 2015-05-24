@@ -55,8 +55,8 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         did_what,
         details,
         ip,
-        id_cookie,
-        fingerprint,
+        browser_id_cookie,
+        browser_fingerprint,
         anonymity_network,
         country,
         region,
@@ -82,7 +82,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       entry.id.asAnyRef,
       entry.doerId.asAnyRef,
       entry.doneAt.asTimestamp,
-      entryTypeToString(entry.tyype),
+      entryTypeToString(entry.didWhat),
       NullVarchar,
       entry.browserIdData.ip,
       entry.browserIdData.idCookie,
@@ -106,13 +106,80 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def entryTypeToString(entryType: AuditLogEntryType): String = entryType match {
+  def loadFirstAuditLogEntry(postId: UniquePostId): Option[AuditLogEntry] = {
+    val query = s"""
+      select
+        audit_id,
+        doer_id,
+        done_at,
+        did_what,
+        details,
+        ip,
+        browser_id_cookie,
+        browser_fingerprint,
+        anonymity_network,
+        country,
+        region,
+        city,
+        page_id,
+        page_role,
+        post_id,
+        post_nr,
+        post_action_type,
+        post_action_sub_id,
+        target_page_id,
+        target_post_id,
+        target_post_nr,
+        target_user_id
+      from dw2_audit_log
+      where site_id = ? and post_id = ?
+      order by done_at limit 1
+      """
+
+    runQuery(query, List(siteId, postId.asAnyRef), rs => {
+      if (!rs.next())
+        return None
+
+      val entry = getAuditLogEntry(rs)
+      dieIf(rs.next(), "DwE4WKU7")
+      Some(entry)
+    })
+  }
+
+
+  private def getAuditLogEntry(rs: js.ResultSet) =
+    AuditLogEntry(
+      siteId = siteId,
+      id = rs.getInt("audit_id"),
+      didWhat = stringToEntryTypeTo(rs.getString("did_what")),
+      doerId = rs.getInt("doer_id"),
+      doneAt = getDate(rs, "done_at"),
+      browserIdData = getBrowserIdData(rs),
+      browserLocation = None,
+      pageId = Option(rs.getString("page_id")),
+      pageRole = Option(rs.getString("page_role")).map(_toPageRole),
+      uniquePostId = getOptionalIntNoneNot0(rs, "post_id"),
+      postNr = getOptionalIntNoneNot0(rs, "post_nr"),
+      targetUniquePostId = getOptionalIntNoneNot0(rs, "target_post_id"),
+      targetPageId = Option(rs.getString("target_page_id")),
+      targetPostNr = getOptionalIntNoneNot0(rs, "target_post_nr"),
+      targetUserId = getOptionalIntNoneNot0(rs, "target_user_id"))
+
+
+  private def getBrowserIdData(rs: js.ResultSet) =
+    BrowserIdData(
+      ip = rs.getString("ip"),
+      idCookie = rs.getString("browser_id_cookie"),
+      fingerprint = rs.getInt("browser_fingerprint"))
+
+
+  private def entryTypeToString(entryType: AuditLogEntryType): String = entryType match {
     case AuditLogEntryType.NewPage => "NwPg"
     case AuditLogEntryType.NewPost => "NwPs"
     case AuditLogEntryType.EditPost => "EdPs"
   }
 
-  def stringToEntryTypeTo(entryType: String): AuditLogEntryType = entryType match {
+  private def stringToEntryTypeTo(entryType: String): AuditLogEntryType = entryType match {
     case  "NwPg" => AuditLogEntryType.NewPage
     case  "NwPs" => AuditLogEntryType.NewPost
     case  "EdPs" => AuditLogEntryType.EditPost
