@@ -168,7 +168,6 @@ object RdbUtil {
     |created_at,
     |password_hash,
     |email_for_every_new_post,
-    |guest_location,
     |is_approved,
     |approved_at,
     |approved_by_id,
