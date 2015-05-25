@@ -123,7 +123,7 @@ object RdbUtil {
       |u.IS_OWNER u_is_owner""".stripMargin
 
   val UserSelectListItemsWithGuests =
-    s"$UserSelectListItemsNoGuests, e.EMAIL_NOTFS g_email_notfs"
+    s"$UserSelectListItemsNoGuests, u.GUEST_COOKIE u_guest_cookie, e.EMAIL_NOTFS g_email_notfs"
 
   def _User(rs: js.ResultSet) = {
     val userId = rs.getInt("u_id")
@@ -140,6 +140,7 @@ object RdbUtil {
       id = userId,
       displayName = dn2e(rs.getString("u_disp_name")),
       username = Option(rs.getString("u_username")),
+      guestCookie = Option(rs.getString("u_guest_cookie")),
       createdAt = getOptionalDate(rs, "u_created_at"),
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = emailNotfPrefs,

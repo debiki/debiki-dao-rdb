@@ -70,8 +70,9 @@ update dw2_posts set pinned_by_id = pinned_by_id + 90 where pinned_by_id >= 0;
 -- user id >= 100 = authenticated user, -1 = system, -2 = totally anonymous, -3 = unknown,
 -- <= -10 = a guest.
 
-alter table dw1_users add column guest_location varchar;
-alter table dw1_users add constraint dw1_users_gstloctn__c_len check (length(guest_location) < 100);
+alter table dw1_users add column guest_cookie varchar;
+alter table dw1_users add constraint dw1_users_guestcookie__c_len check (
+    length(guest_cookie) < 30);
 
 alter table dw1_users alter column created_at drop not null;
 
@@ -85,15 +86,19 @@ alter table dw1_users add constraint dw1_users_id__c check (user_id < 0 or 100 <
 drop index dw1_users_site_email__u;
 create unique index dw1_users_site_email__u on dw1_users(site_id, email) where user_id >= -1;
 
-create unique index dw1_user_guest__u on dw1_users(
-    site_id, display_name, email, guest_location, website)
+create unique index dw1_user_guest__u on dw1_users(site_id, display_name, email, guest_cookie)
     where user_id < -1;
 
-insert into dw1_users(site_id, user_id, display_name, email, guest_location, website)
-    select site_id, id::int, name, email_addr, location, url from dw1_guests;
+create index dw1_user_guestcookie__i on dw1_users(site_id, guest_cookie) where user_id < -1;
+create index dw1_user_guestemail__i on dw1_users(site_id, email) where user_id < -1;
+
+create sequence temp_guest_cookie_seq start with 1001;
+insert into dw1_users(site_id, user_id, display_name, email, guest_cookie)
+    select site_id, id::int, name, email_addr, 'G' || nextval('temp_guest_cookie_seq') from dw1_guests;
+drop sequence temp_guest_cookie_seq;
 
 -- The unknown user shouldn't have any authenticated-user-data.
-update dw1_users set email = '-', guest_location = '-', website = '-',
+update dw1_users set email = '-', guest_cookie = 'UU',
     username = null, created_at = null
     where user_id = -3;
 
@@ -263,8 +268,7 @@ alter table dw1_users add constraint dw1_users_guest__c_nn check (
     user_id >= -1 or (
         display_name is not null and
         email is not null and
-        guest_location is not null and
-        website is not null));
+        guest_cookie is not null));
 
 alter table dw1_users add constraint dw1_users_guest__c_nulls check (
     user_id >= -1 or (
@@ -276,6 +280,7 @@ alter table dw1_users add constraint dw1_users_guest__c_nulls check (
         suspended_till is null and
         suspended_by_id is null and
         country is null and
+        website is null and
         superadmin is null and
         is_owner is null and
         username is null and
@@ -286,7 +291,7 @@ alter table dw1_users add constraint dw1_users_guest__c_nulls check (
 
 alter table dw1_users add constraint dw1_users_auth__c_nulls check (
     user_id < -1 or (
-        guest_location is null));
+        guest_cookie is null));
 
 alter table dw1_users add constraint dw1_users_auth__c_notnulls check (
     user_id < -1 or (

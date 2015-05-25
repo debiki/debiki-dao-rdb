@@ -60,11 +60,9 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
           where u.SITE_ID = ?
             and u.DISPLAY_NAME = ?
             and u.EMAIL = ?
-            and u.GUEST_LOCATION = ?
-            and u.WEBSITE = ?
+            and u.GUEST_COOKIE = ?
           """,
-          List(siteId, e2d(loginAttempt.name), e2d(loginAttempt.email),
-            e2d(loginAttempt.location), e2d(loginAttempt.website)),
+          List(siteId, e2d(loginAttempt.name), e2d(loginAttempt.email), loginAttempt.guestCookie),
           rs => {
             if (rs.next) {
               userId = rs.getInt("USER_ID")
@@ -82,14 +80,14 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
           isNewGuest = true
           runUpdate(i"""
             insert into dw1_users(
-              site_id, user_id, display_name, email, guest_location, website)
+              site_id, user_id, display_name, email, guest_cookie)
             select
-              ?, least(min(user_id) - 1, $MaxCustomGuestId), ?, ?, ?, ?
+              ?, least(min(user_id) - 1, $MaxCustomGuestId), ?, ?, ?
             from
               dw1_users where site_id = ?
             """,
             List(siteId, loginAttempt.name, e2d(loginAttempt.email),
-              e2d(loginAttempt.location), e2d(loginAttempt.website), siteId))
+              loginAttempt.guestCookie, siteId))
           // (Could fix: `returning ID into ?`, saves 1 roundtrip.)
           // Loop one more lap to read ID.
         }
@@ -100,12 +98,13 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
         id = userId,
         displayName = loginAttempt.name,
         username = None,
+        guestCookie = Some(loginAttempt.guestCookie),
         createdAt = None,
         email = loginAttempt.email,
         emailNotfPrefs = _toEmailNotfs(emailNotfsStr),
         emailVerifiedAt = None,
         country = "",
-        website = loginAttempt.website,
+        website = "",
         isApproved = None,
         suspendedTill = None,
         isAdmin = false,

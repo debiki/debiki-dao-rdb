@@ -625,10 +625,9 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       update dw1_users set
         updated_at = now_utc(),
         display_name = ?,
-        website = ?
       where site_id = ? and user_id = ?
       """
-    val values = List(user.displayName, e2d(user.website), siteId, user.id.asAnyRef)
+    val values = List(user.displayName, siteId, user.id.asAnyRef)
     try {
       runUpdateSingleRow(statement, values)
     }
