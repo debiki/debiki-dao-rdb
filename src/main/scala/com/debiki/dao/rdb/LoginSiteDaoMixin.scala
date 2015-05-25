@@ -107,7 +107,7 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
         country = "",
         website = loginAttempt.website,
         isApproved = None,
-        isSuspended = false,
+        suspendedTill = None,
         isAdmin = false,
         isOwner = false)
 

@@ -50,13 +50,10 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     }
     catch {
       case ex: js.SQLException =>
-        if (!isUniqueConstrViolation(ex))
-          throw ex
-
-        if (uniqueConstrViolatedIs("dw2_invites_email__u", ex))
+        if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw2_invites_email__u", ex))
           throw DbDao.DuplicateUserEmail
 
-        die("DwE7PKF4")
+        throw ex
     }
   }
 
@@ -153,12 +150,12 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       runUpdate("""
         insert into DW1_USERS(
             SITE_ID, USER_ID, DISPLAY_NAME, USERNAME, CREATED_AT,
-            EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, PASSWORD_HASH,
+            EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
             COUNTRY, SUPERADMIN, IS_OWNER)
         values (
             ?, ?, ?, ?, ?,
-            ?, ?, ?, ?,
+            ?, ?, ?, false, ?,
             ?, ?, ?,
             ?, ?, ?)
         """,
@@ -181,7 +178,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         if (uniqueConstrViolatedIs("DW1_USERS_SITE_USERNAME__U", ex))
           throw DbDao.DuplicateUsername
 
-        die("DwE6ZP21")
+        throw ex
     }
   }
 
@@ -518,6 +515,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   def loadCompleteUser(userId: UserId): Option[CompleteUser] = {
+    require(User.isRoleId(userId), "DwE5FKE2")
     val sql = s"""
       select $CompleteUserSelectListItemsNoUserId
       from dw1_users
@@ -590,10 +588,11 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         suspended_at = ?,
         suspended_till = ?,
         suspended_by_id = ?,
+        suspended_reason = ?,
         superadmin = ?,
         is_owner = ?
       where site_id = ? and user_id = ?
-                    """
+      """
 
     val values = List(
       user.fullName.trimNullVarcharIfBlank,
@@ -611,12 +610,35 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       user.suspendedAt.orNullTimestamp,
       user.suspendedTill.orNullTimestamp,
       user.suspendedById.orNullInt,
+      user.suspendedReason.orNullVarchar,
       tOrNull(user.isAdmin),
       tOrNull(user.isOwner),
       siteId,
       user.id.asAnyRef)
 
     runUpdateSingleRow(statement, values)
+  }
+
+
+  def updateGuest(user: User): Boolean = {
+    val statement = """
+      update dw1_users set
+        updated_at = now_utc(),
+        display_name = ?,
+        website = ?
+      where site_id = ? and user_id = ?
+      """
+    val values = List(user.displayName, e2d(user.website), siteId, user.id.asAnyRef)
+    try {
+      runUpdateSingleRow(statement, values)
+    }
+    catch {
+      case ex: js.SQLException =>
+        if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw1_user_guest__u", ex))
+          throw DbDao.DuplicateGuest
+
+        throw ex
+    }
   }
 
 

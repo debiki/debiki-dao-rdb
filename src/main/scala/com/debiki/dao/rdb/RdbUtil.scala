@@ -96,12 +96,12 @@ object RdbUtil {
     emailAddress = rs.getString("email_address"),
     secretKey = rs.getString("secret_key"),
     createdById = rs.getInt("created_by_id"),
-    createdAt = ts2d(rs.getTimestamp("created_at")),
-    acceptedAt = ts2o(rs.getTimestamp("accepted_at")),
+    createdAt = getDate(rs, "created_at"),
+    acceptedAt = getOptionalDate(rs, "accepted_at"),
     userId = getOptionalIntNoneNot0(rs, "user_id"),
-    deletedAt = ts2o(rs.getTimestamp("deleted_at")),
+    deletedAt = getOptionalDate(rs, "deleted_at"),
     deletedById = getOptionalIntNoneNot0(rs, "deleted_by_id"),
-    invalidatedAt = ts2o(rs.getTimestamp("invalidated_at")))
+    invalidatedAt = getOptionalDate(rs, "invalidated_at"))
 
 
   val UserSelectListItemsNoGuests =
@@ -112,6 +112,7 @@ object RdbUtil {
       |u.IS_APPROVED u_is_approved,
       |u.APPROVED_AT u_approved_at,
       |u.APPROVED_BY_ID u_approved_by_id,
+      |u.SUSPENDED_TILL u_suspended_till,
       |u.EMAIL u_email,
       |u.EMAIL_NOTFS u_email_notfs,
       |u.EMAIL_VERIFIED_AT u_email_verified_at,
@@ -139,15 +140,15 @@ object RdbUtil {
       id = userId,
       displayName = dn2e(rs.getString("u_disp_name")),
       username = Option(rs.getString("u_username")),
-      createdAt = ts2o(rs.getTimestamp("u_created_at")),
+      createdAt = getOptionalDate(rs, "u_created_at"),
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = emailNotfPrefs,
-      emailVerifiedAt = ts2o(rs.getTimestamp("u_email_verified_at")),
+      emailVerifiedAt = getOptionalDate(rs, "u_email_verified_at"),
       passwordHash = Option(rs.getString("u_password_hash")),
       country = dn2e(rs.getString("u_country")),
       website = dn2e(rs.getString("u_website")),
       isApproved = getOptionalBoolean(rs, "u_is_approved"),
-      isSuspended = false, // for now
+      suspendedTill = getOptionalDate(rs, "u_suspended_till"),
       isAdmin = rs.getString("u_superadmin") == "T",
       isOwner = rs.getString("u_is_owner") == "T")
   }
@@ -172,7 +173,8 @@ object RdbUtil {
     |approved_by_id,
     |suspended_at,
     |suspended_till,
-    |suspended_by_id
+    |suspended_by_id,
+    |suspended_reason
     """
 
   val CompleteUserSelectListItemsWithUserId =
@@ -181,26 +183,28 @@ object RdbUtil {
 
   def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): CompleteUser = {
     val theUserId = userId getOrElse rs.getInt("user_id")
+    dieIf(User.isGuestId(theUserId), "DwE6P4K3")
     CompleteUser(
       id = theUserId,
       fullName = dn2e(rs.getString("display_name")),
       username = rs.getString("username"),
-      createdAt = ts2d(rs.getTimestamp("created_at")),
+      createdAt = getDate(rs, "created_at"),
       emailAddress = dn2e(rs.getString("email")),
       emailNotfPrefs = _toEmailNotfs(rs.getString("email_notfs")),
-      emailVerifiedAt = ts2o(rs.getTimestamp("email_verified_at")),
+      emailVerifiedAt = getOptionalDate(rs, "email_verified_at"),
       emailForEveryNewPost = rs.getBoolean("email_for_every_new_post"),
       passwordHash = Option(rs.getString("password_hash")),
       country = dn2e(rs.getString("country")),
       website = dn2e(rs.getString("website")),
       isApproved = getOptionalBoolean(rs, "is_approved"),
-      approvedAt = ts2o(rs.getTimestamp("approved_at")),
+      approvedAt = getOptionalDate(rs, "approved_at"),
       approvedById = getOptionalIntNoneNot0(rs, "approved_by_id"),
+      suspendedAt = getOptionalDate(rs, "suspended_at"),
+      suspendedTill = getOptionalDate(rs, "suspended_till"),
+      suspendedById = getOptionalIntNoneNot0(rs, "suspended_by_id"),
+      suspendedReason = Option(rs.getString("suspended_reason")),
       isAdmin = rs.getString("superadmin") == "T",
-      isOwner = rs.getString("is_owner") == "T",
-      suspendedAt = None,
-      suspendedTill = None,
-      suspendedById = None)
+      isOwner = rs.getString("is_owner") == "T")
   }
 
 
@@ -237,10 +241,10 @@ object RdbUtil {
       pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
       embeddingPageUrl = Option(resultSet.getString("EMBEDDING_PAGE_URL")),
-      createdAt = ts2d(resultSet.getTimestamp("CREATED_AT")),
-      updatedAt = ts2d(resultSet.getTimestamp("UPDATED_AT")),
-      publishedAt = Option(ts2d(resultSet.getTimestamp("PUBLISHED_AT"))),
-      bumpedAt = Option(ts2d(resultSet.getTimestamp("BUMPED_AT"))),
+      createdAt = getDate(resultSet, "CREATED_AT"),
+      updatedAt = getDate(resultSet, "UPDATED_AT"),
+      publishedAt = getOptionalDate(resultSet, "PUBLISHED_AT"),
+      bumpedAt = getOptionalDate(resultSet, "BUMPED_AT"),
       authorId = resultSet.getInt("AUTHOR_ID"),
       numLikes = n20(resultSet.getInt("NUM_LIKES")),
       numWrongs = n20(resultSet.getInt("NUM_WRONGS")),
@@ -321,7 +325,7 @@ object RdbUtil {
   }
 
 
-  def _pageRoleToSql(pageRole: PageRole): AnyRef = pageRole match {
+  def _pageRoleToSql(pageRole: PageRole): String = pageRole match {
     case PageRole.HomePage => "H"
     case PageRole.WebPage => "P"
     case PageRole.EmbeddedComments => "EC"

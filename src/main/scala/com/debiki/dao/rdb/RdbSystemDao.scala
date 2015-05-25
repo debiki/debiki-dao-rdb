@@ -84,7 +84,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
   def createTheOneAndOnlyConnection(readOnly: Boolean) {
     require(_theOneAndOnlyConnection.isEmpty, "DwE8PKW2")
-    _theOneAndOnlyConnection = Some(db.getConnection(readOnly))
+    _theOneAndOnlyConnection = Some(db.getConnection(readOnly, mustBeSerializable = true))
   }
 
 
@@ -164,7 +164,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   lazy val currentTime: ju.Date = {
     runQuery("select now_utc() as current_time", Nil, rs => {
       rs.next()
-      ts2d(rs.getTimestamp("current_time", RdbSystemDao.calendarUtcTimeZone))
+      getDate(rs, "current_time")
     })
   }
 
@@ -425,7 +425,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       while (rs.next) {
         val siteId = rs.getString("SITE_ID")
         val notfTypeStr = rs.getString("NOTF_TYPE")
-        val createdAt = ts2d(rs.getTimestamp("CREATED_AT"))
+        val createdAt = getDate(rs, "CREATED_AT")
         val uniquePostId = rs.getInt("UNIQUE_POST_ID")
         val pageId = rs.getString("PAGE_ID")
         val postId = rs.getInt("POST_ID")
@@ -435,7 +435,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val toUserId = rs.getInt("TO_USER_ID")
         val emailId = Option(rs.getString("EMAIL_ID"))
         val emailStatus = flagToEmailStatus(rs.getString("EMAIL_STATUS"))
-        val seenAt = ts2o(rs.getTimestamp("SEEN_AT"))
+        val seenAt = getOptionalDate(rs, "SEEN_AT")
 
         val notification = notfTypeStr match {
           case "R" | "M" | "N" =>
