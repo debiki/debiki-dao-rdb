@@ -100,20 +100,6 @@ object Rdb {
   def o2ts(maybeDati: Option[ju.Date]) =
     maybeDati.map(d2ts(_)) getOrElse NullTimestamp
 
-  /**
-   * Converts java.sql.Timestamp to java.util.Date. (If you send a ju.Date
-   * to the database, it throws away the fractional seconds value,
-   * when saving and loading.)
-   */
-  @deprecated("Use 'getDate' instead, or time zone problems!?", "Now")
-  def ts2d(ts: js.Timestamp) =
-     (ts eq null) ? (null: ju.Date) | (new ju.Date(ts.getTime))
-
-  /** Converts java.sql.Timestamp to Some(java.util.Date) or None if null. */
-  @deprecated("Use 'getOptionalDate' instead, or time zone problems!?", "Now")
-  def ts2o(ts: js.Timestamp): Option[ju.Date] =
-    if (ts eq null) None else Some(new ju.Date(ts.getTime))
-
   def tOrNull(bool: Boolean) = if (bool) "T" else NullVarchar
 
   def getResultSetLongOption(rs: js.ResultSet, column: String): Option[Long] = {
@@ -130,8 +116,14 @@ object Rdb {
     else Some(value)
   }
 
+  /** Converts java.sql.Timestamp to java.util.Date, all in UTC. (If you send a
+    * ju.Date to the database, it throws away the fractional seconds value,
+    * when saving and loading.)
+    */
   def getDate(rs: js.ResultSet, column: String): ju.Date = {
-    ts2d(rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone))
+    val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
+    if (timestamp eq null) null: ju.Date
+    else new ju.Date(timestamp.getTime)
   }
 
   def getOptionalDate(rs: js.ResultSet, column: String): Option[ju.Date] = {
@@ -458,7 +450,7 @@ class Rdb(val dataSource: jxs.DataSource){
         case s: String => pstmt.setString(bindPos, s)
         case d: js.Date => assErr("DwE0kiesE4", "Use Timestamp not Date")
         case t: js.Time => assErr("DwE96SK3X8", "Use Timestamp not Time")
-        case t: js.Timestamp => pstmt.setTimestamp(bindPos, t)
+        case t: js.Timestamp => pstmt.setTimestamp(bindPos, t, RdbSystemDao.calendarUtcTimeZone)
         case d: ju.Date => pstmt.setTimestamp(bindPos, d2ts(d))
         case Null(sqlType) => pstmt.setNull(bindPos, sqlType)
         case x => die("DwE60KF2F5", "Cannot bind this: "+ classNameOf(x))

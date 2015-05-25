@@ -1048,8 +1048,8 @@ class RdbSiteDao(
            tyype = parseEmailType(rs.getString("TYPE")),
            sentTo = rs.getString("SENT_TO"),
            toUserId = toUserId,
-           sentOn = Option(ts2d(rs.getTimestamp("SENT_ON"))),
-           createdAt = ts2d(rs.getTimestamp("CREATED_AT")),
+           sentOn = getOptionalDate(rs, "SENT_ON"),
+           createdAt = getDate(rs, "CREATED_AT"),
            subject = rs.getString("SUBJECT"),
            bodyHtmlText = rs.getString("BODY_HTML"),
            providerEmailId = Option(rs.getString("PROVIDER_EMAIL_ID")),
@@ -1104,7 +1104,7 @@ class RdbSiteDao(
         // Assert that there are no sort order bugs.
         assert(!debugLastIsCanonical)
         debugLastIsCanonical = rs.getString("CANONICAL") == "C"
-        val canonicalDati = ts2d(rs.getTimestamp("CANONICAL_DATI"))
+        val canonicalDati = getDate(rs, "CANONICAL_DATI")
         assert(canonicalDati.getTime > debugLastCanonicalDati.getTime)
         debugLastCanonicalDati = canonicalDati
 
