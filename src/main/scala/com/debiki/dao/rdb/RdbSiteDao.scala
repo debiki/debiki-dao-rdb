@@ -353,6 +353,7 @@ class RdbSiteDao(
       newMeta.authorId.asAnyRef,
       newMeta.numLikes.asAnyRef,
       newMeta.numWrongs.asAnyRef,
+      newMeta.numBurys.asAnyRef,
       newMeta.numRepliesVisible.asAnyRef,
       newMeta.numRepliesTotal.asAnyRef,
       newMeta.numChildPages.asAnyRef,
@@ -369,6 +370,7 @@ class RdbSiteDao(
         AUTHOR_ID = ?,
         NUM_LIKES = ?,
         NUM_WRONGS = ?,
+        NUM_BURY_VOTES = ?,
         NUM_REPLIES_VISIBLE = ?,
         NUM_REPLIES_TOTAL = ?,
         NUM_CHILD_PAGES = ?

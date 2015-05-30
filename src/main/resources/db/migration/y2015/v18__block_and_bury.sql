@@ -73,3 +73,28 @@ create index dw2_auditlog_fingerprint_doneat__i on dw2_audit_log(site_id, browse
 -- Fix users table bug.
 alter table dw1_users alter email_for_every_new_post set default null;
 
+
+-- Add Bury and Unwanted vote columns.
+
+alter table dw2_posts add column num_bury_votes int not null default 0;
+alter table dw2_posts add column num_unwanted_votes int not null default 0;
+alter table dw2_posts drop constraint dw2_posts__c_counts_gez;
+alter table dw2_posts add constraint dw2_posts__c_counts_gez check(
+  num_distinct_editors >= 0 and
+  num_edit_suggestions >= 0 and
+  num_pending_flags >= 0 and
+  num_handled_flags >= 0 and
+  num_like_votes >= 0 and
+  num_wrong_votes >= 0 and
+  num_bury_votes >= 0 and
+  num_unwanted_votes >= 0 and
+  num_times_read >= 0);
+
+alter table dw1_pages add column num_bury_votes int not null default 0;
+alter table dw1_pages add column num_unwanted_votes int not null default 0;
+alter table dw1_pages add constraint dw1_pages__c_votes_gez check(
+  num_likes >= 0 and
+  num_wrongs >= 0 and
+  num_bury_votes >= 0 and
+  num_unwanted_votes >= 0);
+

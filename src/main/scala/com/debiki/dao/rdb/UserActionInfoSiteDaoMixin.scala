@@ -62,7 +62,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
     var numLikesReceived = 0
     var numWrongsGiven = 0
     var numWrongsReceived = 0
-    var numOffTopicsGiven = 0
+    var numBurysGiven = 0
     var numOffTopicsReceived = 0
 
     /*
@@ -98,8 +98,8 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
       numLikesReceived = 0, // not yet loaded
       numWrongsGiven = numWrongsGiven,
       numWrongsReceived = 0, // not yet loaded
-      numOffTopicsGiven = numOffTopicsGiven,
-      numOffTopicsReceived = 0) // not yet loaded
+      numBurysGiven = numBurysGiven,
+      numBurysReceived = 0) // not yet loaded
   }
 
 

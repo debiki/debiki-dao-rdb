@@ -229,6 +229,7 @@ object RdbUtil {
       |g.AUTHOR_ID,
       |g.NUM_LIKES,
       |g.NUM_WRONGS,
+      |g.NUM_BURY_VOTES,
       |g.NUM_REPLIES_VISIBLE,
       |g.NUM_REPLIES_TOTAL,
       |g.NUM_CHILD_PAGES
@@ -248,6 +249,7 @@ object RdbUtil {
       authorId = resultSet.getInt("AUTHOR_ID"),
       numLikes = n20(resultSet.getInt("NUM_LIKES")),
       numWrongs = n20(resultSet.getInt("NUM_WRONGS")),
+      numBurys = n20(resultSet.getInt("NUM_BURY_VOTES")),
       numRepliesVisible = n20(resultSet.getInt("NUM_REPLIES_VISIBLE")),
       numRepliesTotal = n20(resultSet.getInt("NUM_REPLIES_TOTAL")),
       numChildPages = resultSet.getInt("NUM_CHILD_PAGES"))
