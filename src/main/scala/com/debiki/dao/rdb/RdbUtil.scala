@@ -20,6 +20,7 @@ package com.debiki.dao.rdb
 import com.debiki.core._
 import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.Prelude._
+import com.debiki.core.User.isGuestId
 import java.{sql => js}
 import scala.{collection => col}
 import Rdb._
@@ -128,7 +129,7 @@ object RdbUtil {
   def _User(rs: js.ResultSet) = {
     val userId = rs.getInt("u_id")
     val emailNotfPrefs = {
-      if (User.isGuestId(userId))
+      if (isGuestId(userId))
         _toEmailNotfs(rs.getString("g_email_notfs"))
       else
         _toEmailNotfs(rs.getString("u_email_notfs"))
@@ -140,7 +141,7 @@ object RdbUtil {
       id = userId,
       displayName = dn2e(rs.getString("u_disp_name")),
       username = Option(rs.getString("u_username")),
-      guestCookie = Option(rs.getString("u_guest_cookie")),
+      guestCookie = isGuestId(userId) ? Option(rs.getString("u_guest_cookie")) | None,
       createdAt = getOptionalDate(rs, "u_created_at"),
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = emailNotfPrefs,
