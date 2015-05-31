@@ -287,7 +287,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def lookupTenant(scheme: String, host: String): TenantLookup = {
+  def lookupTenant(scheme: String, hostname: String): TenantLookup = {
     val RoleCanonical = "C"
     val RoleLink = "L"
     val RoleRedirect = "R"
@@ -295,6 +295,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val HttpsRequired = "R"
     val HttpsAllowed = "A"
     val HttpsNo = "N"
+    // COULD remove the port from the host column in all rows, and rename it to 'hostname'.
     db.queryAtnms("""
         select t.SITE_ID TID,
             t.CANONICAL THIS_CANONICAL, t.HTTPS THIS_HTTPS,
@@ -303,9 +304,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
             left join DW1_TENANT_HOSTS c  -- the cannonical host
             on c.SITE_ID = t.SITE_ID and c.CANONICAL = 'C'
         where t.HOST = ?
-        """, List(host), rs => {
+        """, List(hostname), rs => {
       if (!rs.next) {
-        if (Site.Ipv4AnyPortRegex.matches(host)) {
+        if (Site.Ipv4AnyPortRegex.matches(hostname)) {
           // Make it possible to assess the server before any domain has been connected
           // to it and when we stil don't know its ip, just after installation.
           return FoundAlias(Site.FirstSiteId, canonicalHostUrl = "",
@@ -324,7 +325,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         if (thisRole == RoleDuplicate) {
           // Pretend this is the chost.
           thisRole = RoleCanonical
-          chost_? = host
+          chost_? = hostname
           chostHttps_? = thisHttps
         }
         if (chost_? eq null) {
@@ -338,7 +339,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       def chostUrl =  // the canonical host URL, e.g. http://www.example.com
           (if (chostHttps == HttpsRequired) "https://" else "http://") + chost
 
-      assErrIf3((thisRole == RoleCanonical) != (host == chost), "DwE98h1215]")
+      dieIf((thisRole == RoleCanonical) != (hostname == chost), "DwE98h1215]")
 
       def useThisHostAndScheme = FoundChost(tenantId)
       def redirect = FoundAlias(tenantId, canonicalHostUrl = chostUrl,
@@ -348,9 +349,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       (thisRole, scheme, thisHttps) match {
         case (RoleCanonical, "http" , HttpsRequired) => redirect
         case (RoleCanonical, "http" , _            ) => useThisHostAndScheme
-        case (RoleCanonical, "https", HttpsRequired) => useThisHostAndScheme
-        case (RoleCanonical, "https", HttpsAllowed ) => useLinkRelCanonical
         case (RoleCanonical, "https", HttpsNo      ) => redirect
+        case (RoleCanonical, "https", _            ) => useThisHostAndScheme
         case (RoleRedirect , _      , _            ) => redirect
         case (RoleLink     , _      , _            ) => useLinkRelCanonical
         case (RoleDuplicate, _      , _            ) => assErr("DwE09KL04")
