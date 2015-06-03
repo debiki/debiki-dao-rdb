@@ -98,3 +98,8 @@ alter table dw1_pages add constraint dw1_pages__c_votes_gez check(
   num_bury_votes >= 0 and
   num_unwanted_votes >= 0);
 
+
+-- Remove HTTPS column. All sites will have to either use HTTPS, or none of them.
+
+alter table dw1_tenant_hosts drop column https;
+

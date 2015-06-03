@@ -643,7 +643,7 @@ class RdbSiteDao(
           creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
           hosts = Nil)
         val newTenant = insertSite(newTenantNoId, quotaLimitMegabytes)
-        val newHost = TenantHost(hostname, TenantHost.RoleCanonical, TenantHost.HttpsNone)
+        val newHost = TenantHost(hostname, TenantHost.RoleCanonical)
         val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
         assErrIf(newHostCount != 1, "DwE09KRF3")
         newTenant.copy(hosts = List(newHost))
@@ -719,11 +719,6 @@ class RdbSiteDao(
     transactionCheckQuota { implicit connection =>
       systemDaoSpi.insertTenantHost(siteId, host)(connection)
     }
-  }
-
-
-  def lookupOtherTenant(scheme: String, host: String): TenantLookup = {
-    systemDaoSpi.lookupTenant(scheme, host)
   }
 
 

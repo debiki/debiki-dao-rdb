@@ -243,7 +243,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     require(tenantIds.length == 1 || all)
 
     var hostsByTenantId = Map[String, List[TenantHost]]().withDefaultValue(Nil)
-    var hostsQuery = "select SITE_ID, HOST, CANONICAL, HTTPS from DW1_TENANT_HOSTS"
+    var hostsQuery = "select SITE_ID, HOST, CANONICAL from DW1_TENANT_HOSTS"
     var hostsValues: List[AnyRef] = Nil
     if (!all) {
       UNTESTED
@@ -256,8 +256,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           var hosts = hostsByTenantId(tenantId)
           hosts ::= TenantHost(
              address = rs.getString("HOST"),
-             role = _toTenantHostRole(rs.getString("CANONICAL")),
-             https = _toTenantHostHttps(rs.getString("HTTPS")))
+             role = _toTenantHostRole(rs.getString("CANONICAL")))
           hostsByTenantId = hostsByTenantId.updated(tenantId, hosts)
         }
       })
@@ -287,74 +286,27 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def lookupTenant(scheme: String, hostname: String): TenantLookup = {
-    val RoleCanonical = "C"
-    val RoleLink = "L"
-    val RoleRedirect = "R"
-    val RoleDuplicate = "D"
-    val HttpsRequired = "R"
-    val HttpsAllowed = "A"
-    val HttpsNo = "N"
-    // COULD remove the port from the host column in all rows, and rename it to 'hostname'.
+  def lookupCanonicalHost(hostname: String): Option[TenantLookup] = {
     db.queryAtnms("""
         select t.SITE_ID TID,
-            t.CANONICAL THIS_CANONICAL, t.HTTPS THIS_HTTPS,
-            c.HOST CANONICAL_HOST, c.HTTPS CANONICAL_HTTPS
+            t.CANONICAL THIS_CANONICAL,
+            c.HOST CANONICAL_HOST
         from DW1_TENANT_HOSTS t -- this host, the one connected to
             left join DW1_TENANT_HOSTS c  -- the cannonical host
             on c.SITE_ID = t.SITE_ID and c.CANONICAL = 'C'
         where t.HOST = ?
         """, List(hostname), rs => {
-      if (!rs.next) {
-        if (Site.Ipv4AnyPortRegex.matches(hostname)) {
-          // Make it possible to assess the server before any domain has been connected
-          // to it and when we stil don't know its ip, just after installation.
-          return FoundAlias(Site.FirstSiteId, canonicalHostUrl = "",
-            role = TenantHost.RoleDuplicate)
-        }
-        else {
-          return FoundNothing
-        }
-      }
-      val tenantId = rs.getString("TID")
-      val thisHttps = rs.getString("THIS_HTTPS")
-      val (thisRole, chost, chostHttps) = {
-        var thisRole = rs.getString("THIS_CANONICAL")
-        var chost_? = rs.getString("CANONICAL_HOST")
-        var chostHttps_? = rs.getString("CANONICAL_HTTPS")
-        if (thisRole == RoleDuplicate) {
-          // Pretend this is the chost.
-          thisRole = RoleCanonical
-          chost_? = hostname
-          chostHttps_? = thisHttps
-        }
-        if (chost_? eq null) {
-          // This is not a duplicate, and there's no canonical host
-          // to link or redirect to.
-          return FoundNothing
-        }
-        (thisRole, chost_?, chostHttps_?)
-      }
+      if (!rs.next)
+        return None
 
-      def chostUrl =  // the canonical host URL, e.g. http://www.example.com
-          (if (chostHttps == HttpsRequired) "https://" else "http://") + chost
-
-      dieIf((thisRole == RoleCanonical) != (hostname == chost), "DwE98h1215]")
-
-      def useThisHostAndScheme = FoundChost(tenantId)
-      def redirect = FoundAlias(tenantId, canonicalHostUrl = chostUrl,
-                              role = TenantHost.RoleRedirect)
-      def useLinkRelCanonical = redirect.copy(role = TenantHost.RoleLink)
-
-      (thisRole, scheme, thisHttps) match {
-        case (RoleCanonical, "http" , HttpsRequired) => redirect
-        case (RoleCanonical, "http" , _            ) => useThisHostAndScheme
-        case (RoleCanonical, "https", HttpsNo      ) => redirect
-        case (RoleCanonical, "https", _            ) => useThisHostAndScheme
-        case (RoleRedirect , _      , _            ) => redirect
-        case (RoleLink     , _      , _            ) => useLinkRelCanonical
-        case (RoleDuplicate, _      , _            ) => assErr("DwE09KL04")
-      }
+      return Some(TenantLookup(
+        siteId = rs.getString("TID"),
+        thisHost = TenantHost(
+          address = hostname,
+          role = _toTenantHostRole(rs.getString("THIS_CANONICAL"))),
+        canonicalHost = TenantHost(
+          address = rs.getString("CANONICAL_HOST"),
+          role = TenantHost.RoleCanonical)))
     })
   }
 

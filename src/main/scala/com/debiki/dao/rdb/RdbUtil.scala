@@ -280,13 +280,6 @@ object RdbUtil {
   }
 
 
-  def _toTenantHostHttps(httpsStr: String) = httpsStr match {
-    case "R" => TenantHost.HttpsRequired
-    case "A" => TenantHost.HttpsAllowed
-    case "N" => TenantHost.HttpsNone
-  }
-
-
   def toDbMultireply(postIds: Set[PostId]) = {
     if (postIds.isEmpty) NullVarchar
     else postIds.mkString(",")

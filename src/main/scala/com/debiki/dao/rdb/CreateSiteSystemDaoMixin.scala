@@ -38,16 +38,11 @@ trait CreateSiteSystemDaoMixin {
       case TenantHost.RoleLink => "L"
       case TenantHost.RoleDuplicate => "D"
     }
-    val https = host.https match {
-      case TenantHost.HttpsRequired => "R"
-      case TenantHost.HttpsAllowed => "A"
-      case TenantHost.HttpsNone => "N"
-    }
     val sql = """
-      insert into DW1_TENANT_HOSTS (SITE_ID, HOST, CANONICAL, HTTPS)
-      values (?, ?, ?, ?)
+      insert into DW1_TENANT_HOSTS (SITE_ID, HOST, CANONICAL)
+      values (?, ?, ?)
       """
-    db.update(sql, List(tenantId, host.address, cncl, https))(connection)
+    db.update(sql, List(tenantId, host.address, cncl))(connection)
   }
 
 }
