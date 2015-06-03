@@ -229,20 +229,20 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  override def loadSites(): immutable.Seq[Tenant] =
+  override def loadSites(): immutable.Seq[Site] =
     loadSitesImpl(all = true).to[immutable.Seq]
 
 
-  def loadTenants(tenantIds: Seq[String]): Seq[Tenant] =
+  def loadTenants(tenantIds: Seq[String]): Seq[Site] =
     if (tenantIds.isEmpty) Nil
     else loadSitesImpl(tenantIds = tenantIds)
 
 
-  def loadSitesImpl(tenantIds: Seq[String] = Nil, all: Boolean = false): Seq[Tenant] = {
+  def loadSitesImpl(tenantIds: Seq[String] = Nil, all: Boolean = false): Seq[Site] = {
     // For now, load only 1 tenant.
     require(tenantIds.length == 1 || all)
 
-    var hostsByTenantId = Map[String, List[TenantHost]]().withDefaultValue(Nil)
+    var hostsByTenantId = Map[String, List[SiteHost]]().withDefaultValue(Nil)
     var hostsQuery = "select SITE_ID, HOST, CANONICAL from DW1_TENANT_HOSTS"
     var hostsValues: List[AnyRef] = Nil
     if (!all) {
@@ -254,8 +254,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         while (rs.next) {
           val tenantId = rs.getString("SITE_ID")
           var hosts = hostsByTenantId(tenantId)
-          hosts ::= TenantHost(
-             address = rs.getString("HOST"),
+          hosts ::= SiteHost(
+             hostname = rs.getString("HOST"),
              role = _toTenantHostRole(rs.getString("CANONICAL")))
           hostsByTenantId = hostsByTenantId.updated(tenantId, hosts)
         }
@@ -268,12 +268,12 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       sitesQuery += " where ID = ?"  // for now, later: in (...)
       sitesValues = List(tenantIds.head)
     }
-    var tenants = List[Tenant]()
+    var tenants = List[Site]()
     queryAtnms(sitesQuery, sitesValues, rs => {
       while (rs.next) {
         val tenantId = rs.getString("ID")
         val hosts = hostsByTenantId(tenantId)
-        tenants ::= Tenant(
+        tenants ::= Site(
           id = tenantId,
           name = rs.getString("NAME"),
           creatorIp = rs.getString("CREATOR_IP"),
@@ -286,7 +286,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def lookupCanonicalHost(hostname: String): Option[TenantLookup] = {
+  def lookupCanonicalHost(hostname: String): Option[CanonicalHostLookup] = {
     db.queryAtnms("""
         select t.SITE_ID TID,
             t.CANONICAL THIS_CANONICAL,
@@ -299,14 +299,14 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       if (!rs.next)
         return None
 
-      return Some(TenantLookup(
+      return Some(CanonicalHostLookup(
         siteId = rs.getString("TID"),
-        thisHost = TenantHost(
-          address = hostname,
+        thisHost = SiteHost(
+          hostname = hostname,
           role = _toTenantHostRole(rs.getString("THIS_CANONICAL"))),
-        canonicalHost = TenantHost(
-          address = rs.getString("CANONICAL_HOST"),
-          role = TenantHost.RoleCanonical)))
+        canonicalHost = SiteHost(
+          hostname = rs.getString("CANONICAL_HOST"),
+          role = SiteHost.RoleCanonical)))
     })
   }
 

@@ -593,7 +593,7 @@ class RdbSiteDao(
   }
 
 
-  def loadTenant(): Tenant = {
+  def loadTenant(): Site = {
     systemDaoSpi.loadTenants(List(siteId)).head
   }
 
@@ -627,7 +627,7 @@ class RdbSiteDao(
 
 
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
-        creatorIp: String, creatorEmailAddress: String, quotaLimitMegabytes: Option[Int]): Tenant = {
+        creatorIp: String, creatorEmailAddress: String, quotaLimitMegabytes: Option[Int]): Site = {
     try {
       transactionCheckQuota { implicit connection =>
         // Unless apparently testing from localhost, don't allow someone to create
@@ -639,11 +639,11 @@ class RdbSiteDao(
             throw TooManySitesCreatedException(creatorIp)
         }
 
-        val newTenantNoId = Tenant(id = "?", name = name, creatorIp = creatorIp,
+        val newTenantNoId = Site(id = "?", name = name, creatorIp = creatorIp,
           creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
           hosts = Nil)
         val newTenant = insertSite(newTenantNoId, quotaLimitMegabytes)
-        val newHost = TenantHost(hostname, TenantHost.RoleCanonical)
+        val newHost = SiteHost(hostname, SiteHost.RoleCanonical)
         val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
         assErrIf(newHostCount != 1, "DwE09KRF3")
         newTenant.copy(hosts = List(newHost))
@@ -657,7 +657,7 @@ class RdbSiteDao(
   }
 
 
-  def updateSite(changedSite: Tenant) {
+  def updateSite(changedSite: Site) {
     val currentSite = loadTenant()
     require(changedSite.id == this.siteId,
       "Cannot change site id [DwE32KB80]")
@@ -699,8 +699,8 @@ class RdbSiteDao(
   }
 
 
-  private def insertSite(tenantNoId: Tenant, quotaLimitMegabytes: Option[Int])
-        (implicit connection: js.Connection): Tenant = {
+  private def insertSite(tenantNoId: Site, quotaLimitMegabytes: Option[Int])
+        (implicit connection: js.Connection): Site = {
     assErrIf(tenantNoId.id != "?", "DwE91KB2")
     val tenant = tenantNoId.copy(
       id = db.nextSeqNo("DW1_TENANTS_ID").toString)
@@ -715,7 +715,7 @@ class RdbSiteDao(
   }
 
 
-  def addTenantHost(host: TenantHost) = {
+  def addTenantHost(host: SiteHost) = {
     transactionCheckQuota { implicit connection =>
       systemDaoSpi.insertTenantHost(siteId, host)(connection)
     }

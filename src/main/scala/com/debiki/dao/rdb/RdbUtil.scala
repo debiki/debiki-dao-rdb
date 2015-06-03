@@ -273,10 +273,10 @@ object RdbUtil {
 
 
   def _toTenantHostRole(roleStr: String) = roleStr match {
-    case "C" => TenantHost.RoleCanonical
-    case "R" => TenantHost.RoleRedirect
-    case "L" => TenantHost.RoleLink
-    case "D" => TenantHost.RoleDuplicate
+    case "C" => SiteHost.RoleCanonical
+    case "R" => SiteHost.RoleRedirect
+    case "L" => SiteHost.RoleLink
+    case "D" => SiteHost.RoleDuplicate
   }
 
 

@@ -31,18 +31,18 @@ trait CreateSiteSystemDaoMixin {
   self: RdbSystemDao =>
 
 
-  def insertTenantHost(tenantId: String, host: TenantHost)(connection:  js.Connection) = {
+  def insertTenantHost(tenantId: String, host: SiteHost)(connection:  js.Connection) = {
     val cncl = host.role match {
-      case TenantHost.RoleCanonical => "C"
-      case TenantHost.RoleRedirect => "R"
-      case TenantHost.RoleLink => "L"
-      case TenantHost.RoleDuplicate => "D"
+      case SiteHost.RoleCanonical => "C"
+      case SiteHost.RoleRedirect => "R"
+      case SiteHost.RoleLink => "L"
+      case SiteHost.RoleDuplicate => "D"
     }
     val sql = """
       insert into DW1_TENANT_HOSTS (SITE_ID, HOST, CANONICAL)
       values (?, ?, ?)
       """
-    db.update(sql, List(tenantId, host.address, cncl))(connection)
+    db.update(sql, List(tenantId, host.hostname, cncl))(connection)
   }
 
 }
