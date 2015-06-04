@@ -103,3 +103,8 @@ alter table dw1_pages add constraint dw1_pages__c_votes_gez check(
 
 alter table dw1_tenant_hosts drop column https;
 
+
+-- Let's use scrypt not bcrypt: delete all bcrypt passwords.
+
+update dw1_users set password_hash = null;
+
