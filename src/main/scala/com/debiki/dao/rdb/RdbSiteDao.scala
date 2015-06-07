@@ -601,7 +601,7 @@ class RdbSiteDao(
   def loadSiteStatus(): SiteStatus = {
     val sql = """
       select
-        exists(select 1 from DW1_USERS where SUPERADMIN = 'T' and SITE_ID = ?) as admin_exists,
+        exists(select 1 from DW1_USERS where IS_ADMIN = 'T' and SITE_ID = ?) as admin_exists,
         exists(select 1 from DW1_PAGES where SITE_ID = ?) as content_exists,
         (select CREATOR_EMAIL_ADDRESS from DW1_TENANTS where ID = ?) as admin_email,
         (select EMBEDDING_SITE_URL from DW1_TENANTS where ID = ?) as embedding_site_url"""

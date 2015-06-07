@@ -152,12 +152,12 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
             SITE_ID, USER_ID, DISPLAY_NAME, USERNAME, CREATED_AT,
             EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
-            COUNTRY, SUPERADMIN, IS_OWNER)
+            COUNTRY, IS_OWNER, IS_ADMIN, IS_MODERATOR)
         values (
             ?, ?, ?, ?, ?,
             ?, ?, ?, false, ?,
             ?, ?, ?,
-            ?, ?, ?)
+            ?, ?, ?, ?)
         """,
         List[AnyRef](siteId, user.id.asAnyRef, user.fullName.trimNullVarcharIfBlank,
           user.username, user.createdAt, user.emailAddress.trimNullVarcharIfBlank,
@@ -165,7 +165,8 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
           user.passwordHash.orNullVarchar,
           user.isApproved.orNullBoolean, user.approvedAt.orNullTimestamp,
           user.approvedById.orNullInt,
-          user.country.trimNullVarcharIfBlank, tOrNull(user.isAdmin), tOrNull(user.isOwner)))
+          user.country.trimNullVarcharIfBlank, tOrNull(user.isOwner), tOrNull(user.isAdmin),
+          user.isModerator.asAnyRef))
     }
     catch {
       case ex: js.SQLException =>
@@ -175,7 +176,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         if (uniqueConstrViolatedIs("DW1_USERS_SITE_EMAIL__U", ex))
           throw DbDao.DuplicateUserEmail
 
-        if (uniqueConstrViolatedIs("DW1_USERS_SITE_USERNAME__U", ex))
+        if (uniqueConstrViolatedIs("DW1_USERS_SITE_USERNAMELOWER__U", ex))
           throw DbDao.DuplicateUsername
 
         throw ex
@@ -424,7 +425,9 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val sql = s"""
       select ${UserSelectListItemsNoGuests}
       from DW1_USERS u
-      where u.SITE_ID = ? and u.USER_ID >= $LowestNonGuestId and (u.EMAIL = ? or u.USERNAME = ?)
+      where u.SITE_ID = ?
+        and u.USER_ID >= $LowestNonGuestId
+        and (u.EMAIL = ? or lower(u.USERNAME) = lower(?))
       """
     val values = List(siteId, emailOrUsername, emailOrUsername)
     db.query(sql, values, rs => {
@@ -589,8 +592,9 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         suspended_till = ?,
         suspended_by_id = ?,
         suspended_reason = ?,
-        superadmin = ?,
-        is_owner = ?
+        is_owner = ?,
+        is_admin = ?,
+        is_moderator = ?
       where site_id = ? and user_id = ?
       """
 
@@ -611,8 +615,9 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       user.suspendedTill.orNullTimestamp,
       user.suspendedById.orNullInt,
       user.suspendedReason.orNullVarchar,
-      tOrNull(user.isAdmin),
       tOrNull(user.isOwner),
+      tOrNull(user.isAdmin),
+      user.isModerator.asAnyRef,
       siteId,
       user.id.asAnyRef)
 
@@ -677,7 +682,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val sql = s"""
       select distinct DISPLAY_NAME, USERNAME
       from DW1_USERS
-      where SITE_ID = ? and USERNAME like ? and USER_ID >= $LowestNonGuestId
+      where SITE_ID = ? and lower(USERNAME) like lower(?) and USER_ID >= $LowestNonGuestId
       """
     val values = List(siteId, prefix + "%")
     val result = mutable.ArrayBuffer[NameAndUsername]()

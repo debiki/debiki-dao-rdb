@@ -262,17 +262,25 @@ alter table dw1_users add constraint dw1_users_suspreason__c_len check(
     length(suspended_reason) <= 255);
 
 
+-- Is-admin and is-moderator columns.
+
+alter table dw1_users rename superadmin to is_admin;
+alter table dw1_users add is_moderator boolean default null;
+
+update dw1_users set created_at = now_utc() where created_at is null;
+
+
 -- Guset and non-guest checks.
 
 alter table dw1_users add constraint dw1_users_guest__c_nn check (
     user_id >= -1 or (
+        created_at is not null and
         display_name is not null and
         email is not null and
         guest_cookie is not null));
 
 alter table dw1_users add constraint dw1_users_guest__c_nulls check (
     user_id >= -1 or (
-        created_at is null and
         is_approved is null and
         approved_at is null and
         approved_by_id is null and
@@ -281,8 +289,9 @@ alter table dw1_users add constraint dw1_users_guest__c_nulls check (
         suspended_by_id is null and
         country is null and
         website is null and
-        superadmin is null and
         is_owner is null and
+        is_admin is null and
+        is_moderator is null and
         username is null and
         email_notfs is null and
         email_verified_at is null and
@@ -299,3 +308,5 @@ alter table dw1_users add constraint dw1_users_auth__c_notnulls check (
         username is not null and
         email_for_every_new_post is not null));
 
+drop index dw1_users_site_username__u;
+create unique index dw1_users_site_usernamelower__u on dw1_users(site_id, lower(username));

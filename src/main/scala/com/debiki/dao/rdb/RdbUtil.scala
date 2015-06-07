@@ -109,7 +109,6 @@ object RdbUtil {
     """u.USER_ID u_id,
       |u.DISPLAY_NAME u_disp_name,
       |u.USERNAME u_username,
-      |u.CREATED_AT u_created_at,
       |u.IS_APPROVED u_is_approved,
       |u.APPROVED_AT u_approved_at,
       |u.APPROVED_BY_ID u_approved_by_id,
@@ -120,8 +119,9 @@ object RdbUtil {
       |u.PASSWORD_HASH u_password_hash,
       |u.COUNTRY u_country,
       |u.WEBSITE u_website,
-      |u.SUPERADMIN u_superadmin,
-      |u.IS_OWNER u_is_owner""".stripMargin
+      |u.IS_OWNER u_is_owner,
+      |u.IS_ADMIN u_is_admin,
+      |u.IS_MODERATOR u_is_moderator""".stripMargin
 
   val UserSelectListItemsWithGuests =
     s"$UserSelectListItemsNoGuests, u.GUEST_COOKIE u_guest_cookie, e.EMAIL_NOTFS g_email_notfs"
@@ -142,7 +142,6 @@ object RdbUtil {
       displayName = dn2e(rs.getString("u_disp_name")),
       username = Option(rs.getString("u_username")),
       guestCookie = isGuestId(userId) ? Option(rs.getString("u_guest_cookie")) | None,
-      createdAt = getOptionalDate(rs, "u_created_at"),
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = emailNotfPrefs,
       emailVerifiedAt = getOptionalDate(rs, "u_email_verified_at"),
@@ -151,8 +150,9 @@ object RdbUtil {
       website = dn2e(rs.getString("u_website")),
       isApproved = getOptionalBoolean(rs, "u_is_approved"),
       suspendedTill = getOptionalDate(rs, "u_suspended_till"),
-      isAdmin = rs.getString("u_superadmin") == "T",
-      isOwner = rs.getString("u_is_owner") == "T")
+      isOwner = rs.getString("u_is_owner") == "T",
+      isAdmin = rs.getString("u_is_admin") == "T",
+      isModerator = rs.getBoolean("u_is_moderator"))
   }
 
 
@@ -161,9 +161,10 @@ object RdbUtil {
     |email,
     |country,
     |website,
-    |superadmin,
     |email_notfs,
     |is_owner,
+    |is_admin,
+    |is_moderator,
     |username,
     |email_verified_at,
     |created_at,
@@ -204,8 +205,9 @@ object RdbUtil {
       suspendedTill = getOptionalDate(rs, "suspended_till"),
       suspendedById = getOptionalIntNoneNot0(rs, "suspended_by_id"),
       suspendedReason = Option(rs.getString("suspended_reason")),
-      isAdmin = rs.getString("superadmin") == "T",
-      isOwner = rs.getString("is_owner") == "T")
+      isOwner = rs.getString("is_owner") == "T",
+      isAdmin = rs.getString("is_admin") == "T",
+      isModerator = rs.getBoolean("is_moderator"))
   }
 
 

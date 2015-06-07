@@ -80,9 +80,9 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
           isNewGuest = true
           runUpdate(i"""
             insert into dw1_users(
-              site_id, user_id, display_name, email, guest_cookie)
+              site_id, user_id, created_at, display_name, email, guest_cookie)
             select
-              ?, least(min(user_id) - 1, $MaxCustomGuestId), ?, ?, ?
+              ?, least(min(user_id) - 1, $MaxCustomGuestId), now_utc(), ?, ?, ?
             from
               dw1_users where site_id = ?
             """,
@@ -99,7 +99,6 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
         displayName = loginAttempt.name,
         username = None,
         guestCookie = Some(loginAttempt.guestCookie),
-        createdAt = None,
         email = loginAttempt.email,
         emailNotfPrefs = _toEmailNotfs(emailNotfsStr),
         emailVerifiedAt = None,
@@ -108,7 +107,8 @@ trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
         isApproved = None,
         suspendedTill = None,
         isAdmin = false,
-        isOwner = false)
+        isOwner = false,
+        isModerator = false)
 
       GuestLoginResult(user, isNewGuest)
   }
