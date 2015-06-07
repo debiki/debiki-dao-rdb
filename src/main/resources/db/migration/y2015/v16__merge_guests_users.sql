@@ -266,6 +266,7 @@ alter table dw1_users add constraint dw1_users_suspreason__c_len check(
 
 alter table dw1_users rename superadmin to is_admin;
 alter table dw1_users add is_moderator boolean default null;
+alter table dw1_users add is_editor boolean default null;
 
 update dw1_users set created_at = now_utc() where created_at is null;
 
@@ -292,6 +293,7 @@ alter table dw1_users add constraint dw1_users_guest__c_nulls check (
         is_owner is null and
         is_admin is null and
         is_moderator is null and
+        is_editor is null and
         username is null and
         email_notfs is null and
         email_verified_at is null and
