@@ -90,6 +90,8 @@ alter table dw2_posts add constraint dw2_posts__c_counts_gez check(
   num_unwanted_votes >= 0 and
   num_times_read >= 0);
 
+alter table dw1_pages alter column num_likes set default 0;  -- instead of -1
+alter table dw1_pages alter column num_wrongs set default 0; -- instead of -1
 alter table dw1_pages add column num_bury_votes int not null default 0;
 alter table dw1_pages add column num_unwanted_votes int not null default 0;
 alter table dw1_pages add constraint dw1_pages__c_votes_gez check(
