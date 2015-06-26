@@ -38,13 +38,13 @@ class RdbDaoFactory(
 
 
   def fullTextSearchIndexer =
-    if (fastStartSkipSearch)
-      sys.error("Search disabled, please check your Java -D...=... startup flags")
+    if (fastStartSkipSearch || true)
+      sys.error("Search disabled, please check your Java -D...=... startup flags — no, always disabled right now, doesn't support dw2_posts")
     else
       _fullTextSearchIndexer
 
   private val _fullTextSearchIndexer =
-    if (fastStartSkipSearch) null
+    if (fastStartSkipSearch || true) null
     else new FullTextSearchIndexer(this)
 
 
