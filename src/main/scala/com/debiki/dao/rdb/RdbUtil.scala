@@ -21,7 +21,7 @@ import com.debiki.core._
 import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.Prelude._
 import com.debiki.core.User.isGuestId
-import java.{sql => js}
+import java.{sql => js, util => ju}
 import scala.{collection => col}
 import Rdb._
 
@@ -226,6 +226,7 @@ object RdbUtil {
       |g.UPDATED_AT,
       |g.PUBLISHED_AT,
       |g.BUMPED_AT,
+      |g.LAST_REPLY_AT,
       |g.PAGE_ROLE,
       |g.PARENT_PAGE_ID,
       |g.EMBEDDING_PAGE_URL,
@@ -240,15 +241,26 @@ object RdbUtil {
 
 
   def _PageMeta(resultSet: js.ResultSet, pageId: String = null) = {
+    // We always write to bumped_at so order by queries work, but if in fact the page
+    // hasn't been modified since it was created or published, it has not been bumped.
+    var bumpedAt: Option[ju.Date] = Some(getDate(resultSet, "BUMPED_AT"))
+    val createdAt = getDate(resultSet, "CREATED_AT")
+    val publishedAt = getOptionalDate(resultSet, "PUBLISHED_AT")
+    if (bumpedAt.get.getTime == createdAt.getTime ||
+        publishedAt.exists(_.getTime == bumpedAt.get.getTime)) {
+      bumpedAt = None
+    }
+
     PageMeta(
       pageId = if (pageId ne null) pageId else resultSet.getString("PAGE_ID"),
       pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
       embeddingPageUrl = Option(resultSet.getString("EMBEDDING_PAGE_URL")),
-      createdAt = getDate(resultSet, "CREATED_AT"),
+      createdAt = createdAt,
       updatedAt = getDate(resultSet, "UPDATED_AT"),
-      publishedAt = getOptionalDate(resultSet, "PUBLISHED_AT"),
-      bumpedAt = getOptionalDate(resultSet, "BUMPED_AT"),
+      publishedAt = publishedAt,
+      bumpedAt = bumpedAt,
+      lastReplyAt = getOptionalDate(resultSet, "LAST_REPLY_AT"),
       authorId = resultSet.getInt("AUTHOR_ID"),
       numLikes = n20(resultSet.getInt("NUM_LIKES")),
       numWrongs = n20(resultSet.getInt("NUM_WRONGS")),

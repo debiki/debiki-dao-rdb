@@ -348,8 +348,10 @@ class RdbSiteDao(
     val values = List(
       newMeta.parentPageId.orNullVarchar,
       newMeta.embeddingPageUrl.orNullVarchar,
-      o2ts(newMeta.publishedAt),
-      o2ts(newMeta.bumpedAt),
+      newMeta.publishedAt.orNullTimestamp,
+      // Always write to bumped_at so SQL queries that sort by bumped_at works.
+      newMeta.bumpedAt orElse newMeta.publishedAt getOrElse newMeta.createdAt,
+      newMeta.lastReplyAt.orNullTimestamp,
       newMeta.authorId.asAnyRef,
       newMeta.numLikes.asAnyRef,
       newMeta.numWrongs.asAnyRef,
@@ -367,6 +369,7 @@ class RdbSiteDao(
         UPDATED_AT = now_utc(),
         PUBLISHED_AT = ?,
         BUMPED_AT = ?,
+        LAST_REPLY_AT = ?,
         AUTHOR_ID = ?,
         NUM_LIKES = ?,
         NUM_WRONGS = ?,
@@ -815,6 +818,7 @@ class RdbSiteDao(
             values :+= d2ts(date)
             "g.BUMPED_AT <= ? and"
         }
+        // bumped_at is never null (it defaults to publ date or creation date).
         ("order by g.BUMPED_AT desc", offsetTestAnd)
       case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
         val offsetTestAnd = anyLikesAndDate match {
