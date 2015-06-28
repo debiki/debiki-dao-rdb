@@ -9,3 +9,7 @@ alter table dw1_pages add constraint dw1_pages_createdat_replyat__c_le check (cr
 alter table dw1_pages add constraint dw1_pages_replyat_bumpedat__c_le check (last_reply_at <= bumped_at);
 alter table dw1_pages add constraint dw1_pages_publdat_bumpedat__c_le check (published_at <= bumped_at);
 
+-- Fix multireply bug.
+update dw2_posts set multireply = null
+  where multireply is not null and multireply not like '%,%';
+
