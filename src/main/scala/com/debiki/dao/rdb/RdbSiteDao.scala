@@ -350,7 +350,7 @@ class RdbSiteDao(
       newMeta.embeddingPageUrl.orNullVarchar,
       newMeta.publishedAt.orNullTimestamp,
       // Always write to bumped_at so SQL queries that sort by bumped_at works.
-      newMeta.bumpedAt orElse newMeta.publishedAt getOrElse newMeta.createdAt,
+      newMeta.bumpedOrPublishedOrCreatedAt,
       newMeta.lastReplyAt.orNullTimestamp,
       newMeta.authorId.asAnyRef,
       newMeta.numLikes.asAnyRef,
@@ -630,7 +630,9 @@ class RdbSiteDao(
 
 
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
-        creatorIp: String, creatorEmailAddress: String, quotaLimitMegabytes: Option[Int]): Site = {
+        creatorIp: String, creatorEmailAddress: String,
+        pricePlan: Option[String], quotaLimitMegabytes: Option[Int]): Site = {
+    require(!pricePlan.exists(_.trim.isEmpty), "DwE4KEW23")
     try {
       transactionCheckQuota { implicit connection =>
         // Unless apparently testing from localhost, don't allow someone to create
@@ -645,7 +647,7 @@ class RdbSiteDao(
         val newTenantNoId = Site(id = "?", name = name, creatorIp = creatorIp,
           creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
           hosts = Nil)
-        val newTenant = insertSite(newTenantNoId, quotaLimitMegabytes)
+        val newTenant = insertSite(newTenantNoId, pricePlan, quotaLimitMegabytes)
         val newHost = SiteHost(hostname, SiteHost.RoleCanonical)
         val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
         assErrIf(newHostCount != 1, "DwE09KRF3")
@@ -702,18 +704,20 @@ class RdbSiteDao(
   }
 
 
-  private def insertSite(tenantNoId: Site, quotaLimitMegabytes: Option[Int])
+  private def insertSite(tenantNoId: Site, pricePlan: Option[String],
+        quotaLimitMegabytes: Option[Int])
         (implicit connection: js.Connection): Site = {
     assErrIf(tenantNoId.id != "?", "DwE91KB2")
     val tenant = tenantNoId.copy(
       id = db.nextSeqNo("DW1_TENANTS_ID").toString)
     db.update("""
         insert into DW1_TENANTS (
-          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS, QUOTA_LIMIT_MBS)
-        values (?, ?, ?, ?, ?, ?)""",
+          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS, PRICE_PLAN,
+          QUOTA_LIMIT_MBS)
+        values (?, ?, ?, ?, ?, ?, ?)""",
       List[AnyRef](tenant.id, tenant.name,
         tenant.embeddingSiteUrl.orNullVarchar, tenant.creatorIp,
-        tenant.creatorEmailAddress, quotaLimitMegabytes.orNullInt))
+        tenant.creatorEmailAddress, pricePlan.orNullVarchar, quotaLimitMegabytes.orNullInt))
     tenant
   }
 
@@ -1229,17 +1233,17 @@ class RdbSiteDao(
     val sql = """
       insert into DW1_PAGES (
          SITE_ID, PAGE_ID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
-         CREATED_AT, UPDATED_AT, PUBLISHED_AT, AUTHOR_ID)
+         CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID)
       values (
          ?, ?, ?, ?, ?,
-         ?, ?, ?, ?)"""
+         ?, ?, ?, ?, ?)"""
 
     val values = List[AnyRef](
       siteId, pageMeta.pageId,
       _pageRoleToSql(pageMeta.pageRole), pageMeta.parentPageId.orNullVarchar,
       pageMeta.embeddingPageUrl.orNullVarchar,
       d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
-      pageMeta.authorId.asAnyRef)
+      pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef)
 
     val numNewRows = runUpdate(sql, values)
 

@@ -127,7 +127,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     runQuery(query, List(siteId), rs => {
       rs.next()
       val maxId = rs.getInt("max_id")
-      maxId + 1
+      math.max(LowestAuthenticatedUserId, maxId + 1)
     })
   }
 
