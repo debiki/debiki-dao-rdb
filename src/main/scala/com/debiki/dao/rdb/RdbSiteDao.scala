@@ -1363,12 +1363,14 @@ class RdbSiteDao(
       path
     }
 
-    moveRenamePageImpl(newPath)
+    if (newPath != currentPath) {
+      moveRenamePageImpl(newPath)
 
-    val resultingPath = lookupPagePathImpl(pageId)
-    runErrIf3(resultingPath != Some(newPath),
-      "DwE31ZB0", s"Resulting path: $resultingPath, and intended path: " +
-        s"$newPath, are different")
+      val resultingPath = lookupPagePathImpl(pageId)
+      runErrIf3(resultingPath != Some(newPath),
+        "DwE31ZB0", s"Resulting path: $resultingPath, and intended path: " +
+          s"$newPath, are different")
+    }
 
     newPath
   }
