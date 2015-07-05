@@ -75,6 +75,10 @@ object RdbDaoSuite {
       commonMarkSource.toUpperCase
 
     def sanitizeHtml(text: String) = text.toUpperCase
+
+    private val SlugCharRegex = """[a-z0-9-]""".r
+
+    def slugifyTitle(title: String) = title.toLowerCase.filter(SlugCharRegex.matches(_))
   }
 
 }

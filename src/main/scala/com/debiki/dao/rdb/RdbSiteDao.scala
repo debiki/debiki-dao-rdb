@@ -1320,6 +1320,12 @@ class RdbSiteDao(
   }
 
 
+  /* Currently no longer needed, but keep for a while?
+  /**
+   * Moves the page at pagePath to the location where it was placed before
+   * it was moved to pagePath. Returns that location, or does nothing and
+   * returns None, if there is no such location.
+   */
   def movePageToItsPreviousLocation(pagePath: PagePath): Option[PagePath] = {
     transactionCheckQuota { implicit connection =>
       movePageToItsPreviousLocationImpl(pagePath)
@@ -1341,6 +1347,7 @@ class RdbSiteDao(
     moveRenamePageImpl(mostRecentRedirect)
     Some(mostRecentRedirect)
   }
+   */
 
 
   private def moveRenamePageImpl(pageId: PageId,
