@@ -45,6 +45,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
 
 
   def insertAuditLogEntry(entry: AuditLogEntry) {
+    require(entry.id >= 1)
     require(entry.siteId == siteId, "DwE1FWU6")
     val statement = s"""
       insert into dw2_audit_log(

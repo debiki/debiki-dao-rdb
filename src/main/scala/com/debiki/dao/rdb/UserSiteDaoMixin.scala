@@ -201,12 +201,12 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val details = identity.openIdDetails
     runUpdate("""
             insert into DW1_IDENTITIES(
-                SNO, SITE_ID, USER_ID, USER_ID_ORIG, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
+                ID, SITE_ID, USER_ID, USER_ID_ORIG, OID_CLAIMED_ID, OID_OP_LOCAL_ID,
                 OID_REALM, OID_ENDPOINT, OID_VERSION,
                 FIRST_NAME, EMAIL, COUNTRY)
             values (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            List[AnyRef](identity.id, tenantId, identity.userId.asAnyRef, identity.userId.asAnyRef,
+            List[AnyRef](identity.id.toInt.asAnyRef, tenantId, identity.userId.asAnyRef, identity.userId.asAnyRef,
               details.oidClaimedId, e2d(details.oidOpLocalId), e2d(details.oidRealm),
               e2d(details.oidEndpoint), e2d(details.oidVersion),
               e2d(details.firstName), details.email.orNullVarchar, e2d(details.country)))
@@ -222,13 +222,13 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
           OID_OP_LOCAL_ID = ?, OID_REALM = ?,
           OID_ENDPOINT = ?, OID_VERSION = ?,
           FIRST_NAME = ?, EMAIL = ?, COUNTRY = ?
-      where SNO = ? and SITE_ID = ?
+      where ID = ? and SITE_ID = ?
       """,
       List[AnyRef](identity.userId.asAnyRef, details.oidClaimedId,
         e2d(details.oidOpLocalId), e2d(details.oidRealm),
         e2d(details.oidEndpoint), e2d(details.oidVersion),
         e2d(details.firstName), details.email.orNullVarchar, e2d(details.country),
-        identity.id, siteId))
+        identity.id.toInt.asAnyRef, siteId))
   }
 
 
@@ -236,7 +236,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
         otherSiteId: SiteId, identity: OpenAuthIdentity) {
     val sql = """
         insert into DW1_IDENTITIES(
-            SNO, SITE_ID, USER_ID, USER_ID_ORIG,
+            ID, SITE_ID, USER_ID, USER_ID_ORIG,
             FIRST_NAME, LAST_NAME, FULL_NAME, EMAIL, AVATAR_URL,
             AUTH_METHOD, SECURESOCIAL_PROVIDER_ID, SECURESOCIAL_USER_ID)
         values (
@@ -246,7 +246,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val ds = identity.openAuthDetails
     val method = "OAuth" // should probably remove this column
     val values = List[AnyRef](
-      identity.id, otherSiteId, identity.userId.asAnyRef, identity.userId.asAnyRef,
+      identity.id.toInt.asAnyRef, otherSiteId, identity.userId.asAnyRef, identity.userId.asAnyRef,
       ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
       ds.fullName.orNullVarchar, ds.email.orNullVarchar, ds.avatarUrl.orNullVarchar,
       method, ds.providerId, ds.providerKey)
@@ -260,13 +260,13 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
       update DW1_IDENTITIES set
         USER_ID = ?, AUTH_METHOD = ?,
         FIRST_NAME = ?, LAST_NAME = ?, FULL_NAME = ?, EMAIL = ?, AVATAR_URL = ?
-      where SNO = ? and SITE_ID = ?"""
+      where ID = ? and SITE_ID = ?"""
     val ds = identity.openAuthDetails
     val method = "OAuth" // should probably remove this column
     val values = List[AnyRef](
       identity.userId.asAnyRef, method, ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
       ds.fullName.orNullVarchar, ds.email.orNullVarchar, ds.avatarUrl.orNullVarchar,
-      identity.id, siteId)
+      identity.id.toInt.asAnyRef, siteId)
     db.update(sql, values)
   }
 
