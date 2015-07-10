@@ -35,7 +35,10 @@ import RdbUtil._
 trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
-  val IsOwnerOrStaff = "(is_owner = 'T' or is_admin = 'T' or is_moderator)"
+  // COULD convert these 'T' columns to booleans.
+  val IsOwnerOrStaff = o"""(is_owner is not null and is_owner = 'T' or
+       is_admin is not null and is_admin = 'T' or is_moderator)"""
+
 
   def insertInvite(invite: Invite) {
     val statement = """
