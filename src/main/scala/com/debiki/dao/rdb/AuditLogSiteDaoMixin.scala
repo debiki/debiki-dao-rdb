@@ -70,11 +70,12 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         target_page_id,
         target_post_id,
         target_post_nr,
-        target_user_id)
+        target_user_id,
+        target_site_id)
       values (
         ?, ?, ?, ? at time zone 'UTC',
         ?, ?, ?::inet,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
     val values = List[AnyRef](
@@ -100,7 +101,8 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       entry.targetPageId.orNullVarchar,
       entry.targetUniquePostId.orNullInt,
       entry.targetPostNr.orNullInt,
-      entry.targetUserId.orNullInt)
+      entry.targetUserId.orNullInt,
+      entry.targetSiteId.orNullVarchar)
 
     runUpdateSingleRow(statement, values)
   }
@@ -130,7 +132,8 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         target_page_id,
         target_post_id,
         target_post_nr,
-        target_user_id
+        target_user_id,
+        target_site_id
       from dw2_audit_log
       where site_id = ? and post_id = ?
       order by done_at limit 1
@@ -163,7 +166,8 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       targetUniquePostId = getOptionalIntNoneNot0(rs, "target_post_id"),
       targetPageId = Option(rs.getString("target_page_id")),
       targetPostNr = getOptionalIntNoneNot0(rs, "target_post_nr"),
-      targetUserId = getOptionalIntNoneNot0(rs, "target_user_id"))
+      targetUserId = getOptionalIntNoneNot0(rs, "target_user_id"),
+      targetSiteId = Option(rs.getString("target_site_id")))
 
 
   private def getBrowserIdData(rs: js.ResultSet) =
@@ -174,12 +178,14 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
 
 
   private def entryTypeToString(entryType: AuditLogEntryType): String = entryType match {
+    case AuditLogEntryType.CreateSite => "CrSt"
     case AuditLogEntryType.NewPage => "NwPg"
     case AuditLogEntryType.NewPost => "NwPs"
     case AuditLogEntryType.EditPost => "EdPs"
   }
 
   private def stringToEntryTypeTo(entryType: String): AuditLogEntryType = entryType match {
+    case  "CrSt" => AuditLogEntryType.CreateSite
     case  "NwPg" => AuditLogEntryType.NewPage
     case  "NwPs" => AuditLogEntryType.NewPost
     case  "EdPs" => AuditLogEntryType.EditPost

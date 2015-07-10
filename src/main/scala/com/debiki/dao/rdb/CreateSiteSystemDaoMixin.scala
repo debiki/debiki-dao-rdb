@@ -27,11 +27,11 @@ import RdbUtil._
 import collection.mutable.StringBuilder
 
 
-trait CreateSiteSystemDaoMixin {
+trait CreateSiteSystemDaoMixin extends SystemTransaction {
   self: RdbSystemDao =>
 
 
-  def insertTenantHost(tenantId: String, host: SiteHost)(connection:  js.Connection) = {
+  def insertSiteHost(tenantId: String, host: SiteHost) {
     val cncl = host.role match {
       case SiteHost.RoleCanonical => "C"
       case SiteHost.RoleRedirect => "R"
@@ -42,7 +42,8 @@ trait CreateSiteSystemDaoMixin {
       insert into DW1_TENANT_HOSTS (SITE_ID, HOST, CANONICAL)
       values (?, ?, ?)
       """
-    db.update(sql, List(tenantId, host.hostname, cncl))(connection)
+    val inserted = runUpdateSingleRow(sql, List(tenantId, host.hostname, cncl))
+    dieIf(!inserted, "DwE4KEWW2") // COULD throw helpful exception, probably only a unique key error
   }
 
 }

@@ -35,6 +35,7 @@ import RdbUtil._
 trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
+  val IsOwnerOrStaff = "(is_owner = 'T' or is_admin = 'T' or is_moderator)"
 
   def insertInvite(invite: Invite) {
     val statement = """
@@ -542,8 +543,8 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
     require(!onlyApproved || !onlyPendingApproval)
 
     val andIsApprovedEqWhatever =
-      if (onlyPendingApproval) "and is_approved is null"
-      else if (onlyApproved) "and is_approved = true"
+      if (onlyPendingApproval) s"and (is_approved is null and not $IsOwnerOrStaff)"
+      else if (onlyApproved) s"and (is_approved = true or $IsOwnerOrStaff)"
       else ""
 
     val anyOrderBy =

@@ -71,6 +71,12 @@ class RdbSiteDao(
     transaction
   }
 
+  def otherSiteDao(otherSiteId: SiteId): SiteTransaction = {
+    val dao = new RdbSiteDao(otherSiteId, daoFactory)
+    dao.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
+    dao
+  }
+
   def fullTextSearchIndexer = daoFactory.fullTextSearchIndexer
 
   def commonMarkRenderer: CommonMarkRenderer = daoFactory.commonMarkRenderer
@@ -633,32 +639,61 @@ class RdbSiteDao(
         creatorIp: String, creatorEmailAddress: String,
         pricePlan: Option[String], quotaLimitMegabytes: Option[Int]): Site = {
     require(!pricePlan.exists(_.trim.isEmpty), "DwE4KEW23")
-    try {
-      transactionCheckQuota { implicit connection =>
-        // Unless apparently testing from localhost, don't allow someone to create
-        // very many sites.
-        if (creatorIp != LocalhostAddress) {
-          val websiteCount = countWebsites(
-            createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress)
-          if (websiteCount >= MaxWebsitesPerIp)
-            throw TooManySitesCreatedException(creatorIp)
-        }
 
-        val newTenantNoId = Site(id = "?", name = name, creatorIp = creatorIp,
-          creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
-          hosts = Nil)
-        val newTenant = insertSite(newTenantNoId, pricePlan, quotaLimitMegabytes)
-        val newHost = SiteHost(hostname, SiteHost.RoleCanonical)
-        val newHostCount = systemDaoSpi.insertTenantHost(newTenant.id, newHost)(connection)
-        assErrIf(newHostCount != 1, "DwE09KRF3")
-        newTenant.copy(hosts = List(newHost))
+    // Unless apparently testing from localhost, don't allow someone to create
+    // very many sites.
+    if (creatorIp != LocalhostAddress) {
+      val websiteCount = countWebsites(
+        createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress)
+      if (websiteCount >= MaxWebsitesPerIp)
+        throw TooManySitesCreatedException(creatorIp)
+    }
+
+    val newSiteNoId = Site(id = "?", name = name, creatorIp = creatorIp,
+      creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
+      hosts = Nil)
+
+    val newSite =
+      try { insertSite(newSiteNoId, pricePlan, quotaLimitMegabytes) }
+      catch {
+        case ex: js.SQLException =>
+          if (!isUniqueConstrViolation(ex)) throw ex
+          throw new SiteAlreadyExistsException(name)
       }
-    }
-    catch {
-      case ex: js.SQLException =>
-        if (!isUniqueConstrViolation(ex)) throw ex
-        throw new SiteAlreadyExistsException(name)
-    }
+
+    val newHost = SiteHost(hostname, SiteHost.RoleCanonical)
+    systemDao.insertSiteHost(newSite.id, newHost)
+
+    createSystemUser(newSite.id)
+    createUnknownUser(newSite.id)
+
+    newSite.copy(hosts = List(newHost))
+  }
+
+
+  private def createSystemUser(newSiteId: SiteId): Unit = {
+    otherSiteDao(newSiteId).insertAuthenticatedUser(CompleteUser(
+      id = SystemUserId,
+      fullName = SystemUserFullName,
+      username = SystemUserUsername,
+      createdAt = currentTime,
+      isApproved = None,
+      approvedAt = None,
+      approvedById = None,
+      emailAddress = "",
+      emailNotfPrefs = EmailNotfPrefs.DontReceive,
+      emailVerifiedAt = None))
+  }
+
+
+  private def createUnknownUser(newSiteId: SiteId) {
+    val statement = s"""
+      insert into dw1_users(
+        site_id, user_id, created_at, display_name, email, guest_cookie)
+      values (
+        ?, $UnknownUserId, now_utc(), '$UnknownUserName', '-', '$UnknownUserGuestCookie')
+      """
+    runUpdate(statement, List(newSiteId))
   }
 
 
@@ -691,9 +726,8 @@ class RdbSiteDao(
   }
 
 
-  private def countWebsites(createdFromIp: String, creatorEmailAddress: String)
-        (implicit connection: js.Connection): Int = {
-    db.query("""
+  private def countWebsites(createdFromIp: String, creatorEmailAddress: String): Int = {
+    runQuery("""
         select count(*) WEBSITE_COUNT from DW1_TENANTS
         where CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?
         """, createdFromIp::creatorEmailAddress::Nil, rs => {
@@ -705,12 +739,11 @@ class RdbSiteDao(
 
 
   private def insertSite(tenantNoId: Site, pricePlan: Option[String],
-        quotaLimitMegabytes: Option[Int])
-        (implicit connection: js.Connection): Site = {
+        quotaLimitMegabytes: Option[Int]): Site = {
     assErrIf(tenantNoId.id != "?", "DwE91KB2")
     val tenant = tenantNoId.copy(
-      id = db.nextSeqNo("DW1_TENANTS_ID").toString)
-    db.update("""
+      id = db.nextSeqNo("DW1_TENANTS_ID")(theOneAndOnlyConnection).toString)
+    runUpdateSingleRow("""
         insert into DW1_TENANTS (
           ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS, PRICE_PLAN,
           QUOTA_LIMIT_MBS)
@@ -722,10 +755,9 @@ class RdbSiteDao(
   }
 
 
-  def addTenantHost(host: SiteHost) = {
-    transactionCheckQuota { implicit connection =>
-      systemDaoSpi.insertTenantHost(siteId, host)(connection)
-    }
+  def addSiteHost(host: SiteHost) = {
+    // SHOULD hard code max num hosts, e.g. 10.
+    systemDao.insertSiteHost(siteId, host)
   }
 
 

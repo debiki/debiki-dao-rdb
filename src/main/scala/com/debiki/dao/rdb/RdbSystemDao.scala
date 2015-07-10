@@ -127,6 +127,13 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     db.update(statement, values)(theOneAndOnlyConnection)
   }
 
+  def runUpdateSingleRow(statement: String, values: List[AnyRef] = Nil): Boolean = {
+    val numRowsUpdated = runUpdate(statement, values)
+    dieIf(numRowsUpdated > 1, "DwE2KESW7", o"""This statement modified $numRowsUpdated rows
+         but should have touched one row only: $statement""")
+    numRowsUpdated == 1
+  }
+
 
   // COULD move to new superclass?
   def queryAtnms[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
