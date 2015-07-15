@@ -359,6 +359,8 @@ class RdbSiteDao(
       newMeta.bumpedOrPublishedOrCreatedAt,
       newMeta.lastReplyAt.orNullTimestamp,
       newMeta.authorId.asAnyRef,
+      newMeta.pinOrder.orNullInt,
+      newMeta.pinWhere.map(_.toInt).orNullInt,
       newMeta.numLikes.asAnyRef,
       newMeta.numWrongs.asAnyRef,
       newMeta.numBurys.asAnyRef,
@@ -377,6 +379,8 @@ class RdbSiteDao(
         BUMPED_AT = ?,
         LAST_REPLY_AT = ?,
         AUTHOR_ID = ?,
+        PIN_ORDER = ?,
+        PIN_WHERE = ?,
         NUM_LIKES = ?,
         NUM_WRONGS = ?,
         NUM_BURY_VOTES = ?,
@@ -847,7 +851,7 @@ class RdbSiteDao(
         ("", "")
       case PageOrderOffset.ByPublTime =>
         ("order by g.PUBLISHED_AT desc", "")
-      case PageOrderOffset.ByBumpTime(anyDate) =>
+      case PageOrderOffset.ByPinsAndBumpTime(anyDate) =>
         val offsetTestAnd = anyDate match {
           case None => ""
           case Some(date) =>
@@ -855,7 +859,7 @@ class RdbSiteDao(
             "g.BUMPED_AT <= ? and"
         }
         // bumped_at is never null (it defaults to publ date or creation date).
-        ("order by g.BUMPED_AT desc", offsetTestAnd)
+        (s"order by g.PIN_ORDER nulls last, g.BUMPED_AT desc", offsetTestAnd)
       case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
         val offsetTestAnd = anyLikesAndDate match {
           case None => ""
