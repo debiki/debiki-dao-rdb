@@ -851,7 +851,7 @@ class RdbSiteDao(
         ("", "")
       case PageOrderOffset.ByPublTime =>
         ("order by g.PUBLISHED_AT desc", "")
-      case PageOrderOffset.ByPinsAndBumpTime(anyDate) =>
+      case PageOrderOffset.ByBumpTime(anyDate) =>
         val offsetTestAnd = anyDate match {
           case None => ""
           case Some(date) =>
@@ -859,7 +859,9 @@ class RdbSiteDao(
             "g.BUMPED_AT <= ? and"
         }
         // bumped_at is never null (it defaults to publ date or creation date).
-        (s"order by g.PIN_ORDER nulls last, g.BUMPED_AT desc", offsetTestAnd)
+        (s"order by g.BUMPED_AT desc", offsetTestAnd)
+      case PageOrderOffset.ByPinOrderLoadOnlyPinned =>
+        (s"order by g.PIN_ORDER", "g.PIN_WHERE is not null and")
       case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
         val offsetTestAnd = anyLikesAndDate match {
           case None => ""
