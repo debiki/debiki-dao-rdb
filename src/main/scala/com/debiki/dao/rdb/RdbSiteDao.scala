@@ -840,7 +840,7 @@ class RdbSiteDao(
 
 
   def listChildPages(parentPageIds: Seq[PageId], orderOffset: PageOrderOffset,
-        limit: Int, filterPageRole: Option[PageRole] = None)
+        limit: Int, onlyPageRole: Option[PageRole], excludePageRole: Option[PageRole])
         : Seq[PagePathAndMeta] = {
 
     require(1 <= limit)
@@ -879,11 +879,18 @@ class RdbSiteDao(
 
     values :+= siteId
 
-    val pageRoleTestAnd = filterPageRole match {
+    val onlyThisPageRoleAnd = onlyPageRole match {
       case Some(pageRole) =>
         illArgIf(pageRole == PageRole.WebPage, "DwE20kIR8")
         values :+= _pageRoleToSql(pageRole)
         "g.PAGE_ROLE = ? and"
+      case None => ""
+    }
+
+    val notThisPageRoleAnd = excludePageRole match {
+      case Some(pageRole) =>
+        values :+= _pageRoleToSql(pageRole)
+        "g.PAGE_ROLE <> ? and"
       case None => ""
     }
 
@@ -901,7 +908,8 @@ class RdbSiteDao(
         where
           $offsetTestAnd
           g.SITE_ID = ? and
-          $pageRoleTestAnd
+          $onlyThisPageRoleAnd
+          $notThisPageRoleAnd
           g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) })
         $orderByStr
         limit $limit"""
