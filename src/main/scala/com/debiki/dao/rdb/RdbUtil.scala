@@ -255,7 +255,7 @@ object RdbUtil {
 
     PageMeta(
       pageId = if (pageId ne null) pageId else resultSet.getString("PAGE_ID"),
-      pageRole = _toPageRole(resultSet.getString("PAGE_ROLE")),
+      pageRole = PageRole.fromInt(resultSet.getInt("PAGE_ROLE")) getOrElse PageRole.Discussion,
       parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
       embeddingPageUrl = Option(resultSet.getString("EMBEDDING_PAGE_URL")),
       createdAt = createdAt,
@@ -317,44 +317,6 @@ object RdbUtil {
       warnDbgDie("Bad page status: "+ safed(x) +" [error DwE0395k7]")
       PageStatus.Draft  // make it visible to admins only
   }
-
-
-  def _toPageRole(pageRoleString: String): PageRole = pageRoleString match {
-    case null => PageRole.WebPage
-    case "H" => PageRole.HomePage
-    case "P" => PageRole.WebPage
-    case "EC" => PageRole.EmbeddedComments
-    case "B" => PageRole.Blog
-    case "BP" => PageRole.BlogPost
-    case "F" => PageRole.Forum
-    case "FC" => PageRole.ForumCategory
-    case "FT" => PageRole.ForumTopic
-    case "W" => PageRole.WikiMainPage
-    case "WP" => PageRole.WikiPage
-    case "C" => PageRole.Code
-    case "SP" => PageRole.SpecialContent
-    case _ =>
-      warnDbgDie(
-        "Bad page role string: "+ pageRoleString +" [error DwE390KW8]")
-      PageRole.WebPage
-  }
-
-
-  def _pageRoleToSql(pageRole: PageRole): String = pageRole match {
-    case PageRole.HomePage => "H"
-    case PageRole.WebPage => "P"
-    case PageRole.EmbeddedComments => "EC"
-    case PageRole.Blog => "B"
-    case PageRole.BlogPost => "BP"
-    case PageRole.Forum => "F"
-    case PageRole.ForumCategory => "FC"
-    case PageRole.ForumTopic => "FT"
-    case PageRole.WikiMainPage => "W"
-    case PageRole.WikiPage => "WP"
-    case PageRole.Code => "C"
-    case PageRole.SpecialContent => "SP"
-  }
-
 
   def _toFlag(pageStatus: PageStatus): String = pageStatus match {
     case PageStatus.Draft => "D"

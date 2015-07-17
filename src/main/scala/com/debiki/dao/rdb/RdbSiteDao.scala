@@ -369,7 +369,7 @@ class RdbSiteDao(
       newMeta.numChildPages.asAnyRef,
       siteId,
       newMeta.pageId,
-      _pageRoleToSql(newMeta.pageRole))
+      newMeta.pageRole.toInt.asAnyRef)
     val sql = s"""
       update DW1_PAGES set
         PARENT_PAGE_ID = ?,
@@ -507,14 +507,14 @@ class RdbSiteDao(
         from dw1_pages
         where
           parent_page_id = ? and
-          page_role = 'FC' and
+          page_role = ${PageRole.Category.toInt} and
           site_id = ?),
       sub_categories as (
         select parent_page_id category_id, page_id sub_categories
         from dw1_pages
         where
           parent_page_id in (select category_id from categories) and
-          page_role = 'FC' and
+          page_role = ${PageRole.Category.toInt} and
           site_id = ?)
       select * from categories
       union
@@ -882,14 +882,14 @@ class RdbSiteDao(
     val onlyThisPageRoleAnd = onlyPageRole match {
       case Some(pageRole) =>
         illArgIf(pageRole == PageRole.WebPage, "DwE20kIR8")
-        values :+= _pageRoleToSql(pageRole)
+        values :+= pageRole.toInt.asAnyRef
         "g.PAGE_ROLE = ? and"
       case None => ""
     }
 
     val notThisPageRoleAnd = excludePageRole match {
       case Some(pageRole) =>
-        values :+= _pageRoleToSql(pageRole)
+        values :+= pageRole.toInt.asAnyRef
         "g.PAGE_ROLE <> ? and"
       case None => ""
     }
@@ -1286,7 +1286,7 @@ class RdbSiteDao(
 
     val values = List[AnyRef](
       siteId, pageMeta.pageId,
-      _pageRoleToSql(pageMeta.pageRole), pageMeta.parentPageId.orNullVarchar,
+      pageMeta.pageRole.toInt.asAnyRef, pageMeta.parentPageId.orNullVarchar,
       pageMeta.embeddingPageUrl.orNullVarchar,
       d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
       pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef)
