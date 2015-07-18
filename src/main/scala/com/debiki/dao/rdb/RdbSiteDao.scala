@@ -425,6 +425,11 @@ class RdbSiteDao(
 
   def batchLoadAncestorIdsParentFirst(pageIds: List[PageId])(connection: js.Connection)
       : collection.Map[PageId, List[PageId]] = {
+    // This complicated stuff will go away when I create a dedicated category table,
+    // and add forum_id, category_id, sub_cat_id columns to the pages table and the
+    // category page too? Then everything will be available instantly.
+    // (O.t.o.h. one will need to keep the above denormalized fields up-to-date.)
+
     val pageIdList = makeInListFor(pageIds)
 
     val sql = s"""
@@ -486,6 +491,10 @@ class RdbSiteDao(
 
 
   def loadCategoryTree(rootPageId: PageId): Seq[Category] = {
+    // Later on, I'll replace category pages with a dedicated forum category table.
+    // Then, to load categories, one would simply do a super quick index scan on
+    // the site id, and load all categories, should be relatively few. (0 .. 100?)
+    // So the complicated stuff below will go away.
 
     // The below SQL selects rows like so:
     //
@@ -896,6 +905,19 @@ class RdbSiteDao(
 
     values = values ++ parentPageIds
 
+    // Hack. For now, until I've created a dedicated forum categories table,
+    // select forum category pages and use them as about-this-category pages
+    // a la Discourse. [forumcategory]
+    val includeAnyAboutCategoryPage =
+      if (excludePageRole == Some(PageRole.Category)) {
+        values = values ++ parentPageIds
+        s"""g.PAGE_ID in (${ makeInListFor(parentPageIds) }) and
+            PAGE_ROLE = ${PageRole.Category.toInt}"""
+      }
+      else {
+        "false"
+      }
+
     val sql = s"""
         select t.PARENT_FOLDER,
             t.PAGE_ID,
@@ -907,10 +929,12 @@ class RdbSiteDao(
           and t.CANONICAL = 'C'
         where
           $offsetTestAnd
-          g.SITE_ID = ? and
-          $onlyThisPageRoleAnd
-          $notThisPageRoleAnd
-          g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) })
+          g.SITE_ID = ? and ((
+              $onlyThisPageRoleAnd
+              $notThisPageRoleAnd
+              g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) }))
+            or ( -- hack [forumcategory]
+              $includeAnyAboutCategoryPage))
         $orderByStr
         limit $limit"""
 
@@ -1279,17 +1303,20 @@ class RdbSiteDao(
     val sql = """
       insert into DW1_PAGES (
          SITE_ID, PAGE_ID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
-         CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID)
+         CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID,
+         PIN_ORDER, PIN_WHERE)
       values (
          ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?)"""
+         ?, ?, ?, ?, ?,
+         ?, ?)"""
 
     val values = List[AnyRef](
       siteId, pageMeta.pageId,
       pageMeta.pageRole.toInt.asAnyRef, pageMeta.parentPageId.orNullVarchar,
       pageMeta.embeddingPageUrl.orNullVarchar,
       d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
-      pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef)
+      pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef,
+      pageMeta.pinOrder.orNullInt, pageMeta.pinWhere.map(_.toInt).orNullInt)
 
     val numNewRows = runUpdate(sql, values)
 
