@@ -352,6 +352,7 @@ class RdbSiteDao(
   private def _updatePageMeta(newMeta: PageMeta, anyOld: Option[PageMeta])
         (implicit connection: js.Connection) {
     val values = List(
+      newMeta.pageRole.toInt.asAnyRef,
       newMeta.parentPageId.orNullVarchar,
       newMeta.embeddingPageUrl.orNullVarchar,
       newMeta.publishedAt.orNullTimestamp,
@@ -368,10 +369,10 @@ class RdbSiteDao(
       newMeta.numRepliesTotal.asAnyRef,
       newMeta.numChildPages.asAnyRef,
       siteId,
-      newMeta.pageId,
-      newMeta.pageRole.toInt.asAnyRef)
+      newMeta.pageId)
     val sql = s"""
       update DW1_PAGES set
+        PAGE_ROLE = ?,
         PARENT_PAGE_ID = ?,
         EMBEDDING_PAGE_URL = ?,
         UPDATED_AT = now_utc(),
@@ -387,16 +388,15 @@ class RdbSiteDao(
         NUM_REPLIES_VISIBLE = ?,
         NUM_REPLIES_TOTAL = ?,
         NUM_CHILD_PAGES = ?
-      where SITE_ID = ? and PAGE_ID = ? and PAGE_ROLE = ?
+      where SITE_ID = ? and PAGE_ID = ?
       """
 
     val numChangedRows = db.update(sql, values)
 
     if (numChangedRows == 0)
-      throw DbDao.PageNotFoundByIdAndRoleException(
-        siteId, newMeta.pageId, newMeta.pageRole)
+      throw DbDao.PageNotFoundByIdException( siteId, newMeta.pageId)
     if (2 <= numChangedRows)
-      assErr("DwE4Ikf1")
+      die("DwE4Ikf1")
 
     val newParentPage = anyOld.isEmpty || newMeta.parentPageId != anyOld.get.parentPageId
     if (newParentPage) {
