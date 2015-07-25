@@ -170,6 +170,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         post_id,
         parent_post_id,
         multireply,
+        type,
 
         created_at,
         created_by_id,
@@ -217,7 +218,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         num_times_read)
 
       values (
-        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?,
         ?, ?,
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?,
@@ -232,6 +233,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val values = List[AnyRef](
       post.siteId, post.uniqueId.asAnyRef, post.pageId, post.id.asAnyRef,
       post.parentId.orNullInt, toDbMultireply(post.multireplyPostIds),
+      (post.tyype != PostType.Normal) ? post.tyype.toInt.asAnyRef | NullInt,
       d2ts(post.createdAt), post.createdById.asAnyRef,
       o2ts(post.lastEditedAt), post.lastEditedById.orNullInt,
       o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
@@ -282,6 +284,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       update dw2_posts set
         parent_post_id = ?,
         multireply = ?,
+        type = ?,
 
         updated_at = now_utc(),
 
@@ -331,6 +334,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
     val values = List[AnyRef](
       post.parentId.orNullInt, toDbMultireply(post.multireplyPostIds),
+      (post.tyype != PostType.Normal) ? post.tyype.toInt.asAnyRef | NullInt,
       o2ts(post.lastEditedAt), post.lastEditedById.orNullInt,
       o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
       post.numDistinctEditors.asAnyRef,
@@ -385,6 +389,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       id = rs.getInt("POST_ID"),
       parentId = getResultSetIntOption(rs, "PARENT_POST_ID"),
       multireplyPostIds = fromDbMultireply(rs.getString("MULTIREPLY")),
+      tyype = PostType.fromInt(rs.getInt("TYPE")).getOrElse(PostType.Normal),
       createdAt = getDate(rs, "CREATED_AT"),
       createdById = rs.getInt("CREATED_BY_ID"),
       lastEditedAt = getOptionalDate(rs, "LAST_EDITED_AT"),

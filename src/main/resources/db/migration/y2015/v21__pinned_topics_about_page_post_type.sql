@@ -1,3 +1,4 @@
+-- Pinned topics:
 
 alter table dw1_pages add column pin_order smallint;
 alter table dw1_pages add column pin_where smallint;
@@ -9,6 +10,8 @@ alter table dw1_pages add constraint dw1_pages_pinwhere__c_in check(
 create index dw1_pages_pinorder__i on dw1_pages(site_id, pin_order) where pin_order is not null;
 create index dw1_pages_bumpedat__i on dw1_pages(site_id, bumped_at desc);
 create index dw1_pages_likes_bump__i on dw1_pages(site_id, num_likes desc, bumped_at desc);
+
+-- Page role:
 
 -- Add about-category page role, and rename some others.
 alter table dw1_pages drop constraint dw1_pages_pagerole__c_in;
@@ -47,4 +50,11 @@ alter table dw1_pages add constraint dw1_pages_pagerole__c_in check (page_role b
 alter table dw2_audit_log add constraint dw1_pages_pagerole__c_in check (page_role between 1 and 12);
 create unique index dw1_pages_parentid_about on dw1_pages(site_id, parent_page_id, page_role)
     where page_role = 9; -- the about role
+
+
+-- Post type:
+
+alter table dw2_posts add column type smallint;
+-- Let's accept 1..100, that's a lot more than what's needed and should prevent most kinds of bugs?
+alter table dw2_posts add constraint dw2_posts_type__c_in check (type between 1 and 100);
 
