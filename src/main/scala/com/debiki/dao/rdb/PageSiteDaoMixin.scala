@@ -95,10 +95,10 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
     val values = ArrayBuffer[AnyRef](siteId)
     val queryBuilder = new StringBuilder(256, "select * from DW2_POSTS where SITE_ID = ? and (")
-    for (pagePostId <- pagePostIds) {
-      if (pagePostId != pagePostIds.head) {
-        queryBuilder.append(" or ")
-      }
+    var nr = 0
+    for (pagePostId: PagePostId <- pagePostIds.toSet) {
+      if (nr >= 1) queryBuilder.append(" or ")
+      nr += 1
       queryBuilder.append("(page_id = ? and post_id = ?)")
       values.append(pagePostId.pageId, pagePostId.postId.asAnyRef)
     }
