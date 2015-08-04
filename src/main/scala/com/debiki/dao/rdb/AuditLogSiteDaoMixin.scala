@@ -109,7 +109,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadFirstAuditLogEntry(postId: UniquePostId): Option[AuditLogEntry] = {
+  def loadCreatePostAuditLogEntry(postId: UniquePostId): Option[AuditLogEntry] = {
     val query = s"""
       select
         audit_id,
@@ -137,6 +137,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         target_site_id
       from dw2_audit_log
       where site_id = ? and post_id = ?
+      and did_what = 'NwPs' -- new post
       order by done_at limit 1
       """
 
