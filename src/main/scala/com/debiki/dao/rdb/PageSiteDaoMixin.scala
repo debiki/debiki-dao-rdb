@@ -28,7 +28,8 @@ import RdbUtil._
 import PageSiteDaoMixin._
 
 
-/** Loads pages and posts.
+/** Loads pages and posts -- oops no posts only. Pages still in RdbSiteDao.
+  * COULD rename to PostsSiteDaoMixin? And keep pages in another dao
   */
 trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>

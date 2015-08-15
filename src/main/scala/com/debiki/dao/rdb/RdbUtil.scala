@@ -238,6 +238,17 @@ object RdbUtil {
       |g.NUM_BURY_VOTES,
       |g.NUM_REPLIES_VISIBLE,
       |g.NUM_REPLIES_TOTAL,
+      |g.NUM_OP_LIKE_VOTES,
+      |g.NUM_OP_WRONG_VOTES,
+      |g.NUM_OP_BURY_VOTES,
+      |g.NUM_OP_UNWANTED_VOTES,
+      |g.NUM_OP_REPLIES_VISIBLE,
+      |g.answered_at,
+      |g.ANSWER_POST_ID,
+      |g.DONE_AT,
+      |g.CLOSED_AT,
+      |g.LOCKED_AT,
+      |g.FROZEN_AT,
       |g.NUM_CHILD_PAGES
       |"""
 
@@ -272,6 +283,17 @@ object RdbUtil {
       numBurys = n20(resultSet.getInt("NUM_BURY_VOTES")),
       numRepliesVisible = n20(resultSet.getInt("NUM_REPLIES_VISIBLE")),
       numRepliesTotal = n20(resultSet.getInt("NUM_REPLIES_TOTAL")),
+      numOrigPostLikeVotes = resultSet.getInt("num_op_like_votes"),
+      numOrigPostWrongVotes = resultSet.getInt("num_op_wrong_votes"),
+      numOrigPostBuryVotes = resultSet.getInt("num_op_bury_votes"),
+      numOrigPostUnwantedVotes = resultSet.getInt("num_op_unwanted_votes"),
+      numOrigPostRepliesVisible = resultSet.getInt("num_op_replies_visible"),
+      answeredAt = getOptionalDate(resultSet, "answered_at"),
+      answerPostUniqueId = getOptionalIntNoneNot0(resultSet, "answer_post_id"),
+      doneAt = getOptionalDate(resultSet, "done_at"),
+      closedAt = getOptionalDate(resultSet, "closed_at"),
+      lockedAt = getOptionalDate(resultSet, "locked_at"),
+      frozenAt = getOptionalDate(resultSet, "frozen_at"),
       numChildPages = resultSet.getInt("NUM_CHILD_PAGES"))
   }
 

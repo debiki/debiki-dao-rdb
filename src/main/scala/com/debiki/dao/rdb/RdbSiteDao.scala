@@ -367,6 +367,17 @@ class RdbSiteDao(
       newMeta.numBurys.asAnyRef,
       newMeta.numRepliesVisible.asAnyRef,
       newMeta.numRepliesTotal.asAnyRef,
+      newMeta.numOrigPostLikeVotes.asAnyRef,
+      newMeta.numOrigPostWrongVotes.asAnyRef,
+      newMeta.numOrigPostBuryVotes.asAnyRef,
+      newMeta.numOrigPostUnwantedVotes.asAnyRef,
+      newMeta.numOrigPostRepliesVisible.asAnyRef,
+      newMeta.answeredAt.orNullTimestamp,
+      newMeta.answerPostUniqueId.orNullInt,
+      newMeta.doneAt.orNullTimestamp,
+      newMeta.closedAt.orNullTimestamp,
+      newMeta.lockedAt.orNullTimestamp,
+      newMeta.frozenAt.orNullTimestamp,
       newMeta.numChildPages.asAnyRef,
       siteId,
       newMeta.pageId)
@@ -387,6 +398,17 @@ class RdbSiteDao(
         NUM_BURY_VOTES = ?,
         NUM_REPLIES_VISIBLE = ?,
         NUM_REPLIES_TOTAL = ?,
+        NUM_OP_LIKE_VOTES = ?,
+        NUM_OP_WRONG_VOTES = ?,
+        NUM_OP_BURY_VOTES = ?,
+        NUM_OP_UNWANTED_VOTES = ?,
+        NUM_OP_REPLIES_VISIBLE = ?,
+        answered_at = ?,
+        ANSWER_POST_ID = ?,
+        DONE_AT = ?,
+        CLOSED_AT = ?,
+        LOCKED_AT = ?,
+        FROZEN_AT = ?,
         NUM_CHILD_PAGES = ?
       where SITE_ID = ? and PAGE_ID = ?
       """
@@ -1296,9 +1318,20 @@ class RdbSiteDao(
 
 
   def insertPageMeta(pageMeta: PageMeta) {
-    require(pageMeta.createdAt == pageMeta.updatedAt)
+    require(pageMeta.createdAt == pageMeta.updatedAt, "DwE2EGPF8")
     pageMeta.publishedAt.foreach(publDati =>
-      require(pageMeta.createdAt.getTime <= publDati.getTime))
+      require(pageMeta.createdAt.getTime <= publDati.getTime, "DwE6GKPE3"))
+    require(pageMeta.numOrigPostLikeVotes == 0, "DwE4KPE8")
+    require(pageMeta.numOrigPostWrongVotes == 0, "DwE2PKFE9")
+    require(pageMeta.numOrigPostBuryVotes == 0, "DwE44KP5")
+    require(pageMeta.numOrigPostUnwantedVotes == 0, "DwE2WKU7")
+    require(pageMeta.numOrigPostRepliesVisible == 0, "DwE5PWZ1")
+    require(pageMeta.answeredAt.isEmpty, "DwE5FKEW0")
+    require(pageMeta.answerPostUniqueId.isEmpty, "DwE5FKEW0")
+    require(pageMeta.doneAt.isEmpty, "DwE5FKEW0")
+    require(pageMeta.closedAt.isEmpty, "DwE5FKEW0")
+    require(pageMeta.lockedAt.isEmpty, "DwE5FKEW0")
+    require(pageMeta.frozenAt.isEmpty, "DwE5FKEW0")
 
     val sql = """
       insert into DW1_PAGES (
