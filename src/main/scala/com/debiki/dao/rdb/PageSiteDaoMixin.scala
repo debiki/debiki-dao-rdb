@@ -71,11 +71,11 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       return Nil
     val values = ArrayBuffer[AnyRef](siteId)
     val queryBuilder = new StringBuilder(127, "select * from DW2_POSTS where SITE_ID = ? and (")
+    var first = true
     for (postId <- postIds) {
-      if (postId != postIds.head) {
-        queryBuilder.append(" or ")
-      }
-      queryBuilder.append("post_id = ?")
+      if (first) first = false
+      else queryBuilder.append(" or ")
+      queryBuilder.append("unique_post_id = ?")
       values.append(postId.asAnyRef)
     }
     queryBuilder.append(")")

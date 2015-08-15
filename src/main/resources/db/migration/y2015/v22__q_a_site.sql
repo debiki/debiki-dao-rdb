@@ -19,7 +19,7 @@ alter table dw1_pages add column frozen_at timestamp;
 alter table dw1_pages add column unwanted_at timestamp;
 -- deleted_at: already exists.
 
-alter table dw1_pages add constraint dw1_pages_answer_at_postid__c check (
+alter table dw1_pages add constraint dw1_pages_answerat_answerpostid__c check (
     answered_at is null = answer_post_id is null);
 alter table dw1_pages add constraint dw1_pages_createdat_doneat__c_lt check (created_at <= done_at);
 alter table dw1_pages add constraint dw1_pages_createdat_closedat__c_lt check (created_at <= closed_at);
