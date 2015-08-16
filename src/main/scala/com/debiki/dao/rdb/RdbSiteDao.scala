@@ -870,14 +870,14 @@ class RdbSiteDao(
   }
 
 
-  def listChildPages(parentPageIds: Seq[PageId], orderOffset: PageOrderOffset,
+  def listChildPages(parentPageIds: Seq[PageId], pageQuery: PageQuery,
         limit: Int, onlyPageRole: Option[PageRole], excludePageRole: Option[PageRole])
         : Seq[PagePathAndMeta] = {
 
     require(1 <= limit)
     var values = Vector[AnyRef]()
 
-    val (orderByStr, offsetTestAnd) = orderOffset match {
+    val (orderByStr, offsetTestAnd) = pageQuery.orderOffset match {
       case PageOrderOffset.Any =>
         ("", "")
       case PageOrderOffset.ByPublTime =>
@@ -905,7 +905,7 @@ class RdbSiteDao(
         }
         ("order by g.NUM_LIKES desc, BUMPED_AT desc", offsetTestAnd)
       case _ =>
-        unimplemented(s"Sort order unsupported: $orderOffset [DwE2GFU06]")
+        unimplemented(s"Sort order unsupported: ${pageQuery.orderOffset} [DwE2GFU06]")
     }
 
     values :+= siteId
@@ -925,6 +925,16 @@ class RdbSiteDao(
       case None => ""
     }
 
+    val pageFilterAnd = pageQuery.pageFilter match {
+      case PageFilter.ShowOpenQuestionsTodos =>
+        o"""
+          ((g.PAGE_ROLE = ${PageRole.Question.toInt} and g.ANSWERED_AT is null) or
+           (g.PAGE_ROLE = ${PageRole.ToDo.toInt} and g.DONE_AT is null)) and
+          g.CLOSED_AT is null and
+          """
+      case PageFilter.ShowAll =>
+        ""
+    }
     values = values ++ parentPageIds
 
     // Hack. For now, until I've created a dedicated forum categories table,
@@ -951,6 +961,7 @@ class RdbSiteDao(
           and t.CANONICAL = 'C'
         where
           $offsetTestAnd
+          $pageFilterAnd
           g.SITE_ID = ? and ((
               $onlyThisPageRoleAnd
               $notThisPageRoleAnd
