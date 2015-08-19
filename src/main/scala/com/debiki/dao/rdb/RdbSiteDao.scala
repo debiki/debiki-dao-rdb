@@ -927,6 +927,8 @@ class RdbSiteDao(
 
     val pageFilterAnd = pageQuery.pageFilter match {
       case PageFilter.ShowOpenQuestionsTodos =>
+        // Define CLOSED_AT also for answered and done topics? So it'll be easier to
+        // see which index gets used (and should add an index... PERF COULD).
         o"""
           ((g.PAGE_ROLE = ${PageRole.Question.toInt} and g.ANSWERED_AT is null) or
            (g.PAGE_ROLE = ${PageRole.ToDo.toInt} and g.DONE_AT is null)) and
