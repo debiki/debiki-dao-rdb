@@ -374,6 +374,7 @@ class RdbSiteDao(
       newMeta.numOrigPostRepliesVisible.asAnyRef,
       newMeta.answeredAt.orNullTimestamp,
       newMeta.answerPostUniqueId.orNullInt,
+      newMeta.plannedAt.orNullTimestamp,
       newMeta.doneAt.orNullTimestamp,
       newMeta.closedAt.orNullTimestamp,
       newMeta.lockedAt.orNullTimestamp,
@@ -405,6 +406,7 @@ class RdbSiteDao(
         NUM_OP_REPLIES_VISIBLE = ?,
         answered_at = ?,
         ANSWER_POST_ID = ?,
+        PLANNED_AT = ?,
         DONE_AT = ?,
         CLOSED_AT = ?,
         LOCKED_AT = ?,
@@ -927,11 +929,9 @@ class RdbSiteDao(
 
     val pageFilterAnd = pageQuery.pageFilter match {
       case PageFilter.ShowOpenQuestionsTodos =>
-        // Define CLOSED_AT also for answered and done topics? So it'll be easier to
-        // see which index gets used (and should add an index... PERF COULD).
+        import PageRole._
         o"""
-          ((g.PAGE_ROLE = ${PageRole.Question.toInt} and g.ANSWERED_AT is null) or
-           (g.PAGE_ROLE = ${PageRole.ToDo.toInt} and g.DONE_AT is null)) and
+          g.PAGE_ROLE in (${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt}) and
           g.CLOSED_AT is null and
           """
       case PageFilter.ShowAll =>
@@ -1339,17 +1339,18 @@ class RdbSiteDao(
     require(pageMeta.numOrigPostBuryVotes == 0, "DwE44KP5")
     require(pageMeta.numOrigPostUnwantedVotes == 0, "DwE2WKU7")
     require(pageMeta.numOrigPostRepliesVisible == 0, "DwE5PWZ1")
-    require(pageMeta.answeredAt.isEmpty, "DwE5FKEW0")
+    require(pageMeta.answeredAt.isEmpty, "DwE2KFY9")
     require(pageMeta.answerPostUniqueId.isEmpty, "DwE5FKEW0")
-    require(pageMeta.doneAt.isEmpty, "DwE5FKEW0")
-    require(pageMeta.closedAt.isEmpty, "DwE5FKEW0")
-    require(pageMeta.lockedAt.isEmpty, "DwE5FKEW0")
-    require(pageMeta.frozenAt.isEmpty, "DwE5FKEW0")
+    require(pageMeta.doneAt.isEmpty, "DwE4KPW2")
+    require(pageMeta.closedAt.isEmpty, "DwE8UKW2")
+    require(pageMeta.lockedAt.isEmpty, "DwE3KWY2")
+    require(pageMeta.frozenAt.isEmpty, "DwE3KFY2")
 
     val sql = """
       insert into DW1_PAGES (
          SITE_ID, PAGE_ID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
          CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID,
+         PLANNED_AT,
          PIN_ORDER, PIN_WHERE)
       values (
          ?, ?, ?, ?, ?,
@@ -1362,7 +1363,9 @@ class RdbSiteDao(
       pageMeta.embeddingPageUrl.orNullVarchar,
       d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
       pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef,
-      pageMeta.pinOrder.orNullInt, pageMeta.pinWhere.map(_.toInt).orNullInt)
+      pageMeta.pinOrder.orNullInt,
+      pageMeta.plannedAt.orNullTimestamp,
+      pageMeta.pinWhere.map(_.toInt).orNullInt)
 
     val numNewRows = runUpdate(sql, values)
 
