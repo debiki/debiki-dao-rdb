@@ -216,6 +216,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         num_like_votes,
         num_wrong_votes,
         num_bury_votes,
+        num_unwanted_votes,
         num_times_read)
 
       values (
@@ -229,7 +230,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         ?, ?, ?,
         ?,
         ?, ?, ?,
-        ?, ?, ?, ?)"""
+        ?, ?, ?, ?, ?)"""
 
     val values = List[AnyRef](
       post.siteId, post.uniqueId.asAnyRef, post.pageId, post.id.asAnyRef,
@@ -274,6 +275,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       post.numLikeVotes.asAnyRef,
       post.numWrongVotes.asAnyRef,
       post.numBuryVotes.asAnyRef,
+      post.numUnwantedVotes.asAnyRef,
       post.numTimesRead.asAnyRef)
 
     runUpdate(statement, values)
@@ -329,6 +331,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
         num_like_votes = ?,
         num_wrong_votes = ?,
         num_bury_votes = ?,
+        num_unwanted_votes = ?,
         num_times_read = ?
 
       where site_id = ? and page_id = ? and post_id = ?"""
@@ -374,6 +377,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       post.numLikeVotes.asAnyRef,
       post.numWrongVotes.asAnyRef,
       post.numBuryVotes.asAnyRef,
+      post.numUnwantedVotes.asAnyRef,
       post.numTimesRead.asAnyRef,
 
       post.siteId, post.pageId, post.id.asAnyRef)
@@ -425,6 +429,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
       numLikeVotes = rs.getInt("NUM_LIKE_VOTES"),
       numWrongVotes = rs.getInt("NUM_WRONG_VOTES"),
       numBuryVotes = rs.getInt("NUM_BURY_VOTES"),
+      numUnwantedVotes = rs.getInt("NUM_UNWANTED_VOTES"),
       numTimesRead = rs.getInt("NUM_TIMES_READ"))
   }
 
@@ -574,6 +579,7 @@ object PageSiteDaoMixin {
   private val VoteValueLike = 41
   private val VoteValueWrong = 42
   private val VoteValueBury = 43
+  private val VoteValueUnwanted = 44
   private val FlagValueSpam = 51
   private val FlagValueInapt = 52
   private val FlagValueOther = 53
@@ -583,6 +589,7 @@ object PageSiteDaoMixin {
     case PostVoteType.Like => VoteValueLike
     case PostVoteType.Wrong => VoteValueWrong
     case PostVoteType.Bury => VoteValueBury
+    case PostVoteType.Unwanted => VoteValueUnwanted
     case PostFlagType.Spam => FlagValueSpam
     case PostFlagType.Inapt => FlagValueInapt
     case PostFlagType.Other => FlagValueOther
@@ -593,6 +600,7 @@ object PageSiteDaoMixin {
     case VoteValueLike => PostVoteType.Like
     case VoteValueWrong => PostVoteType.Wrong
     case VoteValueBury => PostVoteType.Bury
+    case VoteValueUnwanted => PostVoteType.Unwanted
     case FlagValueSpam => PostFlagType.Spam
     case FlagValueInapt => PostFlagType.Inapt
     case FlagValueOther => PostFlagType.Other
