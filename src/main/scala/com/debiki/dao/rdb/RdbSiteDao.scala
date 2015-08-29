@@ -1352,12 +1352,11 @@ class RdbSiteDao(
       insert into DW1_PAGES (
          SITE_ID, PAGE_ID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
          CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID,
-         PLANNED_AT,
-         PIN_ORDER, PIN_WHERE)
+         PLANNED_AT, PIN_ORDER, PIN_WHERE)
       values (
          ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?,
-         ?, ?)"""
+         ?, ?, ?)"""
 
     val values = List[AnyRef](
       siteId, pageMeta.pageId,
@@ -1365,15 +1364,14 @@ class RdbSiteDao(
       pageMeta.embeddingPageUrl.orNullVarchar,
       d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
       pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef,
-      pageMeta.pinOrder.orNullInt,
       pageMeta.plannedAt.orNullTimestamp,
-      pageMeta.pinWhere.map(_.toInt).orNullInt)
+      pageMeta.pinOrder.orNullInt, pageMeta.pinWhere.map(_.toInt).orNullInt)
 
     val numNewRows = runUpdate(sql, values)
 
     if (numNewRows == 0) {
       // If the problem was a primary key violation, we wouldn't get to here.
-      runErr("DwE48GS3", o"""Cannot create a `${pageMeta.pageRole}' page because
+      die("DwE48GS3", o"""Cannot create a `${pageMeta.pageRole}' page because
         the parent page, id `${pageMeta.parentPageId}', has an incompatible role""")
     }
 
