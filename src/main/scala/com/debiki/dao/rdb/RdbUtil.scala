@@ -231,7 +231,7 @@ object RdbUtil {
       |g.PIN_ORDER,
       |g.PIN_WHERE,
       |g.PAGE_ROLE,
-      |g.PARENT_PAGE_ID,
+      |g.category_id,
       |g.EMBEDDING_PAGE_URL,
       |g.NUM_LIKES,
       |g.NUM_WRONGS,
@@ -269,7 +269,7 @@ object RdbUtil {
     PageMeta(
       pageId = if (pageId ne null) pageId else resultSet.getString("PAGE_ID"),
       pageRole = PageRole.fromInt(resultSet.getInt("PAGE_ROLE")) getOrElse PageRole.Discussion,
-      parentPageId = Option(resultSet.getString("PARENT_PAGE_ID")),
+      categoryId = getOptionalIntNoneNot0(resultSet, "category_id"),
       embeddingPageUrl = Option(resultSet.getString("EMBEDDING_PAGE_URL")),
       createdAt = createdAt,
       updatedAt = getDate(resultSet, "UPDATED_AT"),

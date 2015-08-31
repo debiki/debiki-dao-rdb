@@ -353,7 +353,7 @@ class RdbSiteDao(
         (implicit connection: js.Connection) {
     val values = List(
       newMeta.pageRole.toInt.asAnyRef,
-      newMeta.parentPageId.orNullVarchar,
+      newMeta.categoryId.orNullInt,
       newMeta.embeddingPageUrl.orNullVarchar,
       newMeta.publishedAt.orNullTimestamp,
       // Always write to bumped_at so SQL queries that sort by bumped_at works.
@@ -386,7 +386,7 @@ class RdbSiteDao(
     val sql = s"""
       update DW1_PAGES set
         PAGE_ROLE = ?,
-        PARENT_PAGE_ID = ?,
+        category_id = ?,
         EMBEDDING_PAGE_URL = ?,
         UPDATED_AT = now_utc(),
         PUBLISHED_AT = ?,
@@ -424,10 +424,11 @@ class RdbSiteDao(
     if (2 <= numChangedRows)
       die("DwE4Ikf1")
 
-    val newParentPage = anyOld.isEmpty || newMeta.parentPageId != anyOld.get.parentPageId
-    if (newParentPage) {
-      anyOld.flatMap(_.parentPageId) foreach { updateParentPageChildCount(_, -1) }
-      newMeta.parentPageId foreach { updateParentPageChildCount(_, +1) }
+    val mowedToNewCategory = anyOld.isEmpty || newMeta.categoryId != anyOld.get.categoryId
+    if (mowedToNewCategory) {
+      unimplemented("DwE5KPE2", "update category child count")
+      //anyOld.flatMap(_.categoryId) foreach { updateParentPageChildCount(_, -1) }
+      //newMeta.categoryId foreach { updateParentPageChildCount(_, +1) }
     }
   }
 
@@ -455,6 +456,7 @@ class RdbSiteDao(
     // and add forum_id, category_id, sub_cat_id columns to the pages table and the
     // category page too? Then everything will be available instantly.
     // (O.t.o.h. one will need to keep the above denormalized fields up-to-date.)
+    Map.empty /*
 
     val pageIdList = makeInListFor(pageIds)
 
@@ -513,6 +515,7 @@ class RdbSiteDao(
       })
     }
     result
+    */
   }
 
 
@@ -536,6 +539,7 @@ class RdbSiteDao(
     // That is, a category directly followed by all its sub categories. And only
     // two levels of categories is allowed.
 
+    Nil /*
     val sql = i"""
       with categories as (
         select page_id category_id, null::varchar sub_category_id
@@ -589,6 +593,7 @@ class RdbSiteDao(
     }
 
     allCategories
+    */
   }
 
 
@@ -860,13 +865,7 @@ class RdbSiteDao(
       while (rs.next) {
         val pagePath = _PagePath(rs, siteId)
         val pageMeta = _PageMeta(rs, pagePath.pageId.get)
-
-        // This might be too inefficient if there are many pages:
-        // (But need load ancestor ids, for access control — some ancestor page might
-        // be private. COULD rewrite and use batchLoadAncestorIdsParentFirst() instead.
-        val ancestorIds = loadAncestorIdsParentFirstImpl(pageMeta.pageId)(connection)
-
-        items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
+        items ::= PagePathAndMeta(pagePath, pageMeta)
       }
      })
     }
@@ -878,6 +877,7 @@ class RdbSiteDao(
         limit: Int, onlyPageRole: Option[PageRole], excludePageRole: Option[PageRole])
         : Seq[PagePathAndMeta] = {
 
+    Nil /*
     require(1 <= limit)
     var values = Vector[AnyRef]()
 
@@ -988,14 +988,15 @@ class RdbSiteDao(
           val pageMeta = _PageMeta(rs, pagePath.pageId.get)
 
           val parentsAncestors =
-            parentsAncestorsByParentId.get(pageMeta.parentPageId.get) getOrElse Nil
-          val ancestorIds = pageMeta.parentPageId.get :: parentsAncestors
+            parentsAncestorsByParentId.get(pageMeta.categoryId.get) getOrElse Nil
+          val ancestorIds = pageMeta.categoryId.get :: parentsAncestors
 
           items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
         }
       })
     }
     items.reverse
+    */
   }
 
 
@@ -1350,7 +1351,7 @@ class RdbSiteDao(
 
     val sql = """
       insert into DW1_PAGES (
-         SITE_ID, PAGE_ID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
+         SITE_ID, PAGE_ID, PAGE_ROLE, category_id, EMBEDDING_PAGE_URL,
          CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID,
          PLANNED_AT, PIN_ORDER, PIN_WHERE)
       values (
@@ -1360,7 +1361,7 @@ class RdbSiteDao(
 
     val values = List[AnyRef](
       siteId, pageMeta.pageId,
-      pageMeta.pageRole.toInt.asAnyRef, pageMeta.parentPageId.orNullVarchar,
+      pageMeta.pageRole.toInt.asAnyRef, pageMeta.categoryId.orNullInt,
       pageMeta.embeddingPageUrl.orNullVarchar,
       d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
       pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef,
@@ -1369,14 +1370,8 @@ class RdbSiteDao(
 
     val numNewRows = runUpdate(sql, values)
 
-    if (numNewRows == 0) {
-      // If the problem was a primary key violation, we wouldn't get to here.
-      die("DwE48GS3", o"""Cannot create a `${pageMeta.pageRole}' page because
-        the parent page, id `${pageMeta.parentPageId}', has an incompatible role""")
-    }
-
-    if (2 <= numNewRows)
-      die("DwE45UL8") // there's a primary key on site + page id
+    dieIf(numNewRows == 0, "DwE4GKPE21")
+    dieIf(numNewRows > 1, "DwE45UL8")
   }
 
 
@@ -1428,18 +1423,20 @@ class RdbSiteDao(
   }
 
 
-  private def updateParentPageChildCount(parentId: PageId, change: Int)
+  /*
+  private def updateParentPageChildCount(categoryId: CategoryId, change: Int)
         (implicit conn: js.Connection) {
     require(change == 1 || change == -1)
     val sql = i"""
-      |update DW1_PAGES
-      |set NUM_CHILD_PAGES = NUM_CHILD_PAGES + ($change)
-      |where SITE_ID = ? and PAGE_ID = ?
+      |update dw1_categories
+      |set num_topics = num_topics + ($change)
+      |where site_id = ? and category_id = ?
       """
-    val values = List(siteId, parentId)
+    val values = List(siteId, categoryId.asAnyRef)
     val rowsUpdated = db.update(sql, values)
     assErrIf(rowsUpdated != 1, "DwE70BK12")
   }
+  */
 
 
   /* Currently no longer needed, but keep for a while?
