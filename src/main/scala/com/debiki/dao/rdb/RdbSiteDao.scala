@@ -44,6 +44,7 @@ class RdbSiteDao(
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
   with PageSiteDaoMixin
+  with CategoriesSiteDaoMixin
   with FullTextSearchSiteDaoMixin
   with UserSiteDaoMixin
   with UserActionInfoSiteDaoMixin
@@ -433,23 +434,7 @@ class RdbSiteDao(
   }
 
 
-  def loadAncestorPostIdsParentFirst(pageId: PageId): immutable.Seq[PageId] =
-    loadAncestorIdsParentFirstImpl(pageId)(theOneAndOnlyConnection)
-
-
-  override def loadAncestorIdsParentFirst(pageId: PageId): List[PageId] = {
-    db.withConnection { connection =>
-      loadAncestorIdsParentFirstImpl(pageId)(connection)
-    }
-  }
-
-
-  private def loadAncestorIdsParentFirstImpl(pageId: PageId)(connection: js.Connection)
-        : List[PageId] = {
-    batchLoadAncestorIdsParentFirst(pageId::Nil)(connection).get(pageId) getOrElse Nil
-  }
-
-
+  // move to categories site dao
   def batchLoadAncestorIdsParentFirst(pageIds: List[PageId])(connection: js.Connection)
       : collection.Map[PageId, List[PageId]] = {
     // This complicated stuff will go away when I create a dedicated category table,
@@ -519,7 +504,8 @@ class RdbSiteDao(
   }
 
 
-  def loadCategoryTree(rootPageId: PageId): Seq[Category] = {
+  /*
+  def loadCategoryMap(): Map[CategoryId, Category] = {
     // Later on, I'll replace category pages with a dedicated forum category table.
     // Then, to load categories, one would simply do a super quick index scan on
     // the site id, and load all categories, should be relatively few. (0 .. 100?)
@@ -539,7 +525,6 @@ class RdbSiteDao(
     // That is, a category directly followed by all its sub categories. And only
     // two levels of categories is allowed.
 
-    Nil /*
     val sql = i"""
       with categories as (
         select page_id category_id, null::varchar sub_category_id
@@ -593,8 +578,7 @@ class RdbSiteDao(
     }
 
     allCategories
-    */
-  }
+  } */
 
 
   def movePages(pageIds: Seq[PageId], fromFolder: String, toFolder: String) {
@@ -870,133 +854,6 @@ class RdbSiteDao(
      })
     }
     items.reverse
-  }
-
-
-  def listChildPages(parentPageIds: Seq[PageId], pageQuery: PageQuery,
-        limit: Int, onlyPageRole: Option[PageRole], excludePageRole: Option[PageRole])
-        : Seq[PagePathAndMeta] = {
-
-    Nil /*
-    require(1 <= limit)
-    var values = Vector[AnyRef]()
-
-    val (orderByStr, offsetTestAnd) = pageQuery.orderOffset match {
-      case PageOrderOffset.Any =>
-        ("", "")
-      case PageOrderOffset.ByPublTime =>
-        ("order by g.PUBLISHED_AT desc", "")
-      case PageOrderOffset.ByBumpTime(anyDate) =>
-        val offsetTestAnd = anyDate match {
-          case None => ""
-          case Some(date) =>
-            values :+= d2ts(date)
-            "g.BUMPED_AT <= ? and"
-        }
-        // bumped_at is never null (it defaults to publ date or creation date).
-        (s"order by g.BUMPED_AT desc", offsetTestAnd)
-      case PageOrderOffset.ByPinOrderLoadOnlyPinned =>
-        (s"order by g.PIN_ORDER", "g.PIN_WHERE is not null and")
-      case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
-        val offsetTestAnd = anyLikesAndDate match {
-          case None => ""
-          case Some((maxNumLikes, date)) =>
-            values :+= maxNumLikes.asAnyRef
-            values :+= d2ts(date)
-            values :+= maxNumLikes.asAnyRef
-            """((g.NUM_LIKES <= ? and g.BUMPED_AT <= ?) or
-                (g.NUM_LIKES < ?)) and"""
-        }
-        ("order by g.NUM_LIKES desc, BUMPED_AT desc", offsetTestAnd)
-      case _ =>
-        unimplemented(s"Sort order unsupported: ${pageQuery.orderOffset} [DwE2GFU06]")
-    }
-
-    values :+= siteId
-
-    val onlyThisPageRoleAnd = onlyPageRole match {
-      case Some(pageRole) =>
-        illArgIf(pageRole == PageRole.WebPage, "DwE20kIR8")
-        values :+= pageRole.toInt.asAnyRef
-        "g.PAGE_ROLE = ? and"
-      case None => ""
-    }
-
-    val notThisPageRoleAnd = excludePageRole match {
-      case Some(pageRole) =>
-        values :+= pageRole.toInt.asAnyRef
-        "g.PAGE_ROLE <> ? and"
-      case None => ""
-    }
-
-    val pageFilterAnd = pageQuery.pageFilter match {
-      case PageFilter.ShowOpenQuestionsTodos =>
-        import PageRole._
-        o"""
-          g.PAGE_ROLE in (${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt}) and
-          g.CLOSED_AT is null and
-          """
-      case PageFilter.ShowAll =>
-        ""
-    }
-    values = values ++ parentPageIds
-
-    // Hack. For now, until I've created a dedicated forum categories table,
-    // select forum category pages and use them as about-this-category pages
-    // a la Discourse. [forumcategory]
-    val includeAnyAboutCategoryPage =
-      if (excludePageRole == Some(PageRole.Category)) {
-        values = values ++ parentPageIds
-        s"""g.PAGE_ID in (${ makeInListFor(parentPageIds) }) and
-            PAGE_ROLE = ${PageRole.Category.toInt}"""
-      }
-      else {
-        "false"
-      }
-
-    val sql = s"""
-        select t.PARENT_FOLDER,
-            t.PAGE_ID,
-            t.SHOW_ID,
-            t.PAGE_SLUG,
-            ${_PageMetaSelectListItems}
-        from DW1_PAGES g left join DW1_PAGE_PATHS t
-          on g.SITE_ID = t.SITE_ID and g.PAGE_ID = t.PAGE_ID
-          and t.CANONICAL = 'C'
-        where
-          $offsetTestAnd
-          $pageFilterAnd
-          g.SITE_ID = ? and ((
-              $onlyThisPageRoleAnd
-              $notThisPageRoleAnd
-              g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) }))
-            or ( -- hack [forumcategory]
-              $includeAnyAboutCategoryPage))
-        $orderByStr
-        limit $limit"""
-
-    var items = List[PagePathAndMeta]()
-
-    db.withConnection { implicit connection =>
-
-      val parentsAncestorsByParentId: collection.Map[PageId, List[PageId]] =
-        batchLoadAncestorIdsParentFirst(parentPageIds.toList)(connection)
-
-      db.query(sql, values.toList, rs => {
-        while (rs.next) {
-          val pagePath = _PagePath(rs, siteId)
-          val pageMeta = _PageMeta(rs, pagePath.pageId.get)
-
-          val parentsAncestors =
-            parentsAncestorsByParentId.get(pageMeta.categoryId.get) getOrElse Nil
-          val ancestorIds = pageMeta.categoryId.get :: parentsAncestors
-
-          items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
-        }
-      })
-    }
-    items.reverse
-    */
   }
 
 

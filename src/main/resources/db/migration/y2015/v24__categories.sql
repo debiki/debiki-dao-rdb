@@ -5,8 +5,9 @@
 create table dw2_categories(
   site_id varchar not null,
   id int not null,
+  page_id varchar not null,  -- FK + ix
   parent_id int,  -- FK
-  position int,
+  position int not null default 1000,
   name varchar not null,
   slug varchar not null,  -- FK
   about_topic_id varchar,  -- FK + ix
@@ -22,11 +23,14 @@ create table dw2_categories(
 
   constraint dw2_cats_id__p primary key (site_id, id),
 
-  constraint dw2_cats__r__cats foreign key (site_id, parent_id)
-    references dw2_categories(site_id, id), -- ix: dw2_cats_site_parent__i
+  constraint dw2_cats_page__r__pages foreign key (site_id, page_id)
+    references dw1_pages(site_id, page_id), -- ix: dw2_cats_page__i
 
-  constraint dw2_cats__r__pages foreign key (site_id, about_topic_id)
-    references dw1_pages(site_id, page_id), -- ix: dw2_cats_site_abouttopic__i
+  constraint dw2_cats__r__cats foreign key (site_id, parent_id)
+    references dw2_categories(site_id, id), -- ix: dw2_cats_parent__i
+
+  constraint dw2_cats_about__r__pages foreign key (site_id, about_topic_id)
+    references dw1_pages(site_id, page_id), -- ix: dw2_cats_abouttopic__i
 
   constraint dw2_cats_name__c_len check(length(name) between 1 and 100),
   constraint dw2_cats_slug__c_len check(length(slug) between 1 and 100),
@@ -39,29 +43,43 @@ create table dw2_categories(
 );
 
 
-create index dw2_cats_site_parent__i on dw2_categories(site_id, parent_id);
-create index dw2_cats_site_abouttopic__i on dw2_categories(site_id, about_topic_id);
-create index dw2_cats_site_slug__i on dw2_categories(site_id, slug);
+create index dw2_cats_page__i on dw2_categories(site_id, page_id);
+create index dw2_cats_parent__i on dw2_categories(site_id, parent_id);
+create index dw2_cats_abouttopic__i on dw2_categories(site_id, about_topic_id);
+create index dw2_cats_slug__i on dw2_categories(site_id, slug);
 
 
 -- Create categories for www.effectivediscussions.org:
 ------------------------------------------------------
 
-insert into dw2_categories
-    select '3', 1, null, null, 'Uncategorized', 'uncategorized', null, null, now_utc(), now_utc()
+insert into dw2_categories select
+    '3', 1, '4jqu3', null, 1, '(Category Root)', '(category-root)', null, null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
-insert into dw2_categories
-    select '3', 2, 1, 10, 'Sandbox', 'sandbox', '2', '', now_utc(), now_utc()
+insert into dw2_categories select
+    '3', 2, '4jqu3', 1,  5, 'General', 'general', '1d8z5', 'description', now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
-insert into dw2_categories
-    select '3', 3, 1,  5, 'General', 'general', '1d8z5', '', now_utc(), now_utc()
+insert into dw2_categories select
+    '3', 3, '4jqu3', 1,  100, 'Pages', 'pages', '110j7', 'description', now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
-insert into dw2_categories
-    select '3', 4, 1,  20, 'Pages', 'pages', '110j7', '', now_utc(), now_utc()
+insert into dw2_categories select
+    '3', 4, '4jqu3', 1, 999, 'Sandbox', 'sandbox', '2', 'description', now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
+
+insert into dw2_categories select
+    '3', 5, '4jqu3', 1, 1000, 'Uncategorized', 'uncategorized', null, null, now_utc(), now_utc()
+    from dw1_pages where site_id = '3' and page_id = '4jqu3';
+
+-- Another site:
+insert into dw2_categories select
+    '55', 1, '1', null, 1, '(Category Root)', '(category-root)', null, null, now_utc(), now_utc()
+    from dw1_pages where site_id = '3' and page_id = '4jqu3'; -- doesn't matter
+
+insert into dw2_categories select
+    '55', 2, '1', 1, 1000, 'Uncategorized', 'uncategorized', null, null, now_utc(), now_utc()
+    from dw1_pages where site_id = '3' and page_id = '4jqu3'; -- doesn't matter
 
 
 -- Make dw1_pages use categories not parent page ids:
@@ -70,24 +88,77 @@ insert into dw2_categories
 alter table dw1_pages drop constraint dw1_pages_parentpage__r__pages;
 
 -- Link topics to categories at www.effectivediscussions.org:
-alter table dw1_pages alter column parent_page_id type int using (
+alter table dw1_pages rename column parent_page_id to category_id;
+alter table dw1_pages alter column category_id type int using (
     case site_id
         when '3' then
-            case parent_page_id
-                when '2' then 2      -- Sandbox
-                when '1d8z5' then 3  -- the General category
-                when '110j7' then 4  -- Pages
-                else null
+            -- Map former category pages, which will hereafter be about-category pages,
+            -- to the new categories table.
+            case page_id
+                when '4jqu3' then 1  -- The forum root category
+                when '1d8z5' then 2  -- the General category
+                when '2' then 3      -- Pages
+                when '110j7' then 4  -- Sandbox
+                -- Map topics to the new categories table.
+                else case category_id
+                    when '1d8z5' then 2  -- General
+                    when '2' then 3      -- Pages
+                    when '110j7' then 4  -- Sandbox
+                    when '4jqu3' then 5  -- Uncategorized
+                    else null
+                end
+            end
+        when '55' then
+            case page_role
+                when 7 then 1 -- the forum page
+                else 2 -- uncategorized
             end
         else null
     end);
-alter table dw1_pages rename column parent_page_id to category_id;
 alter table dw1_pages add constraint dw1_pages_category__r__categories
     foreign key (site_id, category_id) references dw2_categories(site_id, id);
+
+-- Change from type Category to type About-Category for www.effectivediscussions.org,
+-- or Discussion for other sites (there are no page-role-8 for site '55').
+update dw1_pages set
+    page_role = case
+        when site_id = '3' then case page_id
+            when '4jqu3' then 7 -- forum
+            else 9  -- about category
+            end
+        else 12 -- discussion
+        end
+  where page_role = 8;
+
 
 -- Could add constraint that each forum page links to a category
 
 alter index dw1_pages_parentid_about rename to dw1_pages_category_about__u;
 alter index dw1_pages_tnt_parentpage rename to dw1_pages_category__i;
 alter index dw1_pages_site_publishedat rename to dw1_pages_publishedat__i;
+
+
+-- Update counters
+------------------------------------------------------
+
+update dw2_categories c
+    set num_posts = (
+        select count(*)
+        from dw1_pages g join dw2_posts p
+            on g.site_id = p.site_id and g.page_id = p.page_id
+               and p.post_id != 0 -- skip titles
+               and p.deleted_status = 0 -- not deleted
+        where
+            c.site_id = g.site_id and
+            c.id = g.category_id and
+            g.page_role != 7); -- forum
+
+update dw2_categories c
+    set num_topics = (
+        select count(*) from dw1_pages p
+        where
+            c.site_id = p.site_id and
+            c.id = p.category_id and
+            c.page_id != p.page_id and -- skip forum and blog main pages themselves
+            p.page_role != 9); -- skip about-category pages
 
