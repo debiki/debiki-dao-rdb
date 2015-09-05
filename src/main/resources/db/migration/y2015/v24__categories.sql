@@ -7,17 +7,16 @@ create table dw2_categories(
   id int not null,
   page_id varchar not null,  -- FK + ix
   parent_id int,  -- FK
-  position int not null default 1000,
   name varchar not null,
   slug varchar not null,  -- FK
-  about_topic_id varchar,  -- FK + ix
+  position int not null default 1000,
   description varchar,
+  new_topic_types varchar, -- comma separated topic type list, like: 5,3,11
   created_at timestamp not null,
   updated_at timestamp not null,
   locked_at timestamp,
   frozen_at timestamp,
   deleted_at timestamp,
-  new_topic_types varchar, -- comma separated topic type list, like: 5,3,11
   num_topics int not null default 0,
   num_posts int not null default 0,
 
@@ -29,14 +28,11 @@ create table dw2_categories(
   constraint dw2_cats__r__cats foreign key (site_id, parent_id)
     references dw2_categories(site_id, id), -- ix: dw2_cats_parent__i
 
-  constraint dw2_cats_about__r__pages foreign key (site_id, about_topic_id)
-    references dw1_pages(site_id, page_id), -- ix: dw2_cats_abouttopic__i
-
   constraint dw2_cats_name__c_len check(length(name) between 1 and 100),
   constraint dw2_cats_slug__c_len check(length(slug) between 1 and 100),
   constraint dw2_cats_description__c_len check(length(description) < 1000),
+  constraint dw2_cats_newtopictypes__c check(new_topic_types ~ '[0-9,]*'),
   constraint dw2_cats_created_updated__c_le check(created_at <= updated_at),
-  constraint dw2_cats_newtopictypes__c check(new_topic_types ~ '[0-9,]'),
   constraint dw2_cats_numtopics__c_gez check(num_topics >= 0),
   constraint dw2_cats_numposts__c_gez check(num_posts >= 0),
   constraint dw2_cats_numtopics_numposts__c_le check(num_topics <= num_posts)
@@ -45,7 +41,6 @@ create table dw2_categories(
 
 create index dw2_cats_page__i on dw2_categories(site_id, page_id);
 create index dw2_cats_parent__i on dw2_categories(site_id, parent_id);
-create index dw2_cats_abouttopic__i on dw2_categories(site_id, about_topic_id);
 create index dw2_cats_slug__i on dw2_categories(site_id, slug);
 
 
@@ -53,32 +48,32 @@ create index dw2_cats_slug__i on dw2_categories(site_id, slug);
 ------------------------------------------------------
 
 insert into dw2_categories select
-    '3', 1, '4jqu3', null, 1, '(Category Root)', '(category-root)', null, null, now_utc(), now_utc()
+    '3', 1, '4jqu3', null, '(Category Root)', '(category-root)', 1, null, null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
 insert into dw2_categories select
-    '3', 2, '4jqu3', 1,  5, 'General', 'general', '1d8z5', 'description', now_utc(), now_utc()
+    '3', 2, '4jqu3', 1,  'General', 'general', 5, 'description', null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
 insert into dw2_categories select
-    '3', 3, '4jqu3', 1,  100, 'Pages', 'pages', '110j7', 'description', now_utc(), now_utc()
+    '3', 3, '4jqu3', 1,  'Pages', 'pages', 100, 'description', null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
 insert into dw2_categories select
-    '3', 4, '4jqu3', 1, 999, 'Sandbox', 'sandbox', '2', 'description', now_utc(), now_utc()
+    '3', 4, '4jqu3', 1, 'Sandbox', 'sandbox', 999, 'description', null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
 insert into dw2_categories select
-    '3', 5, '4jqu3', 1, 1000, 'Uncategorized', 'uncategorized', null, null, now_utc(), now_utc()
+    '3', 5, '4jqu3', 1, 'Uncategorized', 'uncategorized', 1000, null, null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
 -- Another site:
 insert into dw2_categories select
-    '55', 1, '1', null, 1, '(Category Root)', '(category-root)', null, null, now_utc(), now_utc()
+    '55', 1, '1', null, '(Category Root)', '(category-root)', 1, null, null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3'; -- doesn't matter
 
 insert into dw2_categories select
-    '55', 2, '1', 1, 1000, 'Uncategorized', 'uncategorized', null, null, now_utc(), now_utc()
+    '55', 2, '1', 1, 'Uncategorized', 'uncategorized', 1000, null, null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3'; -- doesn't matter
 
 

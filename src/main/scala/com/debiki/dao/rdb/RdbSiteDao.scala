@@ -173,6 +173,17 @@ class RdbSiteDao(
   }
 
 
+  // For backw compat with old non-transactional stuff.
+  def runQueryPerhapsAtnms[R](query: String, values: List[AnyRef],
+        resultSetHandler: js.ResultSet => R): R = {
+    if (_theOneAndOnlyConnection.isDefined) {
+      runQuery(query, values, resultSetHandler)
+    }
+    else {
+      db.queryAtnms(query, values, resultSetHandler)
+    }
+  }
+
   // COULD move to new superclass?
   def runUpdate(statement: String, values: List[AnyRef] = Nil): Int = {
     db.update(statement, values)(theOneAndOnlyConnection)

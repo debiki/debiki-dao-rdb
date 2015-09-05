@@ -33,12 +33,17 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
+  def loadCategory(categoryId: CategoryId): Option[Category] = {
+    loadCategoryMap().get(categoryId)
+  }
+
+
   def loadCategoryMap(): Map[CategoryId, Category] = {
     val query = """
       select * from dw2_categories where site_id = ?
       """
     var result = Map[CategoryId, Category]()
-    db.queryAtnms(query, List(siteId), rs => {
+    runQueryPerhapsAtnms(query, List(siteId), rs => {
       while (rs.next()) {
         val category = getCategory(rs)
         result += category.id -> category
@@ -134,6 +139,57 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
+  override def nextCategoryId(): UniquePostId = {
+    val query = """
+      select max(id) max_id from dw2_categories where site_id = ?
+      """
+    runQuery(query, List(siteId), rs => {
+      rs.next()
+      val maxId = rs.getInt("max_id") // null becomes 0, fine
+      maxId + 1
+    })
+  }
+
+
+  override def insertCategory(category: Category) {
+    val statement = """
+      insert into dw2_categories (
+        site_id, id, page_id, parent_id,
+        name, slug, position,
+        description, new_topic_types,
+        created_at, updated_at)
+      values (
+        ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?,
+        ?, ?)"""
+    val values = List[AnyRef](
+      siteId, category.id.asAnyRef, category.sectionPageId, category.parentId.orNullInt,
+      category.name, category.slug, category.position.asAnyRef,
+      "", category.newTopicTypes.map(_.toInt).mkString(","),
+      currentTime, currentTime)
+    runUpdateSingleRow(statement, values)
+  }
+
+
+  override def updateCategory(category: Category) {
+    val statement = """
+      update dw2_categories set
+        page_id = ?, parent_id = ?,
+        name = ?, slug = ?, position = ?,
+        description = ?, new_topic_types = ?,
+        created_at = ?, updated_at = ?
+      where site_id = ? and id = ?"""
+    val values = List[AnyRef](
+      category.sectionPageId, category.parentId.orNullInt,
+      category.name, category.slug, category.position.asAnyRef,
+      category.description.orNullVarchar, category.newTopicTypes.map(_.toInt).mkString(","),
+      category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
+      siteId, category.id.asAnyRef)
+    runUpdateSingleRow(statement, values)
+  }
+
+
   private def getCategory(rs: js.ResultSet): Category = {
     Category(
       id = rs.getInt("id"),
@@ -142,7 +198,6 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
       position = rs.getInt("position"),
       name = rs.getString("name"),
       slug = rs.getString("slug"),
-      aboutTopicId = Option(rs.getString("about_topic_id")),
       description = Option(rs.getString("description")),
       numTopics = rs.getInt("num_topics"),
       numPosts = rs.getInt("num_posts"),
@@ -158,8 +213,7 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
   private def getNewTopicTypes(rs: js.ResultSet): immutable.Seq[PageRole] = {
     // This is a comma separated topic type list, like: "5,3,11".
     val newTopicTypes: immutable.Seq[PageRole] = Option(rs.getString("new_topic_types")) match {
-      case None => Nil
-      case Some(text) =>
+      case Some(text) if text.nonEmpty =>
         val topicTypeIdStrings = text.split(',')
         var typeIds = Vector[PageRole]()
         for (typeIdString <- topicTypeIdStrings) {
@@ -171,6 +225,8 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
           }
         }
         typeIds
+      case _ =>
+        Nil
     }
     newTopicTypes
   }
