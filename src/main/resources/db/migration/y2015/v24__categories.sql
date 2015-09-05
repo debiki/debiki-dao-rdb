@@ -157,3 +157,8 @@ update dw2_categories c
             c.page_id != p.page_id and -- skip forum and blog main pages themselves
             p.page_role != 9); -- skip about-category pages
 
+
+-- Bug fix.
+alter table dw2_audit_log drop constraint dw1_pages_pagerole__c_in; -- requires values <= 12
+alter table dw2_audit_log add constraint dw2_auditlog_pagerole__c_in check(page_role between 1 and 100);
+
