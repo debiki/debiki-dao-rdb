@@ -435,13 +435,6 @@ class RdbSiteDao(
       throw DbDao.PageNotFoundByIdException( siteId, newMeta.pageId)
     if (2 <= numChangedRows)
       die("DwE4Ikf1")
-
-    val mowedToNewCategory = anyOld.isEmpty || newMeta.categoryId != anyOld.get.categoryId
-    if (mowedToNewCategory) {
-      unimplemented("DwE5KPE2", "update category child count")
-      //anyOld.flatMap(_.categoryId) foreach { updateParentPageChildCount(_, -1) }
-      //newMeta.categoryId foreach { updateParentPageChildCount(_, +1) }
-    }
   }
 
 
@@ -1289,22 +1282,6 @@ class RdbSiteDao(
         throw ex
     }
   }
-
-
-  /*
-  private def updateParentPageChildCount(categoryId: CategoryId, change: Int)
-        (implicit conn: js.Connection) {
-    require(change == 1 || change == -1)
-    val sql = i"""
-      |update dw1_categories
-      |set num_topics = num_topics + ($change)
-      |where site_id = ? and category_id = ?
-      """
-    val values = List(siteId, categoryId.asAnyRef)
-    val rowsUpdated = db.update(sql, values)
-    assErrIf(rowsUpdated != 1, "DwE70BK12")
-  }
-  */
 
 
   /* Currently no longer needed, but keep for a while?

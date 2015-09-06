@@ -199,8 +199,6 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
       name = rs.getString("name"),
       slug = rs.getString("slug"),
       description = Option(rs.getString("description")),
-      numTopics = rs.getInt("num_topics"),
-      numPosts = rs.getInt("num_posts"),
       newTopicTypes = getNewTopicTypes(rs),
       createdAt = getDate(rs, "created_at"),
       updatedAt = getDate(rs, "updated_at"),

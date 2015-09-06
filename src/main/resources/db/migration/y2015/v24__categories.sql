@@ -17,8 +17,6 @@ create table dw2_categories(
   locked_at timestamp,
   frozen_at timestamp,
   deleted_at timestamp,
-  num_topics int not null default 0,
-  num_posts int not null default 0,
 
   constraint dw2_cats_id__p primary key (site_id, id),
 
@@ -32,10 +30,7 @@ create table dw2_categories(
   constraint dw2_cats_slug__c_len check(length(slug) between 1 and 100),
   constraint dw2_cats_description__c_len check(length(description) < 1000),
   constraint dw2_cats_newtopictypes__c check(new_topic_types ~ '[0-9,]*'),
-  constraint dw2_cats_created_updated__c_le check(created_at <= updated_at),
-  constraint dw2_cats_numtopics__c_gez check(num_topics >= 0),
-  constraint dw2_cats_numposts__c_gez check(num_posts >= 0),
-  constraint dw2_cats_numtopics_numposts__c_le check(num_topics <= num_posts)
+  constraint dw2_cats_created_updated__c_le check(created_at <= updated_at)
 );
 
 
@@ -132,30 +127,6 @@ alter index dw1_pages_parentid_about rename to dw1_pages_category_about__u;
 alter index dw1_pages_tnt_parentpage rename to dw1_pages_category__i;
 alter index dw1_pages_site_publishedat rename to dw1_pages_publishedat__i;
 
-
--- Update counters
-------------------------------------------------------
-
-update dw2_categories c
-    set num_posts = (
-        select count(*)
-        from dw1_pages g join dw2_posts p
-            on g.site_id = p.site_id and g.page_id = p.page_id
-               and p.post_id != 0 -- skip titles
-               and p.deleted_status = 0 -- not deleted
-        where
-            c.site_id = g.site_id and
-            c.id = g.category_id and
-            g.page_role != 7); -- forum
-
-update dw2_categories c
-    set num_topics = (
-        select count(*) from dw1_pages p
-        where
-            c.site_id = p.site_id and
-            c.id = p.category_id and
-            c.page_id != p.page_id and -- skip forum and blog main pages themselves
-            p.page_role != 9); -- skip about-category pages
 
 
 -- Bug fix.
