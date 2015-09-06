@@ -207,6 +207,11 @@ class RdbSiteDao(
   }
 
 
+  def deferConstraints() {
+    runUpdate("set constraints all deferred", Nil)
+  }
+
+
   def loadResourceUsage() = loadResourceUsage(theOneAndOnlyConnection)
 
 

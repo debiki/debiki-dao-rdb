@@ -166,7 +166,7 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val values = List[AnyRef](
       siteId, category.id.asAnyRef, category.sectionPageId, category.parentId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
-      "", category.newTopicTypes.map(_.toInt).mkString(","),
+      category.description.orNullVarchar, category.newTopicTypes.map(_.toInt).mkString(","),
       currentTime, currentTime)
     runUpdateSingleRow(statement, values)
   }

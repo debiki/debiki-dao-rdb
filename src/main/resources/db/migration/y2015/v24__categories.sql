@@ -5,13 +5,13 @@
 create table dw2_categories(
   site_id varchar not null,
   id int not null,
-  page_id varchar not null,  -- FK + ix
-  parent_id int,  -- FK
+  page_id varchar not null,
+  parent_id int,
   name varchar not null,
-  slug varchar not null,  -- FK
+  slug varchar not null,
   position int not null default 1000,
   description varchar,
-  new_topic_types varchar, -- comma separated topic type list, like: 5,3,11
+  new_topic_types varchar, -- comma separated topic type list, e.g. "5,3,11"
   created_at timestamp not null,
   updated_at timestamp not null,
   locked_at timestamp,
@@ -21,10 +21,10 @@ create table dw2_categories(
   constraint dw2_cats_id__p primary key (site_id, id),
 
   constraint dw2_cats_page__r__pages foreign key (site_id, page_id)
-    references dw1_pages(site_id, page_id), -- ix: dw2_cats_page__i
+    references dw1_pages(site_id, page_id) deferrable, -- ix: dw2_cats_page__i
 
   constraint dw2_cats__r__cats foreign key (site_id, parent_id)
-    references dw2_categories(site_id, id), -- ix: dw2_cats_parent__i
+    references dw2_categories(site_id, id), -- ix: dw2_cats_parent_slug__u
 
   constraint dw2_cats_name__c_len check(length(name) between 1 and 100),
   constraint dw2_cats_slug__c_len check(length(slug) between 1 and 100),
@@ -35,7 +35,7 @@ create table dw2_categories(
 
 
 create index dw2_cats_page__i on dw2_categories(site_id, page_id);
-create index dw2_cats_parent__i on dw2_categories(site_id, parent_id);
+create unique index dw2_cats_parent_slug__u on dw2_categories(site_id, parent_id, slug);
 create index dw2_cats_slug__i on dw2_categories(site_id, slug);
 
 
@@ -106,7 +106,7 @@ alter table dw1_pages alter column category_id type int using (
         else null
     end);
 alter table dw1_pages add constraint dw1_pages_category__r__categories
-    foreign key (site_id, category_id) references dw2_categories(site_id, id);
+    foreign key (site_id, category_id) references dw2_categories(site_id, id) deferrable;
 
 -- Change from type Category to type About-Category for www.effectivediscussions.org,
 -- or Discussion for other sites (there are no page-role-8 for site '55').
