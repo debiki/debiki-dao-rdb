@@ -44,6 +44,7 @@ class RdbSiteDao(
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
   with PageSiteDaoMixin
+  with CategoriesSiteDaoMixin
   with FullTextSearchSiteDaoMixin
   with UserSiteDaoMixin
   with UserActionInfoSiteDaoMixin
@@ -172,6 +173,17 @@ class RdbSiteDao(
   }
 
 
+  // For backw compat with old non-transactional stuff.
+  def runQueryPerhapsAtnms[R](query: String, values: List[AnyRef],
+        resultSetHandler: js.ResultSet => R): R = {
+    if (_theOneAndOnlyConnection.isDefined) {
+      runQuery(query, values, resultSetHandler)
+    }
+    else {
+      db.queryAtnms(query, values, resultSetHandler)
+    }
+  }
+
   // COULD move to new superclass?
   def runUpdate(statement: String, values: List[AnyRef] = Nil): Int = {
     db.update(statement, values)(theOneAndOnlyConnection)
@@ -192,6 +204,11 @@ class RdbSiteDao(
       return db.query(query, values, resultSetHandler)(connection)
     }
     db.queryAtnms(query, values, resultSetHandler)
+  }
+
+
+  def deferConstraints() {
+    runUpdate("set constraints all deferred", Nil)
   }
 
 
@@ -353,7 +370,7 @@ class RdbSiteDao(
         (implicit connection: js.Connection) {
     val values = List(
       newMeta.pageRole.toInt.asAnyRef,
-      newMeta.parentPageId.orNullVarchar,
+      newMeta.categoryId.orNullInt,
       newMeta.embeddingPageUrl.orNullVarchar,
       newMeta.publishedAt.orNullTimestamp,
       // Always write to bumped_at so SQL queries that sort by bumped_at works.
@@ -386,7 +403,7 @@ class RdbSiteDao(
     val sql = s"""
       update DW1_PAGES set
         PAGE_ROLE = ?,
-        PARENT_PAGE_ID = ?,
+        category_id = ?,
         EMBEDDING_PAGE_URL = ?,
         UPDATED_AT = now_utc(),
         PUBLISHED_AT = ?,
@@ -423,38 +440,17 @@ class RdbSiteDao(
       throw DbDao.PageNotFoundByIdException( siteId, newMeta.pageId)
     if (2 <= numChangedRows)
       die("DwE4Ikf1")
-
-    val newParentPage = anyOld.isEmpty || newMeta.parentPageId != anyOld.get.parentPageId
-    if (newParentPage) {
-      anyOld.flatMap(_.parentPageId) foreach { updateParentPageChildCount(_, -1) }
-      newMeta.parentPageId foreach { updateParentPageChildCount(_, +1) }
-    }
   }
 
 
-  def loadAncestorPostIdsParentFirst(pageId: PageId): immutable.Seq[PageId] =
-    loadAncestorIdsParentFirstImpl(pageId)(theOneAndOnlyConnection)
-
-
-  override def loadAncestorIdsParentFirst(pageId: PageId): List[PageId] = {
-    db.withConnection { connection =>
-      loadAncestorIdsParentFirstImpl(pageId)(connection)
-    }
-  }
-
-
-  private def loadAncestorIdsParentFirstImpl(pageId: PageId)(connection: js.Connection)
-        : List[PageId] = {
-    batchLoadAncestorIdsParentFirst(pageId::Nil)(connection).get(pageId) getOrElse Nil
-  }
-
-
+  // move to categories site dao
   def batchLoadAncestorIdsParentFirst(pageIds: List[PageId])(connection: js.Connection)
       : collection.Map[PageId, List[PageId]] = {
     // This complicated stuff will go away when I create a dedicated category table,
     // and add forum_id, category_id, sub_cat_id columns to the pages table and the
     // category page too? Then everything will be available instantly.
     // (O.t.o.h. one will need to keep the above denormalized fields up-to-date.)
+    Map.empty /*
 
     val pageIdList = makeInListFor(pageIds)
 
@@ -513,10 +509,12 @@ class RdbSiteDao(
       })
     }
     result
+    */
   }
 
 
-  def loadCategoryTree(rootPageId: PageId): Seq[Category] = {
+  /*
+  def loadCategoryMap(): Map[CategoryId, Category] = {
     // Later on, I'll replace category pages with a dedicated forum category table.
     // Then, to load categories, one would simply do a super quick index scan on
     // the site id, and load all categories, should be relatively few. (0 .. 100?)
@@ -589,7 +587,7 @@ class RdbSiteDao(
     }
 
     allCategories
-  }
+  } */
 
 
   def movePages(pageIds: Seq[PageId], fromFolder: String, toFolder: String) {
@@ -860,140 +858,9 @@ class RdbSiteDao(
       while (rs.next) {
         val pagePath = _PagePath(rs, siteId)
         val pageMeta = _PageMeta(rs, pagePath.pageId.get)
-
-        // This might be too inefficient if there are many pages:
-        // (But need load ancestor ids, for access control — some ancestor page might
-        // be private. COULD rewrite and use batchLoadAncestorIdsParentFirst() instead.
-        val ancestorIds = loadAncestorIdsParentFirstImpl(pageMeta.pageId)(connection)
-
-        items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
+        items ::= PagePathAndMeta(pagePath, pageMeta)
       }
      })
-    }
-    items.reverse
-  }
-
-
-  def listChildPages(parentPageIds: Seq[PageId], pageQuery: PageQuery,
-        limit: Int, onlyPageRole: Option[PageRole], excludePageRole: Option[PageRole])
-        : Seq[PagePathAndMeta] = {
-
-    require(1 <= limit)
-    var values = Vector[AnyRef]()
-
-    val (orderByStr, offsetTestAnd) = pageQuery.orderOffset match {
-      case PageOrderOffset.Any =>
-        ("", "")
-      case PageOrderOffset.ByPublTime =>
-        ("order by g.PUBLISHED_AT desc", "")
-      case PageOrderOffset.ByBumpTime(anyDate) =>
-        val offsetTestAnd = anyDate match {
-          case None => ""
-          case Some(date) =>
-            values :+= d2ts(date)
-            "g.BUMPED_AT <= ? and"
-        }
-        // bumped_at is never null (it defaults to publ date or creation date).
-        (s"order by g.BUMPED_AT desc", offsetTestAnd)
-      case PageOrderOffset.ByPinOrderLoadOnlyPinned =>
-        (s"order by g.PIN_ORDER", "g.PIN_WHERE is not null and")
-      case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
-        val offsetTestAnd = anyLikesAndDate match {
-          case None => ""
-          case Some((maxNumLikes, date)) =>
-            values :+= maxNumLikes.asAnyRef
-            values :+= d2ts(date)
-            values :+= maxNumLikes.asAnyRef
-            """((g.NUM_LIKES <= ? and g.BUMPED_AT <= ?) or
-                (g.NUM_LIKES < ?)) and"""
-        }
-        ("order by g.NUM_LIKES desc, BUMPED_AT desc", offsetTestAnd)
-      case _ =>
-        unimplemented(s"Sort order unsupported: ${pageQuery.orderOffset} [DwE2GFU06]")
-    }
-
-    values :+= siteId
-
-    val onlyThisPageRoleAnd = onlyPageRole match {
-      case Some(pageRole) =>
-        illArgIf(pageRole == PageRole.WebPage, "DwE20kIR8")
-        values :+= pageRole.toInt.asAnyRef
-        "g.PAGE_ROLE = ? and"
-      case None => ""
-    }
-
-    val notThisPageRoleAnd = excludePageRole match {
-      case Some(pageRole) =>
-        values :+= pageRole.toInt.asAnyRef
-        "g.PAGE_ROLE <> ? and"
-      case None => ""
-    }
-
-    val pageFilterAnd = pageQuery.pageFilter match {
-      case PageFilter.ShowOpenQuestionsTodos =>
-        import PageRole._
-        o"""
-          g.PAGE_ROLE in (${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt}) and
-          g.CLOSED_AT is null and
-          """
-      case PageFilter.ShowAll =>
-        ""
-    }
-    values = values ++ parentPageIds
-
-    // Hack. For now, until I've created a dedicated forum categories table,
-    // select forum category pages and use them as about-this-category pages
-    // a la Discourse. [forumcategory]
-    val includeAnyAboutCategoryPage =
-      if (excludePageRole == Some(PageRole.Category)) {
-        values = values ++ parentPageIds
-        s"""g.PAGE_ID in (${ makeInListFor(parentPageIds) }) and
-            PAGE_ROLE = ${PageRole.Category.toInt}"""
-      }
-      else {
-        "false"
-      }
-
-    val sql = s"""
-        select t.PARENT_FOLDER,
-            t.PAGE_ID,
-            t.SHOW_ID,
-            t.PAGE_SLUG,
-            ${_PageMetaSelectListItems}
-        from DW1_PAGES g left join DW1_PAGE_PATHS t
-          on g.SITE_ID = t.SITE_ID and g.PAGE_ID = t.PAGE_ID
-          and t.CANONICAL = 'C'
-        where
-          $offsetTestAnd
-          $pageFilterAnd
-          g.SITE_ID = ? and ((
-              $onlyThisPageRoleAnd
-              $notThisPageRoleAnd
-              g.PARENT_PAGE_ID in (${ makeInListFor(parentPageIds) }))
-            or ( -- hack [forumcategory]
-              $includeAnyAboutCategoryPage))
-        $orderByStr
-        limit $limit"""
-
-    var items = List[PagePathAndMeta]()
-
-    db.withConnection { implicit connection =>
-
-      val parentsAncestorsByParentId: collection.Map[PageId, List[PageId]] =
-        batchLoadAncestorIdsParentFirst(parentPageIds.toList)(connection)
-
-      db.query(sql, values.toList, rs => {
-        while (rs.next) {
-          val pagePath = _PagePath(rs, siteId)
-          val pageMeta = _PageMeta(rs, pagePath.pageId.get)
-
-          val parentsAncestors =
-            parentsAncestorsByParentId.get(pageMeta.parentPageId.get) getOrElse Nil
-          val ancestorIds = pageMeta.parentPageId.get :: parentsAncestors
-
-          items ::= PagePathAndMeta(pagePath, ancestorIds, pageMeta)
-        }
-      })
     }
     items.reverse
   }
@@ -1350,7 +1217,7 @@ class RdbSiteDao(
 
     val sql = """
       insert into DW1_PAGES (
-         SITE_ID, PAGE_ID, PAGE_ROLE, PARENT_PAGE_ID, EMBEDDING_PAGE_URL,
+         SITE_ID, PAGE_ID, PAGE_ROLE, category_id, EMBEDDING_PAGE_URL,
          CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID,
          PLANNED_AT, PIN_ORDER, PIN_WHERE)
       values (
@@ -1360,7 +1227,7 @@ class RdbSiteDao(
 
     val values = List[AnyRef](
       siteId, pageMeta.pageId,
-      pageMeta.pageRole.toInt.asAnyRef, pageMeta.parentPageId.orNullVarchar,
+      pageMeta.pageRole.toInt.asAnyRef, pageMeta.categoryId.orNullInt,
       pageMeta.embeddingPageUrl.orNullVarchar,
       d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
       pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef,
@@ -1369,14 +1236,8 @@ class RdbSiteDao(
 
     val numNewRows = runUpdate(sql, values)
 
-    if (numNewRows == 0) {
-      // If the problem was a primary key violation, we wouldn't get to here.
-      die("DwE48GS3", o"""Cannot create a `${pageMeta.pageRole}' page because
-        the parent page, id `${pageMeta.parentPageId}', has an incompatible role""")
-    }
-
-    if (2 <= numNewRows)
-      die("DwE45UL8") // there's a primary key on site + page id
+    dieIf(numNewRows == 0, "DwE4GKPE21")
+    dieIf(numNewRows > 1, "DwE45UL8")
   }
 
 
@@ -1425,20 +1286,6 @@ class RdbSiteDao(
         }
         throw ex
     }
-  }
-
-
-  private def updateParentPageChildCount(parentId: PageId, change: Int)
-        (implicit conn: js.Connection) {
-    require(change == 1 || change == -1)
-    val sql = i"""
-      |update DW1_PAGES
-      |set NUM_CHILD_PAGES = NUM_CHILD_PAGES + ($change)
-      |where SITE_ID = ? and PAGE_ID = ?
-      """
-    val values = List(siteId, parentId)
-    val rowsUpdated = db.update(sql, values)
-    assErrIf(rowsUpdated != 1, "DwE70BK12")
   }
 
 
