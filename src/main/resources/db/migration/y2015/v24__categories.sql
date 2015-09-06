@@ -64,7 +64,7 @@ insert into dw2_categories select
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
 insert into dw2_categories select
-    '3', 5, '4jqu3', 1, 'Uncategorized', 'uncategorized', 1000, null, null, now_utc(), now_utc()
+    '3', 5, '4jqu3', 1, 'Uncategorized', 'uncategorized', 1000, '__uncategorized__', null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3';
 
 -- Another site:
@@ -73,7 +73,7 @@ insert into dw2_categories select
     from dw1_pages where site_id = '3' and page_id = '4jqu3'; -- doesn't matter
 
 insert into dw2_categories select
-    '55', 2, '1', 1, 'Uncategorized', 'uncategorized', 1000, null, null, now_utc(), now_utc()
+    '55', 2, '1', 1, 'Uncategorized', 'uncategorized', 1000, '__uncategorized__', null, now_utc(), now_utc()
     from dw1_pages where site_id = '3' and page_id = '4jqu3'; -- doesn't matter
 
 
