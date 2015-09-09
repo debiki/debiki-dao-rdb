@@ -19,7 +19,7 @@ package com.debiki.dao.rdb
 
 import com.debiki.core._
 import com.debiki.core.Prelude._
-import java.{sql => js, util => ju}
+import java.{sql => js}
 import scala.collection.immutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
@@ -124,7 +124,7 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
         $orderBy
         limit $limit"""
 
-    var result = ArrayBuffer[PagePathAndMeta]()
+    val result = ArrayBuffer[PagePathAndMeta]()
 
     db.withConnection { implicit connection =>
       db.query(sql, values.toList, rs => {
@@ -230,5 +230,77 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 }
+
+
+/*
+Old code that recursively finds all ancestor pages of a page. Was in use
+before I created the categories table. Perhaps it'll be useful again in the future
+if there'll be really many categories sometimes, so one doesn't want to load all of them?
+def batchLoadAncestorIdsParentFirst(pageIds: List[PageId])(connection: js.Connection)
+    : collection.Map[PageId, List[PageId]] = {
+  // This complicated stuff will go away when I create a dedicated category table,
+  // and add forum_id, category_id, sub_cat_id columns to the pages table and the
+  // category page too? Then everything will be available instantly.
+  // (O.t.o.h. one will need to keep the above denormalized fields up-to-date.)
+
+  val pageIdList = makeInListFor(pageIds)
+
+  val sql = s"""
+    with recursive ancestor_page_ids(child_id, parent_id, site_id, path, cycle) as (
+        select
+          page_id::varchar child_id,
+          parent_page_id::varchar parent_id,
+          site_id,
+          -- `|| ''` needed otherwise conversion to varchar[] doesn't work, weird
+          array[page_id || '']::varchar[],
+          false
+        from dw1_pages where site_id = ? and page_id in ($pageIdList)
+      union all
+        select
+          page_id::varchar child_id,
+          parent_page_id::varchar parent_id,
+          dw1_pages.site_id,
+          path || page_id,
+          parent_page_id = any(path) -- aborts if cycle, don't know if works (never tested)
+        from dw1_pages join ancestor_page_ids
+        on dw1_pages.page_id = ancestor_page_ids.parent_id and
+           dw1_pages.site_id = ancestor_page_ids.site_id
+        where not cycle
+    )
+    select path from ancestor_page_ids
+    order by array_length(path, 1) desc
+    """
+
+  // If asking for ids for many pages, e.g. 2 pages, the result migth look like this:
+  //  path
+  //  -------------------
+  //  {61bg6,1f4q9,51484}
+  //  {1f4q9,51484}
+  //  {61bg6,1f4q9}
+  //  {1f4q9}
+  //  {61bg6}
+  // if asking for ancestors of page 1f4q9 and 61bg6.
+  // I don't know if it's possible to group by the first element in an array,
+  // and keep only the longest array in each group? Instead, for now,
+  // for each page, simply use the longest path found.
+
+  val result = mut.Map[PageId, List[PageId]]()
+  db.withConnection { implicit connection =>
+    db.query(sql, siteId :: pageIds, rs => {
+      while (rs.next()) {
+        val sqlArray: java.sql.Array = rs.getArray("path")
+        val pageIdPathSelfFirst = sqlArray.getArray.asInstanceOf[Array[PageId]].toList
+        val pageId::ancestorIds = pageIdPathSelfFirst
+        // Update `result` if we found longest list of ancestors thus far, for pageId.
+        val lengthOfStoredPath = result.get(pageId).map(_.length) getOrElse -1
+        if (lengthOfStoredPath < ancestorIds.length) {
+          result(pageId) = ancestorIds
+        }
+      }
+    })
+  }
+  result
+}
+  */
 
 

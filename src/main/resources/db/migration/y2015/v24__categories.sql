@@ -9,7 +9,7 @@ create table dw2_categories(
   parent_id int,
   name varchar not null,
   slug varchar not null,
-  position int not null default 1000,
+  position int not null,
   description varchar,
   new_topic_types varchar, -- comma separated topic type list, e.g. "5,3,11"
   created_at timestamp not null,
@@ -29,14 +29,24 @@ create table dw2_categories(
   constraint dw2_cats_name__c_len check(length(name) between 1 and 100),
   constraint dw2_cats_slug__c_len check(length(slug) between 1 and 100),
   constraint dw2_cats_description__c_len check(length(description) < 1000),
-  constraint dw2_cats_newtopictypes__c check(new_topic_types ~ '[0-9,]*'),
-  constraint dw2_cats_created_updated__c_le check(created_at <= updated_at)
+  constraint dw2_cats_newtopictypes__c check(new_topic_types ~ '^([0-9]+,)*[0-9]+$'),
+  constraint dw2_cats_created_updated__c_le check(created_at <= updated_at),
+  constraint dw2_cats_created_locked__c_le check(created_at <= locked_at),
+  constraint dw2_cats_created_frozen__c_le check(created_at <= frozen_at),
+  constraint dw2_cats_created_deleted__c_le check(created_at <= deleted_at)
 );
 
 
 create index dw2_cats_page__i on dw2_categories(site_id, page_id);
 create unique index dw2_cats_parent_slug__u on dw2_categories(site_id, parent_id, slug);
 create index dw2_cats_slug__i on dw2_categories(site_id, slug);
+
+-- Not sure if this will be needed, but just in case, better add it now, because it'd
+-- be hard to add it later. The constraint prevents two categories in the same section
+-- (e.g. in the same forum), at any level (including sub categories, sub sub ...),m
+-- from having the same slug. This makes it possible to show just one slug in the URL
+-- rather than a path of slugs.
+create unique index dw2_cats_page_slug__u on dw2_categories(site_id, page_id, slug);
 
 
 -- Create categories for www.effectivediscussions.org:
@@ -129,7 +139,14 @@ alter index dw1_pages_site_publishedat rename to dw1_pages_publishedat__i;
 
 
 
--- Bug fix.
+-- Bug fixes
+------------------------------------------------------
+
 alter table dw2_audit_log drop constraint dw1_pages_pagerole__c_in; -- requires values <= 12
 alter table dw2_audit_log add constraint dw2_auditlog_pagerole__c_in check(page_role between 1 and 100);
+
+-- The constraint pattern didn't match on ^ and $ and some other things.
+alter table dw2_posts drop constraint dw2_posts_multireply__c_num;
+alter table dw2_posts add constraint dw2_posts_multireply__c_num check (
+    multireply ~ '^([0-9]+,)*[0-9]+$');
 
