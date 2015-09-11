@@ -166,7 +166,7 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val values = List[AnyRef](
       siteId, category.id.asAnyRef, category.sectionPageId, category.parentId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
-      category.description.orNullVarchar, category.newTopicTypes.map(_.toInt).mkString(","),
+      category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
       currentTime, currentTime)
     runUpdateSingleRow(statement, values)
   }
@@ -183,7 +183,7 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val values = List[AnyRef](
       category.sectionPageId, category.parentId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
-      category.description.orNullVarchar, category.newTopicTypes.map(_.toInt).mkString(","),
+      category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
       category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
       siteId, category.id.asAnyRef)
     runUpdateSingleRow(statement, values)
@@ -206,6 +206,10 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
       frozenAt = getOptionalDate(rs, "frozen_at"),
       deletedAt = getOptionalDate(rs, "deleted_at"))
   }
+
+
+  private def topicTypesToVarchar(topicTypes: Seq[PageRole]): AnyRef =
+    topicTypes.map(_.toInt).mkString(",") orIfEmpty NullVarchar
 
 
   private def getNewTopicTypes(rs: js.ResultSet): immutable.Seq[PageRole] = {
