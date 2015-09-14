@@ -25,13 +25,12 @@ import java.{sql => js, util => ju}
 import scala.collection.mutable
 import Rdb._
 import RdbUtil._
-import PageSiteDaoMixin._
+import PostsSiteDaoMixin._
 
 
-/** Loads pages and posts -- oops no posts only. Pages still in RdbSiteDao.
-  * COULD rename to PostsSiteDaoMixin? And keep pages in another dao
+/** Loads and saves posts.
   */
-trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
   override def loadPost(uniquePostId: UniquePostId): Option[Post] =
@@ -574,7 +573,7 @@ trait PageSiteDaoMixin extends SiteDbDao with SiteTransaction {
 }
 
 
-object PageSiteDaoMixin {
+object PostsSiteDaoMixin {
 
   private val VoteValueLike = 41
   private val VoteValueWrong = 42

@@ -43,7 +43,7 @@ class RdbSiteDao(
   val siteId: SiteId,
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
-  with PageSiteDaoMixin
+  with PostsSiteDaoMixin
   with CategoriesSiteDaoMixin
   with FullTextSearchSiteDaoMixin
   with UserSiteDaoMixin

@@ -32,7 +32,7 @@ import scala.collection.mutable.StringBuilder
 import Rdb._
 import RdbUtil._
 import NotificationsSiteDaoMixin.flagToEmailStatus
-import PageSiteDaoMixin.fromActionTypeInt
+import PostsSiteDaoMixin.fromActionTypeInt
 
 
 object RdbSystemDao {
