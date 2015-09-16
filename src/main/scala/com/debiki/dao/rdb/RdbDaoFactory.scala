@@ -61,7 +61,9 @@ class RdbDaoFactory(
 
 
   override def newSystemTransaction(readOnly: Boolean): SystemTransaction = {
-    ???
+    val dao = new RdbSystemDao(this)
+    dao.createTheOneAndOnlyConnection(readOnly = readOnly)
+    dao
   }
 
 

@@ -222,6 +222,7 @@ object RdbUtil {
 
 
   val _PageMetaSelectListItems = i"""
+      |g.version,
       |g.CREATED_AT,
       |g.UPDATED_AT,
       |g.PUBLISHED_AT,
@@ -269,6 +270,7 @@ object RdbUtil {
     PageMeta(
       pageId = if (pageId ne null) pageId else resultSet.getString("PAGE_ID"),
       pageRole = PageRole.fromInt(resultSet.getInt("PAGE_ROLE")) getOrElse PageRole.Discussion,
+      version = resultSet.getInt("version"),
       categoryId = getOptionalIntNoneNot0(resultSet, "category_id"),
       embeddingPageUrl = Option(resultSet.getString("EMBEDDING_PAGE_URL")),
       createdAt = createdAt,

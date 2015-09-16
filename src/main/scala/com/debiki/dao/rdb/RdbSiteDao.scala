@@ -43,6 +43,7 @@ class RdbSiteDao(
   val siteId: SiteId,
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
+  with PagesSiteDaoMixin
   with PostsSiteDaoMixin
   with CategoriesSiteDaoMixin
   with FullTextSearchSiteDaoMixin
@@ -66,7 +67,7 @@ class RdbSiteDao(
   @deprecated("use systemDao instead", "now")
   def systemDaoSpi = daoFactory.systemDbDao // why this weird name?
 
-  lazy val systemDao: RdbSystemDao = {
+  lazy val rdbSystemDao: RdbSystemDao = {
     val transaction = new RdbSystemDao(daoFactory)
     transaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
     transaction
@@ -82,7 +83,7 @@ class RdbSiteDao(
 
   def commonMarkRenderer: CommonMarkRenderer = daoFactory.commonMarkRenderer
 
-  lazy val currentTime: ju.Date = systemDao.currentTime
+  lazy val currentTime: ju.Date = rdbSystemDao.currentTime
 
 
 
@@ -359,9 +360,15 @@ class RdbSiteDao(
   }
 
 
-  def updatePageMeta(meta: PageMeta, old: PageMeta) {
+  def updatePageMeta(meta: PageMeta, oldMeta: PageMeta, markSectionPageStale: Boolean) {
     transactionCheckQuota {
-      _updatePageMeta(meta, anyOld = Some(old))(_)
+      if (markSectionPageStale) {
+        oldMeta.categoryId.foreach(markSectionPageContentHtmlAsStale)
+        if (meta.categoryId != oldMeta.categoryId) {
+          meta.categoryId.foreach(markSectionPageContentHtmlAsStale)
+        }
+      }
+      _updatePageMeta(meta, anyOld = Some(oldMeta))(_)
     }
   }
 
@@ -369,6 +376,7 @@ class RdbSiteDao(
   private def _updatePageMeta(newMeta: PageMeta, anyOld: Option[PageMeta])
         (implicit connection: js.Connection) {
     val values = List(
+      newMeta.version.asAnyRef,
       newMeta.pageRole.toInt.asAnyRef,
       newMeta.categoryId.orNullInt,
       newMeta.embeddingPageUrl.orNullVarchar,
@@ -402,6 +410,7 @@ class RdbSiteDao(
       newMeta.pageId)
     val sql = s"""
       update DW1_PAGES set
+        version = ?,
         PAGE_ROLE = ?,
         category_id = ?,
         EMBEDDING_PAGE_URL = ?,
@@ -552,7 +561,7 @@ class RdbSiteDao(
       }
 
     val newHost = SiteHost(hostname, SiteHost.RoleCanonical)
-    systemDao.insertSiteHost(newSite.id, newHost)
+    rdbSystemDao.insertSiteHost(newSite.id, newHost)
 
     createSystemUser(newSite.id)
     createUnknownUser(newSite.id)
@@ -647,7 +656,7 @@ class RdbSiteDao(
 
   def addSiteHost(host: SiteHost) = {
     // SHOULD hard code max num hosts, e.g. 10.
-    systemDao.insertSiteHost(siteId, host)
+    rdbSystemDao.insertSiteHost(siteId, host)
   }
 
 
@@ -1052,7 +1061,7 @@ class RdbSiteDao(
   }
 
 
-  def insertPageMeta(pageMeta: PageMeta) {
+  def insertPageMetaMarkSectionPageStale(pageMeta: PageMeta) {
     require(pageMeta.createdAt == pageMeta.updatedAt, "DwE2EGPF8")
     pageMeta.publishedAt.foreach(publDati =>
       require(pageMeta.createdAt.getTime <= publDati.getTime, "DwE6GKPE3"))
@@ -1070,16 +1079,16 @@ class RdbSiteDao(
 
     val sql = """
       insert into DW1_PAGES (
-         SITE_ID, PAGE_ID, PAGE_ROLE, category_id, EMBEDDING_PAGE_URL,
+         SITE_ID, PAGE_ID, version, PAGE_ROLE, category_id, EMBEDDING_PAGE_URL,
          CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID,
          PLANNED_AT, PIN_ORDER, PIN_WHERE)
       values (
-         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?,
          ?, ?, ?)"""
 
     val values = List[AnyRef](
-      siteId, pageMeta.pageId,
+      siteId, pageMeta.pageId, pageMeta.version.asAnyRef,
       pageMeta.pageRole.toInt.asAnyRef, pageMeta.categoryId.orNullInt,
       pageMeta.embeddingPageUrl.orNullVarchar,
       d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
@@ -1091,6 +1100,8 @@ class RdbSiteDao(
 
     dieIf(numNewRows == 0, "DwE4GKPE21")
     dieIf(numNewRows > 1, "DwE45UL8")
+
+    pageMeta.categoryId.foreach(markSectionPageContentHtmlAsStale)
   }
 
 

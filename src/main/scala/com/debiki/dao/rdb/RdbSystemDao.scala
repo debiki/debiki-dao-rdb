@@ -18,17 +18,13 @@
 package com.debiki.dao.rdb
 
 import com.debiki.core._
-import com.debiki.core.PagePath._
-import com.debiki.core.DbDao._
-import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.Prelude._
-import _root_.scala.xml.{NodeSeq, Text}
-import _root_.java.{util => ju, io => jio}
+import _root_.java.{util => ju}
 import java.{sql => js}
 import org.flywaydb.core.Flyway
 import scala.{collection => col}
 import scala.collection.{mutable => mut, immutable}
-import scala.collection.mutable.StringBuilder
+import scala.collection.mutable.{ArrayBuffer, StringBuilder}
 import Rdb._
 import RdbUtil._
 import NotificationsSiteDaoMixin.flagToEmailStatus
@@ -164,8 +160,11 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   def secretSalt(): String = unimplemented
 
   /** Creates a site specific dao. */
-  def newSiteDao(siteId: SiteId): RdbSiteDao =
+  def newSiteDao(siteId: SiteId): RdbSiteDao = {
+    // The site dao should use the same transaction connection, if we have any;
+    dieIf(_theOneAndOnlyConnection ne null, "DwE6KEG3")
     daoFactory.newSiteDbDao(siteId)
+  }
 
 
   lazy val currentTime: ju.Date = {
@@ -520,6 +519,76 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
+  override def isCachedContentHtmlStale(sitePageId: SitePageId): Boolean = {
+    val query = s"""
+      select p.version current_version, h.page_version cached_version
+      from dw1_pages p left join dw2_page_html h
+          on p.site_id = h.site_id and p.page_id = h.page_id
+      where p.site_id = ?
+        and p.page_id = ?
+      """
+    runQuery(query, List(sitePageId.siteId, sitePageId.pageId.asAnyRef), rs => {
+      if (!rs.next())
+        return true
+
+      val currentVersion = rs.getInt("current_version")
+      val cachedVersion = rs.getInt("cached_version")
+      cachedVersion != currentVersion
+    })
+  }
+
+
+  override def loadPageIdsToRerender(limit: Int): Seq[PageIdToRerender] = {
+    // In the distant future, will need to optimize the queries here,
+    // e.g. add a pages-to-rerender queue table. Or just indexes somehow.
+    val results = ArrayBuffer[PageIdToRerender]()
+
+    // First find pages for which there is on cached content html.
+    // But not very new pages (more recent than a few minutes) because they'll
+    // most likely be rendered by a GET request handling thread any time soon, when
+    // they're asked for, for the first time. See debiki.dao.RenderedPageHtmlDao [5KWC58].
+    val neverRenderedQuery = s"""
+      select p.site_id, p.page_id, p.version current_version, h.page_version cached_version
+      from dw1_pages p left join dw2_page_html h
+          on p.site_id = h.site_id and p.page_id = h.page_id
+      where h.page_id is null
+      and p.created_at < now_utc() - interval '2' minute
+      limit $limit
+      """
+    runQuery(neverRenderedQuery, Nil, rs => {
+      while (rs.next()) {
+        results.append(getPageIdToRerender(rs))
+      }
+    })
+
+    // Then pages for which there is cached content html, but it's stale.
+    if (results.length < limit) {
+      val outOfDateQuery = s"""
+        select p.site_id, p.page_id, p.version current_version, h.page_version cached_version
+        from dw1_pages p inner join dw2_page_html h
+            on p.site_id = h.site_id and p.page_id = h.page_id and p.version > h.page_version
+        limit $limit
+        """
+      runQuery(outOfDateQuery, Nil, rs => {
+        while (rs.next()) {
+          results.append(getPageIdToRerender(rs))
+        }
+      })
+    }
+
+    results.to[Seq]
+  }
+
+
+  private def getPageIdToRerender(rs: js.ResultSet): PageIdToRerender = {
+    PageIdToRerender(
+      siteId = rs.getString("site_id"),
+      pageId = rs.getString("page_id"),
+      currentVersion = rs.getInt("current_version"),
+      cachedVersion = getOptionalIntNoneNot0(rs, "cached_version"))
+  }
+
+
   /** Finds all evolution scripts below src/main/resources/db/migration and applies them.
     */
   def applyEvolutions() {
@@ -561,6 +630,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_PATHS
       delete from DW1_PAGE_PATHS
       delete from DW1_PAGES
+      delete from DW2_PAGE_HTML
       delete from DW2_POSTS
       delete from DW1_GUEST_PREFS
       delete from DW1_GUESTS

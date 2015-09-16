@@ -151,7 +151,7 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  override def insertCategory(category: Category) {
+  override def insertCategoryMarkSectionPageStale(category: Category) {
     val statement = """
       insert into dw2_categories (
         site_id, id, page_id, parent_id,
@@ -169,10 +169,11 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
       currentTime, currentTime)
     runUpdateSingleRow(statement, values)
+    markSectionPageContentHtmlAsStale(category.id)
   }
 
 
-  override def updateCategory(category: Category) {
+  override def updateCategoryMarkSectionPageStale(category: Category) {
     val statement = """
       update dw2_categories set
         page_id = ?, parent_id = ?,
@@ -187,6 +188,8 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
       category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
       siteId, category.id.asAnyRef)
     runUpdateSingleRow(statement, values)
+    // In the future: mark any old section page html as stale too, if moving to new section.
+    markSectionPageContentHtmlAsStale(category.id)
   }
 
 
