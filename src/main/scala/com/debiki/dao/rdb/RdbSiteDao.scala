@@ -660,6 +660,29 @@ class RdbSiteDao(
   }
 
 
+  override def loadSiteVersion(): Int = {
+    val query = s"""
+      select version from dw1_tenants where id = ?
+      """
+    runQuery(query, List(siteId), rs => {
+      if (!rs.next())
+        die("DwE4KGY7")
+
+      rs.getInt("version")
+    })
+  }
+
+
+  def bumpSiteVersion() {
+    val sql = """
+      update dw1_tenants set version = version + 1 where id = ?
+      """
+    transactionAllowOverQuota { implicit connection =>
+      db.update(sql, List(siteId))
+    }
+  }
+
+
   def checkPagePath(pathToCheck: PagePath): Option[PagePath] = {
     _findCorrectPagePath(pathToCheck)
   }

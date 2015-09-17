@@ -17,12 +17,11 @@ create table dw2_page_html(
   page_id varchar not null,
   site_version int,
   page_version int not null,
-  -- In the future: changed if the source code that generates the html is changed
-  -- — then all cached html becomes out of date.
-  source_code_version varchar,
-  -- Updated_at lets us find out how long it takes to rerender.
+  -- In the future: changed if the application starts generating html
+  -- in a different way — then all cached html becomes out of date.
+  app_version varchar,
   updated_at timestamp not null,
-  cached_content_html text not null,
+  html text not null,
 
   constraint dw2_pagehtml__pageid primary key (site_id, page_id),
   constraint dw2_pagehtml__r__pages foreign key (site_id, page_id)

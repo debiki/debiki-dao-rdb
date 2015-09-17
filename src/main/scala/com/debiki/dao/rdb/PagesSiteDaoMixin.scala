@@ -34,7 +34,7 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
-  def markSectionPageContentHtmlAsStale(categoryId: CategoryId): Unit = {
+  def markSectionPageContentHtmlAsStale(categoryId: CategoryId) {
     val statement = s"""
       update dw2_page_html h
         set page_version = -1, updated_at = now_utc()
@@ -47,9 +47,9 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  override def loadCachedPageContentHtml(pageId: PageId): Option[(String, PageVersion)] = {
+  override def loadCachedPageContentHtml(pageId: PageId): Option[(String, CachedPageVersion)] = {
     val query = s"""
-      select page_version, cached_content_html
+      select site_version, page_version, app_version, html
       from dw2_page_html
       where site_id = ? and page_id = ?
       """
@@ -57,15 +57,18 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
       if (!rs.next())
         return None
 
-      val html = rs.getString("cached_content_html")
-      val version = rs.getInt("page_version")
+      val html = rs.getString("html")
+      val version = CachedPageVersion(
+        siteVersion = rs.getInt("site_version"),
+        pageVersion = rs.getInt("page_version"),
+        appVersion = rs.getString("app_version"))
       Some(html, version)
     })
   }
 
 
   override def saveCachedPageContentHtmlPerhapsBreakTransaction(
-        pageId: PageId, version: PageVersion, html: String): Boolean = {
+        pageId: PageId, version: CachedPageVersion, html: String): Boolean = {
     // 1) BUG Race condition: If the page was just deleted, something else might just
     // have removed the cached version. And here we might reinsert an old version again.
     // Rather harmless though — other parts of the system will ignore the page if it
@@ -73,24 +76,37 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
     // 2) Do an upsert. In 9.4 there's built in support for this, but for now:
     val updateStatement = s"""
       update dw2_page_html
-        set page_version = ?, updated_at = now_utc(), cached_content_html = ?
+        set site_version = ?,
+            page_version = ?,
+            app_version = ?,
+            updated_at = now_utc(),
+            html = ?
         where site_id = ?
           and page_id = ?
           -- Don't overwrite a newer version with an older version. But do overwrite
           -- if the version is the same, because we might be rerendering because
-          -- the html generation code has been changed.
+          -- the app version (i.e. the html generation code) has been changed.
+          and site_version <= ?
           and page_version <= ?
       """
     val rowFound = runUpdateSingleRow(updateStatement, List(
-      version.asAnyRef, html, siteId, pageId, version.asAnyRef))
+      version.siteVersion.asAnyRef, version.pageVersion.asAnyRef,
+      version.appVersion, html, siteId, pageId,
+      version.siteVersion.asAnyRef, version.pageVersion.asAnyRef))
 
     if (!rowFound) {
       val insertStatement = s"""
-        insert into dw2_page_html (site_id, page_id, page_version, updated_at, cached_content_html)
-        values (?, ?, ?, now_utc(), ?)
+        insert into dw2_page_html (
+          site_id, page_id,
+          site_version, page_version, app_version,
+          updated_at, html)
+        values (?, ?, ?, ?, ?, now_utc(), ?)
         """
       try {
-        runUpdateSingleRow(insertStatement, List(siteId, pageId, version.asAnyRef, html))
+        runUpdateSingleRow(insertStatement, List(
+          siteId, pageId,
+          version.siteVersion.asAnyRef, version.pageVersion.asAnyRef, version.appVersion,
+          html))
       }
       catch {
         case exception: js.SQLException if isUniqueConstrViolation(exception) =>
