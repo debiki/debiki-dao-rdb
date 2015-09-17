@@ -49,7 +49,7 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   override def loadCachedPageContentHtml(pageId: PageId): Option[(String, CachedPageVersion)] = {
     val query = s"""
-      select site_version, page_version, app_version, html
+      select site_version, page_version, app_version, data_hash, html
       from dw2_page_html
       where site_id = ? and page_id = ?
       """
@@ -58,10 +58,9 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
         return None
 
       val html = rs.getString("html")
-      val version = CachedPageVersion(
-        siteVersion = rs.getInt("site_version"),
-        pageVersion = rs.getInt("page_version"),
-        appVersion = rs.getString("app_version"))
+      val version = getCachedPageVersion(rs)
+      dieIf(rs.next(), "DwE5KGF2")
+
       Some(html, version)
     })
   }
@@ -79,6 +78,7 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
         set site_version = ?,
             page_version = ?,
             app_version = ?,
+            data_hash = ?,
             updated_at = now_utc(),
             html = ?
         where site_id = ?
@@ -91,7 +91,7 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
       """
     val rowFound = runUpdateSingleRow(updateStatement, List(
       version.siteVersion.asAnyRef, version.pageVersion.asAnyRef,
-      version.appVersion, html, siteId, pageId,
+      version.appVersion, version.dataHash, html, siteId, pageId,
       version.siteVersion.asAnyRef, version.pageVersion.asAnyRef))
 
     if (!rowFound) {
@@ -99,14 +99,14 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
         insert into dw2_page_html (
           site_id, page_id,
           site_version, page_version, app_version,
-          updated_at, html)
-        values (?, ?, ?, ?, ?, now_utc(), ?)
+          data_hash, updated_at, html)
+        values (?, ?, ?, ?, ?, ?, now_utc(), ?)
         """
       try {
         runUpdateSingleRow(insertStatement, List(
           siteId, pageId,
           version.siteVersion.asAnyRef, version.pageVersion.asAnyRef, version.appVersion,
-          html))
+          version.dataHash, html))
       }
       catch {
         case exception: js.SQLException if isUniqueConstrViolation(exception) =>
@@ -115,7 +115,9 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
           return false
       }
     }
+
     true
   }
 
 }
+

@@ -15,11 +15,14 @@ alter table dw1_pages add constraint dw1_pages_version__c_gz check (version >= 1
 create table dw2_page_html(
   site_id varchar not null,
   page_id varchar not null,
-  site_version int,
+  site_version int not null,
   page_version int not null,
   -- In the future: changed if the application starts generating html
   -- in a different way — then all cached html becomes out of date.
-  app_version varchar,
+  app_version varchar not null,
+  -- A hash of the data input to the render algorithm. If the data hasn't
+  -- changed, there's no need to re-render, unless the app version is different.
+  data_hash varchar not null,
   updated_at timestamp not null,
   html text not null,
 

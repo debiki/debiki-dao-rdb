@@ -519,21 +519,32 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  override def isCachedContentHtmlStale(sitePageId: SitePageId): Boolean = {
+  override def loadCachedPageVersion(sitePageId: SitePageId)
+        : Option[(CachedPageVersion, SitePageVersion)] = {
     val query = s"""
-      select p.version current_version, h.page_version cached_version
+      select
+          (select version from dw1_tenants where id = ?) current_site_version,
+          p.version current_page_version,
+          h.site_version,
+          h.page_version,
+          h.app_version,
+          h.data_hash
       from dw1_pages p left join dw2_page_html h
           on p.site_id = h.site_id and p.page_id = h.page_id
       where p.site_id = ?
         and p.page_id = ?
       """
-    runQuery(query, List(sitePageId.siteId, sitePageId.pageId.asAnyRef), rs => {
+    runQuery(query, List(sitePageId.siteId, sitePageId.siteId, sitePageId.pageId.asAnyRef), rs => {
       if (!rs.next())
-        return true
+        return None
 
-      val currentVersion = rs.getInt("current_version")
-      val cachedVersion = rs.getInt("cached_version")
-      cachedVersion != currentVersion
+      val currentSitePageVersion = SitePageVersion(
+        rs.getInt("current_site_version"),
+        rs.getInt("current_page_version"))
+      val cachedPageVersion = getCachedPageVersion(rs)
+      dieIf(rs.next(), "DwE6LJK3")
+
+      Some(cachedPageVersion, currentSitePageVersion)
     })
   }
 
@@ -562,6 +573,12 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     })
 
     // Then pages for which there is cached content html, but it's stale.
+    // Skip pages that should be rerendered because of changed site settings
+    // (i.e. site_version differs) or different app_version, because otherwise
+    // we'd likely constantly be rerendering exactly all pages and we'd never
+    // get done. — Only rerender a page with different site_version or app_version
+    // if someone actually views it. This is done by RenderedPageHtmlDao sending
+    // a message to the RenderContentService, if the page gets accessed. [4KGJW2]
     if (results.length < limit) {
       val outOfDateQuery = s"""
         select p.site_id, p.page_id, p.version current_version, h.page_version cached_version
