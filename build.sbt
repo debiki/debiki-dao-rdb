@@ -4,7 +4,7 @@ organization := "com.debiki"
 
 version := "0.0.2-SNAPSHOT"
 
-scalaVersion := "2.11.1"
+scalaVersion := "2.11.7"
 
 // You can download JDBC for Oracle 11.2.0.1 here:
 // http://www.oracle.com/technetwork/database/enterprise-edition/
