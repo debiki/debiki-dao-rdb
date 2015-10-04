@@ -536,7 +536,8 @@ class RdbSiteDao(
 
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
         creatorIp: String, creatorEmailAddress: String,
-        pricePlan: Option[String], quotaLimitMegabytes: Option[Int]): Site = {
+        pricePlan: Option[String], quotaLimitMegabytes: Option[Int],
+        isTestSiteOkayToDelete: Boolean): Site = {
     require(!pricePlan.exists(_.trim.isEmpty), "DwE4KEW23")
 
     // Unless apparently testing from localhost, don't allow someone to create
@@ -548,7 +549,10 @@ class RdbSiteDao(
         throw TooManySitesCreatedException(creatorIp)
     }
 
-    val newSiteNoId = Site(id = "?", name = name, creatorIp = creatorIp,
+    val id =
+      if (isTestSiteOkayToDelete) "test__" + nextRandomString().take(5)
+      else "?"
+    val newSiteNoId = Site(id, name = name, creatorIp = creatorIp,
       creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
       hosts = Nil)
 
@@ -639,9 +643,12 @@ class RdbSiteDao(
 
   private def insertSite(tenantNoId: Site, pricePlan: Option[String],
         quotaLimitMegabytes: Option[Int]): Site = {
-    assErrIf(tenantNoId.id != "?", "DwE91KB2")
-    val tenant = tenantNoId.copy(
-      id = db.nextSeqNo("DW1_TENANTS_ID")(theOneAndOnlyConnection).toString)
+    val newId =
+      if (tenantNoId.id != "?") tenantNoId.id
+      else {
+        db.nextSeqNo("DW1_TENANTS_ID")(theOneAndOnlyConnection).toString
+      }
+    val tenant = tenantNoId.copy(id = newId)
     runUpdateSingleRow("""
         insert into DW1_TENANTS (
           ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS, PRICE_PLAN,
