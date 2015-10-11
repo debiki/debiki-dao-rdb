@@ -564,6 +564,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           on p.site_id = h.site_id and p.page_id = h.page_id
       where h.page_id is null
       and p.created_at < now_utc() - interval '2' minute
+      and p.page_role != ${PageRole.SpecialContent.toInt}
       limit $limit
       """
     runQuery(neverRenderedQuery, Nil, rs => {
