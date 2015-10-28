@@ -45,7 +45,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
 
 
   def insertAuditLogEntry(entry: AuditLogEntry) {
-    require(entry.id >= 1)
+    require(entry.id >= 1, "DwE0GMF3")
     require(entry.siteId == siteId, "DwE1FWU6")
     val statement = s"""
       insert into dw2_audit_log(
@@ -68,6 +68,9 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         post_nr,
         post_action_type,
         post_action_sub_id,
+        upload_hash_path_suffix,
+        upload_file_name,
+        size_bytes,
         target_page_id,
         target_post_id,
         target_post_nr,
@@ -76,7 +79,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       values (
         ?, ?, ?, ? at time zone 'UTC',
         ?, ?, ?::inet,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
     val values = List[AnyRef](
@@ -99,6 +102,9 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       entry.postNr.orNullInt,
       NullInt,
       NullInt,
+      entry.uploadHashPathSuffix.orNullVarchar,
+      entry.uploadFileName.orNullVarchar,
+      entry.sizeBytes.orNullInt,
       entry.targetPageId.orNullVarchar,
       entry.targetUniquePostId.orNullInt,
       entry.targetPostNr.orNullInt,
@@ -130,6 +136,9 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         post_nr,
         post_action_type,
         post_action_sub_id,
+        upload_hash_path_suffix,
+        upload_file_name,
+        size_bytes,
         target_page_id,
         target_post_id,
         target_post_nr,
@@ -165,6 +174,9 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       pageRole = getOptionalIntNoneNot0(rs, "page_role").flatMap(PageRole.fromInt),
       uniquePostId = getOptionalIntNoneNot0(rs, "post_id"),
       postNr = getOptionalIntNoneNot0(rs, "post_nr"),
+      uploadHashPathSuffix = Option(rs.getString("upload_hash_path_suffix")),
+      uploadFileName = Option(rs.getString("upload_file_name")),
+      sizeBytes = getOptionalIntNoneNot0(rs, "size_bytes"),
       targetUniquePostId = getOptionalIntNoneNot0(rs, "target_post_id"),
       targetPageId = Option(rs.getString("target_page_id")),
       targetPostNr = getOptionalIntNoneNot0(rs, "target_post_nr"),
@@ -185,6 +197,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     case AuditLogEntryType.NewPost => "NwPs"
     case AuditLogEntryType.EditPost => "EdPs"
     case AuditLogEntryType.ChangePostType => "ChPT"
+    case AuditLogEntryType.UploadFile => "UpFl"
   }
 
   private def stringToEntryTypeTo(entryType: String): AuditLogEntryType = entryType match {
@@ -193,6 +206,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     case  "NwPs" => AuditLogEntryType.NewPost
     case  "EdPs" => AuditLogEntryType.EditPost
     case  "ChPT" => AuditLogEntryType.ChangePostType
+    case  "UpFl" => AuditLogEntryType.UploadFile
   }
 
 }

@@ -45,6 +45,7 @@ class RdbSiteDao(
   extends SiteDbDao
   with PagesSiteDaoMixin
   with PostsSiteDaoMixin
+  with UploadsSiteDaoMixin
   with CategoriesSiteDaoMixin
   with FullTextSearchSiteDaoMixin
   with UserSiteDaoMixin
