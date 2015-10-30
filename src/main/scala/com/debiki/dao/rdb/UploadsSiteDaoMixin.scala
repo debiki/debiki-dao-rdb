@@ -31,7 +31,8 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 
-  def insertUploadedFileMeta(uploadRef: UploadRef, sizeBytes: Int, dimensions: Option[(Int, Int)]) {
+  def insertUploadedFileMeta(uploadRef: UploadRef, sizeBytes: Int, mimeType: String,
+        dimensions: Option[(Int, Int)]) {
     // COULD use `insert ... on conflict do nothing` here once have upgraded to Postgres 9.5.
     val (width, height) = dimensions match {
       case Some((w, h)) => (w.asAnyRef, h.asAnyRef)
@@ -40,10 +41,10 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     val statement = """
       insert into dw2_uploads(
         base_url, hash_path_suffix, original_hash_path_suffix,
-        num_references, size_bytes, width, height, created_at, updated_at)
+        num_references, size_bytes, mime_type, width, height, uploaded_at, updated_at)
       select
         ?, ?, ?,
-        ?, ?, ?, ?, now_utc(), now_utc()
+        ?, ?, ?, ?, ?, now_utc(), now_utc()
       -- For now, until Postgres 9.5 which will support `insert ... on conflict do nothing`:
       -- (Race condition: another session might insert just after the select – or does
       -- the serializable isolation level prevent that?)
@@ -53,7 +54,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       """
     val values = List(
       uploadRef.baseUrl, uploadRef.hashPathSuffix, uploadRef.hashPathSuffix,
-      0.asAnyRef, sizeBytes.asAnyRef, width, height,
+      0.asAnyRef, sizeBytes.asAnyRef, mimeType, width, height,
       uploadRef.baseUrl, uploadRef.hashPathSuffix)
 
     // No point in handling unique errors — the transaction would be broken even if we detect them.

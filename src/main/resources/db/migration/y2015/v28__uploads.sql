@@ -8,9 +8,10 @@ create table dw2_uploads(
   hash_path_suffix varchar not null,
   original_hash_path_suffix varchar not null,
   size_bytes int not null,
+  mime_type varchar not null,
   width int,
   height int,
-  created_at timestamp not null,
+  uploaded_at timestamp not null,
   updated_at timestamp not null,
   num_references int not null,
   verified_present_at timestamp,
@@ -19,9 +20,13 @@ create table dw2_uploads(
   constraint dw2_uploads_baseurl__c check (base_url like '%/'),
   constraint dw2_uploads_hashpathsuffix__c check (
     hash_path_suffix ~ '^[[:alnum:]]/[[:alnum:]]/[[:alnum:]\.]+$'),
+  constraint dw2_uploads_baseurl__c_len check (length(base_url) between 1 and 100),
+  constraint dw2_uploads_hashpathsuffix__c_len check (length(hash_path_suffix) between 1 and 100),
+  constraint dw2_uploads_orighashpathsuffix__c_len check (length(original_hash_path_suffix) between 1 and 100),
+  constraint dw2_uploads_mimetype__c_len check (length(mime_type) between 1 and 100),
   constraint dw2_uploads__c_numbers check (num_references >= 0 and size_bytes > 0 and width > 0 and height > 0),
   constraint dw2_uploads__c_dates check (
-    verified_present_at > created_at and verified_absent_at > created_at)
+    verified_present_at > uploaded_at and verified_absent_at > uploaded_at)
 );
 
 create index dw2_uploads_hashpathsuffix__i on dw2_uploads(hash_path_suffix);
@@ -42,7 +47,9 @@ create table dw2_upload_refs(
   constraint dw2_uploadrefs__r__users foreign key (site_id, added_by_id)
     references dw1_users(site_id, user_id), -- ix: dw2_uploadrefs_addedby__i
   constraint dw2_uploadrefs_hashpathsuffix__c check (
-    hash_path_suffix ~ '^[[:alnum:]]/[[:alnum:]]/[[:alnum:]\.]+$')
+    hash_path_suffix ~ '^[[:alnum:]]/[[:alnum:]]/[[:alnum:]\.]+$'),
+  constraint dw2_uploadrefs_baseurl__c_len check (length(base_url) between 1 and 100),
+  constraint dw2_uploadrefs_hashpathsuffix__c_len check (length(hash_path_suffix) between 1 and 100)
 );
 
 create index dw2_uploadrefs_baseurl__i on dw2_upload_refs(base_url);
