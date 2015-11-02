@@ -123,12 +123,12 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val unapprovedPosts = loadPostsToReviewImpl("""
       deleted_status = 0 and
       num_pending_flags = 0 and
-      (approved_version is null or approved_version < current_version)
+      (approved_rev_nr is null or approved_rev_nr < current_rev_nr)
       """)
     val postsWithSuggestions = loadPostsToReviewImpl("""
       deleted_status = 0 and
       num_pending_flags = 0 and
-      approved_version = current_version and
+      approved_rev_nr = current_rev_nr and
       num_edit_suggestions > 0
       """)
     (flaggedPosts ++ unapprovedPosts ++ postsWithSuggestions).to[immutable.Seq]
@@ -181,14 +181,14 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
         last_approved_edit_by_id,
         num_distinct_editors,
 
-        safe_version,
+        safe_rev_nr,
         approved_source,
         approved_html_sanitized,
         approved_at,
         approved_by_id,
-        approved_version,
+        approved_rev_nr,
         current_source_patch,
-        current_version,
+        current_rev_nr,
 
         collapsed_status,
         collapsed_at,
@@ -240,14 +240,14 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
       post.numDistinctEditors.asAnyRef,
 
-      post.safeVersion.orNullInt,
+      post.safeRevision.orNullInt,
       post.approvedSource.orNullVarchar,
       post.approvedHtmlSanitized.orNullVarchar,
       o2ts(post.approvedAt),
       post.approvedById.orNullInt,
-      post.approvedVersion.orNullInt,
+      post.approvedRevision.orNullInt,
       post.currentSourcePatch.orNullVarchar,
-      post.currentVersion.asAnyRef,
+      post.currentRevision.asAnyRef,
 
       post.collapsedStatus.underlying.asAnyRef,
       o2ts(post.collapsedAt),
@@ -296,14 +296,15 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
         last_approved_edit_by_id = ?,
         num_distinct_editors = ?,
 
-        safe_version = ?,
+        safe_rev_nr = ?,
         approved_source = ?,
         approved_html_sanitized = ?,
         approved_at = ?,
         approved_by_id = ?,
-        approved_version = ?,
+        approved_rev_nr = ?,
         current_source_patch = ?,
-        current_version = ?,
+        current_rev_nr = ?,
+        previous_rev_nr = ?,
 
         collapsed_status = ?,
         collapsed_at = ?,
@@ -342,14 +343,15 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
       post.numDistinctEditors.asAnyRef,
 
-      post.safeVersion.orNullInt,
+      post.safeRevision.orNullInt,
       post.approvedSource.orNullVarchar,
       post.approvedHtmlSanitized.orNullVarchar,
       o2ts(post.approvedAt),
       post.approvedById.orNullInt,
-      post.approvedVersion.orNullInt,
+      post.approvedRevision.orNullInt,
       post.currentSourcePatch.orNullVarchar,
-      post.currentVersion.asAnyRef,
+      post.currentRevision.asAnyRef,
+      post.previousRevisionNr.orNullInt,
 
       post.collapsedStatus.underlying.asAnyRef,
       o2ts(post.collapsedAt),
@@ -401,14 +403,15 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       lastApprovedEditAt = getOptionalDate(rs, "LAST_APPROVED_EDIT_AT"),
       lastApprovedEditById = getResultSetIntOption(rs, "LAST_APPROVED_EDIT_BY_ID"),
       numDistinctEditors = rs.getInt("NUM_DISTINCT_EDITORS"),
-      safeVersion = getResultSetIntOption(rs, "SAFE_VERSION"),
+      safeRevision = getResultSetIntOption(rs, "safe_rev_nr"),
       approvedSource = Option(rs.getString("APPROVED_SOURCE")),
       approvedHtmlSanitized = Option(rs.getString("APPROVED_HTML_SANITIZED")),
       approvedAt = getOptionalDate(rs, "APPROVED_AT"),
       approvedById = getResultSetIntOption(rs, "APPROVED_BY_ID"),
-      approvedVersion = getResultSetIntOption(rs, "APPROVED_VERSION"),
+      approvedRevision = getResultSetIntOption(rs, "approved_rev_nr"),
       currentSourcePatch = Option(rs.getString("CURRENT_SOURCE_PATCH")),
-      currentVersion = rs.getInt("CURRENT_VERSION"),
+      currentRevision = rs.getInt("current_rev_nr"),
+      previousRevisionNr = getOptionalIntNoneNot0(rs, "previous_rev_nr"),
       collapsedStatus = new CollapsedStatus(rs.getInt("COLLAPSED_STATUS")),
       collapsedAt = getOptionalDate(rs, "COLLAPSED_AT"),
       collapsedById = getResultSetIntOption(rs, "COLLAPSED_BY_ID"),
@@ -568,6 +571,102 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
           throw DbDao.DuplicateVoteException
       }
     dieIf(numInserted != 1, "DwE9FKw2", s"Error inserting action: numInserted = $numInserted")
+  }
+
+
+  def loadLastPostRevision(postId: UniquePostId) =
+    loadPostRevisionImpl(postId, PostRevision.LastRevisionMagicNr)
+
+
+  def loadPostRevision(postId: UniquePostId, revisionNr: Int) =
+    loadPostRevisionImpl(postId, revisionNr)
+
+
+  private def loadPostRevisionImpl(postId: UniquePostId, revisionNr: Int): Option[PostRevision] = {
+    var query = s"""
+      select
+        revision_nr, previous_nr, source_patch, full_source, title,
+        composed_at, composed_by_id,
+        approved_at, approved_by_id,
+        hidden_at, hidden_by_id
+      from dw2_post_revisions
+      where site_id = ? and post_id = ? and revision_nr = """
+    var values = List(siteId, postId.asAnyRef)
+
+    if (revisionNr == PostRevision.LastRevisionMagicNr) {
+      query += s"""(
+        select max(revision_nr) from dw2_post_revisions
+        where site_id = ? and post_id = ?
+        )"""
+      values = values ::: List(siteId, postId.asAnyRef)
+    }
+    else {
+      query += "?"
+      values = values ::: List(revisionNr.asAnyRef)
+    }
+
+    runQuery(query, values, rs => {
+      if (!rs.next)
+        return None
+
+      Some(PostRevision(
+        postId = postId,
+        revisionNr = rs.getInt("revision_nr"),
+        previousNr = getOptionalIntNoneNot0(rs, "previous_nr"),
+        sourcePatch = Option(rs.getString("source_patch")),
+        fullSource = Option(rs.getString("full_source")),
+        title = Option(rs.getString("title")),
+        composedAt = getDate(rs, "composed_at"),
+        composedById = rs.getInt("composed_by_id"),
+        approvedAt = getOptionalDate(rs, "approved_at"),
+        approvedById = getOptionalIntNoneNot0(rs, "approved_by_id"),
+        hiddenAt = getOptionalDate(rs, "hidden_at"),
+        hiddenById = getOptionalIntNoneNot0(rs, "hidden_by_id")))
+    })
+  }
+
+
+  def insertPostRevision(revision: PostRevision) {
+    val statement = """
+      insert into dw2_post_revisions(
+        site_id, post_id,
+        revision_nr, previous_nr,
+        source_patch, full_source, title,
+        composed_at, composed_by_id,
+        approved_at, approved_by_id,
+        hidden_at, hidden_by_id)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """
+    val values = List[AnyRef](
+      siteId, revision.postId.asAnyRef,
+      revision.revisionNr.asAnyRef, revision.previousNr.orNullInt,
+      revision.sourcePatch.orNullVarchar, revision.fullSource.orNullVarchar,
+      revision.title.orNullVarchar,
+      revision.composedAt, revision.composedById.asAnyRef,
+      revision.approvedAt.orNullTimestamp, revision.approvedById.orNullInt,
+      revision.hiddenAt.orNullTimestamp, revision.hiddenById.orNullInt)
+    runUpdateExactlyOneRow(statement, values)
+  }
+
+
+  def updatePostRevision(revision: PostRevision) {
+    UNTESTED
+    val statement = """
+      update dw2_post_revisions set
+        source_patch = ?, full_source = ?, title = ?,
+        composed_at = ?, combosed_by_id = ?,
+        approved_at = ?, approved_by_id = ?,
+        hidden_at = ?, hidden_by_id = ?
+      where site_id = ? and post_id = ? and revision_nr = ?
+      """
+    val values = List[AnyRef](
+      revision.sourcePatch.orNullVarchar, revision.fullSource.orNullVarchar,
+      revision.title.orNullVarchar,
+      revision.composedAt, revision.composedById.asAnyRef,
+      revision.approvedAt.orNullTimestamp, revision.approvedById.orNullInt,
+      revision.hiddenAt.orNullTimestamp, revision.hiddenById.orNullInt,
+      siteId, revision.postId.asAnyRef, revision.revisionNr.asAnyRef)
+    runUpdateExactlyOneRow(statement, values)
   }
 
 }

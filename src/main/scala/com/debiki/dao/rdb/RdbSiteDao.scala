@@ -200,6 +200,12 @@ class RdbSiteDao(
   }
 
 
+  def runUpdateExactlyOneRow(statement: String, values: List[AnyRef] = Nil) {
+    val numRowsUpdated = runUpdate(statement, values)
+    dieIf(numRowsUpdated != 1, "DwE8FUM1", o"""This statement modified $numRowsUpdated rows
+        but should have touched exactly one row: $statement""")
+  }
+
   // COULD move to new superclass?
   def queryAtnms[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
     anyOneAndOnlyConnection foreach { connection =>
