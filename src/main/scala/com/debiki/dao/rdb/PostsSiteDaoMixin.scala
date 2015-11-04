@@ -123,12 +123,12 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val unapprovedPosts = loadPostsToReviewImpl("""
       deleted_status = 0 and
       num_pending_flags = 0 and
-      (approved_rev_nr is null or approved_rev_nr < current_rev_nr)
+      (approved_rev_nr is null or approved_rev_nr < curr_rev_nr)
       """)
     val postsWithSuggestions = loadPostsToReviewImpl("""
       deleted_status = 0 and
       num_pending_flags = 0 and
-      approved_rev_nr = current_rev_nr and
+      approved_rev_nr = curr_rev_nr and
       num_edit_suggestions > 0
       """)
     (flaggedPosts ++ unapprovedPosts ++ postsWithSuggestions).to[immutable.Seq]
@@ -175,8 +175,12 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
         created_at,
         created_by_id,
 
-        last_edited_at,
-        last_edited_by_id,
+        curr_rev_started_at,
+        curr_rev_by_id,
+        curr_rev_last_edited_at,
+        curr_rev_source_patch,
+        curr_rev_nr,
+
         last_approved_edit_at,
         last_approved_edit_by_id,
         num_distinct_editors,
@@ -187,8 +191,6 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
         approved_at,
         approved_by_id,
         approved_rev_nr,
-        current_source_patch,
-        current_rev_nr,
 
         collapsed_status,
         collapsed_at,
@@ -222,7 +224,8 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
         ?, ?, ?, ?, ?, ?, ?,
         ?, ?,
         ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
@@ -235,19 +238,26 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       post.siteId, post.uniqueId.asAnyRef, post.pageId, post.id.asAnyRef,
       post.parentId.orNullInt, toDbMultireply(post.multireplyPostIds),
       (post.tyype != PostType.Normal) ? post.tyype.toInt.asAnyRef | NullInt,
-      d2ts(post.createdAt), post.createdById.asAnyRef,
-      o2ts(post.lastEditedAt), post.lastEditedById.orNullInt,
-      o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
+
+      d2ts(post.createdAt),
+      post.createdById.asAnyRef,
+
+      post.currentRevStaredAt,
+      post.currentRevisionById.asAnyRef,
+      post.currentRevLastEditedAt.orNullTimestamp,
+      post.currentSourcePatch.orNullVarchar,
+      post.currentRevisionNr.asAnyRef,
+
+      o2ts(post.lastApprovedEditAt),
+      post.lastApprovedEditById.orNullInt,
       post.numDistinctEditors.asAnyRef,
 
-      post.safeRevision.orNullInt,
+      post.safeRevisionNr.orNullInt,
       post.approvedSource.orNullVarchar,
       post.approvedHtmlSanitized.orNullVarchar,
       o2ts(post.approvedAt),
       post.approvedById.orNullInt,
-      post.approvedRevision.orNullInt,
-      post.currentSourcePatch.orNullVarchar,
-      post.currentRevision.asAnyRef,
+      post.approvedRevisionNr.orNullInt,
 
       post.collapsedStatus.underlying.asAnyRef,
       o2ts(post.collapsedAt),
@@ -288,10 +298,13 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
         multireply = ?,
         type = ?,
 
-        updated_at = now_utc(),
+        curr_rev_started_at = ?,
+        curr_rev_by_id = ?,
+        curr_rev_last_edited_at = ?,
+        curr_rev_source_patch = ?,
+        curr_rev_nr = ?,
+        prev_rev_nr = ?,
 
-        last_edited_at = ?,
-        last_edited_by_id = ?,
         last_approved_edit_at = ?,
         last_approved_edit_by_id = ?,
         num_distinct_editors = ?,
@@ -302,9 +315,6 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
         approved_at = ?,
         approved_by_id = ?,
         approved_rev_nr = ?,
-        current_source_patch = ?,
-        current_rev_nr = ?,
-        previous_rev_nr = ?,
 
         collapsed_status = ?,
         collapsed_at = ?,
@@ -337,21 +347,27 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       where site_id = ? and page_id = ? and post_id = ?"""
 
     val values = List[AnyRef](
-      post.parentId.orNullInt, toDbMultireply(post.multireplyPostIds),
+      post.parentId.orNullInt,
+      toDbMultireply(post.multireplyPostIds),
       (post.tyype != PostType.Normal) ? post.tyype.toInt.asAnyRef | NullInt,
-      o2ts(post.lastEditedAt), post.lastEditedById.orNullInt,
-      o2ts(post.lastApprovedEditAt), post.lastApprovedEditById.orNullInt,
+
+      post.currentRevStaredAt,
+      post.currentRevisionById.asAnyRef,
+      post.currentRevLastEditedAt.orNullTimestamp,
+      post.currentSourcePatch.orNullVarchar,
+      post.currentRevisionNr.asAnyRef,
+      post.previousRevisionNr.orNullInt,
+
+      post.lastApprovedEditAt.orNullTimestamp,
+      post.lastApprovedEditById.orNullInt,
       post.numDistinctEditors.asAnyRef,
 
-      post.safeRevision.orNullInt,
+      post.safeRevisionNr.orNullInt,
       post.approvedSource.orNullVarchar,
       post.approvedHtmlSanitized.orNullVarchar,
       o2ts(post.approvedAt),
       post.approvedById.orNullInt,
-      post.approvedRevision.orNullInt,
-      post.currentSourcePatch.orNullVarchar,
-      post.currentRevision.asAnyRef,
-      post.previousRevisionNr.orNullInt,
+      post.approvedRevisionNr.orNullInt,
 
       post.collapsedStatus.underlying.asAnyRef,
       o2ts(post.collapsedAt),
@@ -398,20 +414,21 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       tyype = PostType.fromInt(rs.getInt("TYPE")).getOrElse(PostType.Normal),
       createdAt = getDate(rs, "CREATED_AT"),
       createdById = rs.getInt("CREATED_BY_ID"),
-      lastEditedAt = getOptionalDate(rs, "LAST_EDITED_AT"),
-      lastEditedById = getResultSetIntOption(rs, "LAST_EDITED_BY_ID"),
+      currentRevStaredAt = getDate(rs, "curr_rev_started_at"),
+      currentRevisionById = rs.getInt("curr_rev_by_id"),
+      currentRevLastEditedAt = getOptionalDate(rs, "curr_rev_last_edited_at"),
+      currentSourcePatch = Option(rs.getString("curr_rev_source_patch")),
+      currentRevisionNr = rs.getInt("curr_rev_nr"),
+      previousRevisionNr = getOptionalIntNoneNot0(rs, "prev_rev_nr"),
       lastApprovedEditAt = getOptionalDate(rs, "LAST_APPROVED_EDIT_AT"),
       lastApprovedEditById = getResultSetIntOption(rs, "LAST_APPROVED_EDIT_BY_ID"),
       numDistinctEditors = rs.getInt("NUM_DISTINCT_EDITORS"),
-      safeRevision = getResultSetIntOption(rs, "safe_rev_nr"),
+      safeRevisionNr = getResultSetIntOption(rs, "safe_rev_nr"),
       approvedSource = Option(rs.getString("APPROVED_SOURCE")),
       approvedHtmlSanitized = Option(rs.getString("APPROVED_HTML_SANITIZED")),
       approvedAt = getOptionalDate(rs, "APPROVED_AT"),
       approvedById = getResultSetIntOption(rs, "APPROVED_BY_ID"),
-      approvedRevision = getResultSetIntOption(rs, "approved_rev_nr"),
-      currentSourcePatch = Option(rs.getString("CURRENT_SOURCE_PATCH")),
-      currentRevision = rs.getInt("current_rev_nr"),
-      previousRevisionNr = getOptionalIntNoneNot0(rs, "previous_rev_nr"),
+      approvedRevisionNr = getResultSetIntOption(rs, "approved_rev_nr"),
       collapsedStatus = new CollapsedStatus(rs.getInt("COLLAPSED_STATUS")),
       collapsedAt = getOptionalDate(rs, "COLLAPSED_AT"),
       collapsedById = getResultSetIntOption(rs, "COLLAPSED_BY_ID"),
