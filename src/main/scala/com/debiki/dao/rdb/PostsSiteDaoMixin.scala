@@ -474,7 +474,7 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def loadActionsByUserOnPage(userId: UserId, pageId: PageId): immutable.Seq[PostAction] = {
     var query = """
-      select unique_post_id, post_id, type, created_by_id
+      select unique_post_id, post_id, type, created_at, created_by_id
       from dw2_post_actions
       where site_id = ? and page_id = ? and created_by_id = ?
       """
@@ -486,6 +486,7 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
           uniqueId = rs.getInt("unique_post_id"),
           pageId = pageId,
           postId = rs.getInt("post_id"),
+          doneAt = getDate(rs, "created_at"),
           doerId = userId,
           actionType = fromActionTypeInt(rs.getInt("type")))
         results :+= postAction
@@ -497,7 +498,7 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def loadActionsDoneToPost(pageId: PageId, postId: PostId): immutable.Seq[PostAction] = {
     var query = """
-      select unique_post_id, type, created_by_id
+      select unique_post_id, type, created_at, created_by_id
       from dw2_post_actions
       where site_id = ? and page_id = ? and post_id = ?
       """
@@ -509,6 +510,7 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
           uniqueId = rs.getInt("unique_post_id"),
           pageId = pageId,
           postId = postId,
+          doneAt = getDate(rs, "created_at"),
           doerId = rs.getInt("created_by_id"),
           actionType = fromActionTypeInt(rs.getInt("type")))
         results :+= postAction
@@ -523,7 +525,7 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       return Nil
 
     val queryBuilder = new StringBuilder(256, s"""
-      select unique_post_id, page_id, post_id, type, created_by_id
+      select unique_post_id, page_id, post_id, type, created_at, created_by_id
       from dw2_post_actions
       where site_id = ?
         and type in ($FlagValueSpam, $FlagValueInapt, $FlagValueOther)
@@ -547,6 +549,7 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
           uniqueId = rs.getInt("unique_post_id"),
           pageId = rs.getString("page_id"),
           postId = rs.getInt("post_id"),
+          flaggedAt = getDate(rs, "created_at"),
           flaggerId = rs.getInt("created_by_id"),
           flagType = fromActionTypeIntToFlagType(rs.getInt("type")))
         dieIf(!postAction.actionType.isInstanceOf[PostFlagType], "DwE2dpg4")
