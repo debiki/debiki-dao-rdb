@@ -27,7 +27,7 @@ import Rdb._
 import RdbUtil._
 
 
-/** Loads and saves categories.
+/** Loads and saves categories, and lists all pages in a category or all categories.
   */
 trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>

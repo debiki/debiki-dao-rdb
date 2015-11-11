@@ -61,7 +61,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     runUpdateSingleRow(statement, values)
 
     // There might have been refs to this upload already, for some weird reason.
-    updateNumReferences(uploadRef)
+    updateUploadedFileReferenceCount(uploadRef)
   }
 
 
@@ -94,7 +94,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       // Else: all fine: this post links to the uploaded file already.
     }
 
-    updateNumReferences(uploadRef)
+    updateUploadedFileReferenceCount(uploadRef)
   }
 
 
@@ -106,7 +106,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     val values = List(siteId, postId.asAnyRef, uploadRef.baseUrl,
       uploadRef.hashPathSuffix)
     val gone = runUpdateSingleRow(statement, values)
-    updateNumReferences(uploadRef)
+    updateUploadedFileReferenceCount(uploadRef)
     gone
   }
 
@@ -128,15 +128,20 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private def updateNumReferences(uploadRef: UploadRef) {
+  def updateUploadedFileReferenceCount(uploadRef: UploadRef) {
     val statement = """
       update dw2_uploads set
         updated_at = now_utc(),
         num_references = (
-          select count(*) from dw2_upload_refs where base_url = ? and hash_path_suffix = ?)
+          select count(*) from dw2_upload_refs where base_url = ? and hash_path_suffix = ?) + (
+          select count(*) from dw1_users
+            where (avatar_small_base_url = ? and avatar_small_hash_path_suffix = ?)
+               or (avatar_medium_base_url = ? and avatar_medium_hash_path_suffix = ?))
       where base_url = ? and hash_path_suffix = ?
       """
     val values = List(uploadRef.baseUrl, uploadRef.hashPathSuffix,
+      uploadRef.baseUrl, uploadRef.hashPathSuffix,
+      uploadRef.baseUrl, uploadRef.hashPathSuffix,
       uploadRef.baseUrl, uploadRef.hashPathSuffix)
     runUpdateSingleRow(statement, values)
   }

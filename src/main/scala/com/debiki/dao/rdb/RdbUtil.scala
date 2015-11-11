@@ -119,12 +119,18 @@ object RdbUtil {
       |u.PASSWORD_HASH u_password_hash,
       |u.COUNTRY u_country,
       |u.WEBSITE u_website,
+      |u.avatar_tiny_base_url,
+      |u.avatar_tiny_hash_path_suffix,
+      |u.avatar_small_base_url,
+      |u.avatar_small_hash_path_suffix,
       |u.IS_OWNER u_is_owner,
       |u.IS_ADMIN u_is_admin,
       |u.IS_MODERATOR u_is_moderator""".stripMargin
 
+
   val UserSelectListItemsWithGuests =
     s"$UserSelectListItemsNoGuests, u.GUEST_COOKIE u_guest_cookie, e.EMAIL_NOTFS g_email_notfs"
+
 
   def _User(rs: js.ResultSet) = {
     val userId = rs.getInt("u_id")
@@ -148,6 +154,8 @@ object RdbUtil {
       passwordHash = Option(rs.getString("u_password_hash")),
       country = dn2e(rs.getString("u_country")),
       website = dn2e(rs.getString("u_website")),
+      tinyAvatar = getAnyUploadRef(rs, "avatar_tiny_base_url", "avatar_tiny_hash_path_suffix"),
+      smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path_suffix"),
       isApproved = getOptionalBoolean(rs, "u_is_approved"),
       suspendedTill = getOptionalDate(rs, "u_suspended_till"),
       isOwner = rs.getString("u_is_owner") == "T",
@@ -170,6 +178,12 @@ object RdbUtil {
     |created_at,
     |password_hash,
     |email_for_every_new_post,
+    |avatar_tiny_base_url,
+    |avatar_tiny_hash_path_suffix,
+    |avatar_small_base_url,
+    |avatar_small_hash_path_suffix,
+    |avatar_medium_base_url,
+    |avatar_medium_hash_path_suffix,
     |is_approved,
     |approved_at,
     |approved_by_id,
@@ -196,6 +210,9 @@ object RdbUtil {
       emailVerifiedAt = getOptionalDate(rs, "email_verified_at"),
       emailForEveryNewPost = rs.getBoolean("email_for_every_new_post"),
       passwordHash = Option(rs.getString("password_hash")),
+      tinyAvatar = getAnyUploadRef(rs, "avatar_tiny_base_url", "avatar_tiny_hash_path_suffix"),
+      smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path_suffix"),
+      mediumAvatar = getAnyUploadRef(rs, "avatar_medium_base_url", "avatar_medium_hash_path_suffix"),
       country = dn2e(rs.getString("country")),
       website = dn2e(rs.getString("website")),
       isApproved = getOptionalBoolean(rs, "is_approved"),
@@ -208,6 +225,22 @@ object RdbUtil {
       isOwner = rs.getString("is_owner") == "T",
       isAdmin = rs.getString("is_admin") == "T",
       isModerator = rs.getBoolean("is_moderator"))
+  }
+
+
+  def getAnyUploadRef(rs: js.ResultSet, basePathColumn: String, hashPathSuffixColumn: String)
+        : Option[UploadRef] = {
+    val basePath = Option(rs.getString(basePathColumn))
+    val hashPathSuffix = Option(rs.getString(hashPathSuffixColumn))
+    if (basePath.isEmpty && hashPathSuffix.isEmpty) {
+      None
+    }
+    else if (basePath.isDefined && hashPathSuffix.isDefined) {
+      Some(UploadRef(basePath.get, hashPathSuffix.get))
+    }
+    else {
+      die("EdE03WMY3")
+    }
   }
 
 
