@@ -135,11 +135,14 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
         num_references = (
           select count(*) from dw2_upload_refs where base_url = ? and hash_path_suffix = ?) + (
           select count(*) from dw1_users
-            where (avatar_small_base_url = ? and avatar_small_hash_path_suffix = ?)
+            where (avatar_tiny_base_url = ? and avatar_tiny_hash_path_suffix = ?)
+               or (avatar_small_base_url = ? and avatar_small_hash_path_suffix = ?)
                or (avatar_medium_base_url = ? and avatar_medium_hash_path_suffix = ?))
       where base_url = ? and hash_path_suffix = ?
       """
-    val values = List(uploadRef.baseUrl, uploadRef.hashPathSuffix,
+    val values = List(
+      uploadRef.baseUrl, uploadRef.hashPathSuffix,
+      uploadRef.baseUrl, uploadRef.hashPathSuffix,
       uploadRef.baseUrl, uploadRef.hashPathSuffix,
       uploadRef.baseUrl, uploadRef.hashPathSuffix,
       uploadRef.baseUrl, uploadRef.hashPathSuffix)

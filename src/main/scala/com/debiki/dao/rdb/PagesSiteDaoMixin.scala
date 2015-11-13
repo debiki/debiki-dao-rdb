@@ -35,20 +35,14 @@ trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   def markPagesWithUserAvatarAsStale(userId: UserId) {
-    // The avatar is shown in the Original Post, in direct replies to the OP,
-    // and in all flat chat comments.
+    // Currently a user's avatar is shown in posts written by him/her.
     val statement = s"""
       update dw1_pages
         set version = version + 1, updated_at = now_utc()
         where site_id = ?
           and page_id in (
             select distinct page_id from dw2_posts
-            where site_id = ?
-              and created_by_id = ?
-              and (
-                post_id = ${PageParts.BodyId.toInt} or
-                parent_post_id = ${PageParts.BodyId.toInt} or
-                type = ${PostType.Flat.toInt}))
+            where site_id = ? and created_by_id = ?)
       """
     runUpdate(statement, List(siteId, siteId, userId.asAnyRef))
   }
