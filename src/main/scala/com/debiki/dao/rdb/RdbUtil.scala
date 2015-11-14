@@ -22,7 +22,7 @@ import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
 import com.debiki.core.Prelude._
 import com.debiki.core.User.isGuestId
 import java.{sql => js, util => ju}
-import scala.{collection => col}
+import scala.collection.immutable
 import Rdb._
 
 
@@ -261,7 +261,11 @@ object RdbUtil {
       |g.PUBLISHED_AT,
       |g.BUMPED_AT,
       |g.LAST_REPLY_AT,
+      |g.last_reply_by_id,
       |g.AUTHOR_ID,
+      |g.frequent_poster_1_id,
+      |g.frequent_poster_2_id,
+      |g.frequent_poster_3_id,
       |g.PIN_ORDER,
       |g.PIN_WHERE,
       |g.PAGE_ROLE,
@@ -300,6 +304,13 @@ object RdbUtil {
       bumpedAt = None
     }
 
+    // 3 will do, don't need all 4.
+    val frequentPoster1Id = getOptionalInt(resultSet, "frequent_poster_1_id")
+    val frequentPoster2Id = getOptionalInt(resultSet, "frequent_poster_2_id")
+    val frequentPoster3Id = getOptionalInt(resultSet, "frequent_poster_3_id")
+    val frequentPosterIds = (frequentPoster1Id.toSeq ++ frequentPoster2Id.toSeq ++
+      frequentPoster3Id.toSeq).to[immutable.Seq]
+
     PageMeta(
       pageId = if (pageId ne null) pageId else resultSet.getString("PAGE_ID"),
       pageRole = PageRole.fromInt(resultSet.getInt("PAGE_ROLE")) getOrElse PageRole.Discussion,
@@ -311,7 +322,9 @@ object RdbUtil {
       publishedAt = publishedAt,
       bumpedAt = bumpedAt,
       lastReplyAt = getOptionalDate(resultSet, "LAST_REPLY_AT"),
+      lastReplyById = getOptionalInt(resultSet, "last_reply_by_id"),
       authorId = resultSet.getInt("AUTHOR_ID"),
+      frequentPosterIds = frequentPosterIds,
       pinOrder = getOptionalIntNoneNot0(resultSet, "PIN_ORDER"),
       pinWhere = getOptionalIntNoneNot0(resultSet, "PIN_WHERE").map(int =>
         PinPageWhere.fromInt(int).getOrElse(PinPageWhere.InCategory)),

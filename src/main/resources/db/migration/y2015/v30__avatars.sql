@@ -19,6 +19,9 @@ alter table dw2_uploads add constraint dw2_uploads_originalhashpathsuffix__c che
     is_valid_hash_path_suffix(original_hash_path_suffix));
 
 
+-- Avatars
+--------------------
+
 -- Add avatar image columns. One for tiny (25x25 like Discourse?), one for small (say 50x50),
 -- and one for medium (say 400x400) images.
 alter table dw1_users add column avatar_tiny_base_url varchar;
@@ -69,4 +72,52 @@ alter table dw1_pages drop constraint dw1_pages_replyat_bumpedat__c_le;
 
 update dw1_pages set bumped_at = closed_at where bumped_at > closed_at;
 alter table dw1_pages add constraint dw1_pages_bumpedat_le_closedat__c check (bumped_at <= closed_at);
+
+
+-- Frequent posters
+--------------------
+
+alter table dw1_pages add column last_reply_by_id int;
+update dw1_pages pg set last_reply_by_id = (
+    select po.created_by_id from dw2_posts po
+    where po.site_id = pg.site_id
+      and po.page_id = pg.page_id
+      and po.created_at = pg.last_reply_at);
+alter table dw1_pages add constraint dw1_pages_lastreplyat_byid__c_nn check(
+    last_reply_at is null = last_reply_by_id is null);
+
+-- (Denormalized for better performance and simplicity: )
+alter table dw1_pages add column frequent_poster_1_id int;
+alter table dw1_pages add column frequent_poster_2_id int;
+alter table dw1_pages add column frequent_poster_3_id int;
+alter table dw1_pages add column frequent_poster_4_id int;
+
+alter table dw1_pages add constraint dw1_pages_lastreplybyid__r__users foreign key (
+    site_id, last_reply_by_id) references dw1_users(site_id, user_id);
+alter table dw1_pages add constraint dw1_pages_frequentposter1id__r__users foreign key (
+    site_id, frequent_poster_1_id) references dw1_users(site_id, user_id);
+alter table dw1_pages add constraint dw1_pages_frequentposter2id__r__users foreign key (
+    site_id, frequent_poster_2_id) references dw1_users(site_id, user_id);
+alter table dw1_pages add constraint dw1_pages_frequentposter3id__r__users foreign key (
+    site_id, frequent_poster_3_id) references dw1_users(site_id, user_id);
+alter table dw1_pages add constraint dw1_pages_frequentposter4id__r__users foreign key (
+    site_id, frequent_poster_4_id) references dw1_users(site_id, user_id);
+
+-- FK indexes:
+-- Adding all these indexes should be fine — there'll be few pages in comparison to
+-- the number of posts; these indexes likely don't matter much?
+create index dw1_pages_lastreplybyid__i on dw1_pages(site_id, last_reply_by_id) where last_reply_by_id is not null;
+create index dw1_pages_frequentposter1id__i on dw1_pages(site_id, frequent_poster_1_id) where frequent_poster_1_id is not null;
+create index dw1_pages_frequentposter2id__i on dw1_pages(site_id, frequent_poster_2_id) where frequent_poster_2_id is not null;
+create index dw1_pages_frequentposter3id__i on dw1_pages(site_id, frequent_poster_3_id) where frequent_poster_3_id is not null;
+create index dw1_pages_frequentposter4id__i on dw1_pages(site_id, frequent_poster_4_id) where frequent_poster_4_id is not null;
+
+-- If last-poster is null, all frequent-poster-X must be null.
+-- And if frequent-poster-X is null, then X+1 must be null too.
+-- (So if e.g. frequent_poster_3_id is null, we know that frequent_poster_4_id is null too.)
+alter table dw1_pages add constraint dw1_pages_frequentposter1234__c_null check (
+    (last_reply_by_id is not null or frequent_poster_1_id is null) and
+    (frequent_poster_1_id is not null or frequent_poster_2_id is null) and
+    (frequent_poster_2_id is not null or frequent_poster_3_id is null) and
+    (frequent_poster_3_id is not null or frequent_poster_4_id is null));
 
