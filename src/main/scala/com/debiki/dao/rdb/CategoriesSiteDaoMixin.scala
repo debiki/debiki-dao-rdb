@@ -95,8 +95,10 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val pageFilterAnd = pageQuery.pageFilter match {
       case PageFilter.ShowWaiting =>
         import PageRole._
-        o"""
-          g.page_role in (${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt}) and
+        s"""
+          g.page_role in (
+            ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
+            ${Critique.toInt}) and  -- [plugin]
           g.closed_at is null and
           """
       case PageFilter.ShowAll =>
