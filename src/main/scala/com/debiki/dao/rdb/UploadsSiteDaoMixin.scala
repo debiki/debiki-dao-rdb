@@ -40,7 +40,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     }
     val statement = """
       insert into dw2_uploads(
-        base_url, hash_path_suffix, original_hash_path_suffix,
+        base_url, hash_path, original_hash_path,
         num_references, size_bytes, mime_type, width, height, uploaded_at, updated_at)
       select
         ?, ?, ?,
@@ -50,7 +50,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       -- the serializable isolation level prevent that?)
       where not exists (
         select 1 from dw2_uploads
-        where base_url = ? and hash_path_suffix = ?)
+        where base_url = ? and hash_path = ?)
       """
     val values = List(
       uploadRef.baseUrl, uploadRef.hashPathSuffix, uploadRef.hashPathSuffix,
@@ -76,11 +76,11 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     // Then remove `where not exists`
     val statement = """
       insert into dw2_upload_refs(
-        site_id, post_id, base_url, hash_path_suffix, added_by_id, added_at)
+        site_id, post_id, base_url, hash_path, added_by_id, added_at)
       select ?, ?, ?, ?, ?, now_utc()
       where not exists (
         select 1 from dw2_upload_refs
-        where site_id = ? and post_id = ? and base_url = ? and hash_path_suffix = ?)
+        where site_id = ? and post_id = ? and base_url = ? and hash_path = ?)
       """
     val values = List(
       siteId, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPathSuffix, addedById.asAnyRef,
@@ -101,7 +101,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
   def deleteUploadedFileReference(postId: UniquePostId, uploadRef: UploadRef): Boolean = {
     val statement = """
       delete from dw2_upload_refs
-      where site_id = ? and post_id = ? and base_url = ? and hash_path_suffix = ?
+      where site_id = ? and post_id = ? and base_url = ? and hash_path = ?
       """
     val values = List(siteId, postId.asAnyRef, uploadRef.baseUrl,
       uploadRef.hashPathSuffix)
@@ -121,7 +121,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       while (rs.next) {
         result.append(UploadRef(
           baseUrl = rs.getString("base_url"),
-          hashPathSuffix = rs.getString("hash_path_suffix")))
+          hashPathSuffix = rs.getString("hash_path")))
       }
     })
     result.toSet
@@ -133,12 +133,12 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       update dw2_uploads set
         updated_at = now_utc(),
         num_references = (
-          select count(*) from dw2_upload_refs where base_url = ? and hash_path_suffix = ?) + (
+          select count(*) from dw2_upload_refs where base_url = ? and hash_path = ?) + (
           select count(*) from dw1_users
-            where (avatar_tiny_base_url = ? and avatar_tiny_hash_path_suffix = ?)
-               or (avatar_small_base_url = ? and avatar_small_hash_path_suffix = ?)
-               or (avatar_medium_base_url = ? and avatar_medium_hash_path_suffix = ?))
-      where base_url = ? and hash_path_suffix = ?
+            where (avatar_tiny_base_url = ? and avatar_tiny_hash_path = ?)
+               or (avatar_small_base_url = ? and avatar_small_hash_path = ?)
+               or (avatar_medium_base_url = ? and avatar_medium_hash_path = ?))
+      where base_url = ? and hash_path = ?
       """
     val values = List(
       uploadRef.baseUrl, uploadRef.hashPathSuffix,

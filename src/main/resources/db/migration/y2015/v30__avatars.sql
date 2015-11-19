@@ -1,22 +1,27 @@
 
-create or replace function is_valid_hash_path_suffix(text varchar) returns boolean as $$
+create or replace function is_valid_hash_path(text varchar) returns boolean as $$
     begin
         return text ~ '^[0-9a-z]/[0-9a-z]/[0-9a-z\.]+$';
     end;
 $$ language plpgsql;
 
+alter table dw2_uploads rename hash_path_suffix to hash_path;
+alter table dw2_upload_refs rename hash_path_suffix to hash_path;
+alter table dw2_uploads rename original_hash_path_suffix to original_hash_path;
+alter table dw2_audit_log rename upload_hash_path_suffix to upload_hash_path;
+
 -- Remove some dupl code in old constraint checks:
 alter table dw2_uploads drop constraint dw2_uploads_hashpathsuffix__c;
-alter table dw2_uploads add constraint dw2_uploads_hashpathsuffix__c check(
-    is_valid_hash_path_suffix(hash_path_suffix));
+alter table dw2_uploads add constraint dw2_uploads_hashpath__c check(
+    is_valid_hash_path(hash_path));
 
 alter table dw2_upload_refs drop constraint dw2_uploadrefs_hashpathsuffix__c;
-alter table dw2_upload_refs add constraint dw2_uploadrefs_hashpathsuffix__c check(
-    is_valid_hash_path_suffix(hash_path_suffix));
+alter table dw2_upload_refs add constraint dw2_uploadrefs_hashpath__c check(
+    is_valid_hash_path(hash_path));
 
 -- Add forgotten check.
-alter table dw2_uploads add constraint dw2_uploads_originalhashpathsuffix__c check(
-    is_valid_hash_path_suffix(original_hash_path_suffix));
+alter table dw2_uploads add constraint dw2_uploads_originalhashpath__c check(
+    is_valid_hash_path(original_hash_path));
 
 
 -- Avatars
@@ -25,11 +30,11 @@ alter table dw2_uploads add constraint dw2_uploads_originalhashpathsuffix__c che
 -- Add avatar image columns. One for tiny (25x25 like Discourse?), one for small (say 50x50),
 -- and one for medium (say 400x400) images.
 alter table dw1_users add column avatar_tiny_base_url varchar;
-alter table dw1_users add column avatar_tiny_hash_path_suffix varchar;
+alter table dw1_users add column avatar_tiny_hash_path varchar;
 alter table dw1_users add column avatar_small_base_url varchar;
-alter table dw1_users add column avatar_small_hash_path_suffix varchar;
+alter table dw1_users add column avatar_small_hash_path varchar;
 alter table dw1_users add column avatar_medium_base_url varchar;
-alter table dw1_users add column avatar_medium_hash_path_suffix varchar;
+alter table dw1_users add column avatar_medium_hash_path varchar;
 
 -- Only authenticated users can have avatars.
 alter table dw1_users add constraint dw1_users_avatars__c check(
@@ -37,20 +42,20 @@ alter table dw1_users add constraint dw1_users_avatars__c check(
 
 -- Either all (tiny, small, medium) avatars images are specified, or none at all.
 alter table dw1_users add constraint dw1_users_avatars_none_or_all__c check((
-    avatar_tiny_base_url is null and avatar_tiny_hash_path_suffix is null and
-    avatar_small_base_url is null and avatar_small_hash_path_suffix is null and
-    avatar_medium_base_url is null and avatar_medium_hash_path_suffix is null)
+    avatar_tiny_base_url is null and avatar_tiny_hash_path is null and
+    avatar_small_base_url is null and avatar_small_hash_path is null and
+    avatar_medium_base_url is null and avatar_medium_hash_path is null)
     or (
-    avatar_tiny_base_url is not null and avatar_tiny_hash_path_suffix is not null and
-    avatar_small_base_url is not null and avatar_small_hash_path_suffix is not null and
-    avatar_medium_base_url is not null and avatar_medium_hash_path_suffix is not null));
+    avatar_tiny_base_url is not null and avatar_tiny_hash_path is not null and
+    avatar_small_base_url is not null and avatar_small_hash_path is not null and
+    avatar_medium_base_url is not null and avatar_medium_hash_path is not null));
 
-alter table dw1_users add constraint dw1_users_avatartinyhashpathsuffix__c check(
-    is_valid_hash_path_suffix(avatar_tiny_hash_path_suffix));
-alter table dw1_users add constraint dw1_users_avatarsmallhashpathsuffix__c check(
-    is_valid_hash_path_suffix(avatar_small_hash_path_suffix));
-alter table dw1_users add constraint dw1_users_avatarmediumhashpathsuffix__c check(
-    is_valid_hash_path_suffix(avatar_medium_hash_path_suffix));
+alter table dw1_users add constraint dw1_users_avatartinyhashpath__c check(
+    is_valid_hash_path(avatar_tiny_hash_path));
+alter table dw1_users add constraint dw1_users_avatarsmallhashpath__c check(
+    is_valid_hash_path(avatar_small_hash_path));
+alter table dw1_users add constraint dw1_users_avatarmediumhashpath__c check(
+    is_valid_hash_path(avatar_medium_hash_path));
 
 alter table dw1_users add constraint dw1_users_avatartinybaseurl__c_len check(
     length(avatar_tiny_base_url) between 1 and 100);
@@ -60,11 +65,11 @@ alter table dw1_users add constraint dw1_users_avatarmediumbaseurl__c_len check(
     length(avatar_medium_base_url) between 1 and 100);
 
 create index dw1_users_avatartinybaseurl__i on dw1_users(avatar_tiny_base_url);
-create index dw1_users_avatartinyhashpathsuffix__i on dw1_users(avatar_tiny_hash_path_suffix);
+create index dw1_users_avatartinyhashpath__i on dw1_users(avatar_tiny_hash_path);
 create index dw1_users_avatarsmallbaseurl__i on dw1_users(avatar_small_base_url);
-create index dw1_users_avatarsmallhashpathsuffix__i on dw1_users(avatar_small_hash_path_suffix);
+create index dw1_users_avatarsmallhashpath__i on dw1_users(avatar_small_hash_path);
 create index dw1_users_avatarmediumbaseurl__i on dw1_users(avatar_medium_base_url);
-create index dw1_users_avatarmediumhashpathsuffix__i on dw1_users(avatar_medium_hash_path_suffix);
+create index dw1_users_avatarmediumhashpath__i on dw1_users(avatar_medium_hash_path);
 
 
 -- Fix bumped-at bugs: closed topics no longer bumped.
@@ -86,7 +91,6 @@ update dw1_pages pg set last_reply_by_id = (
 alter table dw1_pages add constraint dw1_pages_lastreplyat_byid__c_nn check(
     last_reply_at is null = last_reply_by_id is null);
 
--- (Denormalized for better performance and simplicity: )
 alter table dw1_pages add column frequent_poster_1_id int;
 alter table dw1_pages add column frequent_poster_2_id int;
 alter table dw1_pages add column frequent_poster_3_id int;
