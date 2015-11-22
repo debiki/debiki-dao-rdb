@@ -115,6 +115,17 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
+  def loadPostsBy(authorId: UserId, limit: Int): immutable.Seq[Post] = {
+    val query = i"""
+      select * from dw2_posts where site_id = ? and created_by_id = ?
+      order by created_at desc limit ?
+      """
+    runQueryFindMany(query, List(siteId, authorId.asAnyRef, limit.asAnyRef), rs => {
+      readPost(rs)
+    })
+  }
+
+
   def loadPostsToReview(): immutable.Seq[Post] = {
     val flaggedPosts = loadPostsToReviewImpl("""
       deleted_status = 0 and

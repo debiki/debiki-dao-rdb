@@ -27,7 +27,7 @@ import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
 import scala.collection.{immutable, mutable}
 import scala.collection.{mutable => mut}
-import scala.collection.mutable.StringBuilder
+import scala.collection.mutable.{ArrayBuffer, StringBuilder}
 import DbDao._
 import Rdb._
 import RdbUtil._
@@ -55,6 +55,7 @@ class RdbSiteDao(
   with NotificationsSiteDaoMixin
   with SettingsSiteDaoMixin
   with BlocksSiteDaoMixin
+  with ReviewsSiteDaoMixin
   with AuditLogSiteDaoMixin
   with SiteTransaction {
 
@@ -172,6 +173,45 @@ class RdbSiteDao(
   // COULD move to new superclass?
   def runQuery[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
     db.query(query, values, resultSetHandler)(theOneAndOnlyConnection)
+  }
+
+
+  def runQueryFindExactlyOne[R](query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => R): R = {
+    runQuery(query, values, rs => {
+      dieIf(!rs.next(), "EsE6MPUK2")
+      val result = singleRowHandler(rs)
+      dieIf(rs.next(), "DwE4GYK8")
+      result
+    })
+  }
+
+
+  def runQueryFindOneOrNone[R](query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => R): Option[R] = {
+    runQuery(query, values, rs => {
+      if (!rs.next()) {
+        None
+      }
+      else {
+        val result = singleRowHandler(rs)
+        dieIf(rs.next(), "DwE6GMY2")
+        Some(result)
+      }
+    })
+  }
+
+
+  def runQueryFindMany[R](query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => R): immutable.Seq[R] = {
+    val results = ArrayBuffer[R]()
+    runQuery(query, values, rs => {
+      while (rs.next) {
+        val result = singleRowHandler(rs)
+        results.append(result)
+      }
+    })
+    results.to[immutable.Seq]
   }
 
 
