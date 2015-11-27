@@ -42,6 +42,17 @@ object RdbUtil {
   def makeInListFor(values: Seq[_]): String =
     values.map((x: Any) => "?").mkString(",")
 
+  def makeInListFor(values: Iterable[_]): String = {
+    // makeInListFor(Seq[_]), when given an Iterable, appended only one single "?"
+    // instead of many, why? Anyway, instead:
+    dieIf(values.isEmpty, "DwE7YME4")
+    var result = "?"
+    if (values.size >= 2) {
+      result += ",?" * (values.size - 1)
+    }
+    result
+  }
+
   /** In PostgreSQL, one can order by id like so:
     *   select ... from ... where (id in (3, 4, 1, 2))
     *   order by id=3 desc, id=4 desc, id=1 desc
@@ -64,6 +75,7 @@ object RdbUtil {
 
   /** `rs.getInt` returns 0 instead of null.
    */
+  @deprecated("use getOptionalInt instead", "now")
   def getOptionalIntNoneNot0(rs: js.ResultSet, column: String): Option[Int] = {
     val i = rs.getInt(column)
     if (rs.wasNull()) None

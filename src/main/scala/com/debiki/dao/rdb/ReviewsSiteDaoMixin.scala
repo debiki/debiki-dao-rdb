@@ -45,30 +45,36 @@ trait ReviewsSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val updateStatement = """
       update dw2_review_tasks set
         reasons = ?,
-        already_approved = ?,
+        caused_by_id = ?,
         created_at = ?,
+        created_at_rev_nr = ?,
         more_reasons_at = ?,
-        reviewed_at = ?,
-        reviewed_by_id = ?,
+        completed_at = ?,
+        completed_at_rev_nr = ?,
+        completed_by_id = ?,
         invalidated_at = ?,
         resolution = ?,
         user_id = ?,
+        page_id = ?,
         post_id = ?,
-        revision_nr = ?
+        post_nr = ?
       where site_id = ? and id = ?
       """
     val updateValues = List[AnyRef](
       ReviewReason.toLong(reviewTask.reasons).asAnyRef,
-      reviewTask.alreadyApproved.asAnyRef,
+      reviewTask.causedById.asAnyRef,
       reviewTask.createdAt,
+      reviewTask.createdAtRevNr.orNullInt,
       reviewTask.moreReasonsAt.orNullTimestamp,
-      reviewTask.reviewedAt.orNullTimestamp,
-      reviewTask.reviewedById.orNullInt,
+      reviewTask.completedAt.orNullTimestamp,
+      reviewTask.completedAtRevNr.orNullInt,
+      reviewTask.completedById.orNullInt,
       reviewTask.invalidatedAt.orNullTimestamp,
       reviewTask.resolution.orNullInt,
       reviewTask.userId.orNullInt,
+      reviewTask.pageId.orNullVarchar,
       reviewTask.postId.orNullInt,
-      reviewTask.revisionNr.orNullInt,
+      reviewTask.postNr.orNullInt,
       siteId,
       reviewTask.id.asAnyRef)
 
@@ -80,43 +86,47 @@ trait ReviewsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       insert into dw2_review_tasks(
         site_id,
         id,
-        done_by_id,
         reasons,
-        already_approved,
+        caused_by_id,
         created_at,
+        created_at_rev_nr,
         more_reasons_at,
-        reviewed_at,
-        reviewed_by_id,
+        completed_at,
+        completed_at_rev_nr,
+        completed_by_id,
         invalidated_at,
         resolution,
         user_id,
+        page_id,
         post_id,
-        revision_nr)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        post_nr)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List[AnyRef](
       siteId,
       reviewTask.id.asAnyRef,
-      reviewTask.doneById.asAnyRef,
       ReviewReason.toLong(reviewTask.reasons).asAnyRef,
-      reviewTask.alreadyApproved.asAnyRef,
+      reviewTask.causedById.asAnyRef,
       reviewTask.createdAt,
+      reviewTask.createdAtRevNr.orNullInt,
       reviewTask.moreReasonsAt.orNullTimestamp,
-      reviewTask.reviewedAt.orNullTimestamp,
-      reviewTask.reviewedById.orNullInt,
+      reviewTask.completedAt.orNullTimestamp,
+      reviewTask.completedAtRevNr.orNullInt,
+      reviewTask.completedById.orNullInt,
       reviewTask.invalidatedAt.orNullTimestamp,
       reviewTask.resolution.orNullInt,
       reviewTask.userId.orNullInt,
+      reviewTask.pageId.orNullVarchar,
       reviewTask.postId.orNullInt,
-      reviewTask.revisionNr.orNullInt)
+      reviewTask.postNr.orNullInt)
     runUpdateSingleRow(statement, values)
   }
 
 
-  override def loadPendingReviewTask(byUserId: UserId, postId: PostId): Option[ReviewTask] = {
+  override def loadPendingPostReviewTask(postId: PostId, causedById: UserId): Option[ReviewTask] = {
     loadReviewTaskImpl(
-      "done_by_id = ? and reviewed_at is null and post_id = ?",
-      Seq(byUserId.asAnyRef, postId.asAnyRef))
+      s"completed_at is null and invalidated_at is null and caused_by_id = ? and post_id = ?",
+      Seq(causedById.asAnyRef, postId.asAnyRef))
   }
 
 
@@ -149,18 +159,20 @@ trait ReviewsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   private def readReviewTask(rs: js.ResultSet): ReviewTask = {
     ReviewTask(
       id = rs.getInt("id"),
-      doneById = rs.getInt("done_by_id"),
       reasons = ReviewReason.fromLong(rs.getLong("reasons")),
-      alreadyApproved = rs.getBoolean("already_approved"),
+      causedById = rs.getInt("caused_by_id"),
       createdAt = getDate(rs, "created_at"),
+      createdAtRevNr = getOptionalInt(rs, "created_at_rev_nr"),
       moreReasonsAt = getOptionalDate(rs, "more_reasons_at"),
-      reviewedAt = getOptionalDate(rs, "reviewed_at"),
-      reviewedById = getOptionalInt(rs, "reviewed_by_id"),
+      completedAt = getOptionalDate(rs, "completed_at"),
+      completedAtRevNr = getOptionalInt(rs, "completed_at_rev_nr"),
+      completedById = getOptionalInt(rs, "completed_by_id"),
       invalidatedAt = getOptionalDate(rs, "invalidated_at"),
       resolution = getOptionalInt(rs, "resolution"),
       userId = getOptionalInt(rs, "user_id"),
+      pageId = Option(rs.getString("page_id")),
       postId = getOptionalInt(rs, "post_id"),
-      revisionNr = getOptionalInt(rs, "revision_nr"))
+      postNr = getOptionalInt(rs, "post_nr"))
   }
 
 }

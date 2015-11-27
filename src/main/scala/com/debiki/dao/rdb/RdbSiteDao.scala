@@ -215,6 +215,19 @@ class RdbSiteDao(
   }
 
 
+  def runQueryBuildMap[K, V](query: String, values: List[AnyRef],
+    singleRowHandler: js.ResultSet => (K, V)): immutable.Map[K, V] = {
+    var valuesByKey = immutable.HashMap[K, V]()
+    runQuery(query, values, rs => {
+      while (rs.next) {
+        val (key, value) = singleRowHandler(rs)
+        valuesByKey += key -> value
+      }
+    })
+    valuesByKey
+  }
+
+
   // For backw compat with old non-transactional stuff.
   def runQueryPerhapsAtnms[R](query: String, values: List[AnyRef],
         resultSetHandler: js.ResultSet => R): R = {

@@ -20,6 +20,7 @@ package com.debiki.dao.rdb
 import collection.immutable
 import collection.mutable.ArrayBuffer
 import com.debiki.core._
+import com.debiki.core.PageParts.TitleId
 import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
 import scala.collection.mutable
@@ -115,9 +116,25 @@ trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  def loadPostsBy(authorId: UserId, limit: Int): immutable.Seq[Post] = {
+  def loadPostsByUniqueId(postIds: Iterable[UniquePostId]): immutable.Map[UniquePostId, Post] = {
+    if (postIds.isEmpty)
+      return Map.empty
+
     val query = i"""
-      select * from dw2_posts where site_id = ? and created_by_id = ?
+      select * from dw2_posts where site_id = ? and unique_post_id in (${makeInListFor(postIds)})
+      """
+    val values = siteId :: postIds.map(_.asAnyRef).toList
+    runQueryBuildMap(query, values, rs => {
+      val post = readPost(rs)
+      post.uniqueId -> post
+    })
+  }
+
+
+  def loadPostsBy(authorId: UserId, includeTitles: Boolean, limit: Int): immutable.Seq[Post] = {
+    val andMaybeSkipTitles = includeTitles ? "" | s"and post_id <> $TitleId"
+    val query = i"""
+      select * from dw2_posts where site_id = ? and created_by_id = ? $andMaybeSkipTitles
       order by created_at desc limit ?
       """
     runQueryFindMany(query, List(siteId, authorId.asAnyRef, limit.asAnyRef), rs => {
