@@ -607,7 +607,7 @@ class RdbSiteDao(
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
         creatorIp: String, creatorEmailAddress: String,
         pricePlan: Option[String], quotaLimitMegabytes: Option[Int],
-        isTestSiteOkayToDelete: Boolean): Site = {
+        isTestSiteOkayToDelete: Boolean, skipMaxSitesCheck: Boolean): Site = {
     require(!pricePlan.exists(_.trim.isEmpty), "DwE4KEW23")
 
     // Unless apparently testing from localhost, don't allow someone to create
@@ -615,7 +615,7 @@ class RdbSiteDao(
     if (creatorIp != LocalhostAddress) {
       val websiteCount = countWebsites(
         createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress)
-      if (websiteCount >= MaxWebsitesPerIp)
+      if (websiteCount >= MaxWebsitesPerIp && !skipMaxSitesCheck)
         throw TooManySitesCreatedException(creatorIp)
     }
 
