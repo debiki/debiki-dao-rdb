@@ -72,3 +72,7 @@ create index dw2_reviewtasks_pageid__i on dw2_review_tasks(site_id, page_id)
 create index dw2_reviewtasks_postid__i on dw2_review_tasks(site_id, post_id)
     where post_id is not null;
 
+
+-- Hide in forum category setting:
+alter table dw2_categories add hide_in_forum boolean not null default false;
+

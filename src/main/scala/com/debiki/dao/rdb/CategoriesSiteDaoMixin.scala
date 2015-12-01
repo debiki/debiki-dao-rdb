@@ -57,6 +57,9 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
         : Seq[PagePathAndMeta] = {
 
     require(limit >= 1, "DwE5KGW2")
+    if (categoryIds.isEmpty)
+      return Nil
+
     var values = Vector[AnyRef]()
 
     val (orderBy, offsetTestAnd) = pageQuery.orderOffset match {
@@ -159,17 +162,17 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
         site_id, id, page_id, parent_id,
         name, slug, position,
         description, new_topic_types,
-        created_at, updated_at)
+        hide_in_forum, created_at, updated_at)
       values (
         ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?,
-        ?, ?)"""
+        ?, ?, ?)"""
     val values = List[AnyRef](
       siteId, category.id.asAnyRef, category.sectionPageId, category.parentId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
-      currentTime, currentTime)
+      category.hideInForum.asAnyRef, currentTime, currentTime)
     runUpdateSingleRow(statement, values)
     markSectionPageContentHtmlAsStale(category.id)
   }
@@ -181,13 +184,13 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
         page_id = ?, parent_id = ?,
         name = ?, slug = ?, position = ?,
         description = ?, new_topic_types = ?,
-        created_at = ?, updated_at = ?
+        hide_in_forum = ?, created_at = ?, updated_at = ?
       where site_id = ? and id = ?"""
     val values = List[AnyRef](
       category.sectionPageId, category.parentId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
-      category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
+      category.hideInForum.asAnyRef, category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
       siteId, category.id.asAnyRef)
     runUpdateSingleRow(statement, values)
     // In the future: mark any old section page html as stale too, if moving to new section.
@@ -205,6 +208,7 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
       slug = rs.getString("slug"),
       description = Option(rs.getString("description")),
       newTopicTypes = getNewTopicTypes(rs),
+      hideInForum = rs.getBoolean("hide_in_forum"),
       createdAt = getDate(rs, "created_at"),
       updatedAt = getDate(rs, "updated_at"),
       lockedAt = getOptionalDate(rs, "locked_at"),
