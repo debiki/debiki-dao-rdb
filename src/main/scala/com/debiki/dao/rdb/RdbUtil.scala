@@ -362,21 +362,6 @@ object RdbUtil {
   }
 
 
-  def _ResourceUse(rs: js.ResultSet) =
-    ResourceUse(
-      numGuests = rs.getInt("NUM_GUESTS"),
-      numIdentities = rs.getInt("NUM_IDENTITIES"),
-      numRoles = rs.getInt("NUM_ROLES"),
-      numRoleSettings = rs.getInt("NUM_ROLE_SETTINGS"),
-      numPages = rs.getInt("NUM_PAGES"),
-      numPosts = rs.getInt("NUM_POSTS"),
-      numPostTextBytes = rs.getLong("NUM_POST_TEXT_BYTES"),
-      numPostsRead = rs.getLong("NUM_POSTS_READ"),
-      numActions = rs.getInt("NUM_ACTIONS"),
-      numNotfs = rs.getInt("NUM_NOTFS"),
-      numEmailsSent = rs.getInt("NUM_EMAILS_SENT"))
-
-
   def _toTenantHostRole(roleStr: String) = roleStr match {
     case "C" => SiteHost.RoleCanonical
     case "R" => SiteHost.RoleRedirect

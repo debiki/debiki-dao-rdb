@@ -31,6 +31,17 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 
+  def loadUploadedFileMeta(uploadRef: UploadRef): Option[(Int, String)] = {
+    val query = """
+      select size_bytes, mime_type from dw2_uploads
+      where base_url = ? and hash_path = ?
+      """
+    runQueryFindOneOrNone(query, List(uploadRef.baseUrl, uploadRef.hashPath), row => {
+      (row.getInt("size_bytes"), row.getString("mime_type"))
+    })
+  }
+
+
   def insertUploadedFileMeta(uploadRef: UploadRef, sizeBytes: Int, mimeType: String,
         dimensions: Option[(Int, Int)]) {
     // COULD use `insert ... on conflict do nothing` here once have upgraded to Postgres 9.5.
@@ -53,15 +64,19 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
         where base_url = ? and hash_path = ?)
       """
     val values = List(
-      uploadRef.baseUrl, uploadRef.hashPathSuffix, uploadRef.hashPathSuffix,
+      uploadRef.baseUrl, uploadRef.hashPath, uploadRef.hashPath,
       0.asAnyRef, sizeBytes.asAnyRef, mimeType, width, height,
-      uploadRef.baseUrl, uploadRef.hashPathSuffix)
+      uploadRef.baseUrl, uploadRef.hashPath)
 
     // No point in handling unique errors — the transaction would be broken even if we detect them.
     runUpdateSingleRow(statement, values)
 
     // There might have been refs to this upload already, for some weird reason.
     updateUploadedFileReferenceCount(uploadRef)
+
+    val siteIdsUsingUpload = loadSiteIdsUsingUpload(uploadRef)
+    updateUploadQuotaUse(siteIdsUsingUpload, uploadRef, deltaUploads = 1,
+      anyDeltaBytes = Some(sizeBytes))
   }
 
 
@@ -72,6 +87,8 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
 
   def insertUploadedFileReference(postId: UniquePostId, uploadRef: UploadRef,
         addedById: UserId) {
+    val siteIdsUsingUploadBefore = loadSiteIdsUsingUpload(uploadRef)
+
     // COULD use `insert ... on conflict do nothing` here once have upgraded to Postgres 9.5.
     // Then remove `where not exists`
     val statement = """
@@ -83,8 +100,8 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
         where site_id = ? and post_id = ? and base_url = ? and hash_path = ?)
       """
     val values = List(
-      siteId, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPathSuffix, addedById.asAnyRef,
-      siteId, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPathSuffix)
+      siteId, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPath, addedById.asAnyRef,
+      siteId, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPath)
 
     try runUpdateSingleRow(statement, values)
     catch {
@@ -95,6 +112,9 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     }
 
     updateUploadedFileReferenceCount(uploadRef)
+    if (!siteIdsUsingUploadBefore.contains(siteId)) {
+      updateUploadQuotaUse(Set(siteId), uploadRef, deltaUploads = 1)
+    }
   }
 
 
@@ -104,9 +124,13 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       where site_id = ? and post_id = ? and base_url = ? and hash_path = ?
       """
     val values = List(siteId, postId.asAnyRef, uploadRef.baseUrl,
-      uploadRef.hashPathSuffix)
+      uploadRef.hashPath)
     val gone = runUpdateSingleRow(statement, values)
     updateUploadedFileReferenceCount(uploadRef)
+    val siteIdsUsingUpload = loadSiteIdsUsingUpload(uploadRef)
+    if (gone && !siteIdsUsingUpload.contains(siteId)) {
+      updateUploadQuotaUse(Set(siteId), uploadRef, deltaUploads =  - 1)
+    }
     gone
   }
 
@@ -121,10 +145,84 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       while (rs.next) {
         result.append(UploadRef(
           baseUrl = rs.getString("base_url"),
-          hashPathSuffix = rs.getString("hash_path")))
+          hashPath = rs.getString("hash_path")))
       }
     })
     result.toSet
+  }
+
+
+  def filterUploadRefsInUse(uploadRefs: Iterable[UploadRef]): Set[UploadRef] = {
+    if (uploadRefs.isEmpty)
+      return Set.empty
+
+    val values = ArrayBuffer[AnyRef]()
+    val orUploadRefsTests = StringBuilder.newBuilder
+    val orAvatarTinyRefsTests = StringBuilder.newBuilder
+    val orAvatarSmallRefsTests = StringBuilder.newBuilder
+    val orAvatarMediumRefsTests = StringBuilder.newBuilder
+
+    uploadRefs foreach { ref =>
+      orUploadRefsTests.append(" or (base_url = ? and hash_path = ?)")
+      values.append(ref.baseUrl, ref.hashPath)
+    }
+
+    uploadRefs foreach { ref =>
+      orAvatarTinyRefsTests.append(" or (avatar_tiny_base_url = ? and avatar_tiny_hash_path = ?)")
+      values.append(ref.baseUrl, ref.hashPath)
+    }
+
+    uploadRefs foreach { ref =>
+      orAvatarSmallRefsTests.append(
+        " or (avatar_small_base_url = ? and avatar_small_hash_path = ?)")
+      values.append(ref.baseUrl, ref.hashPath)
+    }
+
+    uploadRefs foreach { ref =>
+      orAvatarMediumRefsTests.append(
+        " or (avatar_medium_base_url = ? and avatar_medium_hash_path = ?)")
+      values.append(ref.baseUrl, ref.hashPath)
+    }
+
+    val query = s"""
+      select distinct base_url bu, hash_path hp from dw2_upload_refs
+        where false $orUploadRefsTests
+      union
+      select distinct avatar_tiny_base_url bu, avatar_tiny_hash_path hp from dw1_users
+        where false $orAvatarTinyRefsTests
+      union
+      select distinct avatar_small_base_url bu, avatar_small_hash_path hp from dw1_users
+        where false $orAvatarSmallRefsTests
+      union
+      select distinct avatar_medium_base_url bu, avatar_medium_hash_path hp from dw1_users
+        where false $orAvatarMediumRefsTests
+      """
+    val ids = runQueryFindMany[UploadRef](query, values.toList, row => {
+      UploadRef(row.getString("bu"), row.getString("hp"))
+    })
+    ids.toSet
+  }
+
+
+  def loadSiteIdsUsingUpload(ref: UploadRef): Set[SiteId] = {
+    val query = """
+      select distinct site_id from dw2_upload_refs
+        where base_url = ? and hash_path = ?
+      union
+      select distinct site_id from dw1_users
+        where (avatar_tiny_base_url = ? and avatar_tiny_hash_path = ?)
+           or (avatar_small_base_url = ? and avatar_small_hash_path = ?)
+           or (avatar_medium_base_url = ? and avatar_medium_hash_path = ?)
+      """
+    val values = List(
+      ref.baseUrl, ref.hashPath,
+      ref.baseUrl, ref.hashPath,
+      ref.baseUrl, ref.hashPath,
+      ref.baseUrl, ref.hashPath)
+    val ids = runQueryFindMany[SiteId](query, values, row => {
+      row.getString("site_id")
+    })
+    ids.toSet
   }
 
 
@@ -141,13 +239,45 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       where base_url = ? and hash_path = ?
       """
     val values = List(
-      uploadRef.baseUrl, uploadRef.hashPathSuffix,
-      uploadRef.baseUrl, uploadRef.hashPathSuffix,
-      uploadRef.baseUrl, uploadRef.hashPathSuffix,
-      uploadRef.baseUrl, uploadRef.hashPathSuffix,
-      uploadRef.baseUrl, uploadRef.hashPathSuffix)
+      uploadRef.baseUrl, uploadRef.hashPath,
+      uploadRef.baseUrl, uploadRef.hashPath,
+      uploadRef.baseUrl, uploadRef.hashPath,
+      uploadRef.baseUrl, uploadRef.hashPath,
+      uploadRef.baseUrl, uploadRef.hashPath)
     runUpdateSingleRow(statement, values)
   }
+
+
+  def updateUploadQuotaUse(uploadRef: UploadRef, wasAdded: Boolean) =
+    updateUploadQuotaUse(Set(siteId), uploadRef, deltaUploads = wasAdded ? 1 | -1)
+
+
+  def updateUploadQuotaUse(siteIds: Set[SiteId], uploadRef: UploadRef,
+        deltaUploads: Int, anyDeltaBytes: Option[Int] = None) {
+    if (siteIds.isEmpty)
+      return
+
+    val deltaBytes: Int = anyDeltaBytes getOrElse {
+      loadUploadedFileMeta(uploadRef) match {
+        case Some((bytes, mimeType)) => math.signum(deltaUploads) * bytes
+        case None =>
+          COULD // log warning, since the file is gone so we cannot remove the quota it uses/used
+          // Don't add/remove just deltaUploads though, because this might result in e.g.
+          // 3 files that uses 0 bytes, or 0 files that uses 10 000 bytes.
+          return
+      }
+    }
+    dieIf((deltaUploads > 0) != (deltaBytes > 0), "EsE7YMK3")
+    val statement = s"""
+      update dw1_tenants set
+        num_uploads = num_uploads + ?,
+        num_upload_bytes = num_upload_bytes + ?
+      where id in (${ RdbUtil.makeInListFor(siteIds) })
+      """
+    val values = List(deltaUploads, deltaBytes) ::: siteIds.toList
+    runUpdateExactNumRows(siteIds.size, statement, values.map(_.asAnyRef))
+  }
+
 }
 
 

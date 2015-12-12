@@ -259,6 +259,14 @@ class RdbSiteDao(
         but should have touched exactly one row: $statement""")
   }
 
+
+  def runUpdateExactNumRows(correctNumRows: Int, statement: String, values: List[AnyRef] = Nil) {
+    val numRowsUpdated = runUpdate(statement, values)
+    dieIf(numRowsUpdated != correctNumRows, "EsE2GYU7", o"""This statement modified $numRowsUpdated
+        rows but should have modified $correctNumRows rows: $statement""")
+  }
+
+
   // COULD move to new superclass?
   def queryAtnms[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
     anyOneAndOnlyConnection foreach { connection =>
@@ -278,25 +286,13 @@ class RdbSiteDao(
 
   def loadResourceUsage(connection: js.Connection): ResourceUse = {
     val sql = """
-      select
-        QUOTA_LIMIT_MBS,
-        NUM_GUESTS,
-        NUM_IDENTITIES,
-        NUM_ROLES,
-        NUM_ROLE_SETTINGS,
-        NUM_PAGES,
-        NUM_POSTS,
-        NUM_POST_TEXT_BYTES,
-        NUM_POSTS_READ,
-        NUM_ACTIONS,
-        NUM_NOTFS,
-        NUM_EMAILS_SENT
-      from DW1_TENANTS where ID = ?"""
+      select * from DW1_TENANTS where ID = ?
+      """
     db.query(sql, List(siteId), rs => {
       rs.next()
-      dieUnless(rs.isLast(), "DwE59FKQ2")
+      dieUnless(rs.isLast, "DwE59FKQ2")
       ResourceUse(
-        quotaLimitMegabytes = getResultSetIntOption(rs, "QUOTA_LIMIT_MBS"),
+        quotaLimitMegabytes = getOptionalInt(rs, "QUOTA_LIMIT_MBS"),
         numGuests = rs.getInt("NUM_GUESTS"),
         numIdentities = rs.getInt("NUM_IDENTITIES"),
         numRoles = rs.getInt("NUM_ROLES"),
@@ -304,8 +300,12 @@ class RdbSiteDao(
         numPages = rs.getInt("NUM_PAGES"),
         numPosts = rs.getInt("NUM_POSTS"),
         numPostTextBytes = rs.getLong("NUM_POST_TEXT_BYTES"),
+        numPostRevisions = rs.getInt("num_post_revisions"),
+        numPostRevisionBytes = rs.getLong("num_post_rev_bytes"),
         numPostsRead = rs.getInt("NUM_POSTS_READ"),
         numActions = rs.getInt("NUM_ACTIONS"),
+        numUploads = rs.getInt("num_uploads"),
+        numUploadBytes = rs.getLong("num_upload_bytes"),
         numNotfs = rs.getInt("NUM_NOTFS"),
         numEmailsSent = rs.getInt("NUM_EMAILS_SENT"))
     })(connection)
