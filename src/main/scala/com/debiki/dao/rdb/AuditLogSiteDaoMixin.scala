@@ -17,8 +17,7 @@
 
 package com.debiki.dao.rdb
 
-import collection.mutable
-import collection.mutable.ArrayBuffer
+import collection.immutable
 import com.debiki.core._
 import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
@@ -115,48 +114,29 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadAuditLogEntriesRecentFirst(userId: UserId, tyype: AuditLogEntryType, limit: Int)
+        : immutable.Seq[AuditLogEntry] = {
+    val query = s"""
+      select * from dw2_audit_log
+      where site_id = ? and doer_id = ?
+      and did_what = ?
+      order by done_at desc limit $limit
+      """
+    runQueryFindMany(query, List(siteId, userId.asAnyRef, entryTypeToString(tyype)), rs => {
+      getAuditLogEntry(rs)
+    })
+  }
+
+
   def loadCreatePostAuditLogEntry(postId: UniquePostId): Option[AuditLogEntry] = {
     val query = s"""
-      select
-        audit_id,
-        doer_id,
-        done_at,
-        did_what,
-        details,
-        ip,
-        browser_id_cookie,
-        browser_fingerprint,
-        anonymity_network,
-        country,
-        region,
-        city,
-        page_id,
-        page_role,
-        post_id,
-        post_nr,
-        post_action_type,
-        post_action_sub_id,
-        upload_hash_path,
-        upload_file_name,
-        size_bytes,
-        target_page_id,
-        target_post_id,
-        target_post_nr,
-        target_user_id,
-        target_site_id
-      from dw2_audit_log
+      select * from dw2_audit_log
       where site_id = ? and post_id = ?
       and did_what = 'NwPs' -- new post
       order by done_at limit 1
       """
-
-    runQuery(query, List(siteId, postId.asAnyRef), rs => {
-      if (!rs.next())
-        return None
-
-      val entry = getAuditLogEntry(rs)
-      dieIf(rs.next(), "DwE4WKU7")
-      Some(entry)
+    runQueryFindOneOrNone(query, List(siteId, postId.asAnyRef), rs => {
+      getAuditLogEntry(rs)
     })
   }
 
@@ -171,16 +151,16 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       browserIdData = getBrowserIdData(rs),
       browserLocation = None,
       pageId = Option(rs.getString("page_id")),
-      pageRole = getOptionalIntNoneNot0(rs, "page_role").flatMap(PageRole.fromInt),
-      uniquePostId = getOptionalIntNoneNot0(rs, "post_id"),
-      postNr = getOptionalIntNoneNot0(rs, "post_nr"),
+      pageRole = getOptionalInt(rs, "page_role").flatMap(PageRole.fromInt),
+      uniquePostId = getOptionalInt(rs, "post_id"),
+      postNr = getOptionalInt(rs, "post_nr"),
       uploadHashPathSuffix = Option(rs.getString("upload_hash_path")),
       uploadFileName = Option(rs.getString("upload_file_name")),
-      sizeBytes = getOptionalIntNoneNot0(rs, "size_bytes"),
-      targetUniquePostId = getOptionalIntNoneNot0(rs, "target_post_id"),
+      sizeBytes = getOptionalInt(rs, "size_bytes"),
+      targetUniquePostId = getOptionalInt(rs, "target_post_id"),
       targetPageId = Option(rs.getString("target_page_id")),
-      targetPostNr = getOptionalIntNoneNot0(rs, "target_post_nr"),
-      targetUserId = getOptionalIntNoneNot0(rs, "target_user_id"),
+      targetPostNr = getOptionalInt(rs, "target_post_nr"),
+      targetUserId = getOptionalInt(rs, "target_user_id"),
       targetSiteId = Option(rs.getString("target_site_id")))
 
 
