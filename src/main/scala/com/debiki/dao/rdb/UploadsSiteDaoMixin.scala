@@ -52,10 +52,12 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     val statement = """
       insert into dw2_uploads(
         base_url, hash_path, original_hash_path,
-        num_references, size_bytes, mime_type, width, height, uploaded_at, updated_at)
+        num_references, size_bytes, mime_type, width, height,
+        uploaded_at, updated_at, unused_since)
       select
         ?, ?, ?,
-        ?, ?, ?, ?, ?, now_utc(), now_utc()
+        ?, ?, ?, ?, ?,
+        now_utc(), now_utc(), now_utc()
       -- For now, until Postgres 9.5 which will support `insert ... on conflict do nothing`:
       -- (Race condition: another session might insert just after the select – or does
       -- the serializable isolation level prevent that?)
@@ -227,24 +229,10 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
 
 
   def updateUploadedFileReferenceCount(uploadRef: UploadRef) {
-    val statement = """
-      update dw2_uploads set
-        updated_at = now_utc(),
-        num_references = (
-          select count(*) from dw2_upload_refs where base_url = ? and hash_path = ?) + (
-          select count(*) from dw1_users
-            where (avatar_tiny_base_url = ? and avatar_tiny_hash_path = ?)
-               or (avatar_small_base_url = ? and avatar_small_hash_path = ?)
-               or (avatar_medium_base_url = ? and avatar_medium_hash_path = ?))
-      where base_url = ? and hash_path = ?
-      """
+    val statement = """select * from "update_upload_ref_count"(?, ?)"""
     val values = List(
-      uploadRef.baseUrl, uploadRef.hashPath,
-      uploadRef.baseUrl, uploadRef.hashPath,
-      uploadRef.baseUrl, uploadRef.hashPath,
-      uploadRef.baseUrl, uploadRef.hashPath,
       uploadRef.baseUrl, uploadRef.hashPath)
-    runUpdateSingleRow(statement, values)
+    runQuery(statement, values, rs => ())
   }
 
 

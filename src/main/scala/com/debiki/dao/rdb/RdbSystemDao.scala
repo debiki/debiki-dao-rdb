@@ -636,32 +636,45 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
       // There are foreign keys from DW1_TENANTS to other tables, and
       // back.
-      db.update("SET CONSTRAINTS ALL DEFERRED");
+      db.update("SET CONSTRAINTS ALL DEFERRED")
 
       s"""
+      delete from dw2_audit_log
+      delete from dw2_review_tasks
       delete from DW1_SETTINGS
       delete from DW1_ROLE_PAGE_SETTINGS
       delete from DW1_POSTS_READ_STATS
       delete from DW1_NOTIFICATIONS
       delete from DW1_EMAILS_OUT
+      delete from dw2_upload_refs
+      delete from dw2_uploads
       delete from DW2_POST_ACTIONS
-      delete from DW1_PATHS
-      delete from DW1_PAGE_PATHS
-      delete from DW1_PAGES
-      delete from DW2_PAGE_HTML
+      delete from dw2_post_revisions
       delete from DW2_POSTS
+      delete from dw1_page_paths
+      delete from dw2_page_html
+      delete from dw1_pages
+      delete from dw2_categories
+      delete from dw2_blocks
       delete from DW1_GUEST_PREFS
-      delete from DW1_GUESTS
       delete from DW1_IDENTITIES
-      delete from DW1_USERS
+      delete from dw2_invites
+      delete from dw1_users where not (user_id in ($SystemUserId, $UnknownUserId) and site_id = '$FirstSiteId')
       delete from DW1_TENANT_HOSTS
-      delete from DW1_TENANTS where ID <> '${Site.FirstSiteId}'
+      delete from dw1_tenants where id <> '$FirstSiteId'
       update DW1_TENANTS set NEXT_PAGE_ID = 1
-      alter sequence DW1_IDS_SNO restart
-      alter sequence DW1_PAGES_SNO restart
       alter sequence DW1_TENANTS_ID restart
-      alter sequence DW1_USERS_SNO restart
       """.trim.split("\n") foreach { db.update(_) }
+
+      db.update(s"""
+          update dw1_tenants set
+            quota_limit_mbs = null, num_guests = 0, num_identities = 0, num_roles = 0,
+            num_role_settings = 0, num_pages = 0, num_posts = 0, num_post_text_bytes = 0,
+            num_posts_read = 0, num_actions = 0, num_notfs = 0, num_emails_sent = 0,
+            num_audit_rows = 0, num_uploads = 0, num_upload_bytes = 0,
+            num_post_revisions = 0, num_post_rev_bytes = 0
+          where id = '$FirstSiteId'
+          """)
 
       db.update("SET CONSTRAINTS ALL IMMEDIATE")
     }
