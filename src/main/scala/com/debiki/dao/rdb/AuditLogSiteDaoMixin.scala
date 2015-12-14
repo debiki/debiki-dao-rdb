@@ -173,6 +173,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
 
   private def entryTypeToString(entryType: AuditLogEntryType): String = entryType match {
     case AuditLogEntryType.CreateSite => "CrSt"
+    case AuditLogEntryType.ThisSiteCreated => "TsCr"
     case AuditLogEntryType.NewPage => "NwPg"
     case AuditLogEntryType.NewPost => "NwPs"
     case AuditLogEntryType.EditPost => "EdPs"
@@ -182,6 +183,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
 
   private def stringToEntryTypeTo(entryType: String): AuditLogEntryType = entryType match {
     case  "CrSt" => AuditLogEntryType.CreateSite
+    case  "TsCr" => AuditLogEntryType.ThisSiteCreated
     case  "NwPg" => AuditLogEntryType.NewPage
     case  "NwPs" => AuditLogEntryType.NewPost
     case  "EdPs" => AuditLogEntryType.EditPost

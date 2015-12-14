@@ -40,7 +40,7 @@ import RdbUtil._
   * it doesn't have any mutable state.
   */
 class RdbSiteDao(
-  val siteId: SiteId,
+  var siteId: SiteId,
   val daoFactory: RdbDaoFactory)
   extends SiteDbDao
   with PagesSiteDaoMixin
@@ -75,10 +75,8 @@ class RdbSiteDao(
     transaction
   }
 
-  def otherSiteDao(otherSiteId: SiteId): SiteTransaction = {
-    val dao = new RdbSiteDao(otherSiteId, daoFactory)
-    dao.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
-    dao
+  def setSiteId(newId: SiteId) {
+    siteId = newId
   }
 
   def fullTextSearchIndexer = daoFactory.fullTextSearchIndexer
@@ -619,6 +617,7 @@ class RdbSiteDao(
         throw TooManySitesCreatedException(creatorIp)
     }
 
+    // Ought to move this id generation stuff to the caller instead, i.e. CreateSiteDao.
     val id =
       if (isTestSiteOkayToDelete) "test__" + nextRandomString().take(5)
       else "?"
@@ -634,39 +633,23 @@ class RdbSiteDao(
           throw new SiteAlreadyExistsException(name)
       }
 
-    val newHost = SiteHost(hostname, SiteHost.RoleCanonical)
-    rdbSystemDao.insertSiteHost(newSite.id, newHost)
-
-    createSystemUser(newSite.id)
-    createUnknownUser(newSite.id)
-
-    newSite.copy(hosts = List(newHost))
+    newSite
   }
 
 
-  private def createSystemUser(newSiteId: SiteId): Unit = {
-    otherSiteDao(newSiteId).insertAuthenticatedUser(CompleteUser(
-      id = SystemUserId,
-      fullName = SystemUserFullName,
-      username = SystemUserUsername,
-      createdAt = currentTime,
-      isApproved = None,
-      approvedAt = None,
-      approvedById = None,
-      emailAddress = "",
-      emailNotfPrefs = EmailNotfPrefs.DontReceive,
-      emailVerifiedAt = None))
+  def insertSiteHost(host: SiteHost) {
+    rdbSystemDao.insertSiteHost(siteId, host)
   }
 
 
-  private def createUnknownUser(newSiteId: SiteId) {
+  def createUnknownUser() {
     val statement = s"""
       insert into dw1_users(
         site_id, user_id, created_at, display_name, email, guest_cookie)
       values (
         ?, $UnknownUserId, now_utc(), '$UnknownUserName', '-', '$UnknownUserGuestCookie')
       """
-    runUpdate(statement, List(newSiteId))
+    runUpdate(statement, List(siteId))
   }
 
 
