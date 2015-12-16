@@ -25,7 +25,7 @@ import Rdb._
 
 /** Loads and saves ReviewTask:s.
   */
-trait ReviewsSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait ReviewsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 

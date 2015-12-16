@@ -31,7 +31,7 @@ import PostsSiteDaoMixin._
 
 /** Loads and saves posts.
   */
-trait PostsSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait PostsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
   override def loadPost(uniquePostId: UniquePostId): Option[Post] =

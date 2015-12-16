@@ -32,7 +32,7 @@ import RdbUtil._
 
 /** Creates and updates users and identities.
   */
-trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait UserSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
   // COULD convert these 'T' columns to booleans.

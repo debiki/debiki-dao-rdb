@@ -30,7 +30,7 @@ import PostsSiteDaoMixin._
 
 /** Loads and saves pages and cached page content html.
   */
-trait PagesSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait PagesSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 

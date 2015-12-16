@@ -27,7 +27,6 @@ class RdbDaoFactory(
   val db: Rdb,
   val migrations: ScalaBasedDatabaseMigrations,
   val actorSystem: ActorSystem,
-  val commonMarkRenderer: CommonMarkRenderer,
   val fullTextSearchDbDataPath: Option[String],
   val isTest: Boolean = false,
   val fastStartSkipSearch: Boolean = false) extends DbDaoFactory {

@@ -30,7 +30,7 @@ import RdbUtil._
 
 /** Saves and loads info on how many times each post has been read and by whom.
   */
-trait PostsReadStatsSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait PostsReadStatsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 

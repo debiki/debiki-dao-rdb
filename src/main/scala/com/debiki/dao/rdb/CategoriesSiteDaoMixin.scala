@@ -29,7 +29,7 @@ import RdbUtil._
 
 /** Loads and saves categories, and lists all pages in a category or all categories.
   */
-trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait CategoriesSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 
@@ -131,15 +131,13 @@ trait CategoriesSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
     val result = ArrayBuffer[PagePathAndMeta]()
 
-    db.withConnection { implicit connection =>
-      db.query(sql, values.toList, rs => {
+    runQuery(sql, values.toList, rs => {
         while (rs.next) {
           val pagePath = _PagePath(rs, siteId)
           val pageMeta = _PageMeta(rs, pagePath.pageId.get)
           result.append(PagePathAndMeta(pagePath, pageMeta))
         }
-      })
-    }
+    })
     result.toSeq
   }
 

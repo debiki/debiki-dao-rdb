@@ -28,7 +28,7 @@ import Rdb._
 
 /** Saves and deletes notifications.
   */
-trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait NotificationsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 
@@ -101,7 +101,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
   def loadNotificationsForRole(roleId: RoleId): Seq[Notification] = {
     val numToLoad = 50 // for now
-    val notfsToMail = systemDaoSpi.loadNotfsImpl(   // COULD specify consumers
+    val notfsToMail = rdbSystemDao.loadNotfsImpl(   // COULD specify consumers
         numToLoad, Some(siteId), userIdOpt = Some(roleId))
     // All loaded notifications are to `roleId` only.
     notfsToMail(siteId)

@@ -33,7 +33,7 @@ object LoginSiteDaoMixin {
 
 
 
-trait LoginSiteDaoMixin extends SiteDbDao with SiteTransaction {
+trait LoginSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 

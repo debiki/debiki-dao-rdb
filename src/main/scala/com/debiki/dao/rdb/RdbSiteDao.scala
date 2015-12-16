@@ -42,8 +42,7 @@ import RdbUtil._
 class RdbSiteDao(
   var siteId: SiteId,
   val daoFactory: RdbDaoFactory)
-  extends SiteDbDao
-  with PagesSiteDaoMixin
+  extends PagesSiteDaoMixin
   with PostsSiteDaoMixin
   with UploadsSiteDaoMixin
   with CategoriesSiteDaoMixin
@@ -80,8 +79,6 @@ class RdbSiteDao(
   }
 
   def fullTextSearchIndexer = daoFactory.fullTextSearchIndexer
-
-  def commonMarkRenderer: CommonMarkRenderer = daoFactory.commonMarkRenderer
 
   lazy val currentTime: ju.Date = rdbSystemDao.currentTime
 
@@ -366,14 +363,14 @@ class RdbSiteDao(
 
 
   def loadAllPageMetas(): immutable.Seq[PageMeta] =
-    loadPageMetaImpl(pageIds = Nil, all = true)(theOneAndOnlyConnection).values.to[immutable.Seq]
+    loadPageMetaImpl(pageIds = Nil, all = true).values.to[immutable.Seq]
 
 
   def loadPageMetas(pageIds: Seq[PageId]): immutable.Seq[PageMeta] =
-    loadPageMetaImpl(pageIds, all = false)(theOneAndOnlyConnection).values.to[immutable.Seq]
+    loadPageMetaImpl(pageIds, all = false).values.to[immutable.Seq]
 
   def loadPageMetasAsMap(pageIds: Iterable[PageId]): Map[PageId, PageMeta] =
-    loadPageMetaImpl(pageIds.toSeq, all = false)(theOneAndOnlyConnection)
+    loadPageMetaImpl(pageIds.toSeq, all = false)
 
   def loadPageMeta(pageId: PageId): Option[PageMeta] = loadPageMeta(pageId, None)
 
@@ -386,12 +383,12 @@ class RdbSiteDao(
   def loadPageMetasAsMap(pageIds: Seq[PageId], anySiteId: Option[SiteId] = None)
         : Map[PageId, PageMeta] = {
     if (pageIds.isEmpty) return Map.empty
-    db.withConnection { loadPageMetaImpl(pageIds, all = false, anySiteId)(_) }
+    loadPageMetaImpl(pageIds, all = false, anySiteId)
   }
 
 
   def loadPageMetaImpl(pageIds: Seq[PageId], all: Boolean = false,
-        anySiteId: Option[SiteId] = None)(connection: js.Connection): Map[PageId, PageMeta] = {
+        anySiteId: Option[SiteId] = None): Map[PageId, PageMeta] = {
     if (!all && pageIds.isEmpty)
       return Map.empty
 
@@ -407,13 +404,13 @@ class RdbSiteDao(
       sql += s" and g.PAGE_ID in (${ makeInListFor(pageIds) })"
     }
     var metaByPageId = Map[PageId, PageMeta]()
-    db.query(sql, values, rs => {
+    runQuery(sql, values, rs => {
       while (rs.next) {
         val pageId = rs.getString("PAGE_ID")
         val meta = _PageMeta(rs, pageId = pageId)
         metaByPageId += pageId -> meta
       }
-    })(anyOneAndOnlyConnection getOrElse connection)
+    })
     metaByPageId
   }
 
@@ -570,7 +567,7 @@ class RdbSiteDao(
 
 
   def loadTenant(): Site = {
-    systemDaoSpi.loadTenants(List(siteId)).head
+    rdbSystemDao.loadTenants(List(siteId)).head
   }
 
 
@@ -581,8 +578,7 @@ class RdbSiteDao(
         exists(select 1 from DW1_PAGES where SITE_ID = ?) as content_exists,
         (select CREATOR_EMAIL_ADDRESS from DW1_TENANTS where ID = ?) as admin_email,
         (select EMBEDDING_SITE_URL from DW1_TENANTS where ID = ?) as embedding_site_url"""
-    db.queryAtnms(sql, List(siteId, siteId, siteId, siteId), rs => {
-      rs.next()
+    runQueryFindExactlyOne(sql, List(siteId, siteId, siteId, siteId), rs => {
       val adminExists = rs.getBoolean("admin_exists")
       val contentExists = rs.getBoolean("content_exists")
       val adminEmail = rs.getString("admin_email")
@@ -798,15 +794,13 @@ class RdbSiteDao(
 
     var items = List[PagePathAndMeta]()
 
-    db.withConnection { implicit connection =>
-     db.query(sql, values, rs => {
+    runQuery(sql, values, rs => {
       while (rs.next) {
         val pagePath = _PagePath(rs, siteId)
         val pageMeta = _PageMeta(rs, pagePath.pageId.get)
         items ::= PagePathAndMeta(pagePath, pageMeta)
       }
-     })
-    }
+    })
     items.reverse
   }
 
@@ -989,26 +983,18 @@ class RdbSiteDao(
 
 
   def loadPagePath(pageId: PageId): Option[PagePath] =
-    lookupPagePathImpl(pageId)(theOneAndOnlyConnection)
+    lookupPagePathImpl(pageId)
 
 
-  def lookupPagePath(pageId: PageId): Option[PagePath] =
-    lookupPagePathImpl(pageId)(null)
-
-
-  def lookupPagePathImpl(pageId: PageId)(implicit connection: js.Connection)
-        : Option[PagePath] =
+  def lookupPagePathImpl(pageId: PageId): Option[PagePath] =
     lookupPagePathsImpl(pageId, loadRedirects = false).headOption
 
 
   def lookupPagePathAndRedirects(pageId: PageId): List[PagePath] =
-    lookupPagePathsImpl(pageId, loadRedirects = true)(null)
+    lookupPagePathsImpl(pageId, loadRedirects = true)
 
 
-  private def lookupPagePathsImpl(pageId: PageId, loadRedirects: Boolean)
-        (implicit connection: js.Connection)
-        : List[PagePath] = {
-
+  private def lookupPagePathsImpl(pageId: PageId, loadRedirects: Boolean): List[PagePath] = {
     val andOnlyCanonical = if (loadRedirects) "" else "and CANONICAL = 'C'"
     val values = List(siteId, pageId)
     val sql = s"""
@@ -1021,7 +1007,7 @@ class RdbSiteDao(
 
     var pagePaths = List[PagePath]()
 
-    db.query(sql, values, rs => {
+    runQuery(sql, values, rs => {
       var debugLastIsCanonical = false
       var debugLastCanonicalDati = new ju.Date(0)
       while (rs.next) {
@@ -1049,9 +1035,7 @@ class RdbSiteDao(
 
 
   // Looks up the correct PagePath for a possibly incorrect PagePath.
-  private def _findCorrectPagePath(pagePathIn: PagePath)
-      (implicit connection: js.Connection = null): Option[PagePath] = {
-
+  private def _findCorrectPagePath(pagePathIn: PagePath): Option[PagePath] = {
     var query = """
         select PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL
         from DW1_PAGE_PATHS
@@ -1116,7 +1100,7 @@ class RdbSiteDao(
     }
 
     val (correctPath: PagePath, isCanonical: Boolean) =
-      db.query(query, binds.reverse, rs => {
+      runQuery(query, binds.reverse, rs => {
         if (!rs.next)
           return None
         var correctPath = PagePath(

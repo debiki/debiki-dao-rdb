@@ -28,7 +28,7 @@ import RdbUtil._
 
 /** Loads statistics on users, e.g. num posts posted, and lists things they've done.
   */
-trait UserActionInfoSiteDaoMixin extends SiteDbDao {
+trait UserActionInfoSiteDaoMixin {
   self: RdbSiteDao =>
 
 
