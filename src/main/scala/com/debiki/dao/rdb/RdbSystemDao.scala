@@ -45,11 +45,9 @@ object RdbSystemDao {
 
 
 class RdbSystemDao(val daoFactory: RdbDaoFactory)
-  extends SystemDbDao with CreateSiteSystemDaoMixin with SystemTransaction {
+  extends SystemTransaction with CreateSiteSystemDaoMixin {
 
   def db = daoFactory.db
-
-  def close() { db.close() }
 
 
   /** If set, should be the only connection that this dao uses. Some old code doesn't
@@ -154,10 +152,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     siteTransaction
   }
 
-
-  def checkRepoVersion() = unimplemented
-
-  def secretSalt(): String = unimplemented
 
   /** Creates a site specific dao. */
   def newSiteDao(siteId: SiteId): RdbSiteDao = {

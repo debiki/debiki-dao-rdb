@@ -74,6 +74,8 @@ class RdbSiteDao(
     transaction
   }
 
+  def asSystem: SystemTransaction = rdbSystemDao
+
   def setSiteId(newId: SiteId) {
     siteId = newId
   }
@@ -567,7 +569,7 @@ class RdbSiteDao(
 
 
   def loadTenant(): Site = {
-    rdbSystemDao.loadTenants(List(siteId)).head
+    asSystem.loadTenants(List(siteId)).head
   }
 
 
