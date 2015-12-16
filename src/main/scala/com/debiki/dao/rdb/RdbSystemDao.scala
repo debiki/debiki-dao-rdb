@@ -223,7 +223,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     var usersByTenantAndId = Map[(SiteId, UserId), User]()
 
-    db.queryAtnms(totalQuery.toString, allValsReversed.reverse, rs => {
+    queryAtnms(totalQuery.toString, allValsReversed.reverse, rs => {
       while (rs.next) {
         val tenantId = rs.getString("SITE_ID")
         val user = _User(rs)
@@ -293,7 +293,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   def lookupCanonicalHost(hostname: String): Option[CanonicalHostLookup] = {
-    db.queryAtnms("""
+    queryAtnms("""
         select t.SITE_ID TID,
             t.CANONICAL THIS_CANONICAL,
             c.HOST CANONICAL_HOST
@@ -379,7 +379,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     var notfsByTenant =
        Map[SiteId, List[Notification]]().withDefaultValue(Nil)
 
-    db.queryAtnms(query, values, rs => {
+    queryAtnms(query, values, rs => {
       while (rs.next) {
         val siteId = rs.getString("SITE_ID")
         val notfTypeStr = rs.getString("NOTF_TYPE")

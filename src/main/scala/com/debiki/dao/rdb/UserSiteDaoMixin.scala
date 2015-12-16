@@ -418,9 +418,7 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   def loadUserByEmailOrUsername(emailOrUsername: String): Option[User] = {
-    db.withConnection(connection => {
-      loadUserByEmailOrUsernameImpl(emailOrUsername)(connection)
-    })
+    loadUserByEmailOrUsernameImpl(emailOrUsername)(theOneAndOnlyConnection)
   }
 
 
@@ -484,15 +482,13 @@ trait UserSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   private[rdb] def loadUsersAsList(userIds: List[UserId]): List[User] = {
-    val usersBySiteAndId =  // SHOULD specify quota consumers
-      systemDaoSpi.loadUsers(Map(siteId -> userIds))
+    val usersBySiteAndId = rdbSystemDao.loadUsers(Map(siteId -> userIds))
     usersBySiteAndId.values.toList
   }
 
 
   def loadUsersAsMap(userIds: Iterable[UserId]): Map[UserId, User] = {
-    val usersBySiteAndId =  // SHOULD specify quota consumers
-      systemDaoSpi.loadUsers(Map(siteId -> userIds.toList))
+    val usersBySiteAndId = rdbSystemDao.loadUsers(Map(siteId -> userIds.toList))
     usersBySiteAndId map { case (siteAndUserId, user) =>
       siteAndUserId._2 -> user
     }

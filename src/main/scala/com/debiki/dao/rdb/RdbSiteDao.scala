@@ -1204,7 +1204,7 @@ class RdbSiteDao(
         values (?, ?, ?, ?, ?, 'C')
         """,
         List(pagePath.tenantId, pagePath.folder, pagePath.pageId.get,
-          showPageId, e2d(pagePath.pageSlug)))
+          showPageId, e2d(pagePath.pageSlug)))(conn)
     }
     catch {
       case ex: js.SQLException if (isUniqueConstrViolation(ex)) =>
