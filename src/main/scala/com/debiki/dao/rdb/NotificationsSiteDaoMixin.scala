@@ -46,7 +46,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
     val sql = """
       insert into DW1_NOTIFICATIONS(
         SITE_ID, CREATED_AT, NOTF_TYPE,
-        UNIQUE_POST_ID, PAGE_ID, POST_ID, ACTION_TYPE, ACTION_SUB_ID,
+        UNIQUE_POST_ID, PAGE_ID, post_nr, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
@@ -60,7 +60,7 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
       case postNotf: Notification.NewPost =>
         values += postNotf.uniquePostId.asAnyRef
         values += postNotf.pageId
-        values += postNotf.postId.asAnyRef
+        values += postNotf.postNr.asAnyRef
         values += NullInt // no related post action
         values += NullInt //
         values += postNotf.byUserId.asAnyRef
@@ -79,9 +79,9 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
           where SITE_ID = ?
             and NOTF_TYPE = 'M'
             and PAGE_ID = ?
-            and POST_ID = ?
+            and post_nr = ?
             and TO_USER_ID = ?"""
-        val values = List(siteId, mentionToDelete.pageId, mentionToDelete.postId.asAnyRef,
+        val values = List(siteId, mentionToDelete.pageId, mentionToDelete.postNr.asAnyRef,
           mentionToDelete.toUserId.asAnyRef)
         (sql, values)
       case postToDelete: NotificationToDelete.NewPostToDelete =>
@@ -90,8 +90,8 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
           where SITE_ID = ?
             and NOTF_TYPE in ('M', 'R', 'N') -- for now
             and PAGE_ID = ?
-            and POST_ID = ?"""
-        val values = List(siteId, postToDelete.pageId, postToDelete.postId.asAnyRef)
+            and post_nr = ?"""
+        val values = List(siteId, postToDelete.pageId, postToDelete.postNr.asAnyRef)
         (sql, values)
     }
 
@@ -137,8 +137,8 @@ trait NotificationsSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
     val (whereClause, values): (String, List[AnyRef]) = notification match {
       case newPost: Notification.NewPost =>
-        ("SITE_ID = ? and NOTF_TYPE = ? and PAGE_ID = ? and POST_ID = ? and TO_USER_ID = ?",
-          List(siteId, tyype, newPost.pageId, newPost.postId.asAnyRef, newPost.toUserId.asAnyRef))
+        ("SITE_ID = ? and NOTF_TYPE = ? and PAGE_ID = ? and post_nr = ? and TO_USER_ID = ?",
+          List(siteId, tyype, newPost.pageId, newPost.postNr.asAnyRef, newPost.toUserId.asAnyRef))
     }
 
     val emailStatus =

@@ -370,14 +370,14 @@ object RdbUtil {
   }
 
 
-  def toDbMultireply(postIds: Set[PostId]) = {
-    if (postIds.isEmpty) NullVarchar
-    else postIds.mkString(",")
+  def toDbMultireply(postNrs: Set[PostNr]) = {
+    if (postNrs.isEmpty) NullVarchar
+    else postNrs.mkString(",")
   }
 
-  def fromDbMultireply(postIdsCommaSeparated: String): Set[PostId] = {
-    if (postIdsCommaSeparated == null) Set[PostId]()
-    else postIdsCommaSeparated.split(',').map(_.toInt).toSet
+  def fromDbMultireply(postNrsCommaSeparated: String): Set[PostNr] = {
+    if (postNrsCommaSeparated == null) Set[PostNr]()
+    else postNrsCommaSeparated.split(',').map(_.toInt).toSet
   }
 
   def _toPageStatus(pageStatusStr: String): PageStatus = pageStatusStr match {

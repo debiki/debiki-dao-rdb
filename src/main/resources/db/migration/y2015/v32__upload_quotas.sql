@@ -137,3 +137,9 @@ begin
 end $$ language plpgsql;
 
 
+-- Let's do this too:
+alter table dw2_posts rename post_id to post_nr;
+alter table dw2_posts rename parent_post_id to parent_nr;
+alter table dw2_post_actions rename post_id to post_nr;
+alter table dw1_notifications rename post_id to post_nr;
+alter table dw1_posts_read_stats rename post_id to post_nr;

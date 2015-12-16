@@ -345,7 +345,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val baseQuery = """
       select
         SITE_ID, NOTF_TYPE, CREATED_AT,
-        UNIQUE_POST_ID, PAGE_ID, POST_ID, ACTION_TYPE, ACTION_SUB_ID,
+        UNIQUE_POST_ID, PAGE_ID, post_nr, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID,
         EMAIL_ID, EMAIL_STATUS, SEEN_AT
       from DW1_NOTIFICATIONS
@@ -386,7 +386,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val createdAt = getDate(rs, "CREATED_AT")
         val uniquePostId = rs.getInt("UNIQUE_POST_ID")
         val pageId = rs.getString("PAGE_ID")
-        val postId = rs.getInt("POST_ID")
+        val postNr = rs.getInt("post_nr")
         val actionType = getResultSetIntOption(rs, "ACTION_TYPE").map(fromActionTypeInt)
         val actionSubId = getResultSetIntOption(rs, "ACTION_SUB_ID")
         val byUserId = rs.getInt("BY_USER_ID")
@@ -408,7 +408,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
               createdAt = createdAt,
               uniquePostId = uniquePostId,
               pageId = pageId,
-              postId = postId,
+              postNr = postNr,
               byUserId = byUserId,
               toUserId = toUserId,
               emailId = emailId,
@@ -443,21 +443,21 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     // because then we can restrict the search to a subsection of the site
     // (namely below a certain page id).)
 
-    val postIdsByPageBySite = loadIdsOfPostsToIndex(currentIndexVersion, limit)(connection)
-    loadPostsToIndex(postIdsByPageBySite)(connection)
+    val postNrsByPageBySite = loadNrsOfPostsToIndex(currentIndexVersion, limit)(connection)
+    loadPostsToIndex(postNrsByPageBySite)(connection)
   }
 
 
-  private def loadIdsOfPostsToIndex(
+  private def loadNrsOfPostsToIndex(
         currentIndexVersion: Int, limit: Int)(connection: js.Connection)
-        : col.Map[SiteId, col.Map[PageId, col.Seq[PostId]]] = {
+        : col.Map[SiteId, col.Map[PageId, col.Seq[PostNr]]] = {
 
-    val postIdsByPageBySite = mut.Map[SiteId, mut.Map[PageId, mut.ArrayBuffer[PostId]]]()
+    val postNrsByPageBySite = mut.Map[SiteId, mut.Map[PageId, mut.ArrayBuffer[PostNr]]]()
 
     // `currentIndexVersion` shouldn't change until server restarted.
     unimplemented("Indexing posts in DW2_POSTS", "DwE4KUPY8") // this uses a deleted table:
     val sql = s"""
-      select SITE_ID, PAGE_ID, POST_ID from DW1_PAGE_ACTIONS
+      select SITE_ID, PAGE_ID, post_nr from DW1_PAGE_ACTIONS
       where TYPE = 'Post' and INDEX_VERSION <> $currentIndexVersion
       order by SITE_ID, PAGE_ID
       limit $limit
@@ -467,23 +467,23 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       while (rs.next) {
         val siteId = rs.getString("SITE_ID")
         val pageId = rs.getString("PAGE_ID")
-        val postId = rs.getInt("POST_ID")
-        if (postIdsByPageBySite.get(siteId).isEmpty) {
-          postIdsByPageBySite(siteId) = mut.Map[PageId, mut.ArrayBuffer[PostId]]()
+        val postNr = rs.getInt("post_nr")
+        if (postNrsByPageBySite.get(siteId).isEmpty) {
+          postNrsByPageBySite(siteId) = mut.Map[PageId, mut.ArrayBuffer[PostNr]]()
         }
-        if (postIdsByPageBySite(siteId).get(pageId).isEmpty) {
-          postIdsByPageBySite(siteId)(pageId) = mut.ArrayBuffer[PostId]()
+        if (postNrsByPageBySite(siteId).get(pageId).isEmpty) {
+          postNrsByPageBySite(siteId)(pageId) = mut.ArrayBuffer[PostNr]()
         }
-        postIdsByPageBySite(siteId)(pageId) += postId
+        postNrsByPageBySite(siteId)(pageId) += postNr
       }
     })(connection)
 
-    postIdsByPageBySite
+    postNrsByPageBySite
   }
 
 
   private def loadPostsToIndex(
-        postIdsByPageBySite: col.Map[SiteId, col.Map[PageId, col.Seq[PostId]]])(
+        postNrsByPageBySite: col.Map[SiteId, col.Map[PageId, col.Seq[PostNr]]])(
         connection: js.Connection): Vector[PostsToIndex] = {
     unimplemented("Loading posts to index [DwE7FKEf2]") /*
     var chunksOfPostsToIndex = Vector[PostsToIndex]()

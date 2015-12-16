@@ -151,7 +151,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
     /*
     val (guestOrRoleId, userIdColumn) = RdbUtil.userIdAndColumnFor(userId)
     val query = s"""
-      select PAGE_ID, POST_ID, PAID, TIME, TYPE, RELPA, TIME
+      select PAGE_ID, post_nr, PAID, TIME, TYPE, RELPA, TIME
       from DW1_PAGE_ACTIONS
       where SITE_ID = ? and $userIdColumn = ?
       order by time desc
@@ -162,7 +162,7 @@ trait UserActionInfoSiteDaoMixin extends SiteDbDao {
     db.queryAtnms(query, values, rs => {
       while (rs.next) {
         val pageId = rs.getString("PAGE_ID")
-        val postId = rs.getInt("POST_ID")
+        val postId = rs.getInt("post_nr")
         val actionId = rs.getInt("PAID")
         val tyype = rs.getString("TYPE")
         val relatedActionId = rs.getInt("RELPA")

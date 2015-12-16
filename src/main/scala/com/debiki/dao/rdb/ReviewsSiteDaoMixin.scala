@@ -123,7 +123,8 @@ trait ReviewsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   }
 
 
-  override def loadPendingPostReviewTask(postId: PostId, causedById: UserId): Option[ReviewTask] = {
+  override def loadPendingPostReviewTask(postId: UniquePostId, causedById: UserId)
+        : Option[ReviewTask] = {
     loadReviewTaskImpl(
       s"completed_at is null and invalidated_at is null and caused_by_id = ? and post_id = ?",
       Seq(causedById.asAnyRef, postId.asAnyRef))

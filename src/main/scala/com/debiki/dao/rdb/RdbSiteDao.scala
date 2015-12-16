@@ -1358,7 +1358,7 @@ class RdbSiteDao(
   }
 
 
-  def rememberPostsAreIndexed(indexedVersion: Int, pageAndPostIds: PagePostId*) {
+  def rememberPostsAreIndexed(indexedVersion: Int, pageAndPostIds: PagePostNr*) {
     val pagesAndPostsClause =
       pageAndPostIds.map(_ => "(PAGE_ID = ? and PAID = ?)").mkString(" or ")
 

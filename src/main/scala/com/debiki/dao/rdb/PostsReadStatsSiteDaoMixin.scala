@@ -34,7 +34,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao with SiteTransaction {
   self: RdbSiteDao =>
 
 
-  def updatePostsReadStats(pageId: PageId, postIdsRead: Set[PostId],
+  def updatePostsReadStats(pageId: PageId, postNrsRead: Set[PostNr],
         readById: UserId, readFromIp: String) {
 
     // There's an ignore-duplicate-inserts rule in the database (DW1_PSTSRD_IGNORE_DUPL_INS).
@@ -49,13 +49,13 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao with SiteTransaction {
     // fail on any single unique key error.)
     // (If we'd like to avoid roundtrips for separate commits, we could enable autocommit?
     // Or insert via a stored procedure? Well, performance hardly matters.)
-    for (postId <- postIdsRead) {
+    for (postNr <- postNrsRead) {
       transactionCheckQuota { implicit connection =>
         val sql = s"""
           insert into DW1_POSTS_READ_STATS(
-            SITE_ID, PAGE_ID, POST_ID, IP, USER_ID, READ_AT)
+            SITE_ID, PAGE_ID, post_nr, IP, USER_ID, READ_AT)
           values (?, ?, ?, ?, ?, ?)"""
-        val values = List[AnyRef](siteId, pageId, postId.asAnyRef,
+        val values = List[AnyRef](siteId, pageId, postNr.asAnyRef,
           readFromIp, readById.asAnyRef, currentTime)
         try {
           db.update(sql, values)
@@ -71,42 +71,42 @@ trait PostsReadStatsSiteDaoMixin extends SiteDbDao with SiteTransaction {
 
 
   def loadPostsReadStats(pageId: PageId): PostsReadStats =
-    loadPostsReadStats(pageId, postId = None)
+    loadPostsReadStats(pageId, postNr = None)
 
 
-  def loadPostsReadStats(pageId: PageId, postId: Option[PostId]): PostsReadStats = {
+  def loadPostsReadStats(pageId: PageId, postNr: Option[PostNr]): PostsReadStats = {
     var sql = s"""
-      select POST_ID, IP, USER_ID from DW1_POSTS_READ_STATS
+      select post_nr, IP, USER_ID from DW1_POSTS_READ_STATS
       where SITE_ID = ? and PAGE_ID = ?"""
     val values = ArrayBuffer[AnyRef](siteId, pageId)
-    postId foreach { id =>
-      sql += " and POST_ID = ?"
+    postNr foreach { id =>
+      sql += " and post_nr = ?"
       values.append(id.asAnyRef)
     }
-    val ipsByPostId = mutable.HashMap[PostId, ArrayBuffer[String]]()
-    val roleIdsByPostId = mutable.HashMap[PostId, ArrayBuffer[RoleId]]()
+    val ipsByPostNr = mutable.HashMap[PostNr, ArrayBuffer[String]]()
+    val roleIdsByPostNr = mutable.HashMap[PostNr, ArrayBuffer[RoleId]]()
 
     db.queryAtnms(sql, values.toList, rs => {
       while (rs.next) {
-        val postId = rs.getInt("POST_ID")
+        val postNr = rs.getInt("post_nr")
         val ip = rs.getString("IP")
         val anyUserId = getOptionalIntNoneNot0(rs, "USER_ID")
         anyUserId match {
           case Some(id) if User.isRoleId(id) =>
-            val buffer = roleIdsByPostId.getOrElseUpdate(postId, new ArrayBuffer[RoleId])
+            val buffer = roleIdsByPostNr.getOrElseUpdate(postNr, new ArrayBuffer[RoleId])
             buffer += id
           case _ =>
-            val buffer = ipsByPostId.getOrElseUpdate(postId, new ArrayBuffer[String])
+            val buffer = ipsByPostNr.getOrElseUpdate(postNr, new ArrayBuffer[String])
             buffer += ip
         }
       }
     })
 
-    val immutableIpsMap = ipsByPostId.map({ case (postId, ips) =>
-      (postId, ips.toSet)
+    val immutableIpsMap = ipsByPostNr.map({ case (postNr, ips) =>
+      (postNr, ips.toSet)
     }).toMap
-    val immutableRolesMap = roleIdsByPostId.map({ case (postId, roleIds) =>
-      (postId, roleIds.toSet)
+    val immutableRolesMap = roleIdsByPostNr.map({ case (postNr, roleIds) =>
+      (postNr, roleIds.toSet)
     }).toMap
 
     PostsReadStats(immutableIpsMap, immutableRolesMap)

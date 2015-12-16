@@ -110,14 +110,14 @@ trait FullTextSearchSiteDaoMixin extends SiteDbDao {
   }
 
 
-  def debugUnindexPosts(pageAndPostIds: PagePostId*) {
+  def debugUnindexPosts(pageAndPostNrs: PagePostNr*) {
     // Mark posts as unindexed in DW1_PAGE_ACTIONS before deleting them from
     // ElasticSearch, in case the server crashes.
 
-    rememberPostsAreIndexed(indexedVersion = 0, pageAndPostIds: _*)
+    rememberPostsAreIndexed(indexedVersion = 0, pageAndPostNrs: _*)
 
-    for (PagePostId(pageId, postId) <- pageAndPostIds) {
-      val id = elasticSearchIdFor(siteId, pageId = pageId, postId = postId)
+    for (PagePostNr(pageId, postNr) <- pageAndPostNrs) {
+      val id = elasticSearchIdFor(siteId, pageId = pageId, postNr = postNr)
       client.prepareDelete(IndexName, PostMappingName, id)
         .setRouting(siteId)
         .execute()

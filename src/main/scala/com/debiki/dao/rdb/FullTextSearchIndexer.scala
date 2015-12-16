@@ -343,8 +343,8 @@ object FullTextSearchIndexer {
     elasticSearchIdFor(siteId, pageId = post.page.id, postId = post.id)
     */
 
-  def elasticSearchIdFor(siteId: String, pageId: PageId, postId: PostId): String =
-    s"$siteId:$pageId:$postId"
+  def elasticSearchIdFor(siteId: String, pageId: PageId, postNr: PostNr): String =
+    s"$siteId:$pageId:$postNr"
 
 
   object JsonKeys {
