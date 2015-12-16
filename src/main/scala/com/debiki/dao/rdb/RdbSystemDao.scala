@@ -55,9 +55,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     * I'll rename it to 'connection', when all that old code is gone and there's only
     * one connection always.
     */
-  def anyOneAndOnlyConnection =
-    _theOneAndOnlyConnection
-
   // COULD move to new superclass?
   def theOneAndOnlyConnection = {
     if (transactionEnded)
@@ -102,14 +99,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def withConnection[T](f: (js.Connection) => T): T = {
-    anyOneAndOnlyConnection foreach { connection =>
-      return f(connection)
-    }
-    db.withConnection(f)
-  }
-
-
   // COULD move to new superclass?
   def runQuery[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
     db.query(query, values, resultSetHandler)(theOneAndOnlyConnection)
@@ -129,23 +118,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  // COULD move to new superclass?
-  def queryAtnms[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
-    anyOneAndOnlyConnection foreach { connection =>
-      return db.query(query, values, resultSetHandler)(connection)
-    }
-    db.queryAtnms(query, values, resultSetHandler)
-  }
-
-
-  def transaction[T](f: (js.Connection) => T): T = {
-    anyOneAndOnlyConnection foreach { connection =>
-      return f(connection)
-    }
-    db.transaction(f)
-  }
-
-
   override def siteTransaction(siteId: SiteId): SiteTransaction = {
     val siteTransaction = new RdbSiteDao(siteId, daoFactory)
     siteTransaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
@@ -157,6 +129,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   def newSiteDao(siteId: SiteId): RdbSiteDao = {
     // The site dao should use the same transaction connection, if we have any;
     dieIf(_theOneAndOnlyConnection ne null, "DwE6KEG3")
+    dieIf(transactionEnded, "EsE5MGUW2")
     daoFactory.newSiteDbDao(siteId)
   }
 
@@ -217,7 +190,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     var usersByTenantAndId = Map[(SiteId, UserId), User]()
 
-    queryAtnms(totalQuery.toString, allValsReversed.reverse, rs => {
+    runQuery(totalQuery.toString, allValsReversed.reverse, rs => {
       while (rs.next) {
         val tenantId = rs.getString("SITE_ID")
         val user = _User(rs)
@@ -250,7 +223,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       hostsQuery += " where SITE_ID = ?" // for now, later: in (...)
       hostsValues = List(tenantIds.head)
     }
-    queryAtnms(hostsQuery, hostsValues, rs => {
+    runQuery(hostsQuery, hostsValues, rs => {
         while (rs.next) {
           val tenantId = rs.getString("SITE_ID")
           var hosts = hostsByTenantId(tenantId)
@@ -269,7 +242,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       sitesValues = List(tenantIds.head)
     }
     var tenants = List[Site]()
-    queryAtnms(sitesQuery, sitesValues, rs => {
+    runQuery(sitesQuery, sitesValues, rs => {
       while (rs.next) {
         val tenantId = rs.getString("ID")
         val hosts = hostsByTenantId(tenantId)
@@ -287,7 +260,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   def lookupCanonicalHost(hostname: String): Option[CanonicalHostLookup] = {
-    queryAtnms("""
+    runQuery("""
         select t.SITE_ID TID,
             t.CANONICAL THIS_CANONICAL,
             c.HOST CANONICAL_HOST
@@ -373,7 +346,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     var notfsByTenant =
        Map[SiteId, List[Notification]]().withDefaultValue(Nil)
 
-    queryAtnms(query, values, rs => {
+    runQuery(query, values, rs => {
       while (rs.next) {
         val siteId = rs.getString("SITE_ID")
         val notfTypeStr = rs.getString("NOTF_TYPE")
@@ -419,7 +392,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def findPostsNotYetIndexed(currentIndexVersion: Int, limit: Int): Seq[PostsToIndex] = {
+  def findPostsNotYetIndexedNoTransaction(currentIndexVersion: Int, limit: Int)
+        : Seq[PostsToIndex] = {
     db.withConnection { connection =>
       findPostsNotYetIndexedImpl(currentIndexVersion, limit)(connection)
     }
@@ -625,12 +599,11 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   override def emptyDatabase() {
-    require(daoFactory.isTest)
-    db.transaction { implicit connection =>
+      require(daoFactory.isTest)
 
       // There are foreign keys from DW1_TENANTS to other tables, and
       // back.
-      db.update("SET CONSTRAINTS ALL DEFERRED")
+      runUpdate("SET CONSTRAINTS ALL DEFERRED")
 
       s"""
       delete from dw2_audit_log
@@ -658,9 +631,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from dw1_tenants where id <> '$FirstSiteId'
       update DW1_TENANTS set NEXT_PAGE_ID = 1
       alter sequence DW1_TENANTS_ID restart
-      """.trim.split("\n") foreach { db.update(_) }
+      """.trim.split("\n") foreach { runUpdate(_) }
 
-      db.update(s"""
+      runUpdate(s"""
           update dw1_tenants set
             quota_limit_mbs = null, num_guests = 0, num_identities = 0, num_roles = 0,
             num_role_settings = 0, num_pages = 0, num_posts = 0, num_post_text_bytes = 0,
@@ -670,8 +643,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           where id = '$FirstSiteId'
           """)
 
-      db.update("SET CONSTRAINTS ALL IMMEDIATE")
-    }
+      runUpdate("SET CONSTRAINTS ALL IMMEDIATE")
   }
 
 }

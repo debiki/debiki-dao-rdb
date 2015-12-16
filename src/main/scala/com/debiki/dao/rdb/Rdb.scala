@@ -302,14 +302,6 @@ class Rdb(val dataSource: jxs.DataSource){
 
 
   /**
-   * Returns the number of lines updated, or throws an exception.
-   */
-  def updateAtnms(sql: String, binds: List[AnyRef] = Nil): Int = {
-    execImpl(sql, binds, null, conn = null).asInstanceOf[Int]
-  }
-
-
-  /**
    * For calls to stored functions: """{? = call some_function(?, ?, ...) }"""
    */
   def call[A](sql: String, binds: List[AnyRef] = Nil, outParamSqlType: Int,

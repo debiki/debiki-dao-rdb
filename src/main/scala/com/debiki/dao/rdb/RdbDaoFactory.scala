@@ -32,8 +32,7 @@ class RdbDaoFactory(
   val fastStartSkipSearch: Boolean = false) extends DbDaoFactory {
 
 
-  val systemDbDao = new RdbSystemDao(this)
-  systemDbDao.applyEvolutions()
+  new RdbSystemDao(this).applyEvolutions()
 
 
   def fullTextSearchIndexer =

@@ -101,7 +101,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
   def loadNotificationsForRole(roleId: RoleId): Seq[Notification] = {
     val numToLoad = 50 // for now
-    val notfsToMail = rdbSystemDao.loadNotfsImpl(   // COULD specify consumers
+    val notfsToMail = asSystem.loadNotfsImpl(   // COULD specify consumers
         numToLoad, Some(siteId), userIdOpt = Some(roleId))
     // All loaded notifications are to `roleId` only.
     notfsToMail(siteId)

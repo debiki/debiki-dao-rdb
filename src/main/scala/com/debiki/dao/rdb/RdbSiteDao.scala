@@ -39,10 +39,9 @@ import RdbUtil._
   * FullTextSearchSiteDaoMixin. But not very important, because
   * it doesn't have any mutable state.
   */
-class RdbSiteDao(
-  var siteId: SiteId,
-  val daoFactory: RdbDaoFactory)
-  extends PagesSiteDaoMixin
+class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
+  extends SiteTransaction
+  with PagesSiteDaoMixin
   with PostsSiteDaoMixin
   with UploadsSiteDaoMixin
   with CategoriesSiteDaoMixin
@@ -55,26 +54,22 @@ class RdbSiteDao(
   with SettingsSiteDaoMixin
   with BlocksSiteDaoMixin
   with ReviewsSiteDaoMixin
-  with AuditLogSiteDaoMixin
-  with SiteTransaction {
+  with AuditLogSiteDaoMixin {
 
 
   val MaxWebsitesPerIp = 6
 
   val LocalhostAddress = "127.0.0.1"
 
-  def db = systemDaoSpi.db
+  def db = daoFactory.db
 
-  @deprecated("use systemDao instead", "now")
-  def systemDaoSpi = daoFactory.systemDbDao // why this weird name?
-
-  lazy val rdbSystemDao: RdbSystemDao = {
+  /** Lets us call SystemTransaction functions, in the same transaction.
+    */
+  lazy val asSystem: RdbSystemDao = {
     val transaction = new RdbSystemDao(daoFactory)
     transaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
     transaction
   }
-
-  def asSystem: SystemTransaction = rdbSystemDao
 
   def setSiteId(newId: SiteId) {
     siteId = newId
@@ -82,7 +77,7 @@ class RdbSiteDao(
 
   def fullTextSearchIndexer = daoFactory.fullTextSearchIndexer
 
-  lazy val currentTime: ju.Date = rdbSystemDao.currentTime
+  lazy val currentTime: ju.Date = asSystem.currentTime
 
 
 
@@ -146,6 +141,7 @@ class RdbSiteDao(
       // In this case I've moved the over quota check to com.debiki.core.DbDao2.
       return f(connection)
     }
+    die("anyOneAndOnlyConnection is empty [EsE5MPKW2]") /*
     systemDaoSpi.db.transaction { connection =>
       val result = f(connection)
       val resourceUsage = loadResourceUsage(connection)
@@ -155,7 +151,7 @@ class RdbSiteDao(
           throw OverQuotaException(siteId, resourceUsage)
       }
       result
-    }
+    } */
   }
 
 
@@ -163,7 +159,9 @@ class RdbSiteDao(
     anyOneAndOnlyConnection foreach { connection =>
       return f(connection)
     }
+    die("anyOneAndOnlyConnection is empty [EsE7GJMU23]") /*
     systemDaoSpi.db.transaction(f)
+    */
   }
 
 
@@ -261,15 +259,6 @@ class RdbSiteDao(
     val numRowsUpdated = runUpdate(statement, values)
     dieIf(numRowsUpdated != correctNumRows, "EsE2GYU7", o"""This statement modified $numRowsUpdated
         rows but should have modified $correctNumRows rows: $statement""")
-  }
-
-
-  // COULD move to new superclass?
-  def queryAtnms[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
-    anyOneAndOnlyConnection foreach { connection =>
-      return db.query(query, values, resultSetHandler)(connection)
-    }
-    db.queryAtnms(query, values, resultSetHandler)
   }
 
 
@@ -636,7 +625,7 @@ class RdbSiteDao(
 
 
   def insertSiteHost(host: SiteHost) {
-    rdbSystemDao.insertSiteHost(siteId, host)
+    asSystem.insertSiteHost(siteId, host)
   }
 
 
@@ -714,7 +703,7 @@ class RdbSiteDao(
 
   def addSiteHost(host: SiteHost) = {
     // SHOULD hard code max num hosts, e.g. 10.
-    rdbSystemDao.insertSiteHost(siteId, host)
+    asSystem.insertSiteHost(siteId, host)
   }
 
 

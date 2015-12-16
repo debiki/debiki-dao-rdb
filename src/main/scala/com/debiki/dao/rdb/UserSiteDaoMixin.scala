@@ -482,13 +482,13 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   private[rdb] def loadUsersAsList(userIds: List[UserId]): List[User] = {
-    val usersBySiteAndId = rdbSystemDao.loadUsers(Map(siteId -> userIds))
+    val usersBySiteAndId = asSystem.loadUsers(Map(siteId -> userIds))
     usersBySiteAndId.values.toList
   }
 
 
   def loadUsersAsMap(userIds: Iterable[UserId]): Map[UserId, User] = {
-    val usersBySiteAndId = rdbSystemDao.loadUsers(Map(siteId -> userIds.toList))
+    val usersBySiteAndId = asSystem.loadUsers(Map(siteId -> userIds.toList))
     usersBySiteAndId map { case (siteAndUserId, user) =>
       siteAndUserId._2 -> user
     }

@@ -86,7 +86,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction {
     val ipsByPostNr = mutable.HashMap[PostNr, ArrayBuffer[String]]()
     val roleIdsByPostNr = mutable.HashMap[PostNr, ArrayBuffer[RoleId]]()
 
-    db.queryAtnms(sql, values.toList, rs => {
+    runQuery(sql, values.toList, rs => {
       while (rs.next) {
         val postNr = rs.getInt("post_nr")
         val ip = rs.getString("IP")

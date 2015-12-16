@@ -226,8 +226,6 @@ private[rdb] class IndexingActor(
   private val client: es.client.Client,
   private val relDbDaoFactory: RdbDaoFactory) extends Actor {
 
-  private def systemDao: RdbSystemDao = relDbDaoFactory.systemDbDao
-
   // For now, don't index all pending posts. That'd result in my Amazon EC2 instance
   // grinding to a halt, when the hypervisor steals all time becaues it uses too much CPU?
   private val MaxPostsToIndexAtOnce = 50
@@ -241,13 +239,15 @@ private[rdb] class IndexingActor(
 
 
   private def loadAndIndexPendingPosts() {
+    unimplemented("loadAndIndexPendingPosts [EsE4GPU9]") /*
     val chunksOfPostsToIndex: Seq[PostsToIndex] =
-      systemDao.findPostsNotYetIndexed(
+      systemDao.findPostsNotYetIndexedNoTransaction(
         currentIndexVersion = FullTextSearchIndexer.IndexVersion, limit = MaxPostsToIndexAtOnce)
 
     chunksOfPostsToIndex foreach { postsToIndex =>
       indexPosts(postsToIndex)
     }
+    */
   }
 
   private def indexPosts(postsToIndex: PostsToIndex) {
