@@ -43,6 +43,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   extends SiteTransaction
   with PagesSiteDaoMixin
   with PostsSiteDaoMixin
+  with MessagesSiteDaoMixin
   with UploadsSiteDaoMixin
   with CategoriesSiteDaoMixin
   with FullTextSearchSiteDaoMixin
@@ -194,6 +195,16 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
         Some(result)
       }
     })
+  }
+
+
+  // To merge runQueryFindMany just below, and this ...AsSet, into one single
+  // function [C, C[R]] that returns a generic collection C[R], see:
+  // http://stackoverflow.com/a/5734615/694469 and linked from there:
+  // http://stackoverflow.com/questions/5410846/how-do-i-apply-the-enrich-my-library-pattern-to-scala-collections
+  def runQueryFindManyAsSet[R](query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => R): immutable.Set[R] = {
+    runQueryFindMany(query, values, singleRowHandler).toSet
   }
 
 
