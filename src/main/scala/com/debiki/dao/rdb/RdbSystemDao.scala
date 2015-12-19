@@ -349,7 +349,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     runQuery(query, values, rs => {
       while (rs.next) {
         val siteId = rs.getString("SITE_ID")
-        val notfTypeStr = rs.getString("NOTF_TYPE")
+        val notfTypeInt = rs.getInt("NOTF_TYPE")
         val createdAt = getDate(rs, "CREATED_AT")
         val uniquePostId = rs.getInt("UNIQUE_POST_ID")
         val pageId = rs.getString("PAGE_ID")
@@ -362,15 +362,15 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val emailStatus = flagToEmailStatus(rs.getString("EMAIL_STATUS"))
         val seenAt = getOptionalDate(rs, "SEEN_AT")
 
-        val notification = notfTypeStr match {
-          case "R" | "M" | "N" =>
-            val newPostType = notfTypeStr match {
-              case "R" => Notification.NewPostNotfType.DirectReply
-              case "M" => Notification.NewPostNotfType.Mention
-              case "N" => Notification.NewPostNotfType.NewPost
-            }
+        import Notification.NewPostNotfType
+        val notfType = NewPostNotfType.fromInt(notfTypeInt).getOrDie(
+          "EsE6GMUK2", s"Bad notf type: $notfTypeInt")
+
+        val notification = notfType match {
+          case NewPostNotfType.DirectReply | NewPostNotfType.Mention | NewPostNotfType.Message |
+              NewPostNotfType.NewPost =>
             Notification.NewPost(
-              notfType = newPostType,
+              notfType = notfType,
               siteId = siteId,
               createdAt = createdAt,
               uniquePostId = uniquePostId,
@@ -615,6 +615,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from DW1_EMAILS_OUT
       delete from dw2_upload_refs
       delete from dw2_uploads
+      delete from message_members_3
       delete from DW2_POST_ACTIONS
       delete from dw2_post_revisions
       delete from DW2_POSTS

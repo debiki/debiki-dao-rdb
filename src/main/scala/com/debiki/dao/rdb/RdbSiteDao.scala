@@ -43,6 +43,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   extends SiteTransaction
   with PagesSiteDaoMixin
   with PostsSiteDaoMixin
+  with MessagesSiteDaoMixin
   with UploadsSiteDaoMixin
   with CategoriesSiteDaoMixin
   with FullTextSearchSiteDaoMixin
@@ -194,6 +195,16 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
         Some(result)
       }
     })
+  }
+
+
+  // To merge runQueryFindMany just below, and this ...AsSet, into one single
+  // function [C, C[R]] that returns a generic collection C[R], see:
+  // http://stackoverflow.com/a/5734615/694469 and linked from there:
+  // http://stackoverflow.com/questions/5410846/how-do-i-apply-the-enrich-my-library-pattern-to-scala-collections
+  def runQueryFindManyAsSet[R](query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => R): immutable.Set[R] = {
+    runQueryFindMany(query, values, singleRowHandler).toSet
   }
 
 
@@ -793,72 +804,6 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       }
     })
     items.reverse
-  }
-
-
-  def loadPermsOnPage(reqInfo: PermsOnPageQuery): PermsOnPage = {
-    // Currently all permissions are actually hardcoded in this function.
-    // (There's no permissions db table.)
-
-    /*
-    The algorithm: (a sketch. And not yet implemented)
-    lookup rules in PATHRULES:  (not implemented! paths hardcoded instead)
-      if guid, try:  parentFolder / -* /   (i.e. any guid in folder)
-      else, try:
-        first: parentFolder / pageName /   (this particular page)
-        then:  parentFolder / * /          (any page in folder)
-      Then continue with the parent folders:
-        first: parentsParent / parentFolderName /
-        then: parentsParent / * /
-      and so on with the parent's parent ...
-    */
-
-    // ?? Replace admin test with:
-    // if (requeuster.memships.contains(AdminGroupId)) return PermsOnPage.All
-
-    // Allow admins to do anything, e.g. create pages anywhere.
-    // (Currently users can edit their own pages only.)
-    if (reqInfo.user.map(_.isAdmin) == Some(true))
-      return PermsOnPage.All
-
-    // Files whose name starts with '_' are hidden, only admins have access.
-    if (reqInfo.pagePath.isHiddenPage)
-      return PermsOnPage.None
-
-    // People may view and use Javascript and CSS, but of course not edit it.
-    if (reqInfo.pagePath.isScriptOrStyle)
-      return PermsOnPage.None.copy(accessPage = true)
-
-    // For now, hardcode rules here:
-    val mayCreatePage = {
-      val p = reqInfo.pagePath.value
-      if (p startsWith "/test/") true
-      else if (p startsWith "/forum/") true
-      else if (p startsWith "/wiki/") true
-      else false
-    }
-
-    val isPageAuthor =
-      (for (user <- reqInfo.user; pageMeta <- reqInfo.pageMeta) yield {
-        user.id == pageMeta.authorId
-      }) getOrElse false
-
-
-    val isWiki = reqInfo.pagePath.folder == "/wiki/"
-
-    PermsOnPage.None.copy(
-      accessPage = true,
-      editUnauReply = true,
-      createPage = mayCreatePage,
-      editPage = isWiki || isPageAuthor,
-      // Authenticated users can edit others' comments.
-      //  — no, disable this for now, seems too dangerous.
-      //    Instead I should perhaps have the AutoApprover check the user's
-      //    past actions, and only sometimes automatically approve edits.
-      // (In the future, the reputation system (not implemented) will make
-      // them lose this ability should they misuse it.)
-      editAnyReply = isWiki, // || reqInfo.user.map(_.isAuthenticated) == Some(true)
-      pinReplies = isWiki || isPageAuthor)
   }
 
 

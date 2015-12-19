@@ -51,10 +51,8 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
-    val values = mutable.ArrayBuffer[AnyRef](
-      siteId,
-      d2ts(notf.createdAt),
-      notificationTypeToFlag(notf))
+    val values = mutable.ArrayBuffer[AnyRef](siteId, d2ts(notf.createdAt),
+      notf.tyype.toInt.asAnyRef)
 
     notf match {
       case postNotf: Notification.NewPost =>
@@ -133,12 +131,11 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     val baseSql =
       "update DW1_NOTIFICATIONS set EMAIL_ID = ?, EMAIL_STATUS = ? where "
 
-    val tyype = notificationTypeToFlag(notification)
-
     val (whereClause, values): (String, List[AnyRef]) = notification match {
       case newPost: Notification.NewPost =>
         ("SITE_ID = ? and NOTF_TYPE = ? and PAGE_ID = ? and post_nr = ? and TO_USER_ID = ?",
-          List(siteId, tyype, newPost.pageId, newPost.postNr.asAnyRef, newPost.toUserId.asAnyRef))
+          List(siteId, notification.tyype.toInt.asAnyRef, newPost.pageId,
+            newPost.postNr.asAnyRef, newPost.toUserId.asAnyRef))
     }
 
     val emailStatus =
@@ -148,16 +145,6 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     db.update(
       baseSql + whereClause,
       email.map(_.id).orNullVarchar :: emailStatusToFlag(emailStatus) :: values)(connection)
-  }
-
-
-  def notificationTypeToFlag(notification: Notification): AnyRef = notification match {
-    case newPostNotf: Notification.NewPost =>
-      (newPostNotf.notfType match {
-        case Notification.NewPostNotfType.DirectReply => "R"
-        case Notification.NewPostNotfType.Mention => "M"
-        case Notification.NewPostNotfType.NewPost => "N"
-      }).asAnyRef
   }
 
 }
