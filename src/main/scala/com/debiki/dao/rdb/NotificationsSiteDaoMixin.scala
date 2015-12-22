@@ -139,8 +139,8 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     }
 
     val emailStatus =
-      if (email.isDefined) Notification.EmailStatus.Created
-      else Notification.EmailStatus.Skipped
+      if (email.isDefined) NotfEmailStatus.Created
+      else NotfEmailStatus.Skipped
 
     db.update(
       baseSql + whereClause,
@@ -152,16 +152,16 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
 object NotificationsSiteDaoMixin {
 
-  def emailStatusToFlag(status: Notification.EmailStatus) = status match {
-    case Notification.EmailStatus.Created => "C"
-    case Notification.EmailStatus.Skipped => "S"
-    case Notification.EmailStatus.Undecided => "U"
+  def emailStatusToFlag(status: NotfEmailStatus) = status match {
+    case NotfEmailStatus.Created => "C"
+    case NotfEmailStatus.Skipped => "S"
+    case NotfEmailStatus.Undecided => "U"
   }
 
   def flagToEmailStatus(flag: String) = flag match {
-    case "C" => Notification.EmailStatus.Created
-    case "S" => Notification.EmailStatus.Skipped
-    case "U" => Notification.EmailStatus.Undecided
+    case "C" => NotfEmailStatus.Created
+    case "S" => NotfEmailStatus.Skipped
+    case "U" => NotfEmailStatus.Undecided
     case _ => die("DwEKEF05W3", s"Bad email status: `$flag'")
   }
 

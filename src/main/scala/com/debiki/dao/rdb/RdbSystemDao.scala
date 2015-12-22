@@ -362,13 +362,12 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val emailStatus = flagToEmailStatus(rs.getString("EMAIL_STATUS"))
         val seenAt = getOptionalDate(rs, "SEEN_AT")
 
-        import Notification.NewPostNotfType
-        val notfType = NewPostNotfType.fromInt(notfTypeInt).getOrDie(
+        val notfType = NotificationType.fromInt(notfTypeInt).getOrDie(
           "EsE6GMUK2", s"Bad notf type: $notfTypeInt")
 
         val notification = notfType match {
-          case NewPostNotfType.DirectReply | NewPostNotfType.Mention | NewPostNotfType.Message |
-              NewPostNotfType.NewPost =>
+          case NotificationType.DirectReply | NotificationType.Mention | NotificationType.Message |
+               NotificationType.NewPost =>
             Notification.NewPost(
               notfType = notfType,
               siteId = siteId,
