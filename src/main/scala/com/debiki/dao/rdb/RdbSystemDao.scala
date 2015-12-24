@@ -286,7 +286,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
   def loadNotificationsToMailOut(delayInMinutes: Int, numToLoad: Int)
         : Map[SiteId, Seq[Notification]] =
-    loadNotfsImpl(numToLoad, None, delayMinsOpt = Some(delayInMinutes))
+    loadNotfsImpl(numToLoad, unseenFirst = false, None, delayMinsOpt = Some(delayInMinutes))
 
 
   /**
@@ -295,7 +295,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
    * tenantIdOpt + userIdOpt --> loads that user's notfs
    * tenantIdOpt + emailIdOpt --> loads a single email and notf
    */
-  def loadNotfsImpl(numToLoad: Int, tenantIdOpt: Option[String] = None,
+  def loadNotfsImpl(limit: Int, unseenFirst: Boolean, tenantIdOpt: Option[String] = None,
         delayMinsOpt: Option[Int] = None, userIdOpt: Option[UserId] = None,
         emailIdOpt: Option[String] = None): Map[SiteId, Seq[Notification]] = {
 
@@ -306,12 +306,12 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     require(delayMinsOpt.isDefined != tenantIdOpt.isDefined)
     require(userIdOpt.isEmpty || tenantIdOpt.isDefined)
     require(emailIdOpt.isEmpty || tenantIdOpt.isDefined)
-    require(numToLoad > 0)
-    require(emailIdOpt.isEmpty || numToLoad == 1)
+    require(limit > 0)
+    require(emailIdOpt.isEmpty || limit == 1)
 
     val baseQuery = """
       select
-        SITE_ID, NOTF_TYPE, CREATED_AT,
+        SITE_ID, notf_id, NOTF_TYPE, CREATED_AT,
         UNIQUE_POST_ID, PAGE_ID, post_nr, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID,
         EMAIL_ID, EMAIL_STATUS, SEEN_AT
@@ -320,9 +320,13 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     val (whereOrderBy, values) = (userIdOpt, emailIdOpt) match {
       case (Some(uid), None) =>
-        // Later on, could choose to load only those not yet seen.
-        var whereOrderBy =
-          "SITE_ID = ? and TO_USER_ID = ? order by CREATED_AT desc"
+        val orderHow =
+          if (unseenFirst)
+            // Sync with index dw1_ntfs_seen_createdat__i, created just for this query.
+            "case when seen_at is null then null else created_at end desc nulls first"
+          else
+            "created_at desc"
+        val whereOrderBy = s"site_id = ? and to_user_id = ? order by $orderHow"
         val vals = List(tenantIdOpt.get, uid.asAnyRef)
         (whereOrderBy, vals)
       case (None, Some(emailId)) =>
@@ -342,20 +346,21 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         assErr("DwE093RI3")
     }
 
-    val query = baseQuery + whereOrderBy +" limit "+ numToLoad
+    val query = baseQuery + whereOrderBy +" limit "+ limit
     var notfsByTenant =
        Map[SiteId, List[Notification]]().withDefaultValue(Nil)
 
     runQuery(query, values, rs => {
       while (rs.next) {
         val siteId = rs.getString("SITE_ID")
+        val notfId = rs.getInt("notf_id")
         val notfTypeInt = rs.getInt("NOTF_TYPE")
         val createdAt = getDate(rs, "CREATED_AT")
         val uniquePostId = rs.getInt("UNIQUE_POST_ID")
         val pageId = rs.getString("PAGE_ID")
         val postNr = rs.getInt("post_nr")
-        val actionType = getResultSetIntOption(rs, "ACTION_TYPE").map(fromActionTypeInt)
-        val actionSubId = getResultSetIntOption(rs, "ACTION_SUB_ID")
+        val actionType = getOptionalInt(rs, "ACTION_TYPE").map(fromActionTypeInt)
+        val actionSubId = getOptionalInt(rs, "ACTION_SUB_ID")
         val byUserId = rs.getInt("BY_USER_ID")
         val toUserId = rs.getInt("TO_USER_ID")
         val emailId = Option(rs.getString("EMAIL_ID"))
@@ -369,8 +374,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           case NotificationType.DirectReply | NotificationType.Mention | NotificationType.Message |
                NotificationType.NewPost =>
             Notification.NewPost(
-              notfType = notfType,
               siteId = siteId,
+              id = notfId,
+              notfType = notfType,
               createdAt = createdAt,
               uniquePostId = uniquePostId,
               pageId = pageId,

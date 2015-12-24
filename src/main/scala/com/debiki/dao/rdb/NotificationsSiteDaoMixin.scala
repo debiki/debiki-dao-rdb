@@ -42,16 +42,28 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   }
 
 
+  override def nextNotificationId(): NotificationId = {
+    val query = """
+      select max(notf_id) max_id from dw1_notifications where site_id = ?
+      """
+    runQueryFindExactlyOne(query, List(siteId), rs => {
+      val maxId = rs.getInt("max_id") // null becomes 0, fine
+      maxId + 1
+    })
+  }
+
+
   private def createNotf(notf: Notification)(implicit connection: js.Connection) {
     val sql = """
       insert into DW1_NOTIFICATIONS(
-        SITE_ID, CREATED_AT, NOTF_TYPE,
+        SITE_ID, notf_id, CREATED_AT, NOTF_TYPE,
         UNIQUE_POST_ID, PAGE_ID, post_nr, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
-    val values = mutable.ArrayBuffer[AnyRef](siteId, d2ts(notf.createdAt),
+
+    val values = mutable.ArrayBuffer[AnyRef](siteId, notf.id.asAnyRef, d2ts(notf.createdAt),
       notf.tyype.toInt.asAnyRef)
 
     notf match {
@@ -70,12 +82,13 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
 
   private def deleteNotf(notfToDelete: NotificationToDelete)(implicit connection: js.Connection) {
+    import NotificationType._
     val (sql, values: List[AnyRef]) = notfToDelete match {
       case mentionToDelete: NotificationToDelete.MentionToDelete =>
-        val sql = """
+        val sql = s"""
           delete from DW1_NOTIFICATIONS
           where SITE_ID = ?
-            and NOTF_TYPE = 'M'
+            and NOTF_TYPE = ${Mention.toInt}
             and PAGE_ID = ?
             and post_nr = ?
             and TO_USER_ID = ?"""
@@ -83,10 +96,11 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
           mentionToDelete.toUserId.asAnyRef)
         (sql, values)
       case postToDelete: NotificationToDelete.NewPostToDelete =>
-        val sql = """
+        val sql = s"""
           delete from DW1_NOTIFICATIONS
           where SITE_ID = ?
-            and NOTF_TYPE in ('M', 'R', 'N') -- for now
+            and NOTF_TYPE in (
+              ${Mention.toInt}, ${DirectReply.toInt}, ${NewPost.toInt})
             and PAGE_ID = ?
             and post_nr = ?"""
         val values = List(siteId, postToDelete.pageId, postToDelete.postNr.asAnyRef)
@@ -97,12 +111,12 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadNotificationsForRole(roleId: RoleId): Seq[Notification] = {
-    val numToLoad = 50 // for now
-    val notfsToMail = asSystem.loadNotfsImpl(   // COULD specify consumers
-        numToLoad, Some(siteId), userIdOpt = Some(roleId))
+  def loadNotificationsForRole(roleId: RoleId, limit: Int, unseenFirst: Boolean)
+        : Seq[Notification] = {
+    val notfsBySiteId = asSystem.loadNotfsImpl(   // COULD specify consumers
+        limit = limit, unseenFirst = unseenFirst, Some(siteId), userIdOpt = Some(roleId))
     // All loaded notifications are to `roleId` only.
-    notfsToMail(siteId)
+    notfsBySiteId(siteId)
   }
 
 
@@ -123,28 +137,22 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
   def connectNotificationToEmail(notification: Notification, email: Option[Email])
         (connection: js.Connection) {
-
-    // Note! This won't work if the notification is related to a post action, not a post,
-    // because I'm not including action_type and action_sub_id in the where clause below.
-    // I added a comment about this in NotificationGenerator.generateForVote.
-
-    val baseSql =
-      "update DW1_NOTIFICATIONS set EMAIL_ID = ?, EMAIL_STATUS = ? where "
-
-    val (whereClause, values): (String, List[AnyRef]) = notification match {
-      case newPost: Notification.NewPost =>
-        ("SITE_ID = ? and NOTF_TYPE = ? and PAGE_ID = ? and post_nr = ? and TO_USER_ID = ?",
-          List(siteId, notification.tyype.toInt.asAnyRef, newPost.pageId,
-            newPost.postNr.asAnyRef, newPost.toUserId.asAnyRef))
-    }
+    val statement = i"""
+      update dw1_notifications set email_id = ?, email_status = ?
+      where site_id = ? and notf_id = ?
+      """
 
     val emailStatus =
       if (email.isDefined) NotfEmailStatus.Created
       else NotfEmailStatus.Skipped
 
-    db.update(
-      baseSql + whereClause,
-      email.map(_.id).orNullVarchar :: emailStatusToFlag(emailStatus) :: values)(connection)
+    val values = List(
+      email.map(_.id).orNullVarchar,
+      emailStatusToFlag(emailStatus),
+      siteId,
+      notification.id.asAnyRef)
+
+    db.update(statement, values)(connection)
   }
 
 }

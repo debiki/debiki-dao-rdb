@@ -157,6 +157,21 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   }
 
 
+  override def loadReviewTaskCounts(isAdmin: Boolean): ReviewTaskCounts = {
+    val urgentBits = ReviewReason.PostFlagged.toInt // + ... later if more urgent tasks
+    val query = i"""
+      select
+        (select count(1) from dw2_review_tasks
+          where site_id = ? and reasons & $urgentBits != 0 and resolution is null) num_urgent,
+        (select count(1) from dw2_review_tasks
+          where site_id = ? and reasons & $urgentBits = 0 and resolution is null) num_other
+      """
+    runQueryFindExactlyOne(query, List(siteId, siteId), rs => {
+      ReviewTaskCounts(rs.getInt("num_urgent"), rs.getInt("num_other"))
+    })
+  }
+
+
   private def readReviewTask(rs: js.ResultSet): ReviewTask = {
     ReviewTask(
       id = rs.getInt("id"),
