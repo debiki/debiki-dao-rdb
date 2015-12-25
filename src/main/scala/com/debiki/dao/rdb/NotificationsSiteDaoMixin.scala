@@ -111,10 +111,11 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadNotificationsForRole(roleId: RoleId, limit: Int, unseenFirst: Boolean)
-        : Seq[Notification] = {
+  def loadNotificationsForRole(roleId: RoleId, limit: Int, unseenFirst: Boolean,
+        upToWhen: Option[ju.Date]): Seq[Notification] = {
     val notfsBySiteId = asSystem.loadNotfsImpl(   // COULD specify consumers
-        limit = limit, unseenFirst = unseenFirst, Some(siteId), userIdOpt = Some(roleId))
+        limit = limit, unseenFirst = unseenFirst, Some(siteId), userIdOpt = Some(roleId),
+        upToWhen = upToWhen)
     // All loaded notifications are to `roleId` only.
     notfsBySiteId(siteId)
   }

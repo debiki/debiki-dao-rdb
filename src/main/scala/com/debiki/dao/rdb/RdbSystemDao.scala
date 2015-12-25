@@ -297,7 +297,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
    */
   def loadNotfsImpl(limit: Int, unseenFirst: Boolean, tenantIdOpt: Option[String] = None,
         delayMinsOpt: Option[Int] = None, userIdOpt: Option[UserId] = None,
-        emailIdOpt: Option[String] = None): Map[SiteId, Seq[Notification]] = {
+        emailIdOpt: Option[String] = None, upToWhen: Option[ju.Date] = None)
+        : Map[SiteId, Seq[Notification]] = {
 
     require(emailIdOpt.isEmpty, "looking up by email id not tested after rewrite")
     require(delayMinsOpt.isEmpty || userIdOpt.isEmpty)
@@ -308,6 +309,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     require(emailIdOpt.isEmpty || tenantIdOpt.isDefined)
     require(limit > 0)
     require(emailIdOpt.isEmpty || limit == 1)
+    require(upToWhen.isEmpty || emailIdOpt.isEmpty, "EsE6wVK8")
+
+    unimplementedIf(upToWhen.isDefined, "Loading notfs <= upToWhen [EsE7GYKF2]")
 
     val baseQuery = """
       select
@@ -348,7 +352,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
     val query = baseQuery + whereOrderBy +" limit "+ limit
     var notfsByTenant =
-       Map[SiteId, List[Notification]]().withDefaultValue(Nil)
+       Map[SiteId, Vector[Notification]]().withDefaultValue(Vector.empty)
 
     runQuery(query, values, rs => {
       while (rs.next) {
@@ -388,8 +392,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
               seenAt = seenAt)
         }
 
-        val notfsForTenant: List[Notification] = notfsByTenant(siteId)
-        notfsByTenant = notfsByTenant + (siteId -> (notification::notfsForTenant))
+        val notfsForTenant: Vector[Notification] = notfsByTenant(siteId)
+        notfsByTenant = notfsByTenant + (siteId -> (notfsForTenant :+ notification))
       }
     })
 
