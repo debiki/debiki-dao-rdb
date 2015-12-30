@@ -477,7 +477,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     loadUsersAsList(userId::Nil).headOption
 
 
-  def loadUsers(userIds: Seq[UserId]): immutable.Seq[User] =
+  def loadUsers(userIds: Iterable[UserId]): immutable.Seq[User] =
     loadUsersAsList(userIds.toList)
 
 
