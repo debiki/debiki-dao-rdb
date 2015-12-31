@@ -1,6 +1,6 @@
 
 create index dw1_ntfs_seen_createdat__i on dw1_notifications ((
-    case when seen_at is null then null else created_at end) desc nulls first);
+    case when seen_at is null then created_at + INTERVAL '100 years' else created_at end) desc);
 
 
 alter table dw1_notifications add constraint dw1_notfs_seenat_ge_createdat__c check (

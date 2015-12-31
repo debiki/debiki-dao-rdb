@@ -325,9 +325,11 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val (whereOrderBy, values) = (userIdOpt, emailIdOpt) match {
       case (Some(uid), None) =>
         val orderHow =
-          if (unseenFirst)
+          if (unseenFirst) {
             // Sync with index dw1_ntfs_seen_createdat__i, created just for this query.
-            "case when seen_at is null then null else created_at end desc nulls first"
+            o"""case when seen_at is null then created_at + INTERVAL '100 years'
+              else created_at end desc"""
+          }
           else
             "created_at desc"
         val whereOrderBy = s"site_id = ? and to_user_id = ? order by $orderHow"
