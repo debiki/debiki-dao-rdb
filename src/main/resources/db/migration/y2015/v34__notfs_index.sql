@@ -2,6 +2,23 @@
 create index dw1_ntfs_seen_createdat__i on dw1_notifications ((
     case when seen_at is null then created_at + INTERVAL '100 years' else created_at end) desc);
 
+-- Change notf email stauts to int.
+alter table dw1_notifications alter email_status drop default;
+alter table dw1_notifications alter email_status type smallint using (
+    case email_status
+        when 'U' then 1
+        when 'S' then 2
+        when 'C' then 3
+        else 989537 -- this would generate an error directly (smallint) or in a constraint below
+    end);
+alter table dw1_notifications add constraint dw1_notfs_emailstatus__c_in check (
+  email_status between 1 and 20);
+alter table dw1_notifications alter email_status set default 1;
+alter table dw1_notifications alter email_status set not null;
+
+drop index dw1_ntfs_createdat; -- checks for 'U' not 1
+create index dw1_ntfs_createdat_email_undecided__i on dw1_notifications (created_at)
+    where email_status = 1;
 
 alter table dw1_notifications add constraint dw1_notfs_seenat_ge_createdat__c check (
     seen_at > created_at);

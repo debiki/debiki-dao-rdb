@@ -27,7 +27,6 @@ import scala.collection.{mutable => mut, immutable}
 import scala.collection.mutable.{ArrayBuffer, StringBuilder}
 import Rdb._
 import RdbUtil._
-import NotificationsSiteDaoMixin.flagToEmailStatus
 import PostsSiteDaoMixin.fromActionTypeInt
 
 
@@ -342,7 +341,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       case (None, None) =>
         // Load notfs for which emails perhaps are to be sent, for all tenants.
         val whereOrderBy =
-          "EMAIL_STATUS = 'U' and CREATED_AT <= ? order by CREATED_AT asc"
+          o"""EMAIL_STATUS = ${NotfEmailStatus.Undecided.toInt}
+             and CREATED_AT <= ? order by CREATED_AT asc"""
         val nowInMillis = (new ju.Date).getTime
         val someMinsAgo =
           new ju.Date(nowInMillis - delayMinsOpt.get.toLong * 60 * 1000)
@@ -370,7 +370,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val byUserId = rs.getInt("BY_USER_ID")
         val toUserId = rs.getInt("TO_USER_ID")
         val emailId = Option(rs.getString("EMAIL_ID"))
-        val emailStatus = flagToEmailStatus(rs.getString("EMAIL_STATUS"))
+        val emailStatusInt = rs.getInt("email_status")
+        val emailStatus = NotfEmailStatus.fromInt(emailStatusInt).getOrDie(
+          "EsE7UKW2", s"Bad notf email status: $emailStatusInt")
         val seenAt = getOptionalDate(rs, "SEEN_AT")
 
         val notfType = NotificationType.fromInt(notfTypeInt).getOrDie(

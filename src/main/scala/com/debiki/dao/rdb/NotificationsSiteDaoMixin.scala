@@ -18,11 +18,9 @@
 package com.debiki.dao.rdb
 
 import com.debiki.core._
-import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
 import scala.collection.mutable
-import NotificationsSiteDaoMixin._
 import Rdb._
 
 
@@ -149,29 +147,32 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
     val values = List(
       email.map(_.id).orNullVarchar,
-      emailStatusToFlag(emailStatus),
+      emailStatus.toInt.asAnyRef,
       siteId,
       notification.id.asAnyRef)
 
     db.update(statement, values)(connection)
   }
 
-}
 
-
-object NotificationsSiteDaoMixin {
-
-  def emailStatusToFlag(status: NotfEmailStatus) = status match {
-    case NotfEmailStatus.Created => "C"
-    case NotfEmailStatus.Skipped => "S"
-    case NotfEmailStatus.Undecided => "U"
-  }
-
-  def flagToEmailStatus(flag: String) = flag match {
-    case "C" => NotfEmailStatus.Created
-    case "S" => NotfEmailStatus.Skipped
-    case "U" => NotfEmailStatus.Undecided
-    case _ => die("DwEKEF05W3", s"Bad email status: `$flag'")
+  def markNotfAsSeenSkipEmail(userId: UserId, notfId: NotificationId) {
+    // Include user id in case someone specified the notf id of another user's notification.
+    import NotfEmailStatus._
+    val statement = i"""
+      update dw1_notifications set
+        seen_at =
+          case
+            when seen_at is null then now_utc()
+            else seen_at
+          end,
+        email_status =
+          case
+            when email_status = ${Undecided.toInt} then ${Skipped.toInt}
+            else email_status
+          end
+      where site_id = ? and to_user_id = ? and notf_id = ?
+      """
+    runUpdate(statement, List(siteId, userId.asAnyRef, notfId.asAnyRef))
   }
 
 }
