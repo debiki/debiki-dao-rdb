@@ -56,3 +56,13 @@ create index dw2_reviewtasks_open_createdat__i on dw2_review_tasks (
 update dw1_notifications set
     notf_type = case notf_type when 1 then 2 when 2 then 1 when 4 then 5 when 3 then 4 end;
 
+
+-- Allow video/ prefix in uploads file path.
+create or replace function is_valid_hash_path(text varchar) returns boolean as $$
+begin
+    return
+    text ~ '^[0-9a-z]/[0-9a-z]/[0-9a-z\.]+$' or -- old, deprecated, remove later
+    text ~ '^([a-z][a-z0-9]*/)?[0-9][0-9]?/[0-9a-z]/[0-9a-z]{2}/[0-9a-z\.]+$';
+end;
+$$ language plpgsql;
+
