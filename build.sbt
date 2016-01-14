@@ -26,12 +26,8 @@ libraryDependencies ++= Seq(
   // Jsoup removes HTML tags from a string.
   "org.jsoup" % "jsoup" % "1.7.2",
   // Full text search engine:
-  "org.elasticsearch" % "elasticsearch" % "0.90.2"
-  // These 2 lines below might be useful, if in the future I ever make debiki-dao-rdb
-  // itself apply evolutions to the db schema. Then a Play app is needed, and
-  // Play's JDBC module.
-  //"play" %% "play" % "2.1.3" % "test"
-  //"play" %% "play-jdbc" % "2.1.3" % "test"
+  "org.elasticsearch" % "elasticsearch" % "0.90.2",
+  "com.typesafe.play" %% "play-json" % "2.4.6"
 )
 
 // See: https://groups.google.com/forum/?fromgroups=#!topic/simple-build-tool/bkF1IDZj4L0

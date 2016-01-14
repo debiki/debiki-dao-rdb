@@ -52,6 +52,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   with LoginSiteDaoMixin
   with PostsReadStatsSiteDaoMixin
   with NotificationsSiteDaoMixin
+  with WatchbarSiteDaoMixin
   with SettingsSiteDaoMixin
   with BlocksSiteDaoMixin
   with ReviewsSiteDaoMixin
