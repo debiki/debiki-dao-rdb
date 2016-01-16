@@ -176,6 +176,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     case AuditLogEntryType.ThisSiteCreated => "TsCr"
     case AuditLogEntryType.NewPage => "NwPg"
     case AuditLogEntryType.NewPost => "NwPs"
+    case AuditLogEntryType.NewChatMessage => "NwCt"
     case AuditLogEntryType.EditPost => "EdPs"
     case AuditLogEntryType.ChangePostType => "ChPT"
     case AuditLogEntryType.UploadFile => "UpFl"
@@ -186,6 +187,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     case  "TsCr" => AuditLogEntryType.ThisSiteCreated
     case  "NwPg" => AuditLogEntryType.NewPage
     case  "NwPs" => AuditLogEntryType.NewPost
+    case  "NwCt" => AuditLogEntryType.NewChatMessage
     case  "EdPs" => AuditLogEntryType.EditPost
     case  "ChPT" => AuditLogEntryType.ChangePostType
     case  "UpFl" => AuditLogEntryType.UploadFile
