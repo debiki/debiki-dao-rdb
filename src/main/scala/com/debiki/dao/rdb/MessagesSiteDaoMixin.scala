@@ -20,6 +20,7 @@ package com.debiki.dao.rdb
 import com.debiki.core._
 import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
+import scala.collection.immutable
 import Rdb._
 
 
@@ -45,6 +46,25 @@ trait MessagesSiteDaoMixin extends SiteTransaction {
       """
     runQueryFindManyAsSet(query, List(siteId, pageId), rs => {
       rs.getInt("user_id")
+    })
+  }
+
+
+  override def loadPageIdsUserIsMemberOf(userId: UserId, onlyPageRoles: Set[PageRole])
+        : immutable.Seq[PageId] = {
+    require(onlyPageRoles.nonEmpty, "EsE4G8U1")
+    // Inline the page roles (rather than (?, ?, ?, ...)) because they'll always be the same
+    // for each caller (hardcoded somewhere).
+    val query = s"""
+      select m.page_id, p.page_role
+      from message_members_3 m inner join dw1_pages p
+        on m.site_id = p.site_id and m.page_id = p.page_id and p.page_role in (
+            ${ onlyPageRoles.map(_.toInt).mkString(",") })
+      where m.site_id = ? and m.user_id = ?
+      order by p.last_reply_at desc
+      """
+    runQueryFindMany(query, List(siteId, userId.asAnyRef), rs => {
+      rs.getString("page_id")
     })
   }
 
