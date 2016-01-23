@@ -416,6 +416,19 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     metaByPageId
   }
 
+  /* UNT ESTED
+  def loadPageMetaForAllSections(): Seq[PageMeta] = {
+    import PageRole.{Forum, Blog}
+    val sql = s"""
+      select g.page_id, $_PageMetaSelectListItems from dw1_pages g
+      where g.site_id = ? and g.page_role in ($Forum, $Blog)
+      """
+    runQueryFindMany(sql, Nil, rs => {
+      val pageId = rs.getString("PAGE_ID")
+      _PageMeta(rs, pageId = pageId)
+    })
+  }*/
+
 
   def updatePageMeta(meta: PageMeta, oldMeta: PageMeta, markSectionPageStale: Boolean) {
     transactionCheckQuota {
