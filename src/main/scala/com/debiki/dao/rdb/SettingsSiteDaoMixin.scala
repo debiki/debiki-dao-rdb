@@ -34,25 +34,23 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
 
 
   def saveSetting(target: SettingsTarget, setting: SettingNameValue[_]) {
-    transactionCheckQuota { connection =>
-      val settingName = setting._1
-      deleteSettingImpl(target, settingName)(connection)
-      insertSettingImpl(target, setting)(connection)
+    val settingName = setting._1
+    val anyValue = setting._2
+    deleteSettingImpl(target, settingName)
+    anyValue foreach { value =>
+      insertSettingImpl(target, settingName, value)
     }
   }
 
 
   def loadSettings(targets: Seq[SettingsTarget]): Seq[RawSettings] = {
-    db.withConnection { connection =>
-      targets.map(loadSettings(_)(connection))
-    }
+    targets.map(loadSettings)
   }
 
 
   /** Returns the number of settings deleted.
     */
-  private def deleteSettingImpl(target: SettingsTarget, settingName: String)(
-        implicit connection: js.Connection): Int = {
+  private def deleteSettingImpl(target: SettingsTarget, settingName: String): Int = {
     val (sql, values) = target match {
       case SettingsTarget.WholeSite =>
         val sql = """
@@ -73,15 +71,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
           """
         (sql, List(siteId, settingName, pageId))
     }
-    db.update(sql, values)
+    runUpdate(sql, values)
   }
 
 
-  private def insertSettingImpl(target: SettingsTarget, setting: SettingNameValue[_])(
-        implicit connection: js.Connection) {
-    val settingName = setting._1
-    val settingValue = setting._2
-
+  private def insertSettingImpl(target: SettingsTarget, settingName: String, settingValue: Any) {
     val sql = """
       insert into DW1_SETTINGS(
         SITE_ID, TARGET, PAGE_ID, NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE)
@@ -101,7 +95,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       case x: Float => ("Double", NullVarchar, NullInt, x.asAnyRef)
       case x: Double => ("Double", NullVarchar, NullInt, x.asAnyRef)
       case x: Boolean => ("Bool", if (x) "T" else "F", NullInt, NullDouble)
-      case x => assErr("DwE77Xkf5", s"Unsupported value: `$x', type: ${classNameOf(x)}")
+      case x => die("DwE77Xkf5", s"Bad setting type: ${classNameOf(x)}, setting value: '$x'")
     }
 
     val pageIdOrNull = target match {
@@ -113,12 +107,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     val values = List[AnyRef](
       siteId, targetStr, pageIdOrNull, settingName, datatype, textValue, longValue, doubleValue)
 
-    db.update(sql, values)
+    runUpdate(sql, values)
   }
 
 
-  private def loadSettings(target: SettingsTarget)(implicit connection: js.Connection): RawSettings = {
-
+  private def loadSettings(target: SettingsTarget): RawSettings = {
     val (sqlQuery, values) = target match {
       case SettingsTarget.WholeSite =>
         val sql = """
@@ -148,7 +141,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
 
     val valuesBySettingName = mutable.HashMap[String, Any]()
 
-    db.query(sqlQuery, values, rs => {
+    runQuery(sqlQuery, values, rs => {
       while (rs.next()) {
         val name = rs.getString("NAME")
         val datatype = rs.getString("DATATYPE")
