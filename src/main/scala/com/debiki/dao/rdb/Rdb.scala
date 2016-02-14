@@ -21,7 +21,6 @@ import _root_.java.{util => ju, io => jio}
 import _root_.com.debiki.core.Prelude._
 import java.{sql => js, lang => jl}
 import javax.{sql => jxs}
-import org.{postgresql => pg}
 
 
 object Rdb {
@@ -458,10 +457,15 @@ class Rdb(val dataSource: jxs.DataSource){
   def getConnection(readOnly: Boolean, mustBeSerializable: Boolean): js.Connection = {
     val conn: js.Connection = dataSource.getConnection()
     if (conn ne null) {
-      conn.setReadOnly(readOnly)
+      // Now with HikariCP setReadOnly causes: [5JKF2]
+      // """org.postgresql.util.PSQLException: Cannot change transaction read-only property in the
+      // middle of a transaction.""" — but I haven't started any transaction yet??
+      // This did work with Postgres' built in connection pool (but I guess it was wrong).
+      //conn.setReadOnly(readOnly)
       conn.setAutoCommit(false)
       if (mustBeSerializable) {
-        conn.setTransactionIsolation(js.Connection.TRANSACTION_SERIALIZABLE)
+        // Causes """Cannot change transaction isolation level in the middle""" error: [5JKF2]
+        // conn.setTransactionIsolation(js.Connection.TRANSACTION_SERIALIZABLE)
       }
       else {
         // Read Committed is the default isolation level in PostgreSQL.

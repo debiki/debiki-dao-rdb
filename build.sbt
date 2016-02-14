@@ -19,25 +19,16 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "2.2.0" % "test",
   // For loading test database connection info.
   "com.typesafe" % "config" % "1.0.1" % "test",
-  // A data source:
-  ("com.jolbox" % "bonecp" % "0.7.1.RELEASE" % "test" notTransitive())
-    .exclude("com.google.guava", "guava")
-    .exclude("org.slf4j", "slf4j-api"),
   // Jsoup removes HTML tags from a string.
   "org.jsoup" % "jsoup" % "1.7.2",
   // Full text search engine:
   "org.elasticsearch" % "elasticsearch" % "0.90.2"
-  // These 2 lines below might be useful, if in the future I ever make debiki-dao-rdb
-  // itself apply evolutions to the db schema. Then a Play app is needed, and
-  // Play's JDBC module.
-  //"play" %% "play" % "2.1.3" % "test"
-  //"play" %% "play-jdbc" % "2.1.3" % "test"
 )
 
 // See: https://groups.google.com/forum/?fromgroups=#!topic/simple-build-tool/bkF1IDZj4L0
 ideaPackagePrefix := None
 
 // Makes `dependency-graph` work.
-net.virtualvoid.sbt.graph.Plugin.graphSettings
+net.virtualvoid.sbt.graph.DependencyGraphSettings.graphSettings
 
 // vim: fdm=marker et ts=2 sw=2 tw=80 fo=tcqwn list
