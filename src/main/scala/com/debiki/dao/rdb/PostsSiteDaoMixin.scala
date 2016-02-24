@@ -263,7 +263,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
         ?, ?, ?, ?, ?)"""
 
     val values = List[AnyRef](
-      post.siteId, post.uniqueId.asAnyRef, post.pageId, post.nr.asAnyRef,
+      siteId, post.uniqueId.asAnyRef, post.pageId, post.nr.asAnyRef,
       post.parentNr.orNullInt, toDbMultireply(post.multireplyPostNrs),
       (post.tyype != PostType.Normal) ? post.tyype.toInt.asAnyRef | NullInt,
 
@@ -425,7 +425,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       post.numUnwantedVotes.asAnyRef,
       post.numTimesRead.asAnyRef,
 
-      post.siteId, post.pageId, post.nr.asAnyRef)
+      siteId, post.pageId, post.nr.asAnyRef)
 
     runUpdate(statement, values)
   }
@@ -433,7 +433,6 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   private def readPost(rs: js.ResultSet, pageId: Option[PageId] = None): Post = {
     Post(
-      siteId = siteId,
       uniqueId = rs.getInt("UNIQUE_POST_ID"),
       pageId = pageId.getOrElse(rs.getString("PAGE_ID")),
       nr = rs.getInt("post_nr"),
