@@ -117,7 +117,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
           t.show_id,
           t.page_slug,
           ${_PageMetaSelectListItems}
-        from dw1_pages g left join dw1_page_paths t
+        from dw1_pages g inner join dw1_page_paths t
           on g.site_id = t.site_id and g.page_id = t.page_id
           and t.canonical = 'C'
         where
