@@ -301,6 +301,7 @@ object RdbUtil {
       |g.CLOSED_AT,
       |g.LOCKED_AT,
       |g.FROZEN_AT,
+      |g.html_tag_css_classes,
       |g.NUM_CHILD_PAGES
       |"""
 
@@ -358,6 +359,7 @@ object RdbUtil {
       closedAt = getOptionalDate(resultSet, "closed_at"),
       lockedAt = getOptionalDate(resultSet, "locked_at"),
       frozenAt = getOptionalDate(resultSet, "frozen_at"),
+      htmlTagCssClasses = getStringOrEmpty(resultSet, "html_tag_css_classes"),
       numChildPages = resultSet.getInt("NUM_CHILD_PAGES"))
   }
 

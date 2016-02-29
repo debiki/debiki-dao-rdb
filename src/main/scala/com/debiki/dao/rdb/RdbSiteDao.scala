@@ -480,6 +480,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       newMeta.closedAt.orNullTimestamp,
       newMeta.lockedAt.orNullTimestamp,
       newMeta.frozenAt.orNullTimestamp,
+      newMeta.htmlTagCssClasses.orIfEmpty(NullVarchar),
       newMeta.numChildPages.asAnyRef,
       siteId,
       newMeta.pageId)
@@ -519,6 +520,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
         CLOSED_AT = ?,
         LOCKED_AT = ?,
         FROZEN_AT = ?,
+        html_tag_css_classes = ?,
         NUM_CHILD_PAGES = ?
       where SITE_ID = ? and PAGE_ID = ?
       """

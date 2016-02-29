@@ -74,7 +74,18 @@ object Rdb {
 
 
   /** Converts null to the empty string ("Null To Empty"). */
+  @deprecated("now", "use getStringOrEmpty instead")
   def n2e(s: String) = if (s eq null) "" else s
+
+  def getStringOrEmpty(rs: js.ResultSet, column: String): String = {
+    val value = rs.getString(column)
+    if (value eq null) "" else value
+  }
+
+  def getOptionalStringNotEmpty(rs: js.ResultSet, column: String): Option[String] = {
+    val value = Option(rs.getString(column))
+    if (value.contains("")) None else value
+  }
 
   /** Converts null to 0 (zero). */
   def n20(i: Integer): Integer = if (i eq null) 0 else i
