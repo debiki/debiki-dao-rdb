@@ -1,0 +1,21 @@
+
+alter table dw1_users add column num_posts_left smallint;
+alter table dw1_users add column num_posts_approve smallint;
+alter table dw1_users add column num_posts_notify smallint;
+
+alter table dw1_users add constraint dw1_posts_numpostsleft__c_gez check (num_posts_left >= 0);
+alter table dw1_users add constraint dw1_posts_numpostsapprove check (num_posts_approve > 0);
+alter table dw1_users add constraint dw1_posts_numpostsnotify check (num_posts_notify > 0);
+alter table dw1_users add constraint dw1_posts_numpostsleft_etc check (num_posts_left > 0);
+
+
+-- Will be reused, if categories will get their own css class too.
+create or replace function is_valid_css_class(text varchar) returns boolean as $$
+begin
+    return text ~ '^[ a-zA-Z0-9_-]+$';
+end;
+$$ language plpgsql;
+
+alter table dw1_pages add constraint dw1_pages_htmltagcssclass__c_ptrn check (
+  is_valid_css_class(html_tag_css_classes));
+
