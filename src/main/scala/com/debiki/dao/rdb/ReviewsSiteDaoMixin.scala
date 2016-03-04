@@ -123,6 +123,13 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   }
 
 
+  override def loadPendingPostReviewTask(postId: UniquePostId): Option[ReviewTask] = {
+    loadReviewTaskImpl(
+      s"completed_at is null and invalidated_at is null and post_id = ?",
+      Seq(postId.asAnyRef))
+  }
+
+
   override def loadPendingPostReviewTask(postId: UniquePostId, causedById: UserId)
         : Option[ReviewTask] = {
     loadReviewTaskImpl(

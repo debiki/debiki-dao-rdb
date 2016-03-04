@@ -73,6 +73,11 @@ object RdbUtil {
     sb.toString
   }
 
+  def descOrAsc(orderBy: OrderBy) = orderBy match {
+    case OrderBy.MostRecentFirst => "desc"
+    case OrderBy.OldestFirst => "asc"
+  }
+
   /** `rs.getInt` returns 0 instead of null.
    */
   @deprecated("use getOptionalInt instead", "now")

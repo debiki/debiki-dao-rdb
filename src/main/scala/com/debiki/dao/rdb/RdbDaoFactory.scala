@@ -32,9 +32,6 @@ class RdbDaoFactory(
   val fastStartSkipSearch: Boolean = false) extends DbDaoFactory {
 
 
-  new RdbSystemDao(this).applyEvolutions()
-
-
   def fullTextSearchIndexer =
     if (fastStartSkipSearch || true)
       sys.error("Search disabled, please check your Java -D...=... startup flags — no, always disabled right now, doesn't support dw2_posts")

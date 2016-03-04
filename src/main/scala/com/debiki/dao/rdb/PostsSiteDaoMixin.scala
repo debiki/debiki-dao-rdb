@@ -131,11 +131,15 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadPostsBy(authorId: UserId, includeTitles: Boolean, limit: Int): immutable.Seq[Post] = {
+  def loadPostsBy(authorId: UserId, includeTitles: Boolean, includeChatMessages: Boolean,
+        limit: Int, orderBy: OrderBy): immutable.Seq[Post] = {
     val andMaybeSkipTitles = includeTitles ? "" | s"and post_nr <> $TitleNr"
+    val andMaybeSkipChat = includeChatMessages ?
+      "" | s"and (type is null or type <> ${PostType.ChatMessage.toInt})"
     val query = i"""
       select * from dw2_posts where site_id = ? and created_by_id = ? $andMaybeSkipTitles
-      order by created_at desc limit ?
+          $andMaybeSkipChat
+      order by created_at ${descOrAsc(orderBy)} limit ?
       """
     runQueryFindMany(query, List(siteId, authorId.asAnyRef, limit.asAnyRef), rs => {
       readPost(rs)
