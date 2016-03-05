@@ -25,8 +25,12 @@ import java.{sql => js}
 class v14__migrate_posts extends JdbcMigration {
 
   def migrate(connection: js.Connection) {
+    /* This fails because nowadays MigrationHelper.systemDbDao already has a connection already,
+      and then setTheOneAndOnlyConnection() throws an error..
+      *Need not fix* — the migration has been run already everywhere, and isn't needed in new dbs.
     MigrationHelper.systemDbDao.setTheOneAndOnlyConnection(connection)
     MigrationHelper.scalaBasedMigrations.runMigration14(MigrationHelper.systemDbDao)
+     */
   }
 
 }

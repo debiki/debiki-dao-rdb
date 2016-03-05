@@ -154,9 +154,10 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
 
 
   override def loadReviewTasks(olderOrEqualTo: ju.Date, limit: Int): Seq[ReviewTask] = {
+    // Sort by id, desc, if same timestamp, because higher id likely means more recent.
     val query = i"""
-      select * from dw2_review_tasks where site_id = ? and created_at < ?
-      order by created_at desc limit ?
+      select * from dw2_review_tasks where site_id = ? and created_at <= ?
+      order by created_at desc, id desc limit ?
       """
     runQueryFindMany(query, List(siteId, olderOrEqualTo, limit.asAnyRef), rs => {
       readReviewTask(rs)
