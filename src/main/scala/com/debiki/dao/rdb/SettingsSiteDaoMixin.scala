@@ -18,146 +18,174 @@
 package com.debiki.dao.rdb
 
 import com.debiki.core._
-import com.debiki.core.DbDao._
 import com.debiki.core.Prelude._
-import java.{sql => js, util => ju}
+import java.sql.ResultSet
 import scala.collection.mutable
 import Rdb._
 import RdbUtil._
 
 
-/** Creates, updates, deletes and loads settings for e.g. the whole webite, a section
-  * of the site (e.g. a blog or a forum), single pages, and roles (users/groups).
+/** Creates, updates, deletes and loads settings for e.g. the whole website, a section
+  * of the site (e.g. a blog or a forum), a category, single pages.
   */
 trait SettingsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 
-  def saveSetting(target: SettingsTarget, setting: SettingNameValue[_]) {
-    val settingName = setting._1
-    val anyValue = setting._2
-    deleteSettingImpl(target, settingName)
-    anyValue foreach { value =>
-      insertSettingImpl(target, settingName, value)
-    }
-  }
-
-
-  def loadSettings(targets: Seq[SettingsTarget]): Seq[RawSettings] = {
-    targets.map(loadSettings)
-  }
-
-
-  /** Returns the number of settings deleted.
-    */
-  private def deleteSettingImpl(target: SettingsTarget, settingName: String): Int = {
-    val (sql, values) = target match {
-      case SettingsTarget.WholeSite =>
-        val sql = """
-          delete from DW1_SETTINGS
-          where SITE_ID = ? and NAME = ? and TARGET = 'WholeSite'
-          """
-        (sql, List(siteId, settingName))
-      case SettingsTarget.PageTree(rootPageId) =>
-        val sql = """
-          delete from DW1_SETTINGS
-          where SITE_ID = ? and NAME = ? and TARGET = 'PageTree' and PAGE_ID = ?
-          """
-        (sql, List(siteId, settingName, rootPageId))
-      case SettingsTarget.SinglePage(pageId) =>
-        val sql = """
-          delete from DW1_SETTINGS
-          where SITE_ID = ? and NAME = ? and TARGET = 'SinglePage' and PAGE_ID = ?
-          """
-        (sql, List(siteId, settingName, pageId))
-    }
-    runUpdate(sql, values)
-  }
-
-
-  private def insertSettingImpl(target: SettingsTarget, settingName: String, settingValue: Any) {
-    val sql = """
-      insert into DW1_SETTINGS(
-        SITE_ID, TARGET, PAGE_ID, NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE)
-      values (?, ?, ?, ?, ?, ?, ?, ?)
+  override def loadSiteSettings(): Option[EditedSettings] = {
+    val query = s"""
+      select *
+      from settings_3
+      where site_id = ? and category_id is null and page_id is null
       """
-
-    val targetStr = target match {
-      case SettingsTarget.WholeSite => "WholeSite"
-      case _: SettingsTarget.PageTree => "PageTree"
-      case _: SettingsTarget.SinglePage => "SinglePage"
-    }
-
-    val (datatype, textValue, longValue, doubleValue) = settingValue match {
-      case x: String => ("Text", x, NullInt, NullDouble)
-      case x: Int => ("Long", NullVarchar, x.asAnyRef, NullDouble)
-      case x: Long => ("Long", NullVarchar, x.asAnyRef, NullDouble)
-      case x: Float => ("Double", NullVarchar, NullInt, x.asAnyRef)
-      case x: Double => ("Double", NullVarchar, NullInt, x.asAnyRef)
-      case x: Boolean => ("Bool", if (x) "T" else "F", NullInt, NullDouble)
-      case x => die("DwE77Xkf5", s"Bad setting type: ${classNameOf(x)}, setting value: '$x'")
-    }
-
-    val pageIdOrNull = target match {
-      case SettingsTarget.WholeSite => NullVarchar
-      case SettingsTarget.PageTree(rootId) => rootId
-      case SettingsTarget.SinglePage(id) => id
-    }
-
-    val values = List[AnyRef](
-      siteId, targetStr, pageIdOrNull, settingName, datatype, textValue, longValue, doubleValue)
-
-    runUpdate(sql, values)
+    runQueryFindOneOrNone(query, List(siteId), readSettingsFromResultSet)
   }
 
 
-  private def loadSettings(target: SettingsTarget): RawSettings = {
-    val (sqlQuery, values) = target match {
-      case SettingsTarget.WholeSite =>
-        val sql = """
-          select NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
-          from DW1_SETTINGS
-          where SITE_ID = ? and TARGET = 'WholeSite'
-          """
-        (sql, List(siteId))
-      case SettingsTarget.PageTree(rootPageId) =>
-        val sql = """
-          select NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
-          from DW1_SETTINGS
-          where SITE_ID = ?
-            and PAGE_ID = ?
-            and TARGET = 'PageTree'
-          """
-        (sql, List(siteId, rootPageId))
-      case SettingsTarget.SinglePage(pageId) =>
-        val sql = """
-          select NAME, DATATYPE, TEXT_VALUE, LONG_VALUE, DOUBLE_VALUE
-          from DW1_SETTINGS
-          where SITE_ID = ?
-            and PAGE_ID = ?
-            and TARGET = 'SinglePage'"""
-        (sql, List(siteId, pageId))
+  override def upsertSiteSettings(settings: SettingsToSave) {
+    // Later: use Postgres' built-in upsert (when have upgraded to Postgres 9.5)
+    if (loadSiteSettings().isDefined) {
+      updateSiteSettings(settings)
+    }
+    else {
+      insertSiteSettings(settings)
+    }
+  }
+
+
+  private def insertSiteSettings(editedSettings2: SettingsToSave) {
+    val statement = s"""
+      insert into settings_3 (
+        site_id,
+        category_id,
+        page_id,
+        title,
+        description,
+        user_must_be_auth,
+        user_must_be_approved,
+        allow_guest_login,
+        num_first_posts_to_review,
+        num_first_posts_to_approve,
+        num_first_posts_to_allow,
+        head_styles_html,
+        head_scripts_html,
+        end_of_body_html,
+        header_html,
+        footer_html,
+        show_forum_categories,
+        horizontal_comments,
+        social_links_html,
+        logo_url_or_html,
+        company_domain,
+        company_full_name,
+        company_short_name,
+        google_analytics_id,
+        experimental)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """
+    val values = List(
+      siteId,
+      NullInt,
+      NullVarchar,
+      editedSettings2.title.getOrElse(None).orNullVarchar,
+      editedSettings2.description.getOrElse(None).orNullVarchar,
+      editedSettings2.userMustBeAuthenticated.getOrElse(None).orNullBoolean,
+      editedSettings2.userMustBeApproved.getOrElse(None).orNullBoolean,
+      editedSettings2.allowGuestLogin.getOrElse(None).orNullBoolean,
+      editedSettings2.numFirstPostsToReview.getOrElse(None).orNullInt,
+      editedSettings2.numFirstPostsToApprove.getOrElse(None).orNullInt,
+      editedSettings2.numFirstPostsToAllow.getOrElse(None).orNullInt,
+      editedSettings2.headStylesHtml.getOrElse(None).orNullVarchar,
+      editedSettings2.headScriptsHtml.getOrElse(None).orNullVarchar,
+      editedSettings2.endOfBodyHtml.getOrElse(None).orNullVarchar,
+      editedSettings2.headerHtml.getOrElse(None).orNullVarchar,
+      editedSettings2.footerHtml.getOrElse(None).orNullVarchar,
+      editedSettings2.showForumCategories.getOrElse(None).orNullBoolean,
+      editedSettings2.horizontalComments.getOrElse(None).orNullBoolean,
+      editedSettings2.socialLinksHtml.getOrElse(None).orNullVarchar,
+      editedSettings2.logoUrlOrHtml.getOrElse(None).orNullVarchar,
+      editedSettings2.companyDomain.getOrElse(None).orNullVarchar,
+      editedSettings2.companyFullName.getOrElse(None).orNullVarchar,
+      editedSettings2.companyShortName.getOrElse(None).orNullVarchar,
+      editedSettings2.googleUniversalAnalyticsTrackingId.getOrElse(None).orNullVarchar,
+      editedSettings2.showComplicatedStuff.getOrElse(None).orNullBoolean)
+
+    runUpdate(statement, values)
+  }
+
+
+  private def updateSiteSettings(editedSettings2: SettingsToSave) {
+    val statement = mutable.StringBuilder.newBuilder.append("update settings_3 set ")
+    val values = mutable.ArrayBuffer[AnyRef]()
+    var somethingToDo = false
+    var spaceOrComma = ""
+
+    def maybeSet(column: String, anyValue: Option[AnyRef]) {
+      anyValue foreach { value =>
+        somethingToDo = true
+        statement.append(s"$spaceOrComma$column = ?")
+        spaceOrComma = ", "
+        values += value
+      }
     }
 
-    val valuesBySettingName = mutable.HashMap[String, Any]()
+    val s = editedSettings2
+    maybeSet("title", s.title.map(_.orNullVarchar))
+    maybeSet("description", s.description.map(_.orNullVarchar))
+    maybeSet("user_must_be_auth", s.userMustBeAuthenticated.map(_.orNullBoolean))
+    maybeSet("user_must_be_approved", s.userMustBeApproved.map(_.orNullBoolean))
+    maybeSet("allow_guest_login", s.allowGuestLogin.map(_.orNullBoolean))
+    maybeSet("num_first_posts_to_review", s.numFirstPostsToReview.map(_.orNullInt))
+    maybeSet("num_first_posts_to_approve", s.numFirstPostsToApprove.map(_.orNullInt))
+    maybeSet("num_first_posts_to_allow", s.numFirstPostsToAllow.map(_.orNullInt))
+    maybeSet("head_styles_html", s.headStylesHtml.map(_.orNullVarchar))
+    maybeSet("head_scripts_html", s.headScriptsHtml.map(_.orNullVarchar))
+    maybeSet("end_of_body_html", s.endOfBodyHtml.map(_.orNullVarchar))
+    maybeSet("header_html", s.headerHtml.map(_.orNullVarchar))
+    maybeSet("footer_html", s.footerHtml.map(_.orNullVarchar))
+    maybeSet("show_forum_categories", s.showForumCategories.map(_.orNullBoolean))
+    maybeSet("horizontal_comments", s.horizontalComments.map(_.orNullBoolean))
+    maybeSet("social_links_html", s.socialLinksHtml.map(_.orNullVarchar))
+    maybeSet("logo_url_or_html", s.logoUrlOrHtml.map(_.orNullVarchar))
+    maybeSet("company_domain", s.companyDomain.map(_.orNullVarchar))
+    maybeSet("company_full_name", s.companyFullName.map(_.orNullVarchar))
+    maybeSet("company_short_name", s.companyShortName.map(_.orNullVarchar))
+    maybeSet("google_analytics_id", s.googleUniversalAnalyticsTrackingId.map(_.orNullVarchar))
+    maybeSet("experimental", s.showComplicatedStuff.map(_.orNullBoolean))
 
-    runQuery(sqlQuery, values, rs => {
-      while (rs.next()) {
-        val name = rs.getString("NAME")
-        val datatype = rs.getString("DATATYPE")
-        val value = datatype match {
-          case "Text" => rs.getString("TEXT_VALUE")
-          case "Long" => rs.getLong("LONG_VALUE")
-          case "Double" => rs.getDouble("DOUBLE_VALUE")
-          case "Bool" => rs.getString("TEXT_VALUE") == "T"
-        }
-        assErrIf(rs.wasNull,
-          "DwE8fiG0", s"Bad setting: `$name', value is null, target: $target, site: `$siteId'")
-        valuesBySettingName(name) = value
-      }
-    })
+    statement.append(" where site_id = ? and category_id is null and page_id is null")
+    values.append(siteId)
 
-    RawSettings(target, valuesBySettingName.toMap)
+    if (somethingToDo) {
+      runUpdate(statement.toString(), values.toList)
+    }
+  }
+
+
+  private def readSettingsFromResultSet(rs: ResultSet): EditedSettings = {
+    EditedSettings(
+      title = Option(rs.getString("title")),
+      description = Option(rs.getString("description")),
+      userMustBeAuthenticated = getOptionalBoolean(rs, "user_must_be_auth"),
+      userMustBeApproved = getOptionalBoolean(rs, "user_must_be_approved"),
+      allowGuestLogin = getOptionalBoolean(rs, "allow_guest_login"),
+      numFirstPostsToReview = getOptionalInt(rs, "num_first_posts_to_review"),
+      numFirstPostsToApprove = getOptionalInt(rs, "num_first_posts_to_approve"),
+      numFirstPostsToAllow = getOptionalInt(rs, "num_first_posts_to_allow"),
+      headStylesHtml = Option(rs.getString("head_styles_html")),
+      headScriptsHtml = Option(rs.getString("head_scripts_html")),
+      endOfBodyHtml = Option(rs.getString("end_of_body_html")),
+      headerHtml = Option(rs.getString("header_html")),
+      footerHtml = Option(rs.getString("footer_html")),
+      showForumCategories = getOptionalBoolean(rs, "show_forum_categories"),
+      horizontalComments = getOptionalBoolean(rs, "horizontal_comments"),
+      socialLinksHtml = Option(rs.getString("social_links_html")),
+      logoUrlOrHtml = Option(rs.getString("logo_url_or_html")),
+      companyDomain = Option(rs.getString("company_domain")),
+      companyFullName = Option(rs.getString("company_full_name")),
+      companyShortName = Option(rs.getString("company_short_name")),
+      googleUniversalAnalyticsTrackingId = Option(rs.getString("google_analytics_id")),
+      showComplicatedStuff = getOptionalBoolean(rs, "experimental"))
   }
 
 }
