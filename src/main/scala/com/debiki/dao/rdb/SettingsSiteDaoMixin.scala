@@ -154,7 +154,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     values.append(siteId)
 
     if (somethingToDo) {
-      runUpdate(statement.toString(), values.toList)
+      runUpdateExactlyOneRow(statement.toString(), values.toList)
     }
   }
 

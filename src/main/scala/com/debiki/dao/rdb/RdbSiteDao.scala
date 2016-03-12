@@ -622,9 +622,8 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
         creatorIp: String, creatorEmailAddress: String,
-        pricePlan: Option[String], quotaLimitMegabytes: Option[Int],
+        quotaLimitMegabytes: Option[Int],
         isTestSiteOkayToDelete: Boolean, skipMaxSitesCheck: Boolean): Site = {
-    require(!pricePlan.exists(_.trim.isEmpty), "DwE4KEW23")
 
     // Unless apparently testing from localhost, don't allow someone to create
     // very many sites.
@@ -644,7 +643,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       hosts = Nil)
 
     val newSite =
-      try { insertSite(newSiteNoId, pricePlan, quotaLimitMegabytes) }
+      try { insertSite(newSiteNoId, quotaLimitMegabytes) }
       catch {
         case ex: js.SQLException =>
           if (!isUniqueConstrViolation(ex)) throw ex
@@ -712,8 +711,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  private def insertSite(tenantNoId: Site, pricePlan: Option[String],
-        quotaLimitMegabytes: Option[Int]): Site = {
+  private def insertSite(tenantNoId: Site, quotaLimitMegabytes: Option[Int]): Site = {
     val newId =
       if (tenantNoId.id != "?") tenantNoId.id
       else {
@@ -722,12 +720,12 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val tenant = tenantNoId.copy(id = newId)
     runUpdateSingleRow("""
         insert into DW1_TENANTS (
-          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS, PRICE_PLAN,
+          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
           QUOTA_LIMIT_MBS)
-        values (?, ?, ?, ?, ?, ?, ?)""",
+        values (?, ?, ?, ?, ?, ?)""",
       List[AnyRef](tenant.id, tenant.name,
         tenant.embeddingSiteUrl.orNullVarchar, tenant.creatorIp,
-        tenant.creatorEmailAddress, pricePlan.orNullVarchar, quotaLimitMegabytes.orNullInt))
+        tenant.creatorEmailAddress, quotaLimitMegabytes.orNullInt))
     tenant
   }
 
