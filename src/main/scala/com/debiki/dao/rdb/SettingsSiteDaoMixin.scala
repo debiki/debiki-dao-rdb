@@ -59,8 +59,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         site_id,
         category_id,
         page_id,
-        title,
-        description,
         user_must_be_auth,
         user_must_be_approved,
         allow_guest_login,
@@ -80,15 +78,14 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         company_full_name,
         company_short_name,
         google_analytics_id,
-        experimental)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        experimental,
+        html_tag_css_classes)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId,
       NullInt,
       NullVarchar,
-      editedSettings2.title.getOrElse(None).orNullVarchar,
-      editedSettings2.description.getOrElse(None).orNullVarchar,
       editedSettings2.userMustBeAuthenticated.getOrElse(None).orNullBoolean,
       editedSettings2.userMustBeApproved.getOrElse(None).orNullBoolean,
       editedSettings2.allowGuestLogin.getOrElse(None).orNullBoolean,
@@ -108,7 +105,8 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.companyFullName.getOrElse(None).orNullVarchar,
       editedSettings2.companyShortName.getOrElse(None).orNullVarchar,
       editedSettings2.googleUniversalAnalyticsTrackingId.getOrElse(None).orNullVarchar,
-      editedSettings2.showComplicatedStuff.getOrElse(None).orNullBoolean)
+      editedSettings2.showComplicatedStuff.getOrElse(None).orNullBoolean,
+      editedSettings2.htmlTagCssClasses.getOrElse(None).orNullVarchar)
 
     runUpdate(statement, values)
   }
@@ -130,8 +128,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     }
 
     val s = editedSettings2
-    maybeSet("title", s.title.map(_.orNullVarchar))
-    maybeSet("description", s.description.map(_.orNullVarchar))
     maybeSet("user_must_be_auth", s.userMustBeAuthenticated.map(_.orNullBoolean))
     maybeSet("user_must_be_approved", s.userMustBeApproved.map(_.orNullBoolean))
     maybeSet("allow_guest_login", s.allowGuestLogin.map(_.orNullBoolean))
@@ -152,6 +148,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("company_short_name", s.companyShortName.map(_.orNullVarchar))
     maybeSet("google_analytics_id", s.googleUniversalAnalyticsTrackingId.map(_.orNullVarchar))
     maybeSet("experimental", s.showComplicatedStuff.map(_.orNullBoolean))
+    maybeSet("html_tag_css_classes", s.htmlTagCssClasses.map(_.orNullVarchar))
 
     statement.append(" where site_id = ? and category_id is null and page_id is null")
     values.append(siteId)
@@ -164,8 +161,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
 
   private def readSettingsFromResultSet(rs: ResultSet): EditedSettings = {
     EditedSettings(
-      title = Option(rs.getString("title")),
-      description = Option(rs.getString("description")),
       userMustBeAuthenticated = getOptionalBoolean(rs, "user_must_be_auth"),
       userMustBeApproved = getOptionalBoolean(rs, "user_must_be_approved"),
       allowGuestLogin = getOptionalBoolean(rs, "allow_guest_login"),
@@ -185,7 +180,8 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       companyFullName = Option(rs.getString("company_full_name")),
       companyShortName = Option(rs.getString("company_short_name")),
       googleUniversalAnalyticsTrackingId = Option(rs.getString("google_analytics_id")),
-      showComplicatedStuff = getOptionalBoolean(rs, "experimental"))
+      showComplicatedStuff = getOptionalBoolean(rs, "experimental"),
+      htmlTagCssClasses = Option(rs.getString("html_tag_css_classes")))
   }
 
 }
