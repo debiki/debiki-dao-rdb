@@ -74,13 +74,15 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         horizontal_comments,
         social_links_html,
         logo_url_or_html,
-        company_domain,
-        company_full_name,
-        company_short_name,
+        org_domain,
+        org_full_name,
+        org_short_name,
+        contrib_agreement,
+        content_license,
         google_analytics_id,
         experimental,
         html_tag_css_classes)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId,
@@ -101,9 +103,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.horizontalComments.getOrElse(None).orNullBoolean,
       editedSettings2.socialLinksHtml.getOrElse(None).orNullVarchar,
       editedSettings2.logoUrlOrHtml.getOrElse(None).orNullVarchar,
-      editedSettings2.companyDomain.getOrElse(None).orNullVarchar,
-      editedSettings2.companyFullName.getOrElse(None).orNullVarchar,
-      editedSettings2.companyShortName.getOrElse(None).orNullVarchar,
+      editedSettings2.orgDomain.getOrElse(None).orNullVarchar,
+      editedSettings2.orgFullName.getOrElse(None).orNullVarchar,
+      editedSettings2.orgShortName.getOrElse(None).orNullVarchar,
+      editedSettings2.contribAgreement.getOrElse(None).map(_.toInt).orNullInt,
+      editedSettings2.contentLicense.getOrElse(None).map(_.toInt).orNullInt,
       editedSettings2.googleUniversalAnalyticsTrackingId.getOrElse(None).orNullVarchar,
       editedSettings2.showComplicatedStuff.getOrElse(None).orNullBoolean,
       editedSettings2.htmlTagCssClasses.getOrElse(None).orNullVarchar)
@@ -143,9 +147,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("horizontal_comments", s.horizontalComments.map(_.orNullBoolean))
     maybeSet("social_links_html", s.socialLinksHtml.map(_.orNullVarchar))
     maybeSet("logo_url_or_html", s.logoUrlOrHtml.map(_.orNullVarchar))
-    maybeSet("company_domain", s.companyDomain.map(_.orNullVarchar))
-    maybeSet("company_full_name", s.companyFullName.map(_.orNullVarchar))
-    maybeSet("company_short_name", s.companyShortName.map(_.orNullVarchar))
+    maybeSet("org_domain", s.orgDomain.map(_.orNullVarchar))
+    maybeSet("org_full_name", s.orgFullName.map(_.orNullVarchar))
+    maybeSet("org_short_name", s.orgShortName.map(_.orNullVarchar))
+    maybeSet("contrib_agreement", s.contribAgreement.map(_.map(_.toInt).orNullInt))
+    maybeSet("content_license", s.contentLicense.map(_.map(_.toInt).orNullInt))
     maybeSet("google_analytics_id", s.googleUniversalAnalyticsTrackingId.map(_.orNullVarchar))
     maybeSet("experimental", s.showComplicatedStuff.map(_.orNullBoolean))
     maybeSet("html_tag_css_classes", s.htmlTagCssClasses.map(_.orNullVarchar))
@@ -176,9 +182,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       horizontalComments = getOptionalBoolean(rs, "horizontal_comments"),
       socialLinksHtml = Option(rs.getString("social_links_html")),
       logoUrlOrHtml = Option(rs.getString("logo_url_or_html")),
-      companyDomain = Option(rs.getString("company_domain")),
-      companyFullName = Option(rs.getString("company_full_name")),
-      companyShortName = Option(rs.getString("company_short_name")),
+      orgDomain = Option(rs.getString("org_domain")),
+      orgFullName = Option(rs.getString("org_full_name")),
+      orgShortName = Option(rs.getString("org_short_name")),
+      contribAgreement = ContribAgreement.fromInt(rs.getInt("contrib_agreement")), // 0 -> None, ok
+      contentLicense = ContentLicense.fromInt(rs.getInt("content_license")), // 0 -> None, ok
       googleUniversalAnalyticsTrackingId = Option(rs.getString("google_analytics_id")),
       showComplicatedStuff = getOptionalBoolean(rs, "experimental"),
       htmlTagCssClasses = Option(rs.getString("html_tag_css_classes")))

@@ -18,9 +18,11 @@ create table settings_3 (
   horizontal_comments bool,
   social_links_html varchar,
   logo_url_or_html varchar,
-  company_domain varchar,
-  company_full_name varchar,
-  company_short_name varchar,
+  org_domain varchar,
+  org_full_name varchar,
+  org_short_name varchar,
+  contrib_agreement smallint,
+  content_license smallint,
   google_analytics_id varchar,
   experimental bool,
   many_sections bool,
@@ -46,10 +48,12 @@ create table settings_3 (
   constraint settings3_footerhtml__c_len check (length(footer_html) between 1 and 20000),
   constraint settings3_sociallinkshtml__c_len check (length(social_links_html) between 1 and 10000),
   constraint settings3_logourlorhtml__c_len check (length(logo_url_or_html) between 1 and 10000),
-  constraint settings3_companydomain__c_len check (length(company_domain) between 1 and 100),
-  constraint settings3_companyfullname__c_len check (length(company_full_name) between 1 and 100),
-  constraint settings3_companyfullname__c_trim check (trim(company_full_name) = company_full_name),
-  constraint settings3_companyshortname__c_len check (length(company_short_name) between 1 and 100),
+  constraint settings3_orgdomain__c_len check (length(org_domain) between 1 and 100),
+  constraint settings3_orgfullname__c_len check (length(org_full_name) between 1 and 100),
+  constraint settings3_orgfullname__c_trim check (trim(org_full_name) = org_full_name),
+  constraint settings3_orgshortname__c_len check (length(org_short_name) between 1 and 100),
+  constraint settings3_contribagr__c_in check (contrib_agreement between 1 and 100),
+  constraint settings3_contentlicense__c_in check (content_license between 1 and 100),
   constraint settings3_htmltagcssclasses__c_len check (length(html_tag_css_classes) between 1 and 100),
   constraint settings3_htmltagcssclasses__c_valid check (is_valid_css_class(html_tag_css_classes)),
   constraint settings3_googleanalyticsid__c_len check (length(google_analytics_id) between 1 and 100),
@@ -57,7 +61,7 @@ create table settings_3 (
   constraint settings3_required_for_site__c check (
     (category_id is not null or page_id is not null) -- then it's for a category or page
     or ( -- but if this is for the whole site, then these are required:
-      company_full_name is not null)),
+      org_full_name is not null)),
 
   constraint settings3_only_for_site__c check (
     (category_id is null and page_id is null) -- then it's the whole-site settings
@@ -68,12 +72,21 @@ create table settings_3 (
       num_first_posts_to_review is null and
       num_first_posts_to_approve is null and
       num_first_posts_to_allow is null and
-      company_domain is null and
-      company_full_name is null and
-      company_short_name is null and
+      org_domain is null and
+      org_full_name is null and
+      org_short_name is null and
+      contrib_agreement is null and
+      content_license is null and
       google_analytics_id is null and
       experimental is null and
-      many_sections is null))
+      many_sections is null)),
+
+  -- If users agree to 1 = ContribAgreement.UseOnThisSiteOnly, then the forum
+  -- has to license its content under 1 = ContentLicense.AllRightsReserved.
+  constraint settings3_contrib_agr_and_license__c_restr check (
+    contrib_agreement is null or
+    contrib_agreement <> 1 or
+    (content_license is not null and content_license = 1))
 );
 
 
