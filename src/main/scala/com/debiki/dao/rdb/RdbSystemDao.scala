@@ -621,7 +621,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       s"""
       delete from dw2_audit_log
       delete from dw2_review_tasks
-      delete from DW1_SETTINGS
+      delete from settings_3
       delete from DW1_ROLE_PAGE_SETTINGS
       delete from DW1_POSTS_READ_STATS
       delete from DW1_NOTIFICATIONS
