@@ -81,12 +81,12 @@ create table settings_3 (
       experimental is null and
       many_sections is null)),
 
-  -- If users agree to 1 = ContribAgreement.UseOnThisSiteOnly, then the forum
-  -- has to license its content under 1 = ContentLicense.AllRightsReserved.
-  constraint settings3_contrib_agr_and_license__c_restr check (
+  -- The default (null) contrib agreement is CC-BY, compatible with all available content license
+  -- Other agreements are share-alike, so we'll have to use the same content license I think.
+  constraint settings3_contrib_agr_and_license__c_null check (
     contrib_agreement is null or
-    contrib_agreement <> 1 or
-    (content_license is not null and content_license = 1))
+    contrib_agreement = 10 or -- that's our id for CC-BY, compatible with everything
+    (content_license is not null and content_license = contrib_agreement))
 );
 
 
