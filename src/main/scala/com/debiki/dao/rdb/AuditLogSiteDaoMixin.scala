@@ -54,6 +54,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         done_at,
         did_what,
         details,
+        email_address,
         ip,
         browser_id_cookie,
         browser_fingerprint,
@@ -77,7 +78,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         target_site_id)
       values (
         ?, ?, ?, ? at time zone 'UTC',
-        ?, ?, ?::inet,
+        ?, ?, ?, ?::inet,
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
@@ -88,6 +89,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       entry.doneAt.asTimestamp,
       entryTypeToString(entry.didWhat),
       NullVarchar,
+      entry.emailAddress.orNullVarchar,
       entry.browserIdData.ip,
       entry.browserIdData.idCookie,
       entry.browserIdData.fingerprint.asAnyRef,
@@ -148,6 +150,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       didWhat = stringToEntryTypeTo(rs.getString("did_what")),
       doerId = rs.getInt("doer_id"),
       doneAt = getDate(rs, "done_at"),
+      emailAddress = Option(rs.getString("email_address")),
       browserIdData = getBrowserIdData(rs),
       browserLocation = None,
       pageId = Option(rs.getString("page_id")),
