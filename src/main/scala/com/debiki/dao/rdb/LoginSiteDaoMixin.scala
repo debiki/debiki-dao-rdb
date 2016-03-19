@@ -94,28 +94,20 @@ trait LoginSiteDaoMixin extends SiteTransaction {
       }
       dieIf(userId == 0, "DwE3kRhk20")
 
-      val user = User(
+      val user = Guest(
         id = userId,
-        displayName = loginAttempt.name,
-        username = None,
+        guestName = loginAttempt.name,
         guestCookie = Some(loginAttempt.guestCookie),
         email = loginAttempt.email,
         emailNotfPrefs = _toEmailNotfs(emailNotfsStr),
-        emailVerifiedAt = None,
-        country = "",
-        website = "",
-        isApproved = None,
-        suspendedTill = None,
-        isAdmin = false,
-        isOwner = false,
-        isModerator = false)
+        country = "")
 
       GuestLoginResult(user, isNewGuest)
   }
 
 
   private def loginWithPassword(loginAttempt: PasswordLoginAttempt): LoginGrant = {
-    val anyUser = loadUserByEmailOrUsername(loginAttempt.email)
+    val anyUser = loadMemberByEmailOrUsername(loginAttempt.email)
     val user = anyUser getOrElse {
       throw IdentityNotFoundException(s"No user found with email: ${loginAttempt.email}")
     }
@@ -140,7 +132,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
       case Some(email) => throw BadEmailTypeException(emailId)
       case None => throw EmailNotFoundException(emailId)
     }
-    val user = loadUser(email.toUserId.get) match {
+    val user = loadMember(email.toUserId.get) match {
       case Some(user) => user
       case None =>
         runErr("DwE2XKw5", o"""User `${email.toUserId}"' not found
@@ -155,6 +147,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
 
   private def loginOpenId(loginAttempt: OpenIdLoginAttempt): LoginGrant = {
+    die("EsE6UYKJ2", "Unimpl") /*
     transactionCheckQuota { implicit connection =>
 
     // Load any matching Identity and the related User.
@@ -214,6 +207,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
       LoginGrant(Some(identity), user, isNewIdentity = identityInDb.isEmpty,
         isNewRole = userInDb.isEmpty)
     }
+    */
   }
 
 
@@ -226,7 +220,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
   private def loginOpenAuthImpl(loginAttempt: OpenAuthLoginAttempt)
         (connection: js.Connection): LoginGrant = {
-    val (identityInDb: Option[Identity], userInDb: Option[User]) =
+    val (identityInDb: Option[Identity], userInDb: Option[Member]) =
       _loadIdtyDetailsAndUser(
         forOpenAuthProfile = loginAttempt.profileProviderAndKey)(connection)
 

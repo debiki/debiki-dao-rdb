@@ -163,7 +163,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             ?, ?, ?,
             ?, ?, ?, ?)
         """,
-        List[AnyRef](siteId, user.id.asAnyRef, user.fullName.trimNullVarcharIfBlank,
+        List[AnyRef](siteId, user.id.asAnyRef, user.fullName.orNullVarchar,
           user.username, user.createdAt, user.emailAddress.trimNullVarcharIfBlank,
           _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
           user.passwordHash.orNullVarchar,
@@ -293,7 +293,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         forUserId: Option[UserId] = None,
         forOpenIdDetails: OpenIdDetails = null,
         forOpenAuthProfile: OpenAuthProviderIdKey = null)(implicit connection: js.Connection)
-        : (Option[Identity], Option[User]) = {
+        : (Option[Identity], Option[Member]) = {
     val anyOpenIdDetails = Option(forOpenIdDetails)
     val anyOpenAuthKey = Option(forOpenAuthProfile)
 
@@ -368,7 +368,10 @@ trait UserSiteDaoMixin extends SiteTransaction {
       // COULD break out construction of Identity to reusable
       // functions.
 
-      val userInDb = _User(rs)
+      val userInDb: Member = _User(rs) match {
+        case m: Member => m
+        case g: Guest => die("EsE5YK8U2")
+      }
 
       val id = rs.getInt("i_id").toString
       val email = Option(rs.getString("i_email"))
@@ -417,13 +420,13 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadUserByEmailOrUsername(emailOrUsername: String): Option[User] = {
-    loadUserByEmailOrUsernameImpl(emailOrUsername)(theOneAndOnlyConnection)
+  def loadMemberByEmailOrUsername(emailOrUsername: String): Option[Member] = {
+    loadMemberByEmailOrUsernameImpl(emailOrUsername)(theOneAndOnlyConnection)
   }
 
 
-  def loadUserByEmailOrUsernameImpl(emailOrUsername: String)
-        (implicit connection: js.Connection): Option[User] = {
+  def loadMemberByEmailOrUsernameImpl(emailOrUsername: String)
+        (implicit connection: js.Connection): Option[Member] = {
     val sql = s"""
       select ${UserSelectListItemsNoGuests}
       from DW1_USERS u
@@ -432,15 +435,10 @@ trait UserSiteDaoMixin extends SiteTransaction {
         and (u.EMAIL = ? or lower(u.USERNAME) = lower(?))
       """
     val values = List(siteId, emailOrUsername, emailOrUsername)
-    db.query(sql, values, rs => {
-      if (!rs.next()) {
-        None
-      }
-      else {
-        val user = _User(rs)
-        assErrIf(rs.next(), "DwE7FH46")
-        Some(user)
-      }
+    runQueryFindOneOrNone(sql, values, rs => {
+      val user = _User(rs)
+      dieIf(user.isGuest, "EsE7YKP4")
+      user.asInstanceOf[Member]
     })
   }
 
@@ -605,7 +603,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       """
 
     val values = List(
-      user.fullName.trimNullVarcharIfBlank,
+      user.fullName.orNullVarchar,
       user.username,
       user.emailAddress.trimNullVarcharIfBlank,
       user.emailVerifiedAt.orNullTimestamp,
@@ -637,14 +635,14 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def updateGuest(user: User): Boolean = {
+  def updateGuest(user: Guest): Boolean = {
     val statement = """
       update dw1_users set
         updated_at = now_utc(),
         display_name = ?,
       where site_id = ? and user_id = ?
       """
-    val values = List(user.displayName, siteId, user.id.asAnyRef)
+    val values = List(user.guestName, siteId, user.id.asAnyRef)
     try {
       runUpdateSingleRow(statement, values)
     }

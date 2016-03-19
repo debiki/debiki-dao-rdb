@@ -149,7 +149,7 @@ object RdbUtil {
     s"$UserSelectListItemsNoGuests, u.GUEST_COOKIE u_guest_cookie, e.EMAIL_NOTFS g_email_notfs"
 
 
-  def _User(rs: js.ResultSet) = {
+  def _User(rs: js.ResultSet): User = {
     val userId = rs.getInt("u_id")
     val emailNotfPrefs = {
       if (isGuestId(userId))
@@ -157,14 +157,21 @@ object RdbUtil {
       else
         _toEmailNotfs(rs.getString("u_email_notfs"))
     }
-    User(
       // Use dn2e not n2e. ((So works if joined w/ DW1_IDS_SIMPLE, which
       // uses '-' instead of null to indicate absence of email address etc.
       // See usage of this function in RdbSystemDao.loadUsers(). ))
+    if (isGuestId(userId))
+      Guest(
+        id = userId,
+        guestName = dn2e(rs.getString("u_disp_name")),
+        guestCookie = Option(rs.getString("u_guest_cookie")),
+        email = dn2e(rs.getString("u_email")),
+        emailNotfPrefs = emailNotfPrefs,
+        country = dn2e(rs.getString("u_country")))
+    else Member(
       id = userId,
-      displayName = dn2e(rs.getString("u_disp_name")),
-      username = Option(rs.getString("u_username")),
-      guestCookie = isGuestId(userId) ? Option(rs.getString("u_guest_cookie")) | None,
+      fullName = Option(rs.getString("u_disp_name")),
+      theUsername = rs.getString("u_username"),
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = emailNotfPrefs,
       emailVerifiedAt = getOptionalDate(rs, "u_email_verified_at"),
@@ -219,7 +226,7 @@ object RdbUtil {
     dieIf(User.isGuestId(theUserId), "DwE6P4K3")
     CompleteUser(
       id = theUserId,
-      fullName = dn2e(rs.getString("display_name")),
+      fullName = Option(rs.getString("display_name")),
       username = rs.getString("username"),
       createdAt = getDate(rs, "created_at"),
       emailAddress = dn2e(rs.getString("email")),
