@@ -87,7 +87,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       entry.id.asAnyRef,
       entry.doerId.asAnyRef,
       entry.doneAt.asTimestamp,
-      entryTypeToString(entry.didWhat),
+      entry.didWhat.toInt.asAnyRef,
       NullVarchar,
       entry.emailAddress.orNullVarchar,
       entry.browserIdData.ip,
@@ -124,7 +124,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       and did_what = ?
       order by done_at desc limit $limit
       """
-    runQueryFindMany(query, List(siteId, userId.asAnyRef, entryTypeToString(tyype)), rs => {
+    runQueryFindMany(query, List(siteId, userId.asAnyRef, tyype.toInt.asAnyRef), rs => {
       getAuditLogEntry(rs)
     })
   }
@@ -147,7 +147,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     AuditLogEntry(
       siteId = siteId,
       id = rs.getInt("audit_id"),
-      didWhat = stringToEntryTypeTo(rs.getString("did_what")),
+      didWhat = AuditLogEntryType.fromInt(rs.getInt("did_what")) getOrDie "EsE7YKG83",
       doerId = rs.getInt("doer_id"),
       doneAt = getDate(rs, "done_at"),
       emailAddress = Option(rs.getString("email_address")),
@@ -172,28 +172,5 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       ip = rs.getString("ip"),
       idCookie = rs.getString("browser_id_cookie"),
       fingerprint = rs.getInt("browser_fingerprint"))
-
-
-  private def entryTypeToString(entryType: AuditLogEntryType): String = entryType match {
-    case AuditLogEntryType.CreateSite => "CrSt"
-    case AuditLogEntryType.ThisSiteCreated => "TsCr"
-    case AuditLogEntryType.NewPage => "NwPg"
-    case AuditLogEntryType.NewPost => "NwPs"
-    case AuditLogEntryType.NewChatMessage => "NwCt"
-    case AuditLogEntryType.EditPost => "EdPs"
-    case AuditLogEntryType.ChangePostType => "ChPT"
-    case AuditLogEntryType.UploadFile => "UpFl"
-  }
-
-  private def stringToEntryTypeTo(entryType: String): AuditLogEntryType = entryType match {
-    case  "CrSt" => AuditLogEntryType.CreateSite
-    case  "TsCr" => AuditLogEntryType.ThisSiteCreated
-    case  "NwPg" => AuditLogEntryType.NewPage
-    case  "NwPs" => AuditLogEntryType.NewPost
-    case  "NwCt" => AuditLogEntryType.NewChatMessage
-    case  "EdPs" => AuditLogEntryType.EditPost
-    case  "ChPT" => AuditLogEntryType.ChangePostType
-    case  "UpFl" => AuditLogEntryType.UploadFile
-  }
 
 }

@@ -104,11 +104,14 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
             ${Critique.toInt}) and  -- [plugin]
           g.closed_at is null and
           """
-      case PageFilter.ShowAll =>
+      case _ =>
         ""
     }
 
     values = values ++ categoryIds.map(_.asAnyRef)
+
+    val andNotDeleted =
+      (pageQuery.pageFilter == PageFilter.ShowDeleted) ? "" | " and g.deleted_at is null"
 
     val sql = s"""
         select
@@ -126,6 +129,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
           g.site_id = ? and
           g.page_role <> ${PageRole.Forum.toInt} and
           g.category_id in (${ makeInListFor(categoryIds) })
+          $andNotDeleted
         $orderBy
         limit $limit"""
 
