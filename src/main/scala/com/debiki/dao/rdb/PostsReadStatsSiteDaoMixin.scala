@@ -112,4 +112,35 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction {
     PostsReadStats(immutableIpsMap, immutableRolesMap)
   }
 
+
+  def movePostsReadStats(oldPageId: PageId, newPageId: PageId,
+        newPostNrsByOldNrs: Map[PostNr, PostNr]) {
+    require(oldPageId != newPageId, "EsE7YJK830")
+    if (newPostNrsByOldNrs.isEmpty)
+      return
+
+    val oldPostNrs = newPostNrsByOldNrs.keys.toList
+    val values = ArrayBuffer[AnyRef](newPageId)
+    val whens: String = newPostNrsByOldNrs.toSeq.map(_ match {
+      case (oldNr: PostNr, newNr: PostNr) =>
+        values.append(oldNr.asAnyRef)
+        values.append(newNr.asAnyRef)
+        s"when ? then ?"
+    }).mkString(" ")
+    values.append(siteId)
+    values.append(oldPageId)
+    val statement = s"""
+      update dw1_posts_read_stats set
+        page_id = ?,
+        post_nr =
+          case post_nr
+          $whens
+          else post_nr
+          end
+      where site_id = ? and page_id = ? and post_nr in (${makeInListFor(oldPostNrs)})
+      """
+    values.appendAll(oldPostNrs.map(_.asAnyRef))
+    runUpdate(statement, values.toList)
+  }
+
 }

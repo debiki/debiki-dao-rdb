@@ -55,9 +55,9 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     val sql = """
       insert into DW1_NOTIFICATIONS(
         SITE_ID, notf_id, CREATED_AT, NOTF_TYPE,
-        UNIQUE_POST_ID, PAGE_ID, post_nr, ACTION_TYPE, ACTION_SUB_ID,
+        UNIQUE_POST_ID, PAGE_ID, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
 
@@ -67,8 +67,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     notf match {
       case postNotf: Notification.NewPost =>
         values += postNotf.uniquePostId.asAnyRef
-        values += postNotf.pageId
-        values += postNotf.postNr.asAnyRef
+        values += NullVarchar // page id not saved because might change if post moved
         values += NullInt // no related post action
         values += NullInt //
         values += postNotf.byUserId.asAnyRef
@@ -87,10 +86,9 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
           delete from DW1_NOTIFICATIONS
           where SITE_ID = ?
             and NOTF_TYPE = ${Mention.toInt}
-            and PAGE_ID = ?
-            and post_nr = ?
+            and unique_post_id = ?
             and TO_USER_ID = ?"""
-        val values = List(siteId, mentionToDelete.pageId, mentionToDelete.postNr.asAnyRef,
+        val values = List(siteId, mentionToDelete.uniquePostId.asAnyRef,
           mentionToDelete.toUserId.asAnyRef)
         (sql, values)
       case postToDelete: NotificationToDelete.NewPostToDelete =>
@@ -99,9 +97,8 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
           where SITE_ID = ?
             and NOTF_TYPE in (
               ${Mention.toInt}, ${DirectReply.toInt}, ${NewPost.toInt})
-            and PAGE_ID = ?
-            and post_nr = ?"""
-        val values = List(siteId, postToDelete.pageId, postToDelete.postNr.asAnyRef)
+            and unique_post_id = ?"""
+        val values = List(siteId, postToDelete.uniquePostId.asAnyRef)
         (sql, values)
     }
 

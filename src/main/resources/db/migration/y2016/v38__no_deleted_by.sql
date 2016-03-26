@@ -16,3 +16,19 @@ alter table dw2_audit_log alter column did_what type smallint using (
 
 alter table dw2_audit_log add constraint dw2_auditlog_didwhat__c_in check (
   did_what between 1 and 200);
+
+alter table dw2_audit_log drop constraint dw2_auditlog_tgtpage_tgtuser__c; -- what did that do?
+alter table dw2_audit_log drop constraint dw2_auditlog_tgtpost_tgtuser__c; -- and that?
+
+alter table dw2_posts add constraint dw2_posts_parent__c_not_title check (parent_nr <> 0);
+
+alter table dw1_notifications drop column post_nr;
+
+-- Make constraints deferrable.
+alter table dw1_posts_read_stats drop constraint dw1_pstsrd__r__posts;
+alter table dw1_posts_read_stats drop constraint dw1_pstsrd__r__users;
+alter table dw1_posts_read_stats add constraint dw1_pstsrd__r__posts foreign key (
+    site_id, page_id, post_nr) references dw2_posts(site_id, page_id, post_nr) deferrable;
+alter table dw1_posts_read_stats add constraint dw1_pstsrd__r__users foreign key (
+    site_id, user_id) references dw1_users(site_id, user_id) deferrable;
+

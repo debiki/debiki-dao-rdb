@@ -326,6 +326,8 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   def updatePost(post: Post) {
     val statement = """
       update dw2_posts set
+        page_id = ?,
+        post_nr = ?,
         parent_nr = ?,
         multireply = ?,
         type = ?,
@@ -376,9 +378,11 @@ trait PostsSiteDaoMixin extends SiteTransaction {
         num_unwanted_votes = ?,
         num_times_read = ?
 
-      where site_id = ? and page_id = ? and post_nr = ?"""
+      where site_id = ? and unique_post_id = ?"""
 
     val values = List[AnyRef](
+      post.pageId,
+      post.nr.asAnyRef,
       post.parentNr.orNullInt,
       toDbMultireply(post.multireplyPostNrs),
       (post.tyype != PostType.Normal) ? post.tyype.toInt.asAnyRef | NullInt,
@@ -429,7 +433,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       post.numUnwantedVotes.asAnyRef,
       post.numTimesRead.asAnyRef,
 
-      siteId, post.pageId, post.nr.asAnyRef)
+      siteId, post.uniqueId.asAnyRef)
 
     runUpdate(statement, values)
   }
