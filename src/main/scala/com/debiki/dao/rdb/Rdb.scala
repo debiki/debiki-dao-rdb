@@ -162,7 +162,10 @@ object Rdb {
 }
 
 
-class Rdb(val dataSource: jxs.DataSource){
+/** The read-write data source must have auto-commit off, and must (or should) use
+  * the serializable isolation level.
+  */
+class Rdb(val readOnlyDataSource: jxs.DataSource, val readWriteDataSource: jxs.DataSource) {
 
   import Rdb._
 
@@ -228,17 +231,20 @@ class Rdb(val dataSource: jxs.DataSource){
     //ds.setConnectionCacheProperties(props)
   */
 
-  // Test the data source.
+  // Test the data sources.
   {
-    val conn: js.Connection = try {
-      dataSource.getConnection()
-    } catch {
-      case e: Exception => {
-        error("Got a broken database connection source.")
-        throw e
-      }
+    def testDataSource(dataSource: jxs.DataSource, what: String) {
+      val connection: js.Connection =
+        try dataSource.getConnection()
+        catch {
+          case e: Exception =>
+            System.err.println(s"Got a broken $what database connection source [EsE8YKG6]")
+            throw e
+        }
+      connection.close()
     }
-    conn.close()
+    testDataSource(readOnlyDataSource, "read-only")
+    testDataSource(readWriteDataSource, "read-write")
   }
 
 
@@ -466,23 +472,8 @@ class Rdb(val dataSource: jxs.DataSource){
   }
 
   def getConnection(readOnly: Boolean, mustBeSerializable: Boolean): js.Connection = {
-    val conn: js.Connection = dataSource.getConnection()
-    if (conn ne null) {
-      // Now with HikariCP setReadOnly causes: [5JKF2]
-      // """org.postgresql.util.PSQLException: Cannot change transaction read-only property in the
-      // middle of a transaction.""" — but I haven't started any transaction yet??
-      // This did work with Postgres' built in connection pool (but I guess it was wrong).
-      //conn.setReadOnly(readOnly)
-      conn.setAutoCommit(false)
-      if (mustBeSerializable) {
-        // Causes """Cannot change transaction isolation level in the middle""" error: [5JKF2]
-        // conn.setTransactionIsolation(js.Connection.TRANSACTION_SERIALIZABLE)
-      }
-      else {
-        // Read Committed is the default isolation level in PostgreSQL.
-      }
-    }
-    conn
+    if (readOnly) readOnlyDataSource.getConnection()
+    else readWriteDataSource.getConnection()
   }
 
   def closeConnection(connection: js.Connection) {

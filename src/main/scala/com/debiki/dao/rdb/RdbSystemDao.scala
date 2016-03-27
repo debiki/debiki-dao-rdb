@@ -595,7 +595,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     flyway.setInitOnMigrate(true)
     // ------------------------------------------------------------
 
-    flyway.setDataSource(db.dataSource)
+    flyway.setDataSource(db.readWriteDataSource)
     flyway.setSchemas("public")
     // Default prefix is uppercase "V" but I want files in lowercase, e.g. v1__migration_name.sql.
     flyway.setSqlMigrationPrefix("v")
