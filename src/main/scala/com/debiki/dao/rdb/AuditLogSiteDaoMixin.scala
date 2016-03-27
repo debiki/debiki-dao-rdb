@@ -32,24 +32,48 @@ import RdbUtil._
 trait AuditLogSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
+  var batchId: Option[AuditLogEntryId] = None
+  var batchOffset = 0
 
-  def nextAuditLogEntryId: AuditLogEntryId = {
+  def startAuditLogBatch() {
+    batchId = None
+    val (id, _) = nextAuditLogEntryId()
+    batchId = Some(id)
+    batchOffset = 0
+  }
+
+
+  def nextAuditLogEntryId(): (AuditLogEntryId, Option[AuditLogEntryId]) = {
+    batchId foreach { id =>
+      val result = (id + batchOffset, batchId)
+      batchOffset += 1
+      return result
+    }
     val query = "select max(audit_id) max_id from dw2_audit_log where site_id = ?"
     runQuery(query, List(siteId), rs => {
       rs.next()
       val maxId = rs.getInt("max_id") // null becomes 0, fine
-      maxId + 1
+      (maxId + 1, None)
     })
   }
 
 
-  def insertAuditLogEntry(entry: AuditLogEntry) {
+  def insertAuditLogEntry(entryNoId: AuditLogEntry) {
+    val entry =
+      if (entryNoId.id != AuditLogEntry.UnassignedId) entryNoId
+      else {
+        val (id, batchId) = nextAuditLogEntryId()
+        entryNoId.copy(id = id, batchId = batchId)
+      }
+
     require(entry.id >= 1, "DwE0GMF3")
+    require(!entry.batchId.exists(_ > entry.id), "EsE4GGX2")
     require(entry.siteId == siteId, "DwE1FWU6")
     val statement = s"""
       insert into dw2_audit_log(
         site_id,
         audit_id,
+        batch_id,
         doer_id,
         done_at,
         did_what,
@@ -77,7 +101,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         target_user_id,
         target_site_id)
       values (
-        ?, ?, ?, ? at time zone 'UTC',
+        ?, ?, ?, ?, ? at time zone 'UTC',
         ?, ?, ?, ?::inet,
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
@@ -85,6 +109,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     val values = List[AnyRef](
       entry.siteId,
       entry.id.asAnyRef,
+      entry.batchId.orNullInt,
       entry.doerId.asAnyRef,
       entry.doneAt.asTimestamp,
       entry.didWhat.toInt.asAnyRef,
@@ -147,6 +172,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     AuditLogEntry(
       siteId = siteId,
       id = rs.getInt("audit_id"),
+      batchId = getOptionalInt(rs, "audit_id"),
       didWhat = AuditLogEntryType.fromInt(rs.getInt("did_what")) getOrDie "EsE7YKG83",
       doerId = rs.getInt("doer_id"),
       doneAt = getDate(rs, "done_at"),

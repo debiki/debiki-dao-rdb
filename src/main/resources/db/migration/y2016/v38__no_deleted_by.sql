@@ -1,6 +1,10 @@
 
 alter table dw1_pages drop column deleted_by_id;
 
+alter table dw2_audit_log add column batch_id bigint;
+alter table dw2_audit_log add constraint dw2_auditlog_batchid_btwn_1_id__c check (
+  batch_id between 1 and audit_id);
+
 alter table dw2_audit_log alter column did_what type smallint using (
     case did_what
         when 'CrSt' then 1
