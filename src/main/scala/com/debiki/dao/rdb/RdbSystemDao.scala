@@ -591,16 +591,18 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val flyway = new Flyway()
 
     // --- Temporarily, to initialize the production database -----
-    flyway.setInitDescription("base version")
-    flyway.setInitOnMigrate(true)
+    flyway.setBaselineOnMigrate(true)
     // ------------------------------------------------------------
 
+    flyway.setLocations("classpath:db/migration")
     flyway.setDataSource(db.readWriteDataSource)
     flyway.setSchemas("public")
-    // Default prefix is uppercase "V" but I want files in lowercase, e.g. v1__migration_name.sql.
+    // Default prefixes are uppercase "V" and "R" but I want files in lowercase, e.g. v1__name.sql.
     flyway.setSqlMigrationPrefix("v")
+    flyway.setRepeatableSqlMigrationPrefix("r")
     // Warning: Don't clean() in production, could wipe out all data.
     flyway.setCleanOnValidationError(daoFactory.isTest)
+    flyway.setCleanDisabled(!daoFactory.isTest)
     // Make this DAO accessible to the Scala code in the Flyway migration.
     _root_.db.migration.MigrationHelper.systemDbDao = this
     _root_.db.migration.MigrationHelper.scalaBasedMigrations = daoFactory.migrations
