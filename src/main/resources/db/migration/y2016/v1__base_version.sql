@@ -1,37 +1,19 @@
+-- Creates the Debiki database schema.
 --
--- PostgreSQL database dump
+-- Generated like so:
+-- pg_dump --host 127.0.0.1 -p 5432 --username=debiki_dev --schema-only --no-tablespaces --use-set-session-authorization \
+--    > src/main/resources/db/migration/y2016/v1__base_version.sql
 --
-
-SET statement_timeout = 0;
-SET lock_timeout = 0;
-SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
-SET check_function_bodies = false;
-SET client_min_messages = warning;
-
-SET SESSION AUTHORIZATION DEFAULT;
-
+-- (where debiki_dev is a fresh import of the prod db, migrated to old y2016/v38__no_deleted_by.sql)
 --
--- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: 
+-- Then I removed some  SET ...  commands, and also some "REVOKE ..." and
+-- "GRANT ..." commands.
 --
-
-CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
-
-
---
--- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: 
+-- And then processed in Gvim like so: (to remove comments and empty lines)
+--   '<,'>s/^--.*$//g
+--   %s/\n\n\n\n\n\n\n/\r\r\r/g
 --
 
-COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
-
-
-SET SESSION AUTHORIZATION 'debiki_dev';
-
-SET search_path = public, pg_catalog;
-
---
--- Name: delete_page(character varying, character varying); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION delete_page(the_site_id character varying, the_page_id character varying) RETURNS void
     LANGUAGE plpgsql
@@ -44,10 +26,6 @@ delete from DW1_PAGES where TENANT = the_site_id and GUID = the_page_id;
 end;
 $$;
 
-
---
--- Name: dw1_emails_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION dw1_emails_summary() RETURNS trigger
     LANGUAGE plpgsql
@@ -71,10 +49,6 @@ CREATE FUNCTION dw1_emails_summary() RETURNS trigger
     end;
 $$;
 
-
---
--- Name: dw1_guests_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION dw1_guests_summary() RETURNS trigger
     LANGUAGE plpgsql
@@ -101,10 +75,6 @@ CREATE FUNCTION dw1_guests_summary() RETURNS trigger
 $$;
 
 
---
--- Name: dw1_identities_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
-
 CREATE FUNCTION dw1_identities_summary() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -129,10 +99,6 @@ CREATE FUNCTION dw1_identities_summary() RETURNS trigger
     end;
 $$;
 
-
---
--- Name: dw1_notfs_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION dw1_notfs_summary() RETURNS trigger
     LANGUAGE plpgsql
@@ -159,10 +125,6 @@ CREATE FUNCTION dw1_notfs_summary() RETURNS trigger
 $$;
 
 
---
--- Name: dw1_pages_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
-
 CREATE FUNCTION dw1_pages_summary() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -187,10 +149,6 @@ CREATE FUNCTION dw1_pages_summary() RETURNS trigger
     end;
 $$;
 
-
---
--- Name: dw1_posts_read_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION dw1_posts_read_summary() RETURNS trigger
     LANGUAGE plpgsql
@@ -217,10 +175,6 @@ CREATE FUNCTION dw1_posts_read_summary() RETURNS trigger
 $$;
 
 
---
--- Name: dw1_role_page_settings_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
-
 CREATE FUNCTION dw1_role_page_settings_summary() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -245,10 +199,6 @@ CREATE FUNCTION dw1_role_page_settings_summary() RETURNS trigger
     end;
 $$;
 
-
---
--- Name: dw1_roles_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION dw1_roles_summary() RETURNS trigger
     LANGUAGE plpgsql
@@ -275,10 +225,6 @@ CREATE FUNCTION dw1_roles_summary() RETURNS trigger
 $$;
 
 
---
--- Name: dw2_post_actions_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
-
 CREATE FUNCTION dw2_post_actions_summary() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -302,10 +248,6 @@ CREATE FUNCTION dw2_post_actions_summary() RETURNS trigger
     end;
 $$;
 
-
---
--- Name: dw2_posts_summary(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION dw2_posts_summary() RETURNS trigger
     LANGUAGE plpgsql
@@ -345,10 +287,6 @@ CREATE FUNCTION dw2_posts_summary() RETURNS trigger
 $$;
 
 
---
--- Name: hex_to_int(character varying); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
-
 CREATE FUNCTION hex_to_int(hexval character varying) RETURNS integer
     LANGUAGE plpgsql IMMUTABLE STRICT
     AS $$
@@ -360,10 +298,6 @@ BEGIN
 END;
 $$;
 
-
---
--- Name: inc_next_page_id(character varying); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION inc_next_page_id(site_id character varying) RETURNS integer
     LANGUAGE plpgsql
@@ -380,10 +314,6 @@ end;
 $$;
 
 
---
--- Name: is_valid_css_class(character varying); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
-
 CREATE FUNCTION is_valid_css_class(text character varying) RETURNS boolean
     LANGUAGE plpgsql
     AS $_$
@@ -392,10 +322,6 @@ begin
 end;
 $_$;
 
-
---
--- Name: is_valid_hash_path(character varying); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION is_valid_hash_path(text character varying) RETURNS boolean
     LANGUAGE plpgsql
@@ -408,10 +334,6 @@ end;
 $_$;
 
 
---
--- Name: now_utc(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
-
 CREATE FUNCTION now_utc() RETURNS timestamp without time zone
     LANGUAGE plpgsql
     AS $$
@@ -420,10 +342,6 @@ begin
 end;
 $$;
 
-
---
--- Name: string_id_to_int(character varying); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION string_id_to_int(string_id character varying) RETURNS character varying
     LANGUAGE plpgsql IMMUTABLE STRICT
@@ -447,10 +365,6 @@ BEGIN
 END;
 $_$;
 
-
---
--- Name: sum_post_revs_quota_3(); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
 
 CREATE FUNCTION sum_post_revs_quota_3() RETURNS trigger
     LANGUAGE plpgsql
@@ -494,10 +408,6 @@ CREATE FUNCTION sum_post_revs_quota_3() RETURNS trigger
 $$;
 
 
---
--- Name: update_upload_ref_count(character varying, character varying); Type: FUNCTION; Schema: public; Owner: debiki_dev
---
-
 CREATE FUNCTION update_upload_ref_count(the_base_url character varying, the_hash_path character varying) RETURNS void
     LANGUAGE plpgsql
     AS $$
@@ -529,12 +439,6 @@ begin
 end $$;
 
 
-SET default_with_oids = false;
-
---
--- Name: dw1_emails_out; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw1_emails_out (
     site_id character varying(32) NOT NULL,
     id character varying(32) NOT NULL,
@@ -562,10 +466,6 @@ CREATE TABLE dw1_emails_out (
 );
 
 
---
--- Name: dw1_guest_prefs; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw1_guest_prefs (
     site_id character varying(32) NOT NULL,
     ctime timestamp without time zone NOT NULL,
@@ -577,10 +477,6 @@ CREATE TABLE dw1_guest_prefs (
     CONSTRAINT dw1_idsmpleml_version__c CHECK ((version = ANY (ARRAY['C'::bpchar, 'O'::bpchar])))
 );
 
-
---
--- Name: dw1_identities; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw1_identities (
     id integer NOT NULL,
@@ -613,10 +509,6 @@ CREATE TABLE dw1_identities (
 );
 
 
---
--- Name: dw1_notifications; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw1_notifications (
     site_id character varying NOT NULL,
     notf_type smallint NOT NULL,
@@ -639,10 +531,6 @@ CREATE TABLE dw1_notifications (
 );
 
 
---
--- Name: dw1_page_paths; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw1_page_paths (
     site_id character varying(32) NOT NULL,
     parent_folder character varying(100) NOT NULL,
@@ -660,10 +548,6 @@ CREATE TABLE dw1_page_paths (
     CONSTRAINT dw1_pgpths_slug__c_ne CHECK ((btrim((page_slug)::text) <> ''::text))
 );
 
-
---
--- Name: dw1_pages; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw1_pages (
     site_id character varying(32) NOT NULL,
@@ -746,10 +630,6 @@ CREATE TABLE dw1_pages (
 );
 
 
---
--- Name: dw1_posts_read_stats; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw1_posts_read_stats (
     site_id character varying(32) NOT NULL,
     page_id character varying(32) NOT NULL,
@@ -760,10 +640,6 @@ CREATE TABLE dw1_posts_read_stats (
 );
 
 
---
--- Name: dw1_role_page_settings; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw1_role_page_settings (
     site_id character varying NOT NULL,
     role_id integer NOT NULL,
@@ -772,10 +648,6 @@ CREATE TABLE dw1_role_page_settings (
     CONSTRAINT dw1_ropgst_notflevel__c_in CHECK (((notf_level)::text = ANY (ARRAY[('W'::character varying)::text, ('T'::character varying)::text, ('R'::character varying)::text, ('M'::character varying)::text])))
 );
 
-
---
--- Name: dw1_settings; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw1_settings (
     site_id character varying NOT NULL,
@@ -806,10 +678,6 @@ END)
 );
 
 
---
--- Name: dw1_tenant_hosts; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw1_tenant_hosts (
     site_id character varying(32) NOT NULL,
     host character varying NOT NULL,
@@ -820,10 +688,6 @@ CREATE TABLE dw1_tenant_hosts (
     CONSTRAINT dw1_tnthsts_cncl__c CHECK (((canonical)::text = ANY (ARRAY[('C'::character varying)::text, ('R'::character varying)::text, ('L'::character varying)::text, ('D'::character varying)::text])))
 );
 
-
---
--- Name: dw1_tenants; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw1_tenants (
     id character varying(32) NOT NULL,
@@ -866,10 +730,6 @@ CREATE TABLE dw1_tenants (
 );
 
 
---
--- Name: dw1_tenants_id; Type: SEQUENCE; Schema: public; Owner: debiki_dev
---
-
 CREATE SEQUENCE dw1_tenants_id
     START WITH 10
     INCREMENT BY 1
@@ -877,10 +737,6 @@ CREATE SEQUENCE dw1_tenants_id
     NO MAXVALUE
     CACHE 1;
 
-
---
--- Name: dw1_users; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw1_users (
     site_id character varying(32) NOT NULL,
@@ -945,10 +801,6 @@ CREATE TABLE dw1_users (
 );
 
 
---
--- Name: dw2_audit_log; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw2_audit_log (
     site_id character varying NOT NULL,
     audit_id bigint NOT NULL,
@@ -998,10 +850,6 @@ CREATE TABLE dw2_audit_log (
 );
 
 
---
--- Name: dw2_blocks; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw2_blocks (
     site_id character varying NOT NULL,
     block_type character varying,
@@ -1014,10 +862,6 @@ CREATE TABLE dw2_blocks (
     CONSTRAINT dw2_blocks_blockedat_till__c CHECK ((blocked_at <= blocked_till))
 );
 
-
---
--- Name: dw2_categories; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw2_categories (
     site_id character varying NOT NULL,
@@ -1046,10 +890,6 @@ CREATE TABLE dw2_categories (
 );
 
 
---
--- Name: dw2_invites; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw2_invites (
     site_id character varying NOT NULL,
     secret_key character varying NOT NULL,
@@ -1073,10 +913,6 @@ CREATE TABLE dw2_invites (
 );
 
 
---
--- Name: dw2_page_html; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw2_page_html (
     site_id character varying NOT NULL,
     page_id character varying NOT NULL,
@@ -1088,10 +924,6 @@ CREATE TABLE dw2_page_html (
     html text NOT NULL
 );
 
-
---
--- Name: dw2_post_actions; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw2_post_actions (
     site_id character varying NOT NULL,
@@ -1113,10 +945,6 @@ CREATE TABLE dw2_post_actions (
     CONSTRAINT dw2_postacs__c_updat_ge_delat CHECK ((updated_at >= deleted_at))
 );
 
-
---
--- Name: dw2_post_revisions; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw2_post_revisions (
     site_id character varying NOT NULL,
@@ -1141,10 +969,6 @@ CREATE TABLE dw2_post_revisions (
     CONSTRAINT dw2_postrevs_revisionnr_prevnr__c_gz CHECK (((revision_nr > 0) AND (previous_nr > 0)))
 );
 
-
---
--- Name: dw2_posts; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw2_posts (
     site_id character varying NOT NULL,
@@ -1224,10 +1048,6 @@ CREATE TABLE dw2_posts (
 );
 
 
---
--- Name: dw2_review_tasks; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw2_review_tasks (
     site_id character varying NOT NULL,
     id integer NOT NULL,
@@ -1259,10 +1079,6 @@ CREATE TABLE dw2_review_tasks (
 );
 
 
---
--- Name: dw2_upload_refs; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE dw2_upload_refs (
     site_id character varying NOT NULL,
     post_id integer NOT NULL,
@@ -1275,10 +1091,6 @@ CREATE TABLE dw2_upload_refs (
     CONSTRAINT dw2_uploadrefs_hashpathsuffix__c_len CHECK (((length((hash_path)::text) >= 1) AND (length((hash_path)::text) <= 100)))
 );
 
-
---
--- Name: dw2_uploads; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE dw2_uploads (
     base_url character varying NOT NULL,
@@ -1307,10 +1119,6 @@ CREATE TABLE dw2_uploads (
 );
 
 
---
--- Name: message_members_3; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
 CREATE TABLE message_members_3 (
     site_id character varying NOT NULL,
     page_id character varying NOT NULL,
@@ -1319,29 +1127,6 @@ CREATE TABLE message_members_3 (
     added_at timestamp without time zone NOT NULL
 );
 
-
---
--- Name: schema_version; Type: TABLE; Schema: public; Owner: debiki_dev
---
-
-CREATE TABLE schema_version (
-    version_rank integer NOT NULL,
-    installed_rank integer NOT NULL,
-    version character varying(50) NOT NULL,
-    description character varying(200) NOT NULL,
-    type character varying(20) NOT NULL,
-    script character varying(1000) NOT NULL,
-    checksum integer,
-    installed_by character varying(100) NOT NULL,
-    installed_on timestamp without time zone DEFAULT now() NOT NULL,
-    execution_time integer NOT NULL,
-    success boolean NOT NULL
-);
-
-
---
--- Name: settings_3; Type: TABLE; Schema: public; Owner: debiki_dev
---
 
 CREATE TABLE settings_3 (
     site_id character varying NOT NULL,
@@ -1399,257 +1184,121 @@ CREATE TABLE settings_3 (
 );
 
 
---
--- Name: dw1_emlot_tnt_id__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_emails_out
     ADD CONSTRAINT dw1_emlot_tnt_id__p PRIMARY KEY (site_id, id);
 
-
---
--- Name: dw1_ids_siteid_id__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_identities
     ADD CONSTRAINT dw1_ids_siteid_id__p PRIMARY KEY (site_id, id);
 
 
---
--- Name: dw1_idsmpleml__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_guest_prefs
     ADD CONSTRAINT dw1_idsmpleml__p PRIMARY KEY (site_id, email, ctime);
 
-
---
--- Name: dw1_idsoid_tnt_oid__u; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_identities
     ADD CONSTRAINT dw1_idsoid_tnt_oid__u UNIQUE (site_id, oid_claimed_id);
 
 
---
--- Name: dw1_notfs_id__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_notifications
     ADD CONSTRAINT dw1_notfs_id__p PRIMARY KEY (site_id, notf_id);
 
-
---
--- Name: dw1_pages__u; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages__u UNIQUE (site_id, page_id);
 
 
---
--- Name: dw1_ropgst_site_role_page__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_role_page_settings
     ADD CONSTRAINT dw1_ropgst_site_role_page__p PRIMARY KEY (site_id, role_id, page_id);
 
-
---
--- Name: dw1_stngs_tnt_trgt_page_name__u; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_settings
     ADD CONSTRAINT dw1_stngs_tnt_trgt_page_name__u UNIQUE (site_id, target, page_id, name);
 
 
---
--- Name: dw1_tenants_id__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_tenants
     ADD CONSTRAINT dw1_tenants_id__p PRIMARY KEY (id);
 
-
---
--- Name: dw1_tenants_name__u; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_tenants
     ADD CONSTRAINT dw1_tenants_name__u UNIQUE (name);
 
 
---
--- Name: dw1_tnthsts_host__u; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_tenant_hosts
     ADD CONSTRAINT dw1_tnthsts_host__u UNIQUE (host);
 
-
---
--- Name: dw1_users_tnt_sno__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_users
     ADD CONSTRAINT dw1_users_tnt_sno__p PRIMARY KEY (site_id, user_id);
 
 
---
--- Name: dw2_auditlog__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_audit_log
     ADD CONSTRAINT dw2_auditlog__p PRIMARY KEY (site_id, audit_id);
 
-
---
--- Name: dw2_cats_id__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_categories
     ADD CONSTRAINT dw2_cats_id__p PRIMARY KEY (site_id, id);
 
 
---
--- Name: dw2_invites__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_invites
     ADD CONSTRAINT dw2_invites__p PRIMARY KEY (site_id, secret_key);
 
-
---
--- Name: dw2_pagehtml__pageid; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_page_html
     ADD CONSTRAINT dw2_pagehtml__pageid PRIMARY KEY (site_id, page_id);
 
 
---
--- Name: dw2_postacs__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_post_actions
     ADD CONSTRAINT dw2_postacs__p PRIMARY KEY (site_id, unique_post_id, type, created_by_id, sub_id);
 
-
---
--- Name: dw2_postrevs_postid_revnr__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_post_revisions
     ADD CONSTRAINT dw2_postrevs_postid_revnr__p PRIMARY KEY (site_id, post_id, revision_nr);
 
 
---
--- Name: dw2_posts_id__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_id__p PRIMARY KEY (site_id, unique_post_id);
 
-
---
--- Name: dw2_reviewtasks__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_review_tasks
     ADD CONSTRAINT dw2_reviewtasks__p PRIMARY KEY (site_id, id);
 
 
---
--- Name: dw2_uploadrefs__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_upload_refs
     ADD CONSTRAINT dw2_uploadrefs__p PRIMARY KEY (site_id, post_id, base_url, hash_path);
 
-
---
--- Name: dw2_uploads__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_uploads
     ADD CONSTRAINT dw2_uploads__p PRIMARY KEY (base_url, hash_path);
 
 
---
--- Name: msgmbr3_page_user__p; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY message_members_3
     ADD CONSTRAINT msgmbr3_page_user__p PRIMARY KEY (site_id, page_id, user_id);
 
 
---
--- Name: schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
-ALTER TABLE ONLY schema_version
-    ADD CONSTRAINT schema_version_pk PRIMARY KEY (version);
-
-
---
--- Name: dw1_ids_securesocial; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw1_ids_securesocial ON dw1_identities USING btree (site_id, securesocial_provider_id, securesocial_user_id);
 
-
---
--- Name: dw1_idsmpleml_version__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw1_idsmpleml_version__u ON dw1_guest_prefs USING btree (site_id, email, version) WHERE (version = 'C'::bpchar);
 
 
---
--- Name: dw1_idsoid_email; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_idsoid_email ON dw1_identities USING btree (email);
 
-
---
--- Name: dw1_idsoid_tnt_email__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw1_idsoid_tnt_email__u ON dw1_identities USING btree (site_id, email) WHERE ((oid_endpoint)::text = 'https://www.google.com/accounts/o8/ud'::text);
 
 
---
--- Name: dw1_idsoid_tnt_usr; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_idsoid_tnt_usr ON dw1_identities USING btree (site_id, user_id);
 
-
---
--- Name: dw1_ntfs_createdat_email_undecided__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_ntfs_createdat_email_undecided__i ON dw1_notifications USING btree (created_at) WHERE (email_status = 1);
 
 
---
--- Name: dw1_ntfs_emailid; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_ntfs_emailid ON dw1_notifications USING btree (site_id, email_id);
 
 
---
--- Name: dw1_ntfs_postid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_ntfs_postid__i ON dw1_notifications USING btree (site_id, unique_post_id) WHERE (unique_post_id IS NOT NULL);
 
-
---
--- Name: dw1_ntfs_seen_createdat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_ntfs_seen_createdat__i ON dw1_notifications USING btree ((
 CASE
@@ -1658,716 +1307,299 @@ CASE
 END) DESC);
 
 
---
--- Name: dw1_pages_bumpedat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_pages_bumpedat__i ON dw1_pages USING btree (site_id, bumped_at DESC);
 
-
---
--- Name: dw1_pages_category__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_pages_category__i ON dw1_pages USING btree (site_id, category_id);
 
 
---
--- Name: dw1_pages_category_about__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw1_pages_category_about__u ON dw1_pages USING btree (site_id, category_id, page_role) WHERE (page_role = 9);
 
-
---
--- Name: dw1_pages_frequentposter1id__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_pages_frequentposter1id__i ON dw1_pages USING btree (site_id, frequent_poster_1_id) WHERE (frequent_poster_1_id IS NOT NULL);
 
 
---
--- Name: dw1_pages_frequentposter2id__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_pages_frequentposter2id__i ON dw1_pages USING btree (site_id, frequent_poster_2_id) WHERE (frequent_poster_2_id IS NOT NULL);
 
-
---
--- Name: dw1_pages_frequentposter3id__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_pages_frequentposter3id__i ON dw1_pages USING btree (site_id, frequent_poster_3_id) WHERE (frequent_poster_3_id IS NOT NULL);
 
 
---
--- Name: dw1_pages_frequentposter4id__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_pages_frequentposter4id__i ON dw1_pages USING btree (site_id, frequent_poster_4_id) WHERE (frequent_poster_4_id IS NOT NULL);
 
-
---
--- Name: dw1_pages_lastreplybyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_pages_lastreplybyid__i ON dw1_pages USING btree (site_id, last_reply_by_id) WHERE (last_reply_by_id IS NOT NULL);
 
 
---
--- Name: dw1_pages_likes_bump__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_pages_likes_bump__i ON dw1_pages USING btree (site_id, num_likes DESC, bumped_at DESC);
 
-
---
--- Name: dw1_pages_pinorder__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_pages_pinorder__i ON dw1_pages USING btree (site_id, pin_order) WHERE (pin_order IS NOT NULL);
 
 
---
--- Name: dw1_pages_publishedat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_pages_publishedat__i ON dw1_pages USING btree (site_id, published_at);
 
-
---
--- Name: dw1_pgpths_path__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw1_pgpths_path__u ON dw1_page_paths USING btree (site_id, page_id, parent_folder, page_slug, show_id);
 
 
---
--- Name: dw1_pgpths_path_noid_cncl__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw1_pgpths_path_noid_cncl__u ON dw1_page_paths USING btree (site_id, parent_folder, page_slug) WHERE (((show_id)::text = 'F'::text) AND ((canonical)::text = 'C'::text));
 
-
---
--- Name: dw1_pgpths_tnt_fldr_slg_cncl; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_pgpths_tnt_fldr_slg_cncl ON dw1_page_paths USING btree (site_id, parent_folder, page_slug, canonical);
 
 
---
--- Name: dw1_pgpths_tnt_pgid_cncl; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_pgpths_tnt_pgid_cncl ON dw1_page_paths USING btree (site_id, page_id, canonical);
 
-
---
--- Name: dw1_pgpths_tnt_pgid_cncl__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw1_pgpths_tnt_pgid_cncl__u ON dw1_page_paths USING btree (site_id, page_id) WHERE ((canonical)::text = 'C'::text);
 
 
---
--- Name: dw1_pstsrd_guest_ip__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw1_pstsrd_guest_ip__u ON dw1_posts_read_stats USING btree (site_id, page_id, post_nr, ip) WHERE ((user_id IS NULL) OR ((user_id)::text ~~ '-%'::text));
 
-
---
--- Name: dw1_pstsrd_role__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw1_pstsrd_role__u ON dw1_posts_read_stats USING btree (site_id, page_id, post_nr, user_id);
 
 
---
--- Name: dw1_ropgst_site_page; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_ropgst_site_page ON dw1_role_page_settings USING btree (site_id, page_id);
 
-
---
--- Name: dw1_stngs_tnt_trgt_name__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw1_stngs_tnt_trgt_name__u ON dw1_settings USING btree (site_id, target, name) WHERE (page_id IS NULL);
 
 
---
--- Name: dw1_tenants_creatoremail; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_tenants_creatoremail ON dw1_tenants USING btree (creator_email_address);
 
-
---
--- Name: dw1_tenants_creatorip; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_tenants_creatorip ON dw1_tenants USING btree (creator_ip);
 
 
---
--- Name: dw1_tnthsts_tnt_cncl__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw1_tnthsts_tnt_cncl__u ON dw1_tenant_hosts USING btree (site_id) WHERE ((canonical)::text = 'C'::text);
 
-
---
--- Name: dw1_user_guest__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw1_user_guest__u ON dw1_users USING btree (site_id, display_name, email, guest_cookie) WHERE (user_id < (-1));
 
 
---
--- Name: dw1_user_guestcookie__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_user_guestcookie__i ON dw1_users USING btree (site_id, guest_cookie) WHERE (user_id < (-1));
 
-
---
--- Name: dw1_user_guestemail__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_user_guestemail__i ON dw1_users USING btree (site_id, email) WHERE (user_id < (-1));
 
 
---
--- Name: dw1_users_approvedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_users_approvedbyid__i ON dw1_users USING btree (site_id, approved_by_id) WHERE (approved_by_id IS NOT NULL);
 
-
---
--- Name: dw1_users_avatarmediumbaseurl__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_users_avatarmediumbaseurl__i ON dw1_users USING btree (avatar_medium_base_url);
 
 
---
--- Name: dw1_users_avatarmediumhashpath__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_users_avatarmediumhashpath__i ON dw1_users USING btree (avatar_medium_hash_path);
 
-
---
--- Name: dw1_users_avatarsmallbaseurl__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_users_avatarsmallbaseurl__i ON dw1_users USING btree (avatar_small_base_url);
 
 
---
--- Name: dw1_users_avatarsmallhashpath__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_users_avatarsmallhashpath__i ON dw1_users USING btree (avatar_small_hash_path);
 
-
---
--- Name: dw1_users_avatartinybaseurl__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_users_avatartinybaseurl__i ON dw1_users USING btree (avatar_tiny_base_url);
 
 
---
--- Name: dw1_users_avatartinyhashpath__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw1_users_avatartinyhashpath__i ON dw1_users USING btree (avatar_tiny_hash_path);
 
-
---
--- Name: dw1_users_site_email__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw1_users_site_email__u ON dw1_users USING btree (site_id, email) WHERE (user_id >= (-1));
 
 
---
--- Name: dw1_users_site_usernamelower__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw1_users_site_usernamelower__u ON dw1_users USING btree (site_id, lower((username)::text));
 
-
---
--- Name: dw1_users_suspendebyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw1_users_suspendebyid__i ON dw1_users USING btree (site_id, suspended_by_id) WHERE (suspended_by_id IS NOT NULL);
 
 
---
--- Name: dw2_auditlog_doer_doneat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_auditlog_doer_doneat__i ON dw2_audit_log USING btree (site_id, doer_id, done_at);
 
-
---
--- Name: dw2_auditlog_doneat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_auditlog_doneat__i ON dw2_audit_log USING btree (site_id, done_at);
 
 
---
--- Name: dw2_auditlog_fingerprint_doneat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_auditlog_fingerprint_doneat__i ON dw2_audit_log USING btree (site_id, browser_fingerprint, done_at);
 
-
---
--- Name: dw2_auditlog_idcookie_doneat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_auditlog_idcookie_doneat__i ON dw2_audit_log USING btree (site_id, browser_id_cookie, done_at);
 
 
---
--- Name: dw2_auditlog_ip_doneat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_auditlog_ip_doneat__i ON dw2_audit_log USING btree (site_id, ip, done_at);
 
-
---
--- Name: dw2_auditlog_page_doneat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_auditlog_page_doneat__i ON dw2_audit_log USING btree (site_id, page_id, done_at) WHERE (page_id IS NOT NULL);
 
 
---
--- Name: dw2_auditlog_post_doneat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_auditlog_post_doneat__i ON dw2_audit_log USING btree (site_id, post_id, done_at) WHERE (post_id IS NOT NULL);
 
-
---
--- Name: dw2_auditlog_uploadhashpathsuffix__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_auditlog_uploadhashpathsuffix__i ON dw2_audit_log USING btree (upload_hash_path) WHERE (upload_hash_path IS NOT NULL);
 
 
---
--- Name: dw2_blocks_blockedby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_blocks_blockedby__i ON dw2_blocks USING btree (site_id, blocked_by_id);
 
-
---
--- Name: dw2_blocks_browseridcookie__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw2_blocks_browseridcookie__u ON dw2_blocks USING btree (site_id, browser_id_cookie) WHERE (browser_id_cookie IS NOT NULL);
 
 
---
--- Name: dw2_blocks_ip__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw2_blocks_ip__u ON dw2_blocks USING btree (site_id, ip) WHERE (ip IS NOT NULL);
 
-
---
--- Name: dw2_cats_page__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_cats_page__i ON dw2_categories USING btree (site_id, page_id);
 
 
---
--- Name: dw2_cats_page_slug__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw2_cats_page_slug__u ON dw2_categories USING btree (site_id, page_id, slug);
 
-
---
--- Name: dw2_cats_parent_slug__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw2_cats_parent_slug__u ON dw2_categories USING btree (site_id, parent_id, slug);
 
 
---
--- Name: dw2_cats_slug__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_cats_slug__i ON dw2_categories USING btree (site_id, slug);
 
-
---
--- Name: dw2_emlot_touser__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_emlot_touser__i ON dw1_emails_out USING btree (site_id, to_user_id);
 
 
---
--- Name: dw2_invites_createdby_at__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_invites_createdby_at__i ON dw2_invites USING btree (site_id, created_by_id, created_at);
 
-
---
--- Name: dw2_invites_deletedby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_invites_deletedby__i ON dw2_invites USING btree (site_id, deleted_by_id) WHERE (deleted_by_id IS NOT NULL);
 
 
---
--- Name: dw2_invites_email__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw2_invites_email__u ON dw2_invites USING btree (site_id, email_address, created_by_id) WHERE ((deleted_at IS NULL) AND (invalidated_at IS NULL));
 
-
---
--- Name: dw2_invites_user__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_invites_user__i ON dw2_invites USING btree (site_id, user_id) WHERE (user_id IS NOT NULL);
 
 
---
--- Name: dw2_ntfs_touserid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_ntfs_touserid__i ON dw1_notifications USING btree (site_id, to_user_id);
 
-
---
--- Name: dw2_pages_createdby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_pages_createdby__i ON dw1_pages USING btree (site_id, author_id);
 
 
---
--- Name: dw2_postacs_createdby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_postacs_createdby__i ON dw2_post_actions USING btree (site_id, created_by_id);
 
-
---
--- Name: dw2_postacs_deletedby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_postacs_deletedby__i ON dw2_post_actions USING btree (site_id, deleted_by_id) WHERE (deleted_by_id IS NOT NULL);
 
 
---
--- Name: dw2_postacs_page_byuser; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_postacs_page_byuser ON dw2_post_actions USING btree (site_id, page_id, created_by_id);
 
-
---
--- Name: dw2_postrevs_approvedby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_postrevs_approvedby__i ON dw2_post_revisions USING btree (site_id, approved_by_id) WHERE (approved_by_id IS NOT NULL);
 
 
---
--- Name: dw2_postrevs_composedby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_postrevs_composedby__i ON dw2_post_revisions USING btree (site_id, composed_by_id);
 
-
---
--- Name: dw2_postrevs_hiddenby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_postrevs_hiddenby__i ON dw2_post_revisions USING btree (site_id, hidden_by_id) WHERE (hidden_by_id IS NOT NULL);
 
 
---
--- Name: dw2_postrevs_postid_prevnr__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_postrevs_postid_prevnr__i ON dw2_post_revisions USING btree (site_id, post_id, previous_nr) WHERE (previous_nr IS NOT NULL);
 
-
---
--- Name: dw2_posts_approvedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_posts_approvedbyid__i ON dw2_posts USING btree (site_id, approved_by_id) WHERE (approved_by_id IS NOT NULL);
 
 
---
--- Name: dw2_posts_closedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_posts_closedbyid__i ON dw2_posts USING btree (site_id, closed_by_id) WHERE (closed_by_id IS NOT NULL);
 
-
---
--- Name: dw2_posts_collapsedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_posts_collapsedbyid__i ON dw2_posts USING btree (site_id, collapsed_by_id) WHERE (collapsed_by_id IS NOT NULL);
 
 
---
--- Name: dw2_posts_createdby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_posts_createdby__i ON dw2_posts USING btree (site_id, created_by_id);
 
-
---
--- Name: dw2_posts_deletedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_posts_deletedbyid__i ON dw2_posts USING btree (site_id, deleted_by_id) WHERE (deleted_by_id IS NOT NULL);
 
 
---
--- Name: dw2_posts_hiddenbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_posts_hiddenbyid__i ON dw2_posts USING btree (site_id, hidden_by_id) WHERE (hidden_by_id IS NOT NULL);
 
-
---
--- Name: dw2_posts_lastapprovededitbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_posts_lastapprovededitbyid__i ON dw2_posts USING btree (site_id, last_approved_edit_by_id) WHERE (last_approved_edit_by_id IS NOT NULL);
 
 
---
--- Name: dw2_posts_lasteditedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_posts_lasteditedbyid__i ON dw2_posts USING btree (site_id, curr_rev_by_id) WHERE (curr_rev_by_id IS NOT NULL);
 
-
---
--- Name: dw2_posts_numflags__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_posts_numflags__i ON dw2_posts USING btree (site_id, num_pending_flags) WHERE ((deleted_status = 0) AND (num_pending_flags > 0));
 
 
---
--- Name: dw2_posts_page_parentnr__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_posts_page_parentnr__i ON dw2_posts USING btree (site_id, page_id, parent_nr);
 
-
---
--- Name: dw2_posts_page_postnr__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw2_posts_page_postnr__u ON dw2_posts USING btree (site_id, page_id, post_nr);
 
 
---
--- Name: dw2_posts_pendingedits__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_posts_pendingedits__i ON dw2_posts USING btree (site_id, last_edit_suggestion_at) WHERE ((((deleted_status = 0) AND (num_pending_flags = 0)) AND (approved_rev_nr = curr_rev_nr)) AND (num_edit_suggestions > 0));
 
-
---
--- Name: dw2_posts_pinnedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_posts_pinnedbyid__i ON dw2_posts USING btree (site_id, pinned_by_id) WHERE (pinned_by_id IS NOT NULL);
 
 
---
--- Name: dw2_posts_unapproved__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_posts_unapproved__i ON dw2_posts USING btree (site_id, curr_rev_last_edited_at) WHERE (((deleted_status = 0) AND (num_pending_flags = 0)) AND ((approved_rev_nr IS NULL) OR (approved_rev_nr < curr_rev_nr)));
 
-
---
--- Name: dw2_reviewtasks_causedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_reviewtasks_causedbyid__i ON dw2_review_tasks USING btree (site_id, caused_by_id);
 
 
---
--- Name: dw2_reviewtasks_completedbyid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_reviewtasks_completedbyid__i ON dw2_review_tasks USING btree (site_id, completed_by_id) WHERE (completed_by_id IS NOT NULL);
 
-
---
--- Name: dw2_reviewtasks_createdat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_reviewtasks_createdat__i ON dw2_review_tasks USING btree (site_id, created_at DESC);
 
 
---
--- Name: dw2_reviewtasks_open_causedby_postid__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX dw2_reviewtasks_open_causedby_postid__u ON dw2_review_tasks USING btree (site_id, caused_by_id, post_id) WHERE ((post_id IS NOT NULL) AND (resolution IS NULL));
 
-
---
--- Name: dw2_reviewtasks_open_causedby_userid__u; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE UNIQUE INDEX dw2_reviewtasks_open_causedby_userid__u ON dw2_review_tasks USING btree (site_id, caused_by_id, user_id) WHERE ((user_id IS NOT NULL) AND (resolution IS NULL));
 
 
---
--- Name: dw2_reviewtasks_open_createdat__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_reviewtasks_open_createdat__i ON dw2_review_tasks USING btree (site_id, created_at DESC) WHERE (resolution IS NULL);
 
-
---
--- Name: dw2_reviewtasks_pageid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_reviewtasks_pageid__i ON dw2_review_tasks USING btree (site_id, page_id) WHERE (page_id IS NOT NULL);
 
 
---
--- Name: dw2_reviewtasks_postid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_reviewtasks_postid__i ON dw2_review_tasks USING btree (site_id, post_id) WHERE (post_id IS NOT NULL);
 
-
---
--- Name: dw2_reviewtasks_userid__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_reviewtasks_userid__i ON dw2_review_tasks USING btree (site_id, user_id) WHERE (user_id IS NOT NULL);
 
 
---
--- Name: dw2_uploadrefs_addedby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_uploadrefs_addedby__i ON dw2_upload_refs USING btree (site_id, added_by_id);
 
-
---
--- Name: dw2_uploadrefs_baseurl__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_uploadrefs_baseurl__i ON dw2_upload_refs USING btree (base_url);
 
 
---
--- Name: dw2_uploadrefs_hashpathsuffix__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_uploadrefs_hashpathsuffix__i ON dw2_upload_refs USING btree (hash_path);
 
-
---
--- Name: dw2_uploads_hashpathsuffix__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX dw2_uploads_hashpathsuffix__i ON dw2_uploads USING btree (hash_path);
 
 
---
--- Name: dw2_uploads_unusedsince__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX dw2_uploads_unusedsince__i ON dw2_uploads USING btree (unused_since) WHERE (num_references = 0);
 
-
---
--- Name: msgmbr3_addedby__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX msgmbr3_addedby__i ON message_members_3 USING btree (site_id, added_by_id);
 
 
---
--- Name: msgmbr3_user__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE INDEX msgmbr3_user__i ON message_members_3 USING btree (site_id, user_id);
 
-
---
--- Name: schema_version_ir_idx; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
-CREATE INDEX schema_version_ir_idx ON schema_version USING btree (installed_rank);
-
-
---
--- Name: schema_version_s_idx; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
-CREATE INDEX schema_version_s_idx ON schema_version USING btree (success);
-
-
---
--- Name: schema_version_vr_idx; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
-CREATE INDEX schema_version_vr_idx ON schema_version USING btree (version_rank);
-
-
---
--- Name: settings3_site__i; Type: INDEX; Schema: public; Owner: debiki_dev
---
 
 CREATE INDEX settings3_site__i ON settings_3 USING btree (site_id);
 
 
---
--- Name: settings3_site_category; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX settings3_site_category ON settings_3 USING btree (site_id, category_id) WHERE (category_id IS NOT NULL);
 
 
---
--- Name: settings3_site_page; Type: INDEX; Schema: public; Owner: debiki_dev
---
-
 CREATE UNIQUE INDEX settings3_site_page ON settings_3 USING btree (site_id, page_id) WHERE (page_id IS NOT NULL);
 
-
---
--- Name: dw1_pstsrd_ignore_dupl_ins; Type: RULE; Schema: public; Owner: debiki_dev
---
 
 CREATE RULE dw1_pstsrd_ignore_dupl_ins AS
     ON INSERT TO dw1_posts_read_stats
@@ -2376,638 +1608,310 @@ CREATE RULE dw1_pstsrd_ignore_dupl_ins AS
           WHERE (((((dw1_posts_read_stats.site_id)::text = (new.site_id)::text) AND ((dw1_posts_read_stats.page_id)::text = (new.page_id)::text)) AND (dw1_posts_read_stats.post_nr = new.post_nr)) AND ((dw1_posts_read_stats.user_id = new.user_id) OR ((dw1_posts_read_stats.ip)::text = (new.ip)::text))))) DO INSTEAD NOTHING;
 
 
---
--- Name: dw1_emails_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
-
 CREATE TRIGGER dw1_emails_summary AFTER INSERT OR DELETE OR UPDATE ON dw1_emails_out FOR EACH ROW EXECUTE PROCEDURE dw1_emails_summary();
 
-
---
--- Name: dw1_identities_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
 
 CREATE TRIGGER dw1_identities_summary AFTER INSERT OR DELETE OR UPDATE ON dw1_identities FOR EACH ROW EXECUTE PROCEDURE dw1_identities_summary();
 
 
---
--- Name: dw1_notfs_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
-
 CREATE TRIGGER dw1_notfs_summary AFTER INSERT OR DELETE OR UPDATE ON dw1_notifications FOR EACH ROW EXECUTE PROCEDURE dw1_notfs_summary();
 
-
---
--- Name: dw1_pages_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
 
 CREATE TRIGGER dw1_pages_summary AFTER INSERT OR DELETE OR UPDATE ON dw1_pages FOR EACH ROW EXECUTE PROCEDURE dw1_pages_summary();
 
 
---
--- Name: dw1_posts_read_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
-
 CREATE TRIGGER dw1_posts_read_summary AFTER INSERT OR DELETE OR UPDATE ON dw1_posts_read_stats FOR EACH ROW EXECUTE PROCEDURE dw1_posts_read_summary();
 
-
---
--- Name: dw1_role_page_settings_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
 
 CREATE TRIGGER dw1_role_page_settings_summary AFTER INSERT OR DELETE OR UPDATE ON dw1_role_page_settings FOR EACH ROW EXECUTE PROCEDURE dw1_role_page_settings_summary();
 
 
---
--- Name: dw1_roles_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
-
 CREATE TRIGGER dw1_roles_summary AFTER INSERT OR DELETE OR UPDATE ON dw1_users FOR EACH ROW EXECUTE PROCEDURE dw1_roles_summary();
 
-
---
--- Name: dw2_actions_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
 
 CREATE TRIGGER dw2_actions_summary AFTER INSERT OR DELETE OR UPDATE ON dw2_post_actions FOR EACH ROW EXECUTE PROCEDURE dw2_post_actions_summary();
 
 
---
--- Name: dw2_posts_summary; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
-
 CREATE TRIGGER dw2_posts_summary AFTER INSERT OR DELETE OR UPDATE ON dw2_posts FOR EACH ROW EXECUTE PROCEDURE dw2_posts_summary();
 
 
---
--- Name: sum_post_revs_quota_3; Type: TRIGGER; Schema: public; Owner: debiki_dev
---
-
 CREATE TRIGGER sum_post_revs_quota_3 AFTER INSERT OR DELETE OR UPDATE ON dw2_post_revisions FOR EACH ROW EXECUTE PROCEDURE sum_post_revs_quota_3();
 
-
---
--- Name: dw1_emlot__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_emails_out
     ADD CONSTRAINT dw1_emlot__r__users FOREIGN KEY (site_id, to_user_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw1_ids_userid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_identities
     ADD CONSTRAINT dw1_ids_userid__r__users FOREIGN KEY (site_id, user_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw1_ids_useridorig__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_identities
     ADD CONSTRAINT dw1_ids_useridorig__r__users FOREIGN KEY (site_id, user_id_orig) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw1_ntfs__r__emails; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_notifications
     ADD CONSTRAINT dw1_ntfs__r__emails FOREIGN KEY (site_id, email_id) REFERENCES dw1_emails_out(site_id, id);
 
-
---
--- Name: dw1_ntfs__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_notifications
     ADD CONSTRAINT dw1_ntfs__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
 
---
--- Name: dw1_ntfs__r__postacs; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_notifications
     ADD CONSTRAINT dw1_ntfs__r__postacs FOREIGN KEY (site_id, unique_post_id, action_type, by_user_id, action_sub_id) REFERENCES dw2_post_actions(site_id, unique_post_id, type, created_by_id, sub_id);
 
-
---
--- Name: dw1_ntfs__r__sites; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_notifications
     ADD CONSTRAINT dw1_ntfs__r__sites FOREIGN KEY (site_id) REFERENCES dw1_tenants(id);
 
 
---
--- Name: dw1_ntfs_byuserid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_notifications
     ADD CONSTRAINT dw1_ntfs_byuserid__r__users FOREIGN KEY (site_id, by_user_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw1_ntfs_postid__r__posts; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_notifications
     ADD CONSTRAINT dw1_ntfs_postid__r__posts FOREIGN KEY (site_id, unique_post_id) REFERENCES dw2_posts(site_id, unique_post_id);
 
 
---
--- Name: dw1_ntfs_touserid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_notifications
     ADD CONSTRAINT dw1_ntfs_touserid__r__users FOREIGN KEY (site_id, to_user_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw1_pages__r__tenant; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages__r__tenant FOREIGN KEY (site_id) REFERENCES dw1_tenants(id) DEFERRABLE;
 
 
---
--- Name: dw1_pages_category__r__categories; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages_category__r__categories FOREIGN KEY (site_id, category_id) REFERENCES dw2_categories(site_id, id) DEFERRABLE;
 
-
---
--- Name: dw1_pages_createdbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages_createdbyid__r__users FOREIGN KEY (site_id, author_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw1_pages_frequentposter1id__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages_frequentposter1id__r__users FOREIGN KEY (site_id, frequent_poster_1_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw1_pages_frequentposter2id__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages_frequentposter2id__r__users FOREIGN KEY (site_id, frequent_poster_2_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw1_pages_frequentposter3id__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages_frequentposter3id__r__users FOREIGN KEY (site_id, frequent_poster_3_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw1_pages_frequentposter4id__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages_frequentposter4id__r__users FOREIGN KEY (site_id, frequent_poster_4_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw1_pages_lastreplybyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_pages
     ADD CONSTRAINT dw1_pages_lastreplybyid__r__users FOREIGN KEY (site_id, last_reply_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw1_pgpths_tnt_pgid__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_page_paths
     ADD CONSTRAINT dw1_pgpths_tnt_pgid__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id) DEFERRABLE;
 
 
---
--- Name: dw1_pstsrd__r__posts; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_posts_read_stats
     ADD CONSTRAINT dw1_pstsrd__r__posts FOREIGN KEY (site_id, page_id, post_nr) REFERENCES dw2_posts(site_id, page_id, post_nr) DEFERRABLE;
 
-
---
--- Name: dw1_pstsrd__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_posts_read_stats
     ADD CONSTRAINT dw1_pstsrd__r__users FOREIGN KEY (site_id, user_id) REFERENCES dw1_users(site_id, user_id) DEFERRABLE;
 
 
---
--- Name: dw1_ropgst__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_role_page_settings
     ADD CONSTRAINT dw1_ropgst__r__users FOREIGN KEY (site_id, role_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw1_ropgst_site_page__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_role_page_settings
     ADD CONSTRAINT dw1_ropgst_site_page__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
 
---
--- Name: dw1_stngs_pageid__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_settings
     ADD CONSTRAINT dw1_stngs_pageid__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
-
---
--- Name: dw1_tnthsts__r__tenants; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_tenant_hosts
     ADD CONSTRAINT dw1_tnthsts__r__tenants FOREIGN KEY (site_id) REFERENCES dw1_tenants(id);
 
 
---
--- Name: dw1_users__r__tenant; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_users
     ADD CONSTRAINT dw1_users__r__tenant FOREIGN KEY (site_id) REFERENCES dw1_tenants(id) DEFERRABLE;
 
-
---
--- Name: dw1_users_approvedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw1_users
     ADD CONSTRAINT dw1_users_approvedbyid__r__users FOREIGN KEY (site_id, approved_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw1_users_suspendebyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw1_users
     ADD CONSTRAINT dw1_users_suspendebyid__r__users FOREIGN KEY (site_id, suspended_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_auditlog__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_audit_log
     ADD CONSTRAINT dw2_auditlog__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
 
---
--- Name: dw2_auditlog__r__posts; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_audit_log
     ADD CONSTRAINT dw2_auditlog__r__posts FOREIGN KEY (site_id, post_id) REFERENCES dw2_posts(site_id, unique_post_id);
 
-
---
--- Name: dw2_auditlog_doer__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_audit_log
     ADD CONSTRAINT dw2_auditlog_doer__r__users FOREIGN KEY (site_id, doer_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_auditlog_targetuser__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_audit_log
     ADD CONSTRAINT dw2_auditlog_targetuser__r__users FOREIGN KEY (site_id, target_user_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_auditlog_tgtsite__r__sites; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_audit_log
     ADD CONSTRAINT dw2_auditlog_tgtsite__r__sites FOREIGN KEY (target_site_id) REFERENCES dw1_tenants(id);
 
 
---
--- Name: dw2_blocks_blockedby__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_blocks
     ADD CONSTRAINT dw2_blocks_blockedby__r__users FOREIGN KEY (site_id, blocked_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_cats__r__cats; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_categories
     ADD CONSTRAINT dw2_cats__r__cats FOREIGN KEY (site_id, parent_id) REFERENCES dw2_categories(site_id, id);
 
 
---
--- Name: dw2_cats_page__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_categories
     ADD CONSTRAINT dw2_cats_page__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id) DEFERRABLE;
 
-
---
--- Name: dw2_invites_inviter__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_invites
     ADD CONSTRAINT dw2_invites_inviter__r__users FOREIGN KEY (site_id, created_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_invites_user__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_invites
     ADD CONSTRAINT dw2_invites_user__r__users FOREIGN KEY (site_id, user_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_pagehtml__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_page_html
     ADD CONSTRAINT dw2_pagehtml__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
 
---
--- Name: dw2_postacs__r__posts; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_post_actions
     ADD CONSTRAINT dw2_postacs__r__posts FOREIGN KEY (site_id, unique_post_id) REFERENCES dw2_posts(site_id, unique_post_id);
 
-
---
--- Name: dw2_postacs_createdbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_post_actions
     ADD CONSTRAINT dw2_postacs_createdbyid__r__users FOREIGN KEY (site_id, created_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_postacs_deletedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_post_actions
     ADD CONSTRAINT dw2_postacs_deletedbyid__r__users FOREIGN KEY (site_id, deleted_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_postrevs_approvedby__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_post_revisions
     ADD CONSTRAINT dw2_postrevs_approvedby__r__users FOREIGN KEY (site_id, approved_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_postrevs_composedby__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_post_revisions
     ADD CONSTRAINT dw2_postrevs_composedby__r__users FOREIGN KEY (site_id, composed_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_postrevs_hiddenby__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_post_revisions
     ADD CONSTRAINT dw2_postrevs_hiddenby__r__users FOREIGN KEY (site_id, hidden_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_postrevs_postid__r__posts; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_post_revisions
     ADD CONSTRAINT dw2_postrevs_postid__r__posts FOREIGN KEY (site_id, post_id) REFERENCES dw2_posts(site_id, unique_post_id);
 
-
---
--- Name: dw2_postrevs_prevnr_r__postrevs; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_post_revisions
     ADD CONSTRAINT dw2_postrevs_prevnr_r__postrevs FOREIGN KEY (site_id, post_id, previous_nr) REFERENCES dw2_post_revisions(site_id, post_id, revision_nr);
 
 
---
--- Name: dw2_posts__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
-
---
--- Name: dw2_posts_approvedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_approvedbyid__r__users FOREIGN KEY (site_id, approved_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_posts_closedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_closedbyid__r__users FOREIGN KEY (site_id, closed_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_posts_collapsedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_collapsedbyid__r__users FOREIGN KEY (site_id, collapsed_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_posts_createdbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_createdbyid__r__users FOREIGN KEY (site_id, created_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_posts_deletedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_deletedbyid__r__users FOREIGN KEY (site_id, deleted_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_posts_hiddenbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_hiddenbyid__r__users FOREIGN KEY (site_id, hidden_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_posts_lastapprovededitbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_lastapprovededitbyid__r__users FOREIGN KEY (site_id, last_approved_edit_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_posts_lasteditedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_lasteditedbyid__r__users FOREIGN KEY (site_id, curr_rev_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_posts_pinnedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_posts
     ADD CONSTRAINT dw2_posts_pinnedbyid__r__users FOREIGN KEY (site_id, pinned_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_reviewtasks__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_review_tasks
     ADD CONSTRAINT dw2_reviewtasks__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
-
---
--- Name: dw2_reviewtasks__r__posts; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_review_tasks
     ADD CONSTRAINT dw2_reviewtasks__r__posts FOREIGN KEY (site_id, post_id) REFERENCES dw2_posts(site_id, unique_post_id);
 
 
---
--- Name: dw2_reviewtasks_causedbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_review_tasks
     ADD CONSTRAINT dw2_reviewtasks_causedbyid__r__users FOREIGN KEY (site_id, caused_by_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_reviewtasks_complbyid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_review_tasks
     ADD CONSTRAINT dw2_reviewtasks_complbyid__r__users FOREIGN KEY (site_id, completed_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: dw2_reviewtasks_userid__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY dw2_review_tasks
     ADD CONSTRAINT dw2_reviewtasks_userid__r__users FOREIGN KEY (site_id, user_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: dw2_uploadrefs__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY dw2_upload_refs
     ADD CONSTRAINT dw2_uploadrefs__r__users FOREIGN KEY (site_id, added_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: msgmbr3__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY message_members_3
     ADD CONSTRAINT msgmbr3__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
-
---
--- Name: msgmbr3_addedby__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY message_members_3
     ADD CONSTRAINT msgmbr3_addedby__r__users FOREIGN KEY (site_id, added_by_id) REFERENCES dw1_users(site_id, user_id);
 
 
---
--- Name: msgmbr3_user__r__users; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY message_members_3
     ADD CONSTRAINT msgmbr3_user__r__users FOREIGN KEY (site_id, user_id) REFERENCES dw1_users(site_id, user_id);
 
-
---
--- Name: settings3_cat__r__cats; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
 
 ALTER TABLE ONLY settings_3
     ADD CONSTRAINT settings3_cat__r__cats FOREIGN KEY (site_id, category_id) REFERENCES dw2_categories(site_id, id);
 
 
---
--- Name: settings3_page__r__pages; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY settings_3
     ADD CONSTRAINT settings3_page__r__pages FOREIGN KEY (site_id, page_id) REFERENCES dw1_pages(site_id, page_id);
 
 
---
--- Name: settings3_site__r__sites; Type: FK CONSTRAINT; Schema: public; Owner: debiki_dev
---
-
 ALTER TABLE ONLY settings_3
     ADD CONSTRAINT settings3_site__r__sites FOREIGN KEY (site_id) REFERENCES dw1_tenants(id);
-
-
-SET SESSION AUTHORIZATION 'postgres';
-
---
--- Name: public; Type: ACL; Schema: -; Owner: postgres
---
-
-REVOKE ALL ON SCHEMA public FROM PUBLIC;
-REVOKE ALL ON SCHEMA public FROM postgres;
-GRANT ALL ON SCHEMA public TO postgres;
-GRANT ALL ON SCHEMA public TO PUBLIC;
 
 
 --
