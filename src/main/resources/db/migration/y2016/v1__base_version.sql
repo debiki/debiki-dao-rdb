@@ -13,7 +13,8 @@
 --   '<,'>s/^--.*$//g
 --   %s/\n\n\n\n\n\n\n/\r\r\r/g
 --
-
+-- Lastly, append the stuff in the 'Create main site' section at the end of this file.
+--
 
 CREATE FUNCTION delete_page(the_site_id character varying, the_page_id character varying) RETURNS void
     LANGUAGE plpgsql
@@ -1912,6 +1913,29 @@ ALTER TABLE ONLY settings_3
 
 ALTER TABLE ONLY settings_3
     ADD CONSTRAINT settings3_site__r__sites FOREIGN KEY (site_id) REFERENCES dw1_tenants(id);
+
+
+-- Create main site
+--------------------
+-- The main site always exists and has id 1, so create it.
+-- Also create a System and an Unknown user, ids -1 and -3.
+-- Reserving -2 for totally anonymous users.
+
+insert into dw1_tenants (id, name, creator_email_address, creator_ip)
+  select '1', 'Main Site', 'unknown@example.com', '0.0.0.0'
+  where not exists (
+    select id from dw1_tenants where id = '1');
+
+insert into dw1_users(
+    site_id, user_id, display_name, is_admin, username, email_for_every_new_post, created_at)
+  select '1',  -1, 'System', 'T', 'system', false, now_utc()
+  where not exists (
+    select 1 from dw1_users where site_id = '1' and user_id = -1);
+
+insert into dw1_users(site_id, user_id, display_name, email, guest_cookie, created_at)
+  select '1',  -3, 'Unknown', '-', 'UU', now_utc()
+  where not exists (
+    select 1 from dw1_users where site_id = '1' and user_id = -1);
 
 
 --

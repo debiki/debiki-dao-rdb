@@ -591,7 +591,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val flyway = new Flyway()
 
     // --- Temporarily, to initialize the production database -----
-    flyway.setBaselineOnMigrate(true)
+    flyway.setBaselineOnMigrate(!daoFactory.isTest)
     // ------------------------------------------------------------
 
     flyway.setLocations("classpath:db/migration")
