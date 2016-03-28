@@ -1,16 +1,16 @@
-CREATE FUNCTION delete_page(the_site_id character varying, the_page_id character varying) RETURNS void
+CREATE or replace FUNCTION delete_page(the_site_id character varying, the_page_id character varying) RETURNS void
     LANGUAGE plpgsql
     AS $$
 begin
-delete from DW1_PAGE_ACTIONS where TENANT = the_site_id and PAGE_ID = the_page_id;
-delete from DW1_PAGE_PATHS where TENANT = the_site_id and PAGE_ID = the_page_id;
-delete from DW1_POSTS where SITE_ID = the_site_id and PAGE_ID = the_page_id;
-delete from DW1_PAGES where TENANT = the_site_id and GUID = the_page_id;
+delete from post_actions3 where TENANT = the_site_id and PAGE_ID = the_page_id;
+delete from page_paths3 where TENANT = the_site_id and PAGE_ID = the_page_id;
+delete from posts3 where SITE_ID = the_site_id and PAGE_ID = the_page_id;
+delete from pages3 where TENANT = the_site_id and GUID = the_page_id;
 end;
 $$;
 
 
-CREATE FUNCTION hex_to_int(hexval character varying) RETURNS integer
+CREATE or replace FUNCTION hex_to_int(hexval character varying) RETURNS integer
     LANGUAGE plpgsql IMMUTABLE STRICT
     AS $$
 DECLARE
@@ -22,13 +22,13 @@ END;
 $$;
 
 
-CREATE FUNCTION inc_next_page_id(site_id character varying) RETURNS integer
+CREATE or replace FUNCTION inc_next_page_id(site_id character varying) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 declare
 next_id int;
 begin
-update DW1_TENANTS
+update sites3
 set NEXT_PAGE_ID = NEXT_PAGE_ID + 1
 where ID = site_id
 returning NEXT_PAGE_ID into next_id;
@@ -37,7 +37,7 @@ end;
 $$;
 
 
-CREATE FUNCTION is_valid_css_class(text character varying) RETURNS boolean
+CREATE or replace FUNCTION is_valid_css_class(text character varying) RETURNS boolean
     LANGUAGE plpgsql
     AS $_$
 begin
@@ -46,7 +46,7 @@ end;
 $_$;
 
 
-CREATE FUNCTION is_valid_hash_path(text character varying) RETURNS boolean
+CREATE or replace FUNCTION is_valid_hash_path(text character varying) RETURNS boolean
     LANGUAGE plpgsql
     AS $_$
 begin
@@ -57,7 +57,7 @@ end;
 $_$;
 
 
-CREATE FUNCTION now_utc() RETURNS timestamp without time zone
+CREATE or replace FUNCTION now_utc() RETURNS timestamp without time zone
     LANGUAGE plpgsql
     AS $$
 begin
@@ -66,7 +66,7 @@ end;
 $$;
 
 
-CREATE FUNCTION string_id_to_int(string_id character varying) RETURNS character varying
+CREATE or replace FUNCTION string_id_to_int(string_id character varying) RETURNS character varying
     LANGUAGE plpgsql IMMUTABLE STRICT
     AS $_$
 DECLARE
@@ -89,7 +89,7 @@ END;
 $_$;
 
 
-CREATE FUNCTION update_upload_ref_count(the_base_url character varying, the_hash_path character varying) RETURNS void
+CREATE or replace FUNCTION update_upload_ref_count(the_base_url character varying, the_hash_path character varying) RETURNS void
     LANGUAGE plpgsql
     AS $$
 declare
@@ -97,16 +97,16 @@ declare
     num_avatar_refs int;
     num_refs int;
 begin
-    -- (Don't use site_id here — dw2_uploads is for all sites)
+    -- (Don't use site_id here — uploads3 is for all sites)
     select count(*) into num_post_refs
-        from dw2_upload_refs where base_url = the_base_url and hash_path = the_hash_path;
+        from upload_refs3 where base_url = the_base_url and hash_path = the_hash_path;
     select count(*) into num_avatar_refs
-        from dw1_users
+        from users3
         where (avatar_tiny_base_url = the_base_url and avatar_tiny_hash_path = the_hash_path)
              or (avatar_small_base_url = the_base_url and avatar_small_hash_path = the_hash_path)
              or (avatar_medium_base_url = the_base_url and avatar_medium_hash_path = the_hash_path);
     num_refs = num_post_refs + num_avatar_refs;
-    update dw2_uploads set
+    update uploads3 set
         updated_at = now_utc(),
         num_references = num_refs,
         unused_since =

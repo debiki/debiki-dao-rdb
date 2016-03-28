@@ -1,3 +1,27 @@
+drop trigger if exists dw1_emails_summary on dw1_emails_out;
+drop trigger if exists dw1_identities_summary on dw1_identities;
+drop trigger if exists dw1_notfs_summary on dw1_notifications;
+drop trigger if exists dw1_pages_summary on dw1_pages;
+drop trigger if exists dw1_posts_read_summary on dw1_posts_read_stats;
+drop trigger if exists dw1_role_page_settings_summary on dw1_role_page_settings;
+drop trigger if exists dw1_roles_summary on dw1_users;
+drop trigger if exists dw2_actions_summary on dw2_post_actions;
+drop trigger if exists dw2_posts_summary on dw2_posts;
+drop trigger if exists sum_post_revs_quota_3 on dw2_post_revisions;
+
+drop function if exists dw1_emails_summary() cascade;
+drop function if exists dw1_guests_summary() cascade;
+drop function if exists dw1_identities_summary() cascade;
+drop function if exists dw1_notfs_summary() cascade;
+drop function if exists dw1_pages_summary() cascade;
+drop function if exists dw1_posts_read_summary() cascade;
+drop function if exists dw1_role_page_settings_summary() cascade;
+drop function if exists dw1_roles_summary() cascade;
+drop function if exists dw2_post_actions_summary() cascade;
+drop function if exists dw2_posts_summary() cascade;
+drop function if exists sum_post_revs_quota_3() cascade;
+
+
 alter table dw1_emails_out rename to emails_out3;
 alter table dw1_guest_prefs rename to guest_prefs3;
 alter table dw1_identities rename to identities3;
@@ -22,3 +46,16 @@ alter table dw2_upload_refs rename to upload_refs3;
 alter table dw2_uploads rename to uploads3;
 alter table message_members_3 rename to page_members3;
 alter table settings_3 rename to settings3;
+
+
+-- Oops. Delete duplicates:
+
+delete from settings3
+  where page_id is null and category_id is null and ctid not in (
+    select max(s.ctid)
+    from settings3 s where s.page_id is null and s.category_id is null
+    group by s.site_id);
+
+create unique index settings3_siteid__u on settings3 (site_id)
+  where page_id is null and category_id is null;
+
