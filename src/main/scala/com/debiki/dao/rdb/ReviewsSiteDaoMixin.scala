@@ -31,7 +31,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
 
   override def nextReviewTaskId(): ReviewTaskId = {
     val query = """
-      select max(id) max_id from dw2_review_tasks where site_id = ?
+      select max(id) max_id from review_tasks3 where site_id = ?
       """
     runQueryFindExactlyOne(query, List(siteId), rs => {
       val maxId = rs.getInt("max_id") // null becomes 0, fine
@@ -43,7 +43,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   override def upsertReviewTask(reviewTask: ReviewTask) {
     // Later, with Postgres 9.5, use its built-in upsert.
     val updateStatement = """
-      update dw2_review_tasks set
+      update review_tasks3 set
         reasons = ?,
         caused_by_id = ?,
         created_at = ?,
@@ -83,7 +83,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       return
 
     val statement = """
-      insert into dw2_review_tasks(
+      insert into review_tasks3(
         site_id,
         id,
         reasons,
@@ -145,7 +145,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
 
   private def loadReviewTaskImpl(whereClauses: String, values: Seq[AnyRef]): Option[ReviewTask] = {
     val query = i"""
-      select * from dw2_review_tasks where site_id = ? and
+      select * from review_tasks3 where site_id = ? and
       """ + whereClauses
     runQueryFindOneOrNone(query, (siteId +: values).toList, rs => {
       readReviewTask(rs)
@@ -156,7 +156,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   override def loadReviewTasks(olderOrEqualTo: ju.Date, limit: Int): Seq[ReviewTask] = {
     // Sort by id, desc, if same timestamp, because higher id likely means more recent.
     val query = i"""
-      select * from dw2_review_tasks where site_id = ? and created_at <= ?
+      select * from review_tasks3 where site_id = ? and created_at <= ?
       order by created_at desc, id desc limit ?
       """
     runQueryFindMany(query, List(siteId, olderOrEqualTo, limit.asAnyRef), rs => {
@@ -169,9 +169,9 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
     val urgentBits = ReviewReason.PostFlagged.toInt // + ... later if more urgent tasks
     val query = i"""
       select
-        (select count(1) from dw2_review_tasks
+        (select count(1) from review_tasks3
           where site_id = ? and reasons & $urgentBits != 0 and resolution is null) num_urgent,
-        (select count(1) from dw2_review_tasks
+        (select count(1) from review_tasks3
           where site_id = ? and reasons & $urgentBits = 0 and resolution is null) num_other
       """
     runQueryFindExactlyOne(query, List(siteId, siteId), rs => {

@@ -32,7 +32,7 @@ trait MessagesSiteDaoMixin extends SiteTransaction {
 
   override def insertMessageMember(pageId: PageId, userId: UserId, addedById: UserId) {
     val statement = """
-      insert into message_members_3 (site_id, page_id, user_id, added_by_id, added_at)
+      insert into page_members3 (site_id, page_id, user_id, added_by_id, added_at)
       values (?, ?, ?, ?, now_utc())
       """
     val values = List[AnyRef](siteId, pageId, userId.asAnyRef, addedById.asAnyRef)
@@ -42,7 +42,7 @@ trait MessagesSiteDaoMixin extends SiteTransaction {
 
   override def loadMessageMembers(pageId: PageId): Set[UserId] = {
     val query = """
-      select user_id from message_members_3 where site_id = ? and page_id = ?
+      select user_id from page_members3 where site_id = ? and page_id = ?
       """
     runQueryFindManyAsSet(query, List(siteId, pageId), rs => {
       rs.getInt("user_id")
@@ -57,7 +57,7 @@ trait MessagesSiteDaoMixin extends SiteTransaction {
     // for each caller (hardcoded somewhere).
     val query = s"""
       select m.page_id, p.page_role
-      from message_members_3 m inner join dw1_pages p
+      from page_members3 m inner join pages3 p
         on m.site_id = p.site_id and m.page_id = p.page_id and p.page_role in (
             ${ onlyPageRoles.map(_.toInt).mkString(",") })
       where m.site_id = ? and m.user_id = ?

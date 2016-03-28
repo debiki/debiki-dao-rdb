@@ -34,7 +34,7 @@ class RdbDaoFactory(
 
   def fullTextSearchIndexer =
     if (fastStartSkipSearch || true)
-      sys.error("Search disabled, please check your Java -D...=... startup flags — no, always disabled right now, doesn't support dw2_posts")
+      sys.error("Search disabled, please check your Java -D...=... startup flags — no, always disabled right now, doesn't support posts3")
     else
       _fullTextSearchIndexer
 

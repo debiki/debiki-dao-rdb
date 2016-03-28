@@ -160,8 +160,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       val inList = idsAu.map(_ => "?").mkString(",")
       val q = s"""
          select u.SITE_ID, $UserSelectListItemsWithGuests
-         from DW1_USERS u
-         left join DW1_GUEST_PREFS e on u.site_id = e.site_id and u.email = e.email
+         from users3 u
+         left join guest_prefs3 e on u.site_id = e.site_id and u.email = e.email
          where u.SITE_ID = ?
          and u.USER_ID in (""" + inList +")"
       (q, siteId :: idsAu.map(_.asAnyRef))
@@ -215,7 +215,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     require(tenantIds.length == 1 || all)
 
     var hostsByTenantId = Map[String, List[SiteHost]]().withDefaultValue(Nil)
-    var hostsQuery = "select SITE_ID, HOST, CANONICAL from DW1_TENANT_HOSTS"
+    var hostsQuery = "select SITE_ID, HOST, CANONICAL from hosts3"
     var hostsValues: List[AnyRef] = Nil
     if (!all) {
       UNTESTED
@@ -234,7 +234,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       })
 
     var sitesQuery =
-      "select ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS from DW1_TENANTS"
+      "select ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS from sites3"
     var sitesValues: List[AnyRef] = Nil
     if (!all) {
       sitesQuery += " where ID = ?"  // for now, later: in (...)
@@ -263,8 +263,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         select t.SITE_ID TID,
             t.CANONICAL THIS_CANONICAL,
             c.HOST CANONICAL_HOST
-        from DW1_TENANT_HOSTS t -- this host, the one connected to
-            left join DW1_TENANT_HOSTS c  -- the cannonical host
+        from hosts3 t -- this host, the one connected to
+            left join hosts3 c  -- the cannonical host
             on c.SITE_ID = t.SITE_ID and c.CANONICAL = 'C'
         where t.HOST = ?
         """, List(hostname), rs => {
@@ -318,7 +318,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         UNIQUE_POST_ID, PAGE_ID, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID,
         EMAIL_ID, EMAIL_STATUS, SEEN_AT
-      from DW1_NOTIFICATIONS
+      from notifications3
       where """
 
     val (whereOrderBy, values) = (userIdOpt, emailIdOpt) match {
@@ -433,7 +433,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     val postNrsByPageBySite = mut.Map[SiteId, mut.Map[PageId, mut.ArrayBuffer[PostNr]]]()
 
     // `currentIndexVersion` shouldn't change until server restarted.
-    unimplemented("Indexing posts in DW2_POSTS", "DwE4KUPY8") // this uses a deleted table:
+    unimplemented("Indexing posts in posts3", "DwE4KUPY8") // this uses a deleted table:
     val sql = s"""
       select SITE_ID, PAGE_ID, post_nr from DW1_PAGE_ACTIONS
       where TYPE = 'Post' and INDEX_VERSION <> $currentIndexVersion
@@ -501,13 +501,13 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         : Option[(CachedPageVersion, SitePageVersion)] = {
     val query = s"""
       select
-          (select version from dw1_tenants where id = ?) current_site_version,
+          (select version from sites3 where id = ?) current_site_version,
           p.version current_page_version,
           h.site_version,
           h.page_version,
           h.app_version,
           h.data_hash
-      from dw1_pages p left join dw2_page_html h
+      from pages3 p left join page_html3 h
           on p.site_id = h.site_id and p.page_id = h.page_id
       where p.site_id = ?
         and p.page_id = ?
@@ -538,7 +538,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     // they're asked for, for the first time. See debiki.dao.RenderedPageHtmlDao [5KWC58].
     val neverRenderedQuery = s"""
       select p.site_id, p.page_id, p.version current_version, h.page_version cached_version
-      from dw1_pages p left join dw2_page_html h
+      from pages3 p left join page_html3 h
           on p.site_id = h.site_id and p.page_id = h.page_id
       where h.page_id is null
       and p.created_at < now_utc() - interval '2' minute
@@ -561,7 +561,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     if (results.length < limit) {
       val outOfDateQuery = s"""
         select p.site_id, p.page_id, p.version current_version, h.page_version cached_version
-        from dw1_pages p inner join dw2_page_html h
+        from pages3 p inner join page_html3 h
             on p.site_id = h.site_id and p.page_id = h.page_id and p.version > h.page_version
         limit $limit
         """
@@ -613,41 +613,40 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   override def emptyDatabase() {
       require(daoFactory.isTest)
 
-      // There are foreign keys from DW1_TENANTS to other tables, and
-      // back.
-      runUpdate("SET CONSTRAINTS ALL DEFERRED")
+      // There are foreign keys from sites3 to other tables and back.
+      runUpdate("set constraints all deferred")
 
       s"""
-      delete from dw2_audit_log
-      delete from dw2_review_tasks
-      delete from settings_3
-      delete from DW1_ROLE_PAGE_SETTINGS
-      delete from DW1_POSTS_READ_STATS
-      delete from DW1_NOTIFICATIONS
-      delete from DW1_EMAILS_OUT
-      delete from dw2_upload_refs
-      delete from dw2_uploads
-      delete from message_members_3
-      delete from DW2_POST_ACTIONS
-      delete from dw2_post_revisions
-      delete from DW2_POSTS
-      delete from dw1_page_paths
-      delete from dw2_page_html
-      delete from dw1_pages
-      delete from dw2_categories
-      delete from dw2_blocks
-      delete from DW1_GUEST_PREFS
-      delete from DW1_IDENTITIES
-      delete from dw2_invites
-      delete from dw1_users where not (user_id in ($SystemUserId, $UnknownUserId) and site_id = '$FirstSiteId')
-      delete from DW1_TENANT_HOSTS
-      delete from dw1_tenants where id <> '$FirstSiteId'
-      update DW1_TENANTS set NEXT_PAGE_ID = 1
+      delete from audit_log3
+      delete from review_tasks3
+      delete from settings3
+      delete from member_page_settings3
+      delete from post_read_stats3
+      delete from notifications3
+      delete from emails_out3
+      delete from upload_refs3
+      delete from uploads3
+      delete from page_members3
+      delete from post_actions3
+      delete from post_revisions3
+      delete from posts3
+      delete from page_paths3
+      delete from page_html3
+      delete from pages3
+      delete from categories3
+      delete from blocks3
+      delete from guest_prefs3
+      delete from identities3
+      delete from invites3
+      delete from users3 where not (user_id in ($SystemUserId, $UnknownUserId) and site_id = '$FirstSiteId')
+      delete from hosts3
+      delete from sites3 where id <> '$FirstSiteId'
+      update sites3 set next_page_id = 1
       alter sequence DW1_TENANTS_ID restart
       """.trim.split("\n") foreach { runUpdate(_) }
 
       runUpdate(s"""
-          update dw1_tenants set
+          update sites3 set
             quota_limit_mbs = null, num_guests = 0, num_identities = 0, num_roles = 0,
             num_role_settings = 0, num_pages = 0, num_posts = 0, num_post_text_bytes = 0,
             num_posts_read = 0, num_actions = 0, num_notfs = 0, num_emails_sent = 0,
@@ -656,7 +655,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           where id = '$FirstSiteId'
           """)
 
-      runUpdate("SET CONSTRAINTS ALL IMMEDIATE")
+      runUpdate("set constraints all immediate")
   }
 
 }

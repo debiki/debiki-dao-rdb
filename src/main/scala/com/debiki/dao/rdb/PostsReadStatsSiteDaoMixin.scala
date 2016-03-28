@@ -52,7 +52,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction {
     for (postNr <- postNrsRead) {
       transactionCheckQuota { implicit connection =>
         val sql = s"""
-          insert into DW1_POSTS_READ_STATS(
+          insert into post_read_stats3(
             SITE_ID, PAGE_ID, post_nr, IP, USER_ID, READ_AT)
           values (?, ?, ?, ?, ?, ?)"""
         val values = List[AnyRef](siteId, pageId, postNr.asAnyRef,
@@ -76,7 +76,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction {
 
   def loadPostsReadStats(pageId: PageId, postNr: Option[PostNr]): PostsReadStats = {
     var sql = s"""
-      select post_nr, IP, USER_ID from DW1_POSTS_READ_STATS
+      select post_nr, IP, USER_ID from post_read_stats3
       where SITE_ID = ? and PAGE_ID = ?"""
     val values = ArrayBuffer[AnyRef](siteId, pageId)
     postNr foreach { id =>
@@ -130,7 +130,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction {
     values.append(siteId)
     values.append(oldPageId)
     val statement = s"""
-      update dw1_posts_read_stats set
+      update post_read_stats3 set
         page_id = ?,
         post_nr =
           case post_nr

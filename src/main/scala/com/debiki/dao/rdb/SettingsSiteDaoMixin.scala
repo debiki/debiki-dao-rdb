@@ -35,7 +35,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
   override def loadSiteSettings(): Option[EditedSettings] = {
     val query = s"""
       select *
-      from settings_3
+      from settings3
       where site_id = ? and category_id is null and page_id is null
       """
     runQueryFindOneOrNone(query, List(siteId), readSettingsFromResultSet)
@@ -55,7 +55,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
 
   private def insertSiteSettings(editedSettings2: SettingsToSave) {
     val statement = s"""
-      insert into settings_3 (
+      insert into settings3 (
         site_id,
         category_id,
         page_id,
@@ -117,7 +117,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
 
 
   private def updateSiteSettings(editedSettings2: SettingsToSave) {
-    val statement = mutable.StringBuilder.newBuilder.append("update settings_3 set ")
+    val statement = mutable.StringBuilder.newBuilder.append("update settings3 set ")
     val values = mutable.ArrayBuffer[AnyRef]()
     var somethingToDo = false
     var spaceOrComma = ""

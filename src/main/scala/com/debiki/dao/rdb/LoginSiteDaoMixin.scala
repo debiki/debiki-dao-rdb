@@ -54,8 +54,8 @@ trait LoginSiteDaoMixin extends SiteTransaction {
       var isNewGuest = false
       for (i <- 1 to 2 if userId == 0) {
         runQuery("""
-          select u.USER_ID, e.EMAIL_NOTFS from DW1_USERS u
-            left join DW1_GUEST_PREFS e
+          select u.USER_ID, e.EMAIL_NOTFS from users3 u
+            left join guest_prefs3 e
             on u.EMAIL = e.EMAIL and e.VERSION = 'C'
           where u.SITE_ID = ?
             and u.DISPLAY_NAME = ?
@@ -79,12 +79,12 @@ trait LoginSiteDaoMixin extends SiteTransaction {
           // Could avoid logging any error though!
           isNewGuest = true
           runUpdate(i"""
-            insert into dw1_users(
+            insert into users3(
               site_id, user_id, created_at, display_name, email, guest_cookie)
             select
               ?, least(min(user_id) - 1, $MaxCustomGuestId), now_utc(), ?, ?, ?
             from
-              dw1_users where site_id = ?
+              users3 where site_id = ?
             """,
             List(siteId, loginAttempt.name, e2d(loginAttempt.email),
               loginAttempt.guestCookie, siteId))
