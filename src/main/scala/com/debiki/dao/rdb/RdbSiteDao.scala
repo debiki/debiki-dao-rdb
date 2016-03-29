@@ -283,7 +283,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   def loadResourceUsage(connection: js.Connection): ResourceUse = {
     val sql = """
-      select * from DW1_TENANTS where ID = ?
+      select * from sites3 where ID = ?
       """
     db.query(sql, List(siteId), rs => {
       rs.next()
@@ -324,10 +324,10 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     * """Try many times, because harmless deadlocks might abort the first attempt.
     * Example: Editing a row with a foreign key to table R result in a shared lock
     * on the referenced row in table R — so if two sessions A and B insert rows for
-    * the same page into DW1_PAGE_ACTIONS and then update DW1_PAGES aftewards,
+    * the same page into DW1_PAGE_ACTIONS and then update pages3 aftewards,
     * the update statement from session A blocks on the shared lock that
-    * B holds on the DW1_PAGES row, and then session B blocks on the exclusive
-    * lock on the DW1_PAGES row that A's update statement is trying to grab.
+    * B holds on the pages3 row, and then session B blocks on the exclusive
+    * lock on the pages3 row that A's update statement is trying to grab.
     * An E2E test that fails without `tryManyTimes` here is `EditActivitySpec`."""
     */
   private def tryManyTimes[T](numTimes: Int)(sqlBlock: => T): T = {
@@ -399,7 +399,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       else anySiteId.getOrElse(siteId) :: pageIds.toList
     var sql = s"""
         select g.PAGE_ID, ${_PageMetaSelectListItems}
-        from DW1_PAGES g
+        from pages3 g
         where g.SITE_ID = ?
         """
     if (!all) {
@@ -420,7 +420,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   def loadPageMetaForAllSections(): Seq[PageMeta] = {
     import PageRole.{Forum, Blog}
     val sql = s"""
-      select g.page_id, $_PageMetaSelectListItems from dw1_pages g
+      select g.page_id, $_PageMetaSelectListItems from pages3 g
       where g.site_id = ? and g.page_role in ($Forum, $Blog)
       """
     runQueryFindMany(sql, Nil, rs => {
@@ -488,7 +488,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       siteId,
       newMeta.pageId)
     val sql = s"""
-      update DW1_PAGES set
+      update pages3 set
         version = ?,
         PAGE_ROLE = ?,
         category_id = ?,
@@ -549,7 +549,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   private def _movePages(pageIds: Seq[PageId], fromFolder: String,
         toFolder: String)(implicit connection: js.Connection) {
-    unimplemented("Moving pages and updating DW1_PAGE_PATHS.CANONICAL")
+    unimplemented("Moving pages and updating page_paths3.CANONICAL")
     /*
     if (pageIds isEmpty)
       return
@@ -568,7 +568,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     // Use Postgres' REGEXP_REPLACE to replace only the first occurrance of
     // `fromFolder`.
     val sql = """
-      update DW1_PAGE_PATHS
+      update page_paths3
       set PARENT_FOLDER = REGEXP_REPLACE(PARENT_FOLDER, ?, ?)
       where SITE_ID = ?
         and PAGE_ID in (""" + makeInListFor(pageIds) + ")"
@@ -597,11 +597,11 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   def loadSiteStatus(): SiteStatus = {
     val sql = s"""
       select
-        exists(select 1 from DW1_USERS where IS_ADMIN = 'T' and SITE_ID = ?
+        exists(select 1 from users3 where IS_ADMIN = 'T' and SITE_ID = ?
           and user_id <> $SystemUserId) as admin_exists,
-        exists(select 1 from DW1_PAGES where SITE_ID = ?) as content_exists,
-        (select CREATOR_EMAIL_ADDRESS from DW1_TENANTS where ID = ?) as admin_email,
-        (select EMBEDDING_SITE_URL from DW1_TENANTS where ID = ?) as embedding_site_url"""
+        exists(select 1 from pages3 where SITE_ID = ?) as content_exists,
+        (select CREATOR_EMAIL_ADDRESS from sites3 where ID = ?) as admin_email,
+        (select EMBEDDING_SITE_URL from sites3 where ID = ?) as embedding_site_url"""
     runQueryFindExactlyOne(sql, List(siteId, siteId, siteId, siteId), rs => {
       val adminExists = rs.getBoolean("admin_exists")
       val contentExists = rs.getBoolean("content_exists")
@@ -663,7 +663,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   def createUnknownUser() {
     val statement = s"""
-      insert into dw1_users(
+      insert into users3(
         site_id, user_id, created_at, display_name, email, guest_cookie)
       values (
         ?, $UnknownUserId, now_utc(), '$UnknownUserName', '-', '$UnknownUserGuestCookie')
@@ -682,7 +682,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       "Cannot change site creator IP [DwE3BK777]")
 
     val sql = """
-      update DW1_TENANTS
+      update sites3
       set NAME = ?, EMBEDDING_SITE_URL = ?
       where ID = ?"""
     val values =
@@ -703,7 +703,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   private def countWebsites(createdFromIp: String, creatorEmailAddress: String): Int = {
     runQuery("""
-        select count(*) WEBSITE_COUNT from DW1_TENANTS
+        select count(*) WEBSITE_COUNT from sites3
         where CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?
         """, createdFromIp::creatorEmailAddress::Nil, rs => {
       rs.next()
@@ -721,7 +721,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       }
     val tenant = tenantNoId.copy(id = newId)
     runUpdateSingleRow("""
-        insert into DW1_TENANTS (
+        insert into sites3 (
           ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
           QUOTA_LIMIT_MBS)
         values (?, ?, ?, ?, ?, ?)""",
@@ -740,7 +740,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   override def loadSiteVersion(): Int = {
     val query = s"""
-      select version from dw1_tenants where id = ?
+      select version from sites3 where id = ?
       """
     runQuery(query, List(siteId), rs => {
       if (!rs.next())
@@ -753,7 +753,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   def bumpSiteVersion() {
     val sql = """
-      update dw1_tenants set version = version + 1 where id = ?
+      update sites3 set version = version + 1 where id = ?
       """
     transactionAllowOverQuota { implicit connection =>
       db.update(sql, List(siteId))
@@ -804,7 +804,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
             t.SHOW_ID,
             t.PAGE_SLUG,
             ${_PageMetaSelectListItems}
-        from DW1_PAGE_PATHS t left join DW1_PAGES g
+        from page_paths3 t left join pages3 g
           on t.SITE_ID = g.SITE_ID and t.PAGE_ID = g.PAGE_ID
         where t.CANONICAL = 'C'
           and t.SITE_ID = ?
@@ -863,7 +863,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       d2ts(email.createdAt), email.subject, email.bodyHtmlText)
 
     db.update("""
-      insert into DW1_EMAILS_OUT(
+      insert into emails_out3(
         SITE_ID, ID, TYPE, SENT_TO, TO_USER_ID, CREATED_AT, SUBJECT, BODY_HTML)
       values (
         ?, ?, ?, ?, ?, ?, ?, ?)
@@ -886,7 +886,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
         siteId, email.id)
 
       db.update("""
-        update DW1_EMAILS_OUT
+        update emails_out3
         set SENT_ON = ?, PROVIDER_EMAIL_ID = ?,
             FAILURE_TYPE = ?, FAILURE_TEXT = ?, FAILURE_TIME = ?
         where SITE_ID = ? and ID = ?
@@ -899,7 +899,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val query = """
       select TYPE, SENT_TO, TO_USER_ID, SENT_ON, CREATED_AT, SUBJECT,
         BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
-      from DW1_EMAILS_OUT
+      from emails_out3
       where SITE_ID = ? and ID = ?
       """
     val emailOpt = db.queryAtnms(query, List(siteId, emailId), rs => {
@@ -957,7 +957,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       select PARENT_FOLDER, SHOW_ID, PAGE_SLUG,
         -- For debug assertions:
         CANONICAL, CANONICAL_DATI
-      from DW1_PAGE_PATHS
+      from page_paths3
       where SITE_ID = ? and PAGE_ID = ? $andOnlyCanonical
       order by $CanonicalLast, CANONICAL_DATI asc"""
 
@@ -994,7 +994,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   private def _findCorrectPagePath(pagePathIn: PagePath): Option[PagePath] = {
     var query = """
         select PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL
-        from DW1_PAGE_PATHS
+        from page_paths3
         where SITE_ID = ?
         """
 
@@ -1101,7 +1101,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     require(pageMeta.frozenAt.isEmpty, "DwE3KFY2")
 
     val sql = """
-      insert into DW1_PAGES (
+      insert into pages3 (
          SITE_ID, PAGE_ID, version, PAGE_ROLE, category_id, EMBEDDING_PAGE_URL,
          CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID,
          PLANNED_AT, PIN_ORDER, PIN_WHERE)
@@ -1139,7 +1139,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val showPageId = pagePath.showId ? "T" | "F"
     try {
       db.update("""
-        insert into DW1_PAGE_PATHS (
+        insert into page_paths3 (
           SITE_ID, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL)
         values (?, ?, ?, ?, ?, 'C')
         """,
@@ -1264,7 +1264,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     def changeExistingPathsToRedirects(pageId: PageId) {
       val vals = List(siteId, pageId)
       val stmt = """
-        update DW1_PAGE_PATHS
+        update page_paths3
         set CANONICAL = 'R'
         where SITE_ID = ? and PAGE_ID = ?
         """
@@ -1278,7 +1278,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       val showPageId = newPath.showId ? "T" | "F"
       var vals = List(siteId, newPath.folder, e2d(newPath.pageSlug), showPageId)
       var stmt = """
-        delete from DW1_PAGE_PATHS
+        delete from page_paths3
         where SITE_ID = ? and PARENT_FOLDER = ? and PAGE_SLUG = ?
           and SHOW_ID = ? and CANONICAL = 'R'
         """
@@ -1302,7 +1302,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val pagesAndPostsClause =
       pageAndPostIds.map(_ => "(PAGE_ID = ? and PAID = ?)").mkString(" or ")
 
-    unimplemented("Indexing posts in DW2_POSTS", "DwE0GIK3") // this uses a deleted table:
+    unimplemented("Indexing posts in posts3", "DwE0GIK3") // this uses a deleted table:
     /*
     val sql = s"""
       update DW1_ PAGE_ACTIONS set INDEX_VERSION = ?

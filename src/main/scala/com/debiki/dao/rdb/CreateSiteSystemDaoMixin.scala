@@ -39,7 +39,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       case SiteHost.RoleDuplicate => "D"
     }
     val sql = """
-      insert into DW1_TENANT_HOSTS (SITE_ID, HOST, CANONICAL)
+      insert into hosts3 (SITE_ID, HOST, CANONICAL)
       values (?, ?, ?)
       """
     val inserted = runUpdateSingleRow(sql, List(tenantId, host.hostname, cncl))

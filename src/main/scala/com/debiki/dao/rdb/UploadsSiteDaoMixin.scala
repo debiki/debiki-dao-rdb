@@ -33,7 +33,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
 
   def loadUploadedFileMeta(uploadRef: UploadRef): Option[(Int, String)] = {
     val query = """
-      select size_bytes, mime_type from dw2_uploads
+      select size_bytes, mime_type from uploads3
       where base_url = ? and hash_path = ?
       """
     runQueryFindOneOrNone(query, List(uploadRef.baseUrl, uploadRef.hashPath), row => {
@@ -50,7 +50,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       case None => (NullInt, NullInt)
     }
     val statement = """
-      insert into dw2_uploads(
+      insert into uploads3(
         base_url, hash_path, original_hash_path,
         num_references, size_bytes, mime_type, width, height,
         uploaded_at, updated_at, unused_since)
@@ -62,7 +62,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       -- (Race condition: another session might insert just after the select – or does
       -- the serializable isolation level prevent that?)
       where not exists (
-        select 1 from dw2_uploads
+        select 1 from uploads3
         where base_url = ? and hash_path = ?)
       """
     val values = List(
@@ -94,11 +94,11 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     // COULD use `insert ... on conflict do nothing` here once have upgraded to Postgres 9.5.
     // Then remove `where not exists`
     val statement = """
-      insert into dw2_upload_refs(
+      insert into upload_refs3(
         site_id, post_id, base_url, hash_path, added_by_id, added_at)
       select ?, ?, ?, ?, ?, now_utc()
       where not exists (
-        select 1 from dw2_upload_refs
+        select 1 from upload_refs3
         where site_id = ? and post_id = ? and base_url = ? and hash_path = ?)
       """
     val values = List(
@@ -122,7 +122,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
 
   def deleteUploadedFileReference(postId: UniquePostId, uploadRef: UploadRef): Boolean = {
     val statement = """
-      delete from dw2_upload_refs
+      delete from upload_refs3
       where site_id = ? and post_id = ? and base_url = ? and hash_path = ?
       """
     val values = List(siteId, postId.asAnyRef, uploadRef.baseUrl,
@@ -139,7 +139,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
 
   def loadUploadedFileReferences(postId: UniquePostId): Set[UploadRef] = {
     val query = """
-      select * from dw2_upload_refs
+      select * from upload_refs3
       where site_id = ? and post_id = ?
       """
     val result = ArrayBuffer[UploadRef]()
@@ -187,16 +187,16 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     }
 
     val query = s"""
-      select distinct base_url bu, hash_path hp from dw2_upload_refs
+      select distinct base_url bu, hash_path hp from upload_refs3
         where false $orUploadRefsTests
       union
-      select distinct avatar_tiny_base_url bu, avatar_tiny_hash_path hp from dw1_users
+      select distinct avatar_tiny_base_url bu, avatar_tiny_hash_path hp from users3
         where false $orAvatarTinyRefsTests
       union
-      select distinct avatar_small_base_url bu, avatar_small_hash_path hp from dw1_users
+      select distinct avatar_small_base_url bu, avatar_small_hash_path hp from users3
         where false $orAvatarSmallRefsTests
       union
-      select distinct avatar_medium_base_url bu, avatar_medium_hash_path hp from dw1_users
+      select distinct avatar_medium_base_url bu, avatar_medium_hash_path hp from users3
         where false $orAvatarMediumRefsTests
       """
     val ids = runQueryFindMany[UploadRef](query, values.toList, row => {
@@ -208,10 +208,10 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
 
   def loadSiteIdsUsingUpload(ref: UploadRef): Set[SiteId] = {
     val query = """
-      select distinct site_id from dw2_upload_refs
+      select distinct site_id from upload_refs3
         where base_url = ? and hash_path = ?
       union
-      select distinct site_id from dw1_users
+      select distinct site_id from users3
         where (avatar_tiny_base_url = ? and avatar_tiny_hash_path = ?)
            or (avatar_small_base_url = ? and avatar_small_hash_path = ?)
            or (avatar_medium_base_url = ? and avatar_medium_hash_path = ?)
@@ -257,7 +257,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
     }
     dieIf((deltaUploads > 0) != (deltaBytes > 0), "EsE7YMK3")
     val statement = s"""
-      update dw1_tenants set
+      update sites3 set
         num_uploads = num_uploads + ?,
         num_upload_bytes = num_upload_bytes + ?
       where id in (${ RdbUtil.makeInListFor(siteIds) })

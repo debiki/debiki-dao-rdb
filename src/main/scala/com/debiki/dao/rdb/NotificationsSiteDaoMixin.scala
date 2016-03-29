@@ -42,7 +42,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
   override def nextNotificationId(): NotificationId = {
     val query = """
-      select max(notf_id) max_id from dw1_notifications where site_id = ?
+      select max(notf_id) max_id from notifications3 where site_id = ?
       """
     runQueryFindExactlyOne(query, List(siteId), rs => {
       val maxId = rs.getInt("max_id") // null becomes 0, fine
@@ -53,7 +53,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
   private def createNotf(notf: Notification)(implicit connection: js.Connection) {
     val sql = """
-      insert into DW1_NOTIFICATIONS(
+      insert into notifications3(
         SITE_ID, notf_id, CREATED_AT, NOTF_TYPE,
         UNIQUE_POST_ID, PAGE_ID, ACTION_TYPE, ACTION_SUB_ID,
         BY_USER_ID, TO_USER_ID)
@@ -83,7 +83,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     val (sql, values: List[AnyRef]) = notfToDelete match {
       case mentionToDelete: NotificationToDelete.MentionToDelete =>
         val sql = s"""
-          delete from DW1_NOTIFICATIONS
+          delete from notifications3
           where SITE_ID = ?
             and NOTF_TYPE = ${Mention.toInt}
             and unique_post_id = ?
@@ -93,7 +93,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
         (sql, values)
       case postToDelete: NotificationToDelete.NewPostToDelete =>
         val sql = s"""
-          delete from DW1_NOTIFICATIONS
+          delete from notifications3
           where SITE_ID = ?
             and NOTF_TYPE in (
               ${Mention.toInt}, ${DirectReply.toInt}, ${NewPost.toInt})
@@ -134,7 +134,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   def connectNotificationToEmail(notification: Notification, email: Option[Email])
         (connection: js.Connection) {
     val statement = i"""
-      update dw1_notifications set email_id = ?, email_status = ?
+      update notifications3 set email_id = ?, email_status = ?
       where site_id = ? and notf_id = ?
       """
 
@@ -156,7 +156,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     // Include user id in case someone specified the notf id of another user's notification.
     import NotfEmailStatus._
     val statement = i"""
-      update dw1_notifications set
+      update notifications3 set
         seen_at =
           case
             when seen_at is null then now_utc()

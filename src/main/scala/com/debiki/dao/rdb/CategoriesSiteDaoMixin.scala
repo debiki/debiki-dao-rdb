@@ -40,7 +40,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
   def loadCategoryMap(): Map[CategoryId, Category] = {
     val query = """
-      select * from dw2_categories where site_id = ?
+      select * from categories3 where site_id = ?
       """
     var result = Map[CategoryId, Category]()
     runQueryPerhapsAtnms(query, List(siteId), rs => {
@@ -120,7 +120,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
           t.show_id,
           t.page_slug,
           ${_PageMetaSelectListItems}
-        from dw1_pages g inner join dw1_page_paths t
+        from pages3 g inner join page_paths3 t
           on g.site_id = t.site_id and g.page_id = t.page_id
           and t.canonical = 'C'
         where
@@ -148,7 +148,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
   override def nextCategoryId(): UniquePostId = {
     val query = """
-      select max(id) max_id from dw2_categories where site_id = ?
+      select max(id) max_id from categories3 where site_id = ?
       """
     runQuery(query, List(siteId), rs => {
       rs.next()
@@ -160,7 +160,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
   override def insertCategoryMarkSectionPageStale(category: Category) {
     val statement = """
-      insert into dw2_categories (
+      insert into categories3 (
         site_id, id, page_id, parent_id,
         name, slug, position,
         description, new_topic_types,
@@ -182,7 +182,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
   override def updateCategoryMarkSectionPageStale(category: Category) {
     val statement = """
-      update dw2_categories set
+      update categories3 set
         page_id = ?, parent_id = ?,
         name = ?, slug = ?, position = ?,
         description = ?, new_topic_types = ?,
@@ -269,17 +269,17 @@ def batchLoadAncestorIdsParentFirst(pageIds: List[PageId])(connection: js.Connec
           -- `|| ''` needed otherwise conversion to varchar[] doesn't work, weird
           array[page_id || '']::varchar[],
           false
-        from dw1_pages where site_id = ? and page_id in ($pageIdList)
+        from pages3 where site_id = ? and page_id in ($pageIdList)
       union all
         select
           page_id::varchar child_id,
           parent_page_id::varchar parent_id,
-          dw1_pages.site_id,
+          pages3.site_id,
           path || page_id,
           parent_page_id = any(path) -- aborts if cycle, don't know if works (never tested)
-        from dw1_pages join ancestor_page_ids
-        on dw1_pages.page_id = ancestor_page_ids.parent_id and
-           dw1_pages.site_id = ancestor_page_ids.site_id
+        from pages3 join ancestor_page_ids
+        on pages3.page_id = ancestor_page_ids.parent_id and
+           pages3.site_id = ancestor_page_ids.site_id
         where not cycle
     )
     select path from ancestor_page_ids

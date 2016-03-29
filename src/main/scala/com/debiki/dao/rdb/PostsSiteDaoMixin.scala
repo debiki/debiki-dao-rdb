@@ -48,7 +48,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   def loadPostsOnPageImpl(pageId: PageId, postNr: Option[PostNr], siteId: Option[SiteId])
         : immutable.Seq[Post] = {
-    var query = "select * from DW2_POSTS where SITE_ID = ? and PAGE_ID = ?"
+    var query = "select * from posts3 where SITE_ID = ? and PAGE_ID = ?"
     val values = ArrayBuffer[AnyRef](siteId.getOrElse(this.siteId), pageId)
     postNr foreach { id =>
       // WOULD simplify: remove this block, use loadPosts(Iterable[PagePostId]) instead.
@@ -70,7 +70,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
     if (postIds.isEmpty)
       return Nil
     val values = ArrayBuffer[AnyRef](siteId)
-    val queryBuilder = new StringBuilder(127, "select * from DW2_POSTS where SITE_ID = ? and (")
+    val queryBuilder = new StringBuilder(127, "select * from posts3 where SITE_ID = ? and (")
     var first = true
     for (postId <- postIds) {
       if (first) first = false
@@ -95,7 +95,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       return Nil
 
     val values = ArrayBuffer[AnyRef](siteId)
-    val queryBuilder = new StringBuilder(256, "select * from DW2_POSTS where SITE_ID = ? and (")
+    val queryBuilder = new StringBuilder(256, "select * from posts3 where SITE_ID = ? and (")
     var nr = 0
     for (pagePostNr: PagePostNr <- pagePostNrs.toSet) {
       if (nr >= 1) queryBuilder.append(" or ")
@@ -121,7 +121,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       return Map.empty
 
     val query = i"""
-      select * from dw2_posts where site_id = ? and unique_post_id in (${makeInListFor(postIds)})
+      select * from posts3 where site_id = ? and unique_post_id in (${makeInListFor(postIds)})
       """
     val values = siteId :: postIds.map(_.asAnyRef).toList
     runQueryBuildMap(query, values, rs => {
@@ -137,7 +137,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
     val andMaybeSkipChat = includeChatMessages ?
       "" | s"and (type is null or type <> ${PostType.ChatMessage.toInt})"
     val query = i"""
-      select * from dw2_posts where site_id = ? and created_by_id = ? $andMaybeSkipTitles
+      select * from posts3 where site_id = ? and created_by_id = ? $andMaybeSkipTitles
           $andMaybeSkipChat
       order by created_at ${descOrAsc(orderBy)} limit ?
       """
@@ -168,7 +168,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
 
   private def loadPostsToReviewImpl(whereTests: String): ArrayBuffer[Post] = {
-    var query = s"select * from dw2_posts where site_id = ? and $whereTests"
+    var query = s"select * from posts3 where site_id = ? and $whereTests"
     val values = List(siteId)
     var results = ArrayBuffer[Post]()
     runQuery(query, values.toList, rs => {
@@ -183,7 +183,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   override def nextPostId(): UniquePostId = {
     val query = """
-      select max(unique_post_id) max_id from dw2_posts where site_id = ?
+      select max(unique_post_id) max_id from posts3 where site_id = ?
       """
     runQuery(query, List(siteId), rs => {
       rs.next()
@@ -195,7 +195,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   override def insertPost(post: Post) {
     val statement = """
-      insert into dw2_posts(
+      insert into posts3(
         site_id,
         unique_post_id,
         page_id,
@@ -325,7 +325,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   def updatePost(post: Post) {
     val statement = """
-      update dw2_posts set
+      update posts3 set
         page_id = ?,
         post_nr = ?,
         parent_nr = ?,
@@ -491,7 +491,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   def deleteVote(pageId: PageId, postNr: PostNr, voteType: PostVoteType, voterId: UserId)
         : Boolean = {
     val statement = """
-      delete from dw2_post_actions
+      delete from post_actions3
       where site_id = ? and page_id = ? and post_nr = ? and type = ? and created_by_id = ?
       """
     val values = List[AnyRef](siteId, pageId, postNr.asAnyRef, toActionTypeInt(voteType),
@@ -510,7 +510,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   def loadActionsByUserOnPage(userId: UserId, pageId: PageId): immutable.Seq[PostAction] = {
     var query = """
       select unique_post_id, post_nr, type, created_at, created_by_id
-      from dw2_post_actions
+      from post_actions3
       where site_id = ? and page_id = ? and created_by_id = ?
       """
     val values = List[AnyRef](siteId, pageId, userId.asAnyRef)
@@ -534,7 +534,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   def loadActionsDoneToPost(pageId: PageId, postNr: PostNr): immutable.Seq[PostAction] = {
     var query = """
       select unique_post_id, type, created_at, created_by_id
-      from dw2_post_actions
+      from post_actions3
       where site_id = ? and page_id = ? and post_nr = ?
       """
     val values = List[AnyRef](siteId, pageId, postNr.asAnyRef)
@@ -561,7 +561,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
     val queryBuilder = new StringBuilder(256, s"""
       select unique_post_id, page_id, post_nr, type, created_at, created_by_id
-      from dw2_post_actions
+      from post_actions3
       where site_id = ?
         and type in ($FlagValueSpam, $FlagValueInapt, $FlagValueOther)
         and (
@@ -602,7 +602,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   def clearFlags(pageId: PageId, postNr: PostNr, clearedById: UserId) {
     var statement = s"""
-      update dw2_post_actions
+      update post_actions3
       set deleted_at = ?, deleted_by_id = ?, updated_at = now_utc()
       where site_id = ? and page_id = ? and post_nr = ? and deleted_at is null
       """
@@ -613,7 +613,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   def insertPostAction(uniquePostId: UniquePostId, pageId: PageId, postNr: PostNr, actionType: PostActionType, doerId: UserId) {
     val statement = """
-      insert into dw2_post_actions(site_id, unique_post_id, page_id, post_nr, type, created_by_id,
+      insert into post_actions3(site_id, unique_post_id, page_id, post_nr, type, created_by_id,
           created_at, sub_id)
       values (?, ?, ?, ?, ?, ?, ?, 1)
       """
@@ -644,13 +644,13 @@ trait PostsSiteDaoMixin extends SiteTransaction {
         composed_at, composed_by_id,
         approved_at, approved_by_id,
         hidden_at, hidden_by_id
-      from dw2_post_revisions
+      from post_revisions3
       where site_id = ? and post_id = ? and revision_nr = """
     var values = List(siteId, postId.asAnyRef)
 
     if (revisionNr == PostRevision.LastRevisionMagicNr) {
       query += s"""(
-        select max(revision_nr) from dw2_post_revisions
+        select max(revision_nr) from post_revisions3
         where site_id = ? and post_id = ?
         )"""
       values = values ::: List(siteId, postId.asAnyRef)
@@ -683,7 +683,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   def insertPostRevision(revision: PostRevision) {
     val statement = """
-      insert into dw2_post_revisions(
+      insert into post_revisions3(
         site_id, post_id,
         revision_nr, previous_nr,
         source_patch, full_source, title,
@@ -707,7 +707,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   def updatePostRevision(revision: PostRevision) {
     UNTESTED
     val statement = """
-      update dw2_post_revisions set
+      update post_revisions3 set
         source_patch = ?, full_source = ?, title = ?,
         composed_at = ?, combosed_by_id = ?,
         approved_at = ?, approved_by_id = ?,

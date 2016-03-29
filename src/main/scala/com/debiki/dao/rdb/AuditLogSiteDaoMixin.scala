@@ -49,7 +49,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       batchOffset += 1
       return result
     }
-    val query = "select max(audit_id) max_id from dw2_audit_log where site_id = ?"
+    val query = "select max(audit_id) max_id from audit_log3 where site_id = ?"
     runQuery(query, List(siteId), rs => {
       rs.next()
       val maxId = rs.getInt("max_id") // null becomes 0, fine
@@ -70,7 +70,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     require(!entry.batchId.exists(_ > entry.id), "EsE4GGX2")
     require(entry.siteId == siteId, "DwE1FWU6")
     val statement = s"""
-      insert into dw2_audit_log(
+      insert into audit_log3(
         site_id,
         audit_id,
         batch_id,
@@ -144,7 +144,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   def loadAuditLogEntriesRecentFirst(userId: UserId, tyype: AuditLogEntryType, limit: Int)
         : immutable.Seq[AuditLogEntry] = {
     val query = s"""
-      select * from dw2_audit_log
+      select * from audit_log3
       where site_id = ? and doer_id = ?
       and did_what = ?
       order by done_at desc limit $limit
@@ -157,7 +157,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
 
   def loadCreatePostAuditLogEntry(postId: UniquePostId): Option[AuditLogEntry] = {
     val query = s"""
-      select * from dw2_audit_log
+      select * from audit_log3
       where site_id = ? and post_id = ?
       and did_what = 'NwPs' -- new post
       order by done_at limit 1

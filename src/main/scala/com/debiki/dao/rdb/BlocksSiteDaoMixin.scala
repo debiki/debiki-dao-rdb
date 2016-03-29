@@ -36,7 +36,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
 
   override def insertBlock(block: Block) {
     val statement = s"""
-      insert into dw2_blocks(
+      insert into blocks3(
         site_id,
         block_type,
         blocked_at,
@@ -74,7 +74,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
 
   private def deleteBlock(whereTest: String, value: String) {
     val statement = s"""
-     delete from dw2_blocks
+     delete from blocks3
      where site_id = ? and $whereTest
      """
     runUpdateSingleRow(statement, List(siteId, value))
@@ -89,7 +89,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
         blocked_by_id,
         ip,
         browser_id_cookie
-      from dw2_blocks
+      from blocks3
       where
         site_id = ? and (ip = ?::inet or browser_id_cookie = ?)
       """

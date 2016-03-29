@@ -37,11 +37,11 @@ trait PagesSiteDaoMixin extends SiteTransaction {
   def markPagesWithUserAvatarAsStale(userId: UserId) {
     // Currently a user's avatar is shown in posts written by him/her.
     val statement = s"""
-      update dw1_pages
+      update pages3
         set version = version + 1, updated_at = now_utc()
         where site_id = ?
           and page_id in (
-            select distinct page_id from dw2_posts
+            select distinct page_id from posts3
             where site_id = ? and created_by_id = ?)
       """
     runUpdate(statement, List(siteId, siteId, userId.asAnyRef))
@@ -50,11 +50,11 @@ trait PagesSiteDaoMixin extends SiteTransaction {
 
   def markSectionPageContentHtmlAsStale(categoryId: CategoryId) {
     val statement = s"""
-      update dw2_page_html h
+      update page_html3 h
         set page_version = -1, updated_at = now_utc()
         where site_id = ?
           and page_id = (
-            select page_id from dw2_categories
+            select page_id from categories3
             where site_id = ? and id = ?)
       """
     runUpdateSingleRow(statement, List(siteId, siteId, categoryId.asAnyRef))
@@ -64,7 +64,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
   override def loadCachedPageContentHtml(pageId: PageId): Option[(String, CachedPageVersion)] = {
     val query = s"""
       select site_version, page_version, app_version, data_hash, html
-      from dw2_page_html
+      from page_html3
       where site_id = ? and page_id = ?
       """
     runQuery(query, List(siteId, pageId.asAnyRef), rs => {
@@ -88,7 +88,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
     // doesn't exist. But this might waste a tiny bit disk space.
     // 2) Do an upsert. In 9.4 there's built in support for this, but for now:
     val updateStatement = s"""
-      update dw2_page_html
+      update page_html3
         set site_version = ?,
             page_version = ?,
             app_version = ?,
@@ -110,7 +110,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
 
     if (!rowFound) {
       val insertStatement = s"""
-        insert into dw2_page_html (
+        insert into page_html3 (
           site_id, page_id,
           site_version, page_version, app_version,
           data_hash, updated_at, html)
