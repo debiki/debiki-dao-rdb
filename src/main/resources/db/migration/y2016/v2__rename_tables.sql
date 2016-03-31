@@ -59,3 +59,9 @@ delete from settings3
 create unique index settings3_siteid__u on settings3 (site_id)
   where page_id is null and category_id is null;
 
+
+-- Add temporary simple staff-only permission (& rename column).
+
+alter table categories3 add column staff_only bool not null default false;
+alter table categories3 rename column hide_in_forum to unlisted;
+

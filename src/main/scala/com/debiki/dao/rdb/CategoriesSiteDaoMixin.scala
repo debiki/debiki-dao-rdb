@@ -53,6 +53,21 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadCategoryPathRootLast(categoryId: CategoryId): Seq[Category] = {
+    val categoriesById = loadCategoryMap()
+    val ancestors = ArrayBuffer[Category]()
+    var nextCategory = categoriesById.get(categoryId)
+    var laps = 0
+    while (nextCategory.isDefined) {
+      laps += 1
+      dieIf(laps > 100, "EsE7YKGW3", s"Category cycle? Around category ${nextCategory.get.id}")
+      ancestors += nextCategory.get
+      nextCategory = nextCategory.get.parentId.flatMap(categoriesById.get)
+    }
+    ancestors.toSeq
+  }
+
+
   def loadPagesInCategories(categoryIds: Seq[CategoryId], pageQuery: PageQuery, limit: Int)
         : Seq[PagePathAndMeta] = {
 
@@ -164,17 +179,17 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         site_id, id, page_id, parent_id,
         name, slug, position,
         description, new_topic_types,
-        hide_in_forum, created_at, updated_at)
+        unlisted, staff_only, created_at, updated_at)
       values (
         ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?,
-        ?, ?, ?)"""
+        ?, ?, ?, ?)"""
     val values = List[AnyRef](
       siteId, category.id.asAnyRef, category.sectionPageId, category.parentId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
-      category.hideInForum.asAnyRef, currentTime, currentTime)
+      category.unlisted.asAnyRef, category.staffOnly.asAnyRef, currentTime, currentTime)
     runUpdateSingleRow(statement, values)
     markSectionPageContentHtmlAsStale(category.id)
   }
@@ -186,13 +201,14 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         page_id = ?, parent_id = ?,
         name = ?, slug = ?, position = ?,
         description = ?, new_topic_types = ?,
-        hide_in_forum = ?, created_at = ?, updated_at = ?
+        unlisted = ?, staff_only = ?, created_at = ?, updated_at = ?
       where site_id = ? and id = ?"""
     val values = List[AnyRef](
       category.sectionPageId, category.parentId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
-      category.hideInForum.asAnyRef, category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
+      category.unlisted.asAnyRef, category.staffOnly.asAnyRef,
+      category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
       siteId, category.id.asAnyRef)
     runUpdateSingleRow(statement, values)
     // In the future: mark any old section page html as stale too, if moving to new section.
@@ -210,7 +226,8 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       slug = rs.getString("slug"),
       description = Option(rs.getString("description")),
       newTopicTypes = getNewTopicTypes(rs),
-      hideInForum = rs.getBoolean("hide_in_forum"),
+      unlisted = rs.getBoolean("unlisted"),
+      staffOnly = rs.getBoolean("staff_only"),
       createdAt = getDate(rs, "created_at"),
       updatedAt = getDate(rs, "updated_at"),
       lockedAt = getOptionalDate(rs, "locked_at"),
