@@ -70,7 +70,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       reviewTask.completedAtRevNr.orNullInt,
       reviewTask.completedById.orNullInt,
       reviewTask.invalidatedAt.orNullTimestamp,
-      reviewTask.resolution.orNullInt,
+      reviewTask.resolution.map(_.toInt).orNullInt,
       reviewTask.userId.orNullInt,
       reviewTask.pageId.orNullVarchar,
       reviewTask.postId.orNullInt,
@@ -114,7 +114,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       reviewTask.completedAtRevNr.orNullInt,
       reviewTask.completedById.orNullInt,
       reviewTask.invalidatedAt.orNullTimestamp,
-      reviewTask.resolution.orNullInt,
+      reviewTask.resolution.map(_.toInt).orNullInt,
       reviewTask.userId.orNullInt,
       reviewTask.pageId.orNullVarchar,
       reviewTask.postId.orNullInt,
@@ -165,6 +165,19 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   }
 
 
+  override def loadReviewTaskCausedBy(userId: UserId, limit: Int, orderBy: OrderBy)
+        : Seq[ReviewTask] = {
+    val desc = orderBy.isDescending ? "desc" | ""
+    val query = i"""
+      select * from review_tasks3 where site_id = ? and caused_by_id = ?
+      order by created_at $desc, id $desc limit ?
+      """
+    runQueryFindMany(query, List(siteId, userId.asAnyRef, limit.asAnyRef), rs => {
+      readReviewTask(rs)
+    })
+  }
+
+
   override def loadReviewTaskCounts(isAdmin: Boolean): ReviewTaskCounts = {
     val urgentBits = ReviewReason.PostFlagged.toInt // + ... later if more urgent tasks
     val query = i"""
@@ -192,7 +205,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       completedAtRevNr = getOptionalInt(rs, "completed_at_rev_nr"),
       completedById = getOptionalInt(rs, "completed_by_id"),
       invalidatedAt = getOptionalDate(rs, "invalidated_at"),
-      resolution = getOptionalInt(rs, "resolution"),
+      resolution = getOptionalInt(rs, "resolution").map(new ReviewTaskResolution(_)),
       userId = getOptionalInt(rs, "user_id"),
       pageId = Option(rs.getString("page_id")),
       postId = getOptionalInt(rs, "post_id"),
