@@ -63,5 +63,6 @@ create unique index settings3_siteid__u on settings3 (site_id)
 -- Add temporary simple staff-only permission (& rename column).
 
 alter table categories3 add column staff_only bool not null default false;
+alter table categories3 add column only_staff_may_create_topics bool not null default false;
 alter table categories3 rename column hide_in_forum to unlisted;
 
