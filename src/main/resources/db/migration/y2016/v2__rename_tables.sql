@@ -66,3 +66,32 @@ alter table categories3 add column staff_only bool not null default false;
 alter table categories3 add column only_staff_may_create_topics bool not null default false;
 alter table categories3 rename column hide_in_forum to unlisted;
 
+
+-- Add trust and threat levels.
+
+alter table users3 add column trust_level smallint not null default 1;
+alter table users3 add column locked_trust_level smallint;
+alter table users3 add column threat_level smallint not null default 3;
+alter table users3 add column locked_threat_level smallint;
+
+alter table users3 add constraint users3_trustlevel__c_betw check (trust_level between 1 and 5);
+alter table users3 add constraint users3_lockedtrustlevel__c_betw check (locked_trust_level between 1 and 5);
+alter table users3 add constraint users3_threatlevel__c_betw check (threat_level between 1 and 6);
+alter table users3 add constraint users3_lockedthreatlevel__c_betw check (locked_threat_level between 1 and 6);
+
+
+-- Save threat level in blocks table, and always save browser id cookie.
+
+alter table blocks3 alter column block_type set data type smallint using 6; -- 6 = totally blocked
+alter table blocks3 rename column block_type to threat_level;
+alter table blocks3 alter column browser_id_cookie set not null;
+
+drop index dw2_blocks_browseridcookie__u;
+create unique index dw2_blocks_browseridcookie__u on blocks3 (site_id, browser_id_cookie)
+  where browser_id_cookie is not null and ip is null;
+
+
+-- Review task resolution.
+
+update review_tasks3 set resolution = 1 where resolution = 100;
+

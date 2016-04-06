@@ -38,7 +38,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
     val statement = s"""
       insert into blocks3(
         site_id,
-        block_type,
+        threat_level,
         blocked_at,
         blocked_till,
         blocked_by_id,
@@ -52,7 +52,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
       """
     val values = List[AnyRef](
       siteId,
-      NullVarchar,
+      block.threatLevel.toInt.asAnyRef,
       block.blockedAt.asTimestamp,
       block.blockedTill.orNullTimestamp,
       block.blockedById.asAnyRef,
@@ -68,7 +68,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
 
 
   def unblockBrowser(browserIdCookie: String) {
-    deleteBlock("browser_id_cookie = ?", browserIdCookie)
+    deleteBlock("browser_id_cookie = ? and ip is null", browserIdCookie)
   }
 
 
@@ -84,6 +84,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
   override def loadBlocks(ip: String, browserIdCookie: String): immutable.Seq[Block] = {
     val query = """
       select
+        threat_level,
         blocked_at,
         blocked_till,
         blocked_by_id,
@@ -103,12 +104,19 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private def getBlock(rs: js.ResultSet) =
+  private def getBlock(rs: js.ResultSet) = {
+    var threatLevelInt = rs.getInt("threat_level")
+    if (threatLevelInt <= ThreatLevel.HopefullySafe.toInt) {
+      // The db constraints allow 1 and 2, but remap them to 3 because there's no enum for 1 or 2.
+      threatLevelInt = ThreatLevel.HopefullySafe.toInt
+    }
     Block(
+      threatLevel = ThreatLevel.fromInt(threatLevelInt) getOrDie "EsE8PY24",
       ip = Option(rs.getString("ip")).map(InetAddresses.forString),
       browserIdCookie = Option(rs.getString("browser_id_cookie")),
       blockedById = rs.getInt("blocked_by_id"),
       blockedAt = getDate(rs, "blocked_at"),
       blockedTill = getOptionalDate(rs, "blocked_till"))
+  }
 
 }

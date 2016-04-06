@@ -159,7 +159,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     val query = s"""
       select * from audit_log3
       where site_id = ? and post_id = ?
-      and did_what = 'NwPs' -- new post
+      and did_what = ${AuditLogEntryType.NewPost.toInt}
       order by done_at limit 1
       """
     runQueryFindOneOrNone(query, List(siteId, postId.asAnyRef), rs => {
@@ -190,7 +190,8 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       targetPageId = Option(rs.getString("target_page_id")),
       targetPostNr = getOptionalInt(rs, "target_post_nr"),
       targetUserId = getOptionalInt(rs, "target_user_id"),
-      targetSiteId = Option(rs.getString("target_site_id")))
+      targetSiteId = Option(rs.getString("target_site_id")),
+      isLoading = true)
 
 
   private def getBrowserIdData(rs: js.ResultSet) =

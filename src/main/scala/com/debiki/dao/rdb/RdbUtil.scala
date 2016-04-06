@@ -130,6 +130,10 @@ object RdbUtil {
       |u.APPROVED_AT u_approved_at,
       |u.APPROVED_BY_ID u_approved_by_id,
       |u.SUSPENDED_TILL u_suspended_till,
+      |u.trust_level u_trust_level,
+      |u.locked_trust_level u_locked_trust_level,
+      |u.threat_level u_threat_level,
+      |u.locked_threat_level u_locked_threat_level,
       |u.EMAIL u_email,
       |u.EMAIL_NOTFS u_email_notfs,
       |u.EMAIL_VERIFIED_AT u_email_verified_at,
@@ -182,6 +186,10 @@ object RdbUtil {
       smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path"),
       isApproved = getOptionalBoolean(rs, "u_is_approved"),
       suspendedTill = getOptionalDate(rs, "u_suspended_till"),
+      trustLevel = TrustLevel.fromInt(rs.getInt("u_trust_level")).getOrDie("EsE7YK24"),
+      lockedTrustLevel = getOptionalInt(rs, "u_locked_trust_level").flatMap(TrustLevel.fromInt),
+      threatLevel = ThreatLevel.fromInt(rs.getInt("u_threat_level")).getOrDie("EsE0PW4V2"),
+      lockedThreatLevel = getOptionalInt(rs, "u_locked_threat_level").flatMap(ThreatLevel.fromInt),
       isOwner = rs.getString("u_is_owner") == "T",
       isAdmin = rs.getString("u_is_admin") == "T",
       isModerator = rs.getBoolean("u_is_moderator"))
@@ -214,7 +222,11 @@ object RdbUtil {
     |suspended_at,
     |suspended_till,
     |suspended_by_id,
-    |suspended_reason
+    |suspended_reason,
+    |trust_level,
+    |locked_trust_level,
+    |threat_level,
+    |locked_threat_level
     """
 
   val CompleteUserSelectListItemsWithUserId =
@@ -246,6 +258,10 @@ object RdbUtil {
       suspendedTill = getOptionalDate(rs, "suspended_till"),
       suspendedById = getOptionalIntNoneNot0(rs, "suspended_by_id"),
       suspendedReason = Option(rs.getString("suspended_reason")),
+      trustLevel = TrustLevel.fromInt(rs.getInt("trust_level")).getOrDie("EsE5GJKW4"),
+      lockedTrustLevel = getOptionalInt(rs, "locked_trust_level").flatMap(TrustLevel.fromInt),
+      threatLevel = ThreatLevel.fromInt(rs.getInt("threat_level")).getOrDie("EsE22IU60C"),
+      lockedThreatLevel = getOptionalInt(rs, "locked_threat_level").flatMap(ThreatLevel.fromInt),
       isOwner = rs.getString("is_owner") == "T",
       isAdmin = rs.getString("is_admin") == "T",
       isModerator = rs.getBoolean("is_moderator"))
