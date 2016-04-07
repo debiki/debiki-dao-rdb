@@ -161,6 +161,7 @@ object RdbUtil {
       else
         _toEmailNotfs(rs.getString("u_email_notfs"))
     }
+    val lockedThreatLevel = getOptionalInt(rs, "u_locked_threat_level").flatMap(ThreatLevel.fromInt)
       // Use dn2e not n2e. ((So works if joined w/ DW1_IDS_SIMPLE, which
       // uses '-' instead of null to indicate absence of email address etc.
       // See usage of this function in RdbSystemDao.loadUsers(). ))
@@ -171,7 +172,8 @@ object RdbUtil {
         guestCookie = Option(rs.getString("u_guest_cookie")),
         email = dn2e(rs.getString("u_email")),
         emailNotfPrefs = emailNotfPrefs,
-        country = dn2e(rs.getString("u_country")))
+        country = dn2e(rs.getString("u_country")),
+        lockedThreatLevel = lockedThreatLevel)
     else Member(
       id = userId,
       fullName = Option(rs.getString("u_disp_name")),
@@ -189,7 +191,7 @@ object RdbUtil {
       trustLevel = TrustLevel.fromInt(rs.getInt("u_trust_level")).getOrDie("EsE7YK24"),
       lockedTrustLevel = getOptionalInt(rs, "u_locked_trust_level").flatMap(TrustLevel.fromInt),
       threatLevel = ThreatLevel.fromInt(rs.getInt("u_threat_level")).getOrDie("EsE0PW4V2"),
-      lockedThreatLevel = getOptionalInt(rs, "u_locked_threat_level").flatMap(ThreatLevel.fromInt),
+      lockedThreatLevel = lockedThreatLevel,
       isOwner = rs.getString("u_is_owner") == "T",
       isAdmin = rs.getString("u_is_admin") == "T",
       isModerator = rs.getBoolean("u_is_moderator"))

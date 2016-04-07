@@ -648,18 +648,19 @@ trait UserSiteDaoMixin extends SiteTransaction {
       update users3 set
         updated_at = now_utc(),
         display_name = ?,
+        locked_threat_level = ?
       where site_id = ? and user_id = ?
       """
-    val values = List(user.guestName, siteId, user.id.asAnyRef)
-    try {
-      runUpdateSingleRow(statement, values)
-    }
+    val values = List(user.guestName, user.lockedThreatLevel.map(_.toInt).orNullInt,
+      siteId, user.id.asAnyRef)
+
+    try runUpdateSingleRow(statement, values)
     catch {
       case ex: js.SQLException =>
         if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw1_user_guest__u", ex))
           throw DbDao.DuplicateGuest
-
-        throw ex
+        else
+          throw ex
     }
   }
 
