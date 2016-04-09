@@ -55,14 +55,28 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       query += " and post_nr = ?"
       values.append(id.asAnyRef)
     }
-    var results = ArrayBuffer[Post]()
-    runQuery(query, values.toList, rs => {
-      while (rs.next()) {
-        val post = readPost(rs, pageId = Some(pageId))
-        results += post
-      }
+    runQueryFindMany(query, values.toList, rs => {
+      readPost(rs, pageId = Some(pageId))
     })
-    results.to[immutable.Seq]
+  }
+
+
+  override def loadOrigPostAndLatestPosts(pageId: PageId, limit: Int): Seq[Post] = {
+    require(limit > 0, "EsE7GK4W0")
+    // Use post_nr, not created_at, because 1) if a post is moved from another page to page pageId,
+    // then its created_at might be long-ago, although its post_nr will become the highest
+    // on this page once it's been added. Also 2) there's an index on pageid, post_nr.
+    val query = s"""
+      select * from posts3 where site_id = ? and page_id = ? and
+          post_nr in (${PageParts.TitleNr}, ${PageParts.BodyNr})
+      union
+      select * from (
+        select * from posts3 where site_id = ? and page_id = ?
+        order by post_nr desc limit $limit) required_subquery_alias
+      """
+    runQueryFindMany(query, List(siteId, pageId.asAnyRef, siteId, pageId.asAnyRef), rs => {
+      readPost(rs, pageId = Some(pageId))
+    })
   }
 
 
