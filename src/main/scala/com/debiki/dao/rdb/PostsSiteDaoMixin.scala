@@ -144,21 +144,32 @@ trait PostsSiteDaoMixin extends SiteTransaction {
     })
   }
 
+  /*
+  def loadPosts(authorId: UserId, includeTitles: Boolean, includeChatMessages: Boolean,
+        limit: Int, orderBy: OrderBy, onPageId: Option[PageId], onlyUnapproved: Boolean)
+        : immutable.Seq[Post] = {
 
-  def loadPostsBy(authorId: UserId, includeTitles: Boolean, includeChatMessages: Boolean,
-        limit: Int, orderBy: OrderBy): immutable.Seq[Post] = {
-    val andMaybeSkipTitles = includeTitles ? "" | s"and post_nr <> $TitleNr"
-    val andMaybeSkipChat = includeChatMessages ?
+    val values = ArrayBuffer(siteId, authorId.asAnyRef)
+
+    val andSkipTitles = includeTitles ? "" | s"and post_nr <> $TitleNr"
+    val andSkipChat = includeChatMessages ?
       "" | s"and (type is null or type <> ${PostType.ChatMessage.toInt})"
+    val andOnlyUnapproved = onlyUnapproved ? "curr_rev_nr > approved_rev_nr" | ""
+
+    val andOnCertainPage = onPageId map { pageId =>
+      values.append(pageId)
+      s"and page_id = ?"
+    } getOrElse ""
+
     val query = i"""
-      select * from posts3 where site_id = ? and created_by_id = ? $andMaybeSkipTitles
-          $andMaybeSkipChat
+      select * from posts3 where site_id = ? and created_by_id = ? $andSkipTitles
+          $andSkipChat $andOnCertainPage $andOnlyUnapproved
       order by created_at ${descOrAsc(orderBy)} limit ?
       """
     runQueryFindMany(query, List(siteId, authorId.asAnyRef, limit.asAnyRef), rs => {
       readPost(rs)
     })
-  }
+  } */
 
 
   def loadPostsToReview(): immutable.Seq[Post] = {
