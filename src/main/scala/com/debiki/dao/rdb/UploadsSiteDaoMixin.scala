@@ -44,6 +44,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
 
   def insertUploadedFileMeta(uploadRef: UploadRef, sizeBytes: Int, mimeType: String,
         dimensions: Option[(Int, Int)]) {
+    dieIf(mimeType eq null, "EsE5KY3U2")
     // COULD use `insert ... on conflict do nothing` here once have upgraded to Postgres 9.5.
     val (width, height) = dimensions match {
       case Some((w, h)) => (w.asAnyRef, h.asAnyRef)
