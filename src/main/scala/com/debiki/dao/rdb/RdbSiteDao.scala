@@ -661,14 +661,14 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  def createUnknownUser() {
+  def createUnknownUser(date: ju.Date) {
     val statement = s"""
       insert into users3(
         site_id, user_id, created_at, display_name, email, guest_cookie)
       values (
-        ?, $UnknownUserId, now_utc(), '$UnknownUserName', '-', '$UnknownUserGuestCookie')
+        ?, $UnknownUserId, ?, '$UnknownUserName', '-', '$UnknownUserGuestCookie')
       """
-    runUpdate(statement, List(siteId))
+    runUpdate(statement, List(siteId, date))
   }
 
 

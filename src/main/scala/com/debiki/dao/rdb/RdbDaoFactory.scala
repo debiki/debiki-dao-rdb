@@ -66,7 +66,7 @@ class RdbDaoFactory(
     * e.g. a full text search indexer.
     */
   def shutdown() {
-    if (!fastStartSkipSearch) fullTextSearchIndexer.shutdown()
+    // if (!fastStartSkipSearch) fullTextSearchIndexer.shutdown()
   }
 
 
