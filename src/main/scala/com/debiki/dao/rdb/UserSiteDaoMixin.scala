@@ -812,7 +812,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   private def notfLevelToFlag(notfLevel: PageNotfLevel) = notfLevel match {
     case PageNotfLevel.Watching => "W"
     case PageNotfLevel.Tracking => "T"
-    case PageNotfLevel.Regular => "R"
+    case PageNotfLevel.Normal => "R"
     case PageNotfLevel.Muted => "M"
   }
 
@@ -820,7 +820,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   private def flagToNotfLevel(flag: String) = flag match {
     case "W" => PageNotfLevel.Watching
     case "T" => PageNotfLevel.Tracking
-    case "R" => PageNotfLevel.Regular
+    case "R" => PageNotfLevel.Normal
     case "M" => PageNotfLevel.Muted
     case x => die("DwE7FK02", s"Bad notf level: `$x'")
   }
