@@ -515,21 +515,25 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadMemberInclDetailsByUsername(username: String): Option[CompleteUser] = {
+    loadCompleteUserImpl("username", username)
+  }
+
+
   def loadCompleteUser(userId: UserId): Option[CompleteUser] = {
     require(User.isRoleId(userId), "DwE5FKE2")
-    val sql = s"""
-      select $CompleteUserSelectListItemsNoUserId
-      from users3
-      where site_id = ? and user_id = ?
-      """
-    val values = List(siteId, userId.asAnyRef)
-    runQuery(sql, values, rs => {
-      if (!rs.next())
-        return None
+    loadCompleteUserImpl("user_id", userId.asAnyRef)
+  }
 
-      val user = getCompleteUser(rs, userId = Some(userId))
-      dieIf(rs.next(), "DwE80ZQ2")
-      Some(user)
+
+  def loadCompleteUserImpl(field: String, value: AnyRef): Option[CompleteUser] = {
+    val sql = s"""
+      select $CompleteUserSelectListItemsWithUserId
+      from users3
+      where site_id = ? and $field = ?
+      """
+    runQueryFindOneOrNone(sql, List(siteId, value), rs => {
+      getCompleteUser(rs)
     })
   }
 
