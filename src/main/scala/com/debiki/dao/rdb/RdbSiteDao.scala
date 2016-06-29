@@ -46,7 +46,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   with MessagesSiteDaoMixin
   with UploadsSiteDaoMixin
   with CategoriesSiteDaoMixin
-  with FullTextSearchSiteDaoMixin
+  with SearchSiteDaoMixin
   with UserSiteDaoMixin
   with UserActionInfoSiteDaoMixin
   with LoginSiteDaoMixin
@@ -75,8 +75,6 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   def setSiteId(newId: SiteId) {
     siteId = newId
   }
-
-  def fullTextSearchIndexer = daoFactory.fullTextSearchIndexer
 
   lazy val currentTime: ju.Date = asSystem.currentTime
 

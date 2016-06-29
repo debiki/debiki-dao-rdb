@@ -20,9 +20,7 @@ libraryDependencies ++= Seq(
   // For loading test database connection info.
   "com.typesafe" % "config" % "1.0.1" % "test",
   // Jsoup removes HTML tags from a string.
-  "org.jsoup" % "jsoup" % "1.7.2",
-  // Full text search engine:
-  "org.elasticsearch" % "elasticsearch" % "0.90.2"
+  "org.jsoup" % "jsoup" % "1.7.2"
 )
 
 // See: https://groups.google.com/forum/?fromgroups=#!topic/simple-build-tool/bkF1IDZj4L0

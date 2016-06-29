@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011 Kaj Magnus Lindberg (born 1979)
+ * Copyright (c) 2011-2016 Kaj Magnus Lindberg
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,7 +17,6 @@
 
 package com.debiki.dao.rdb
 
-import akka.actor.ActorSystem
 import com.debiki.core._
 
 
@@ -26,21 +25,7 @@ import com.debiki.core._
 class RdbDaoFactory(
   val db: Rdb,
   val migrations: ScalaBasedDatabaseMigrations,
-  val actorSystem: ActorSystem,
-  val fullTextSearchDbDataPath: Option[String],
-  val isTest: Boolean = false,
-  val fastStartSkipSearch: Boolean = false) extends DbDaoFactory {
-
-
-  def fullTextSearchIndexer =
-    if (fastStartSkipSearch || true)
-      sys.error("Search disabled, please check your Java -D...=... startup flags — no, always disabled right now, doesn't support posts3")
-    else
-      _fullTextSearchIndexer
-
-  private val _fullTextSearchIndexer =
-    if (fastStartSkipSearch || true) null
-    else new FullTextSearchIndexer(this)
+  val isTest: Boolean = false) extends DbDaoFactory {
 
 
   def newSiteDbDao(siteId: SiteId) =
@@ -61,27 +46,6 @@ class RdbDaoFactory(
     dao
   }
 
-
-  /** Stops any background services started by this factory,
-    * e.g. a full text search indexer.
-    */
-  def shutdown() {
-    // if (!fastStartSkipSearch) fullTextSearchIndexer.shutdown()
-  }
-
-
-  override def debugDeleteRecreateSearchEngineIndexes() {
-    fullTextSearchIndexer.debugDeleteIndexAndMappings()
-    fullTextSearchIndexer.createIndexAndMappinigsIfAbsent()
-  }
-
-  override def debugWaitUntilSearchEngineStarted() {
-    fullTextSearchIndexer.debugWaitUntilSearchEngineStarted()
-  }
-
-  override def debugRefreshSearchEngineIndexer() {
-    fullTextSearchIndexer.debugRefreshIndexes()
-  }
 }
 
 

@@ -22,8 +22,7 @@ import com.debiki.core.Prelude._
 import _root_.java.{util => ju}
 import java.{sql => js}
 import org.flywaydb.core.Flyway
-import scala.{collection => col}
-import scala.collection.{mutable => mut, immutable}
+import scala.collection.{mutable, immutable}
 import scala.collection.mutable.{ArrayBuffer, StringBuilder}
 import Rdb._
 import RdbUtil._
@@ -402,101 +401,6 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def findPostsNotYetIndexedNoTransaction(currentIndexVersion: Int, limit: Int)
-        : Seq[PostsToIndex] = {
-    db.withConnection { connection =>
-      findPostsNotYetIndexedImpl(currentIndexVersion, limit)(connection)
-    }
-  }
-
-
-  private def findPostsNotYetIndexedImpl(currentIndexVersion: Int, limit: Int)(
-        connection: js.Connection): Seq[PostsToIndex] = {
-
-    // First load ids of posts to index, then load pages and posts.
-    //
-    // (We need to load metadata on each page, actually, because
-    // when indexing a post, we want to know the page-id-path to the page
-    // to which the post belongs, so we can index this page-id-path,
-    // because then we can restrict the search to a subsection of the site
-    // (namely below a certain page id).)
-
-    val postNrsByPageBySite = loadNrsOfPostsToIndex(currentIndexVersion, limit)(connection)
-    loadPostsToIndex(postNrsByPageBySite)(connection)
-  }
-
-
-  private def loadNrsOfPostsToIndex(
-        currentIndexVersion: Int, limit: Int)(connection: js.Connection)
-        : col.Map[SiteId, col.Map[PageId, col.Seq[PostNr]]] = {
-
-    val postNrsByPageBySite = mut.Map[SiteId, mut.Map[PageId, mut.ArrayBuffer[PostNr]]]()
-
-    // `currentIndexVersion` shouldn't change until server restarted.
-    unimplemented("Indexing posts in posts3", "DwE4KUPY8") // this uses a deleted table:
-    val sql = s"""
-      select SITE_ID, PAGE_ID, post_nr from DW1_PAGE_ACTIONS
-      where TYPE = 'Post' and INDEX_VERSION <> $currentIndexVersion
-      order by SITE_ID, PAGE_ID
-      limit $limit
-      """
-
-    db.query(sql, Nil, rs => {
-      while (rs.next) {
-        val siteId = rs.getString("SITE_ID")
-        val pageId = rs.getString("PAGE_ID")
-        val postNr = rs.getInt("post_nr")
-        if (postNrsByPageBySite.get(siteId).isEmpty) {
-          postNrsByPageBySite(siteId) = mut.Map[PageId, mut.ArrayBuffer[PostNr]]()
-        }
-        if (postNrsByPageBySite(siteId).get(pageId).isEmpty) {
-          postNrsByPageBySite(siteId)(pageId) = mut.ArrayBuffer[PostNr]()
-        }
-        postNrsByPageBySite(siteId)(pageId) += postNr
-      }
-    })(connection)
-
-    postNrsByPageBySite
-  }
-
-
-  private def loadPostsToIndex(
-        postNrsByPageBySite: col.Map[SiteId, col.Map[PageId, col.Seq[PostNr]]])(
-        connection: js.Connection): Vector[PostsToIndex] = {
-    unimplemented("Loading posts to index [DwE7FKEf2]") /*
-    var chunksOfPostsToIndex = Vector[PostsToIndex]()
-    for ((siteId, postIdsByPage) <- postIdsByPageBySite.iterator) {
-      val siteDao: RdbSiteDao = newSiteDao(siteId)
-      val pageIds = postIdsByPage.keySet.toList
-      val ancestorIdsByPageId: col.Map[PageId, List[PageId]] =
-        siteDao.batchLoadAncestorIdsParentFirst(pageIds)(connection)
-      val metaByPageId: Map[PageId, PageMeta] = siteDao.loadPageMetaImpl(pageIds)(connection)
-
-      // This is really inefficient, but load the whole page. Then all
-      // posts that we are to index will also be loaded.
-      // — This works even if the posts have not yet been inserted into DW1_POSTS
-      // (which is currently the case).
-      // COULD try to load an up-to-date version from DW1_POSTS first (so the
-      // history of each post needn't be loaded too).
-      val pageParts: List[PageParts] = pageIds.flatMap(siteDao.loadPageParts(_).toList)
-
-      for {
-        (pageId, postIds) <- postIdsByPage.iterator
-        parts <- pageParts.find(_.pageId == pageId)
-        meta <- metaByPageId.get(pageId)
-        ancestorIds <- ancestorIdsByPageId.get(pageId)
-      } {
-        val pageNoPath = PageNoPath(parts, ancestorIds, meta)
-        val posts = postIds.flatMap(parts.getPost(_))
-        chunksOfPostsToIndex :+= PostsToIndex(siteId, pageNoPath, posts.toVector)
-      }
-    }
-
-    chunksOfPostsToIndex
-    */
-  }
-
-
   override def loadCachedPageVersion(sitePageId: SitePageId)
         : Option[(CachedPageVersion, SitePageVersion)] = {
     val query = s"""
@@ -585,6 +489,94 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
+  def loadStuffToIndex(limit: Int): StuffToIndex = {
+    val postIdsBySite = mutable.Map[SiteId, ArrayBuffer[UniquePostId]]()
+    // Hmm, use action_at or inserted_at? Normally, use inserted_at, but when
+    // reindexing everything, everything gets inserted at the same time. Then should
+    // instead use posts3.created_at, desc order, so most recent indexed first.
+    val query = s"""
+       select site_id, post_id from index_queue3 order by inserted_at limit $limit
+       """
+
+    runQuery(query, Nil, rs => {
+      while (rs.next()) {
+        val siteId = rs.getString("site_id")
+        val postId = rs.getInt("post_id")
+        val postIds = postIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[UniquePostId]())
+        postIds.append(postId)
+      }
+    })
+
+    val entries: Vector[(SiteId, ArrayBuffer[UniquePostId])] = postIdsBySite.iterator.toVector
+
+    val sitePageIds = mutable.Set[SitePageId]()
+
+    val postsBySite = Map[SiteId, immutable.Seq[Post]](
+      entries.map(siteAndPosts => {
+        val siteId = siteAndPosts._1
+        val siteTrans = siteTransaction(siteId)
+        val posts = siteTrans.loadPostsByUniqueId(siteAndPosts._2).values.toVector
+        sitePageIds ++= posts.map(post => SitePageId(siteId, post.pageId))
+        (siteId, posts)
+      }): _*)
+
+    val pagesBySitePageId = loadPagesBySitePageId(sitePageIds)
+    StuffToIndex(postsBySite, pagesBySitePageId)
+  }
+
+
+  def loadPagesBySitePageId(sitePageIds: collection.Set[SitePageId]): Map[SitePageId, PageMeta] = {
+    COULD_OPTIMIZE // For now, load pages one at a time.
+    Map[SitePageId, PageMeta](sitePageIds.toSeq.flatMap({ sitePageId =>
+      siteTransaction(sitePageId.siteId).loadPageMeta(sitePageId.pageId) map { pageMeta =>
+        sitePageId -> pageMeta
+      }
+    }): _*)
+  }
+
+
+  def deleteFromIndexQueue(post: Post, siteId: SiteId) {
+    val statement = s"""
+      delete from index_queue3 where site_id = ? and post_id = ? and post_rev_nr <= ?
+      """
+    // [85YKF30] Only approved posts currently get indexed. Perhaps I should add a rule that
+    // a post's approvedRevisionNr is never decremented? Because if it is, then impossible?
+    // to know if the index queue entry should be deleted or not.
+    // But only-increment is a bit bad? because then one can no longer undo an accidental approval?
+    // Or add another field, stateUpdateCountCountNr, which gets bumped whenever the post
+    // gets updated in any way?
+    // For now:
+    val revNr = post.approvedRevisionNr.getOrElse(post.currentRevisionNr)
+    runUpdate(statement, List(siteId, post.uniqueId.asAnyRef, revNr.asAnyRef))
+  }
+
+
+  def addEverythingInLanguagesToIndexQueue(languages: Set[String]) {
+    if (languages.isEmpty)
+      return
+
+    require(languages == Set("english"), s"Langs not yet impl: ${languages.toString} [EsE2PYK40]")
+
+    // Later: COULD index also deleted and hidden posts, and make available to staff.
+    val statement = s"""
+      insert into index_queue3 (action_at, site_id, site_version, post_id, post_rev_nr)
+      select
+        posts3.created_at,
+        sites3.id,
+        sites3.version,
+        posts3.unique_post_id,
+        posts3.approved_rev_nr
+      from posts3 inner join sites3
+        on posts3.site_id = sites3.id
+      where
+        ${SearchSiteDaoMixin.PostShouldBeIndexedTests}
+      ${SearchSiteDaoMixin.OnPostConflictAction}
+      """
+
+    runUpdate(statement, Nil)
+  }
+
+
   /** Finds all evolution scripts below src/main/resources/db/migration and applies them.
     */
   def applyEvolutions() {
@@ -617,6 +609,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       runUpdate("set constraints all deferred")
 
       s"""
+      delete from index_queue3
       delete from audit_log3
       delete from review_tasks3
       delete from settings3
