@@ -18,6 +18,7 @@
 package com.debiki.dao.rdb
 
 import _root_.java.{util => ju, io => jio}
+import _root_.com.debiki.core._
 import _root_.com.debiki.core.Prelude._
 import java.{sql => js, lang => jl}
 import javax.{sql => jxs}

@@ -58,8 +58,6 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   with AuditLogSiteDaoMixin {
 
 
-  val MaxWebsitesPerIp = 6
-
   val LocalhostAddress = "127.0.0.1"
 
   def db = daoFactory.db
@@ -622,21 +620,26 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
         creatorIp: String, creatorEmailAddress: String,
-        quotaLimitMegabytes: Option[Int],
-        isTestSiteOkayToDelete: Boolean, skipMaxSitesCheck: Boolean): Site = {
+        quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
+        isTestSiteOkayToDelete: Boolean): Site = {
 
     // Unless apparently testing from localhost, don't allow someone to create
     // very many sites.
     if (creatorIp != LocalhostAddress) {
       val websiteCount = countWebsites(
-        createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress)
-      if (websiteCount >= MaxWebsitesPerIp && !skipMaxSitesCheck)
-        throw TooManySitesCreatedException(creatorIp)
+        createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
+        testSites = isTestSiteOkayToDelete)
+      if (websiteCount >= maxSitesPerIp)
+        throw TooManySitesCreatedByYouException(creatorIp)
+
+      val numSitesTotal = countWebsitesTotal(isTestSiteOkayToDelete)
+      if (numSitesTotal >= maxSitesTotal)
+        throw TooManySitesCreatedInTotalException
     }
 
     // Ought to move this id generation stuff to the caller instead, i.e. CreateSiteDao.
     val id =
-      if (isTestSiteOkayToDelete) "test__" + nextRandomString().take(5)
+      if (isTestSiteOkayToDelete) TestSiteIdPrefix + nextRandomString().take(5)
       else "?"
     val newSiteNoId = Site(id, name = name, creatorIp = creatorIp,
       creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
@@ -699,14 +702,26 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  private def countWebsites(createdFromIp: String, creatorEmailAddress: String): Int = {
-    runQuery("""
+  def countWebsites(createdFromIp: String, creatorEmailAddress: String, testSites: Boolean)
+        : Int = {
+    val maybeNot = if (testSites) "" else "not"
+    val query = s"""
         select count(*) WEBSITE_COUNT from sites3
-        where CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?
-        """, createdFromIp::creatorEmailAddress::Nil, rs => {
-      rs.next()
-      val websiteCount = rs.getInt("WEBSITE_COUNT")
-      websiteCount
+        where (CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?)
+          and id $maybeNot like '$TestSiteIdPrefix%'
+        """
+    runQueryFindExactlyOne(query, List(createdFromIp, creatorEmailAddress), rs => {
+      rs.getInt("WEBSITE_COUNT")
+    })
+  }
+
+
+  def countWebsitesTotal(testSites: Boolean): Int = {
+    val maybeNot = if (testSites) "" else "not"
+    val query =
+      s"select count(*) site_count from sites3 where id $maybeNot like '$TestSiteIdPrefix%'"
+    runQueryFindExactlyOne(query, Nil, rs => {
+      rs.getInt("site_count")
     })
   }
 
