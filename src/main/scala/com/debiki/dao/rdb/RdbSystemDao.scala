@@ -204,9 +204,9 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     loadSitesImpl(all = true).to[immutable.Seq]
 
 
-  def loadTenants(tenantIds: Seq[String]): Seq[Site] =
-    if (tenantIds.isEmpty) Nil
-    else loadSitesImpl(tenantIds = tenantIds)
+  def loadSitesWithIds(siteIds: Seq[SiteId]): Seq[Site] =
+    if (siteIds.isEmpty) Nil
+    else loadSitesImpl(tenantIds = siteIds)
 
 
   def loadSitesImpl(tenantIds: Seq[String] = Nil, all: Boolean = false): Seq[Site] = {
@@ -233,7 +233,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       })
 
     var sitesQuery =
-      "select ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS from sites3"
+      "select ID, NAME, ctime, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS from sites3"
     var sitesValues: List[AnyRef] = Nil
     if (!all) {
       sitesQuery += " where ID = ?"  // for now, later: in (...)
@@ -247,6 +247,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         tenants ::= Site(
           id = tenantId,
           name = rs.getString("NAME"),
+          createdAt = getWhen(rs, "ctime"),
           creatorIp = rs.getString("CREATOR_IP"),
           creatorEmailAddress = rs.getString("CREATOR_EMAIL_ADDRESS"),
           embeddingSiteUrl = Option(rs.getString("EMBEDDING_SITE_URL")),

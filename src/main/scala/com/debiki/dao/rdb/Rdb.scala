@@ -141,10 +141,22 @@ object Rdb {
     else new ju.Date(timestamp.getTime)
   }
 
+  def getWhen(rs: js.ResultSet, column: String): When = {
+    val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
+    if (timestamp eq null) When.fromMillis(0)
+    else When.fromMillis(timestamp.getTime)
+  }
+
   def getOptionalDate(rs: js.ResultSet, column: String): Option[ju.Date] = {
     val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
     if (timestamp eq null) None
     else Some(new ju.Date(timestamp.getTime))
+  }
+
+  def getOptionalWhen(rs: js.ResultSet, column: String): Option[When] = {
+    val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
+    if (timestamp eq null) None
+    else Some(When.fromMillis(timestamp.getTime))
   }
 
   def isUniqueConstrViolation(sqlException: js.SQLException): Boolean = {

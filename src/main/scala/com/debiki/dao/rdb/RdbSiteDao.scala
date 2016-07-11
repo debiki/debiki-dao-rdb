@@ -74,7 +74,9 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     siteId = newId
   }
 
+  @deprecated("now", "use this.now instead")
   lazy val currentTime: ju.Date = asSystem.currentTime
+  lazy val now: When = When.fromDate(asSystem.currentTime)
 
 
 
@@ -586,7 +588,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
 
   def loadTenant(): Site = {
-    asSystem.loadTenants(List(siteId)).head
+    asSystem.loadSitesWithIds(List(siteId)).head
   }
 
 
@@ -641,7 +643,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val id =
       if (isTestSiteOkayToDelete) TestSiteIdPrefix + nextRandomString().take(5)
       else "?"
-    val newSiteNoId = Site(id, name = name, creatorIp = creatorIp,
+    val newSiteNoId = Site(id, name = name, createdAt = now, creatorIp = creatorIp,
       creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
       hosts = Nil)
 
