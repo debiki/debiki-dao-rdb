@@ -603,6 +603,16 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
+  override def deleteSite(siteId: SiteId) {
+    die("UNTESTED")
+    require(daoFactory.isTest)
+    // There are foreign keys from sites3 to other tables and back.
+    runUpdate("set constraints all deferred")
+    runQuery("select * from delete_site(?)", List(siteId), rs => ())
+    runUpdate("set constraints all immediate")
+  }
+
+
   override def emptyDatabase() {
       require(daoFactory.isTest)
 

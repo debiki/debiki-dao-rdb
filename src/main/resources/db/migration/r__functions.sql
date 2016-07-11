@@ -120,3 +120,58 @@ begin
 end $$;
 
 
+create or replace function delete_sites_upload_refs(the_id varchar) returns void
+    language plpgsql as $$
+begin
+    -- Update ref counts.
+    update uploads3 set
+        num_references = num_references - subquery.num_refs,
+        unused_since = case
+            when num_references - subquery.num_refs = 0 then now_utc()
+            else null
+        end
+        from (
+            select base_url, hash_path, count(*) num_refs
+            from upload_refs3
+            where site_id = the_id
+            group by base_url, hash_path) as subquery
+        where
+            uploads3.base_url = subquery.base_url and
+            uploads3.hash_path = subquery.hash_path;
+
+    -- Delete all refs.
+    delete from upload_refs3 where site_id = the_id;
+end $$;
+
+
+create or replace function delete_site(the_id varchar) returns void language plpgsql as $$
+begin
+    perform delete_sites_upload_refs(the_id);
+    delete from index_queue3 where site_id = the_id;
+    delete from audit_log3 where site_id = the_id;
+    delete from review_tasks3 where site_id = the_id;
+    delete from settings3 where site_id = the_id;
+    delete from member_page_settings3 where site_id = the_id;
+    delete from post_read_stats3 where site_id = the_id;
+    delete from notifications3 where site_id = the_id;
+    delete from emails_out3 where site_id = the_id;
+    -- Already done: delete from upload_refs3 where site_id = the_id;
+    -- There's no site_id here: uploads3
+    delete from page_members3 where site_id = the_id;
+    delete from post_actions3 where site_id = the_id;
+    delete from post_revisions3 where site_id = the_id;
+    delete from posts3 where site_id = the_id;
+    delete from page_paths3 where site_id = the_id;
+    delete from page_html3 where site_id = the_id;
+    delete from pages3 where site_id = the_id;
+    delete from categories3 where site_id = the_id;
+    delete from blocks3 where site_id = the_id;
+    delete from guest_prefs3 where site_id = the_id;
+    delete from identities3 where site_id = the_id;
+    delete from invites3 where site_id = the_id;
+    delete from users3 where site_id = the_id;
+    delete from hosts3 where site_id = the_id;
+    delete from sites3 where sites3.id = the_id;
+end $$;
+
+
