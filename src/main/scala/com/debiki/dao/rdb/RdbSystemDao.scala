@@ -232,8 +232,10 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         }
       })
 
-    var sitesQuery =
-      "select ID, NAME, ctime, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS from sites3"
+    var sitesQuery = s"""
+      select id, status, name, ctime, embedding_site_url, creator_ip, creator_email_address
+      from sites3
+      """
     var sitesValues: List[AnyRef] = Nil
     if (!all) {
       sitesQuery += " where ID = ?"  // for now, later: in (...)
@@ -246,6 +248,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         val hosts = hostsByTenantId(tenantId)
         tenants ::= Site(
           id = tenantId,
+          status = SiteStatus.fromInt(rs.getInt("status")).getOrDie("EsE2KUY67"),
           name = rs.getString("NAME"),
           createdAt = getWhen(rs, "ctime"),
           creatorIp = rs.getString("CREATOR_IP"),

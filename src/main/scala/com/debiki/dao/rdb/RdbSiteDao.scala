@@ -587,36 +587,8 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  def loadTenant(): Site = {
+  def loadSite(): Site = {
     asSystem.loadSitesWithIds(List(siteId)).head
-  }
-
-
-  def loadSiteStatus(): SiteStatus = {
-    val sql = s"""
-      select
-        exists(select 1 from users3 where IS_ADMIN = 'T' and SITE_ID = ?
-          and user_id <> $SystemUserId) as admin_exists,
-        exists(select 1 from pages3 where SITE_ID = ?) as content_exists,
-        (select CREATOR_EMAIL_ADDRESS from sites3 where ID = ?) as admin_email,
-        (select EMBEDDING_SITE_URL from sites3 where ID = ?) as embedding_site_url"""
-    runQueryFindExactlyOne(sql, List(siteId, siteId, siteId, siteId), rs => {
-      val adminExists = rs.getBoolean("admin_exists")
-      val contentExists = rs.getBoolean("content_exists")
-      val adminEmail = rs.getString("admin_email")
-      val anyEmbeddingSiteUrl = Option(rs.getString("embedding_site_url"))
-
-      if (!adminExists)
-        return SiteStatus.OwnerCreationPending(adminEmail)
-
-      if (!contentExists && anyEmbeddingSiteUrl.isDefined)
-        return SiteStatus.IsEmbeddedSite
-
-      if (!contentExists)
-        return SiteStatus.ContentCreationPending
-
-      return SiteStatus.IsSimpleSite
-    })
   }
 
 
@@ -643,9 +615,9 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val id =
       if (isTestSiteOkayToDelete) TestSiteIdPrefix + nextRandomString().take(5)
       else "?"
-    val newSiteNoId = Site(id, name = name, createdAt = now, creatorIp = creatorIp,
-      creatorEmailAddress = creatorEmailAddress, embeddingSiteUrl = embeddingSiteUrl,
-      hosts = Nil)
+    val newSiteNoId = Site(id, SiteStatus.NoAdmin, name = name, createdAt = now,
+      creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
+      embeddingSiteUrl = embeddingSiteUrl, hosts = Nil)
 
     val newSite =
       try { insertSite(newSiteNoId, quotaLimitMegabytes) }
@@ -676,7 +648,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
 
   def updateSite(changedSite: Site) {
-    val currentSite = loadTenant()
+    val currentSite = loadSite()
     require(changedSite.id == this.siteId,
       "Cannot change site id [DwE32KB80]")
     require(changedSite.creatorEmailAddress == currentSite.creatorEmailAddress,
@@ -686,16 +658,13 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
     val sql = """
       update sites3
-      set NAME = ?, EMBEDDING_SITE_URL = ?
+      set status = ?, NAME = ?, EMBEDDING_SITE_URL = ?
       where ID = ?"""
     val values =
-      List(changedSite.name, changedSite.embeddingSiteUrl.orNullVarchar, siteId)
+      List(changedSite.status.toInt.asAnyRef, changedSite.name,
+        changedSite.embeddingSiteUrl.orNullVarchar, siteId)
 
-    try {
-      transactionCheckQuota { implicit connection =>
-        db.update(sql, values)
-      }
-    }
+    try runUpdate(sql, values)
     catch {
       case ex: js.SQLException =>
         if (!isUniqueConstrViolation(ex)) throw ex
@@ -728,22 +697,22 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  private def insertSite(tenantNoId: Site, quotaLimitMegabytes: Option[Int]): Site = {
+  private def insertSite(siteNoId: Site, quotaLimitMegabytes: Option[Int]): Site = {
     val newId =
-      if (tenantNoId.id != "?") tenantNoId.id
+      if (siteNoId.id != "?") siteNoId.id
       else {
         db.nextSeqNo("DW1_TENANTS_ID")(theOneAndOnlyConnection).toString
       }
-    val tenant = tenantNoId.copy(id = newId)
+    val site = siteNoId.copy(id = newId)
     runUpdateSingleRow("""
         insert into sites3 (
-          ID, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
+          ID, status, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
           QUOTA_LIMIT_MBS)
-        values (?, ?, ?, ?, ?, ?)""",
-      List[AnyRef](tenant.id, tenant.name,
-        tenant.embeddingSiteUrl.orNullVarchar, tenant.creatorIp,
-        tenant.creatorEmailAddress, quotaLimitMegabytes.orNullInt))
-    tenant
+        values (?, ?, ?, ?, ?, ?, ?)""",
+      List[AnyRef](site.id, site.status.toInt.asAnyRef, site.name,
+        site.embeddingSiteUrl.orNullVarchar, site.creatorIp,
+        site.creatorEmailAddress, quotaLimitMegabytes.orNullInt))
+    site
   }
 
 
