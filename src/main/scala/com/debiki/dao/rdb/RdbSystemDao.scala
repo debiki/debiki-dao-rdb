@@ -261,6 +261,17 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
+  def updateSites(sites: Seq[(SiteId, SiteStatus)]) {
+    val statement = s"""
+       update sites3 set status = ? where id = ?
+       """
+    for ((siteId, newStatus) <- sites) {
+      val num = runUpdate(statement, List(newStatus.toInt.asAnyRef, siteId))
+      dieIf(num != 1, "EsE24KF90", s"num = $num when changing site status, site id: $siteId")
+    }
+  }
+
+
   def lookupCanonicalHost(hostname: String): Option[CanonicalHostLookup] = {
     runQuery("""
         select t.SITE_ID TID,
