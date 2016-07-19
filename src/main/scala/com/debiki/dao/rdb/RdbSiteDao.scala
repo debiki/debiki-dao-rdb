@@ -587,8 +587,8 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  def loadSite(): Site = {
-    asSystem.loadSitesWithIds(List(siteId)).head
+  def loadSite(): Option[Site] = {
+    asSystem.loadSitesWithIds(List(siteId)).headOption
   }
 
 
@@ -648,7 +648,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
 
   def updateSite(changedSite: Site) {
-    val currentSite = loadSite()
+    val currentSite = loadSite().getOrDie("EsE7YKW2", s"Site $siteId not found")
     require(changedSite.id == this.siteId,
       "Cannot change site id [DwE32KB80]")
     require(changedSite.creatorEmailAddress == currentSite.creatorEmailAddress,
