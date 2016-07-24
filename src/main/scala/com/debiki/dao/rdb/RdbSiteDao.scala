@@ -595,7 +595,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
         creatorIp: String, creatorEmailAddress: String,
         quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
-        isTestSiteOkayToDelete: Boolean): Site = {
+        isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan): Site = {
 
     // Unless apparently testing from localhost, don't allow someone to create
     // very many sites.
@@ -620,7 +620,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       embeddingSiteUrl = embeddingSiteUrl, hosts = Nil)
 
     val newSite =
-      try { insertSite(newSiteNoId, quotaLimitMegabytes) }
+      try { insertSite(newSiteNoId, quotaLimitMegabytes, pricePlan) }
       catch {
         case ex: js.SQLException =>
           if (!isUniqueConstrViolation(ex)) throw ex
@@ -697,7 +697,8 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  private def insertSite(siteNoId: Site, quotaLimitMegabytes: Option[Int]): Site = {
+  private def insertSite(siteNoId: Site, quotaLimitMegabytes: Option[Int], pricePlan: PricePlan)
+        : Site = {
     val newId =
       if (siteNoId.id != "?") siteNoId.id
       else {
@@ -707,11 +708,11 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     runUpdateSingleRow("""
         insert into sites3 (
           ID, status, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
-          QUOTA_LIMIT_MBS)
-        values (?, ?, ?, ?, ?, ?, ?)""",
+          QUOTA_LIMIT_MBS, price_plan)
+        values (?, ?, ?, ?, ?, ?, ?, ?)""",
       List[AnyRef](site.id, site.status.toInt.asAnyRef, site.name,
         site.embeddingSiteUrl.orNullVarchar, site.creatorIp,
-        site.creatorEmailAddress, quotaLimitMegabytes.orNullInt))
+        site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
     site
   }
 
@@ -1279,28 +1280,6 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     changeExistingPathsToRedirects(pageId)
     deleteAnyExistingRedirectFrom(newPath)
     insertPagePathOrThrow(newPath)
-  }
-
-
-  def rememberPostsAreIndexed(indexedVersion: Int, pageAndPostIds: PagePostNr*) {
-    val pagesAndPostsClause =
-      pageAndPostIds.map(_ => "(PAGE_ID = ? and PAID = ?)").mkString(" or ")
-
-    unimplemented("Indexing posts in posts3", "DwE0GIK3") // this uses a deleted table:
-    /*
-    val sql = s"""
-      update DW1_ PAGE_ACTIONS set INDEX_VERSION = ?
-      where SITE_ID = ?
-        and ($pagesAndPostsClause)
-        and TYPE = 'Post'
-      """
-
-    val values = indexedVersion :: siteId ::
-      pageAndPostIds.toList.flatMap(x => List(x.pageId, x.postId))
-
-    val numPostsUpdated = db.updateAtnms(sql, values.asInstanceOf[List[AnyRef]])
-    assert(numPostsUpdated <= pageAndPostIds.length)
-    */
   }
 
 }
