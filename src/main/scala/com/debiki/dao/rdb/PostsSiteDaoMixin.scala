@@ -266,6 +266,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
         deleted_by_id,
 
         pinned_position,
+        branch_sideways,
 
         num_pending_flags,
         num_handled_flags,
@@ -287,7 +288,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
         ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
-        ?,
+        ?, ?,
         ?, ?, ?,
         ?, ?, ?, ?, ?)"""
 
@@ -333,6 +334,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       post.deletedById.orNullInt,
 
       post.pinnedPosition.orNullInt,
+      post.branchSideways.orNullInt,
 
       post.numPendingFlags.asAnyRef,
       post.numHandledFlags.asAnyRef,
@@ -392,6 +394,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
         deleted_by_id = ?,
 
         pinned_position = ?,
+        branch_sideways = ?,
 
         num_pending_flags = ?,
         num_handled_flags = ?,
@@ -447,6 +450,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       post.deletedById.orNullInt,
 
       post.pinnedPosition.orNullInt,
+      post.branchSideways.orNullInt,
 
       post.numPendingFlags.asAnyRef,
       post.numHandledFlags.asAnyRef,
@@ -500,8 +504,9 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       // later: hidden_reason
       deletedStatus = new DeletedStatus(rs.getInt("DELETED_STATUS")),
       deletedAt = getOptionalDate(rs, "DELETED_AT"),
-      deletedById = getResultSetIntOption(rs, "DELETED_BY_ID"),
-      pinnedPosition = getResultSetIntOption(rs, "PINNED_POSITION"),
+      deletedById = getOptionalInt(rs, "DELETED_BY_ID"),
+      pinnedPosition = getOptionalInt(rs, "PINNED_POSITION"),
+      branchSideways = getOptionalByte(rs, "branch_sideways"),
       numPendingFlags = rs.getInt("NUM_PENDING_FLAGS"),
       numHandledFlags = rs.getInt("NUM_HANDLED_FLAGS"),
       numPendingEditSuggestions = rs.getInt("NUM_EDIT_SUGGESTIONS"),

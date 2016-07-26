@@ -29,6 +29,7 @@ object Rdb {
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
   val NullBoolean = Null(js.Types.BOOLEAN)
+  val NullSmallInt = Null(js.Types.SMALLINT)
   val NullInt = Null(js.Types.INTEGER)
   val NullDouble = Null(js.Types.DOUBLE)
   val NullTimestamp = Null(js.Types.TIMESTAMP)
@@ -38,14 +39,16 @@ object Rdb {
    * `getOrElse(Null(java.sql.Types.VARCHAR))`.
    * (There is already an `Option.orNull`.)
    */
-  class StringOptionPimpedWithNullVarchar(opt: Option[String]) {
+  implicit class StringOptionPimpedWithNullVarchar(opt: Option[String]) {
     def orNullVarchar = opt.getOrElse(NullVarchar)
   }
-  implicit def pimpOptionWithNullVarchar(opt: Option[String]) =
-    new StringOptionPimpedWithNullVarchar(opt)
 
   implicit class PimpOptionWithNullInt(opt: Option[Int]) {
     def orNullInt: AnyRef = opt.map(_.asInstanceOf[Integer]).getOrElse(NullInt)
+  }
+
+  implicit class PimpOptionWithNullByte(opt: Option[Byte]) {
+    def orNullInt: AnyRef = opt.map(_.toInt.asInstanceOf[Integer]).getOrElse(NullSmallInt).asAnyRef
   }
 
   implicit class PimpOptionWithNullBoolean(opt: Option[Boolean]) {
@@ -116,6 +119,13 @@ object Rdb {
   def getResultSetLongOption(rs: js.ResultSet, column: String): Option[Long] = {
     // rs.getLong() returns 0 instead of null.
     var value = rs.getLong(column)
+    if (rs.wasNull) None
+    else Some(value)
+  }
+
+  def getOptionalByte(rs: js.ResultSet, column: String): Option[Byte] = {
+    // rs.getByte() returns 0 instead of null.
+    var value = rs.getByte(column)
     if (rs.wasNull) None
     else Some(value)
   }
