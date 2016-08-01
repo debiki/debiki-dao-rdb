@@ -631,6 +631,11 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
+  def listHostnames(): Seq[SiteHost] = {
+    asSystem.loadSite(siteId).map(_.hosts).getOrElse(Nil)
+  }
+
+
   def insertSiteHost(host: SiteHost) {
     asSystem.insertSiteHost(siteId, host)
   }
@@ -714,6 +719,28 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
         site.embeddingSiteUrl.orNullVarchar, site.creatorIp,
         site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
     site
+  }
+
+
+  def changeCanonicalHostRoleToExtra() {
+    val statement = s"""
+      update hosts3 set canonical = 'D'
+      where site_id = ? and canonical = 'C'
+      """
+    runUpdateExactlyOneRow(statement, List(siteId))
+  }
+
+
+  def changeExtraHostsRole(newRole: SiteHost.Role) {
+    val letter =
+      if (newRole == SiteHost.RoleDuplicate) "D"
+      else if (newRole == SiteHost.RoleRedirect) "R"
+      else die("EsE3KP34I6")
+    val statement = s"""
+      update hosts3 set canonical = ?
+      where site_id = ? and canonical in ('D', 'R')
+      """
+    runUpdate(statement, List(letter, siteId))
   }
 
 
