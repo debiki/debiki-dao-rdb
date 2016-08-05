@@ -428,7 +428,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }*/
 
 
-  def updatePageMeta(meta: PageMeta, oldMeta: PageMeta, markSectionPageStale: Boolean) {
+  def updatePageMetaImpl(meta: PageMeta, oldMeta: PageMeta, markSectionPageStale: Boolean) {
     transactionCheckQuota {
       if (markSectionPageStale) {
         oldMeta.categoryId.foreach(markSectionPageContentHtmlAsStale)
@@ -443,6 +443,10 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   private def _updatePageMeta(newMeta: PageMeta, anyOld: Option[PageMeta])
         (implicit connection: js.Connection) {
+    anyOld foreach { oldMeta =>
+      dieIf(!oldMeta.pageRole.mayChangeRole && oldMeta.pageRole != newMeta.pageRole,
+        "EsE7KPW24", s"Trying to change page role from ${oldMeta.pageRole} to ${newMeta.pageRole}")
+    }
     val values = List(
       newMeta.version.asAnyRef,
       newMeta.pageRole.toInt.asAnyRef,
