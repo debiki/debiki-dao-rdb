@@ -43,6 +43,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   extends SiteTransaction
   with PagesSiteDaoMixin
   with PostsSiteDaoMixin
+  with TagsSiteDaoMixin
   with MessagesSiteDaoMixin
   with UploadsSiteDaoMixin
   with CategoriesSiteDaoMixin
@@ -167,6 +168,16 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   // COULD move to new superclass?
   def runQuery[R](query: String, values: List[AnyRef], resultSetHandler: js.ResultSet => R): R = {
     db.query(query, values, resultSetHandler)(theOneAndOnlyConnection)
+  }
+
+
+  def runQueryAndForEachRow(query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => Any) {
+    runQuery(query, values, rs => {
+      while (rs.next) {
+        singleRowHandler(rs)
+      }
+    })
   }
 
 

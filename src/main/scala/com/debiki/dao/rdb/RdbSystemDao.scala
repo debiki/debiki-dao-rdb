@@ -635,6 +635,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from upload_refs3
       delete from uploads3
       delete from page_members3
+      delete from post_tags3
       delete from post_actions3
       delete from post_revisions3
       delete from posts3

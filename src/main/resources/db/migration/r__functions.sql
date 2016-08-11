@@ -46,6 +46,16 @@ end;
 $_$;
 
 
+create or replace function is_valid_tag_label(text character varying) returns boolean
+    language plpgsql
+    as $_$
+begin
+    -- No whitespace, commas, ';' etcetera.
+    return text ~ '^[^\s,;\|''"]+$' and length(text) between 1 and 100;
+end;
+$_$;
+
+
 CREATE or replace FUNCTION is_valid_hash_path(text character varying) RETURNS boolean
     LANGUAGE plpgsql
     AS $_$
