@@ -32,9 +32,28 @@ trait TagsSiteDaoMixin extends SiteTransaction {
 
   def loadAllTagsAsSet(): Set[TagLabel] = {
     val query = """
-      select tag from post_tags3 where site_id = ?
+      select distinct tag from post_tags3 where site_id = ?
       """
     runQueryFindManyAsSet(query, List(siteId), rs => rs.getString("tag"))
+  }
+
+
+  def loadTagsAndStats(): Seq[TagAndStats] = {
+    val query = """
+      select
+        tag,
+        count(*) num_total,
+        sum(is_page::int) num_pages
+      from post_tags3 where site_id = ? group by tag
+      """
+    runQueryFindMany(query, List(siteId), rs => {
+      TagAndStats(
+        label = rs.getString("tag"),
+        numTotal = rs.getInt("num_total"),
+        numPages = rs.getInt("num_pages"),
+        numSubscribers = -1,
+        numMuted = -1)
+    })
   }
 
 
@@ -78,13 +97,13 @@ trait TagsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def addTagsToPost(tags: Set[TagLabel], postId: UniquePostId) {
+  def addTagsToPost(tags: Set[TagLabel], postId: UniquePostId, isPage: Boolean) {
     if (tags.isEmpty)
       return
-    val rows = ("(?, ?, ?), " * tags.size) dropRight 2 // drops last ", "
-    val values: List[AnyRef] = tags.toList flatMap (List(siteId, postId.asAnyRef, _))
+    val rows = ("(?, ?, ?, ?), " * tags.size) dropRight 2 // drops last ", "
+    val values = tags.toList.flatMap(List(siteId, postId.asAnyRef, _, isPage.asAnyRef))
     val statement = s"""
-      insert into post_tags3 (site_id, post_id, tag) values $rows
+      insert into post_tags3 (site_id, post_id, tag, is_page) values $rows
       """
     runUpdate(statement, values)
   }
@@ -93,6 +112,31 @@ trait TagsSiteDaoMixin extends SiteTransaction {
   def renameTag(from: String, to: String) {
     die("EsE5KPU02SK3", "Unimplemented")
     // update post_tags3 ...
+  }
+
+
+  def setTagNotfLevel(userId: UserId, tagLabel: TagLabel, notfLevel: NotfLevel) {
+    val statement = s"""
+      insert into tag_notf_levels3 (site_id, user_id, tag, notf_level)
+        values (?, ?, ?, ?)
+      on conflict (site_id, user_id, tag) do update
+        set notf_level = excluded.notf_level
+      """
+    val values = List(siteId, userId.asAnyRef, tagLabel, notfLevel.toInt.asAnyRef)
+    runUpdateExactlyOneRow(statement, values)
+  }
+
+
+  def loadTagNotfLevels(userId: UserId): Map[TagLabel, NotfLevel] = {
+    val query = """
+      select tag, notf_level
+      from tag_notf_levels3 where site_id = ? and user_id = ?
+      """
+    runQueryBuildMap(query, List(siteId, userId.asAnyRef), rs => {
+      val label = rs.getString("tag")
+      val notfLevelInt = rs.getInt("notf_level")
+      label -> NotfLevel.fromInt(notfLevelInt).getOrElse(NotfLevel.Normal)
+    })
   }
 
 }

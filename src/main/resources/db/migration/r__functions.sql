@@ -50,8 +50,17 @@ create or replace function is_valid_tag_label(text character varying) returns bo
     language plpgsql
     as $_$
 begin
-    -- No whitespace, commas, ';' etcetera.
-    return text ~ '^[^\s,;\|''"]+$' and length(text) between 1 and 100;
+    -- No whitespace, commas, ';' etcetera. Sync with Scala [7JES4R3]
+    return text ~ '^[^\s,;\|''"<>]+$' and length(text) between 1 and 100;
+end;
+$_$;
+
+
+create or replace function is_valid_notf_level(notf_level int) returns boolean
+    language plpgsql
+    as $_$
+begin
+    return notf_level between 1 and 5;  -- sync with Scala code [7KJE0W3]
 end;
 $_$;
 
