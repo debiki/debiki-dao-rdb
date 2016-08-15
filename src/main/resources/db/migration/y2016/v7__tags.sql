@@ -49,3 +49,12 @@ create table category_notf_levels3(
   constraint catnotflvl__r__users foreign key (site_id, user_id) references users3 (site_id, user_id),
   constraint catnotflvl_notf_lvl check (is_valid_notf_level(notf_level))
 );
+
+
+-- Notfs by user and post index
+-------------
+
+drop index dw2_ntfs_touserid__i;
+create index notfs_touser_createdat__i on notifications3 (site_id, to_user_id, created_at desc);
+create index notfs_touser_post__i on notifications3 (site_id, to_user_id, unique_post_id);
+

@@ -116,6 +116,20 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def listUsersNotifiedAboutPost(postId: UniquePostId): Set[UserId] = {
+    val query = s"""
+      select to_user_id, notf_type
+      from notifications3
+      where site_id = ?
+        and unique_post_id = ?
+      """
+    runQueryFindManyAsSet(query, List(siteId, postId.asAnyRef), rs => {
+      val userId = rs.getInt("to_user_id")
+      val notfTypeInt = rs.getInt("notf_type")
+      userId
+    })
+  }
+
   def updateNotificationSkipEmail(notifications: Seq[Notification]) {
     transactionAllowOverQuota { implicit connection =>
       updateNotificationConnectToEmail(notifications, email = None)

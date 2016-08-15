@@ -146,7 +146,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def loadUsers(userIdsByTenant: Map[SiteId, List[UserId]]): Map[(SiteId, UserId), User] = {
+  def loadUsers(userIdsByTenant: Map[SiteId, immutable.Seq[UserId]]): Map[(SiteId, UserId), User] = {
     var idCount = 0
 
     def incIdCount(ids: List[UserId]) {
@@ -179,7 +179,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     // Build query.
     for ((tenantId, userIds) <- userIdsByTenant.toList) {
       if (userIds nonEmpty) {
-        growQuery(makeSingleSiteQuery(tenantId, userIds))
+        growQuery(makeSingleSiteQuery(tenantId, userIds.toList))
       }
     }
 
@@ -393,7 +393,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
         val notification = notfType match {
           case NotificationType.DirectReply | NotificationType.Mention | NotificationType.Message |
-               NotificationType.NewPost =>
+               NotificationType.NewPost | NotificationType.PostTagged =>
             Notification.NewPost(
               siteId = siteId,
               id = notfId,
@@ -635,6 +635,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from upload_refs3
       delete from uploads3
       delete from page_members3
+      delete from tag_notf_levels3
       delete from post_tags3
       delete from post_actions3
       delete from post_revisions3

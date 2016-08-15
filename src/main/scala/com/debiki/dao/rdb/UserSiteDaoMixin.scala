@@ -472,14 +472,14 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   def loadUser(userId: UserId): Option[User] =
-    loadUsersAsList(userId::Nil).headOption
+    loadUsersAsSeq(userId::Nil).headOption
 
 
   def loadUsers(userIds: Iterable[UserId]): immutable.Seq[User] =
-    loadUsersAsList(userIds.toList)
+    loadUsersAsSeq(userIds.toList)
 
 
-  private[rdb] def loadUsersAsList(userIds: List[UserId]): List[User] = {
+  def loadUsersAsSeq(userIds: immutable.Seq[UserId]): List[User] = {
     val usersBySiteAndId = asSystem.loadUsers(Map(siteId -> userIds))
     usersBySiteAndId.values.toList
   }

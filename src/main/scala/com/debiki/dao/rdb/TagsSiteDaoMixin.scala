@@ -58,6 +58,8 @@ trait TagsSiteDaoMixin extends SiteTransaction {
 
 
   def loadTagsByPostId(postIds: Iterable[UniquePostId]): Map[UniquePostId, Set[TagLabel]] = {
+    if (postIds.isEmpty)
+      return Map.empty
     val query = s"""
       select tag, post_id from post_tags3
       where site_id = ? and post_id in (${ makeInListFor(postIds) })
@@ -76,6 +78,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
       else {
         tagsByPostId = tagsByPostId.updated(currentPostId, tags.toSet)
         tags.clear()
+        tags += tag
         currentPostId = postId
       }
     })
@@ -130,7 +133,8 @@ trait TagsSiteDaoMixin extends SiteTransaction {
   def loadTagNotfLevels(userId: UserId): Map[TagLabel, NotfLevel] = {
     val query = """
       select tag, notf_level
-      from tag_notf_levels3 where site_id = ? and user_id = ?
+      from tag_notf_levels3
+      where site_id = ? and user_id = ?
       """
     runQueryBuildMap(query, List(siteId, userId.asAnyRef), rs => {
       val label = rs.getString("tag")
@@ -139,4 +143,21 @@ trait TagsSiteDaoMixin extends SiteTransaction {
     })
   }
 
+
+  def listUsersWatchingTags(tags: Set[TagLabel]): Set[UserId] = {
+    if (tags.isEmpty)
+      return Set.empty
+    val query = s"""
+      select user_id, notf_level
+      from tag_notf_levels3
+      where site_id = ?
+        and tag in (${ makeInListFor(tags) })
+        and notf_level in (${ NotfLevel.WatchingFirst.toInt }, ${ NotfLevel.WatchingAll.toInt })
+      """
+    runQueryFindManyAsSet(query, siteId :: tags.toList, rs => {
+      val userId = rs.getInt("user_id")
+      val notfLevelInt = rs.getInt("notf_level")
+      userId
+    })
+  }
 }
