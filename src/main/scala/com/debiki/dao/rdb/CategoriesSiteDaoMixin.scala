@@ -176,17 +176,18 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
   override def insertCategoryMarkSectionPageStale(category: Category) {
     val statement = """
       insert into categories3 (
-        site_id, id, page_id, parent_id,
+        site_id, id, page_id, parent_id, default_category_id,
         name, slug, position,
         description, new_topic_types,
         unlisted, staff_only, only_staff_may_create_topics, created_at, updated_at)
       values (
-        ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?,
         ?, ?, ?, ?, ?)"""
     val values = List[AnyRef](
       siteId, category.id.asAnyRef, category.sectionPageId, category.parentId.orNullInt,
+      category.defaultCategoryId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
       category.unlisted.asAnyRef, category.staffOnly.asAnyRef,
@@ -199,13 +200,13 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
   override def updateCategoryMarkSectionPageStale(category: Category) {
     val statement = """
       update categories3 set
-        page_id = ?, parent_id = ?,
+        page_id = ?, parent_id = ?, default_category_id = ?,
         name = ?, slug = ?, position = ?,
         description = ?, new_topic_types = ?,
         unlisted = ?, staff_only = ?, only_staff_may_create_topics = ?, created_at = ?, updated_at = ?
       where site_id = ? and id = ?"""
     val values = List[AnyRef](
-      category.sectionPageId, category.parentId.orNullInt,
+      category.sectionPageId, category.parentId.orNullInt, category.defaultCategoryId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
       category.unlisted.asAnyRef, category.staffOnly.asAnyRef, category.onlyStaffMayCreateTopics.asAnyRef,
@@ -221,7 +222,8 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
     Category(
       id = rs.getInt("id"),
       sectionPageId = rs.getString("page_id"),
-      parentId = getOptionalIntNoneNot0(rs, "parent_id"),
+      parentId = getOptionalInt(rs, "parent_id"),
+      defaultCategoryId = getOptionalInt(rs, "default_category_id"),
       position = rs.getInt("position"),
       name = rs.getString("name"),
       slug = rs.getString("slug"),

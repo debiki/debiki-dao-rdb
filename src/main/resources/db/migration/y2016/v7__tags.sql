@@ -58,3 +58,23 @@ drop index dw2_ntfs_touserid__i;
 create index notfs_touser_createdat__i on notifications3 (site_id, to_user_id, created_at desc);
 create index notfs_touser_post__i on notifications3 (site_id, to_user_id, unique_post_id);
 
+
+-- Default topic type, default category
+-------------
+
+alter table categories3 add column default_topic_type smallint default 12; -- discussion
+alter table categories3 add constraint cats_topictype__c_in check (
+  default_topic_type between 1 and 100);
+
+alter table categories3 add column default_category_id int;
+alter table categories3 add constraint cats_defaultcat__r__cats
+  foreign key (site_id, default_category_id) references categories3 (site_id, id)
+  on delete cascade on update cascade deferrable;
+
+update categories3 set default_category_id = (
+  select child.id from categories3 child
+  where child.description = '__uncategorized__'
+    and child.parent_id = categories3.id
+    and child.site_id = categories3.site_id
+);
+
