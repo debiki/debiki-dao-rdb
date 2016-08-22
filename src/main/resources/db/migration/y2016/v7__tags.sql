@@ -78,3 +78,6 @@ update categories3 set default_category_id = (
     and child.site_id = categories3.site_id
 );
 
+alter table categories3 add constraint cats_default_or_parent__c_nn
+  check (default_category_id is not null or parent_id is not null);
+

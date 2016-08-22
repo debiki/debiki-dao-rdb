@@ -218,6 +218,19 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
   }
 
 
+  override def loadAboutCategoryPageId(categoryId: CategoryId): Option[PageId] = {
+    val query = s"""
+      select page_id from pages3
+      where site_id = ?
+        and category_id = ?
+        and page_role = ${PageRole.AboutCategory.toInt}
+      """
+    runQueryFindOneOrNone(query, List(siteId, categoryId.asAnyRef), rs => {
+      rs.getString("page_id")
+    })
+  }
+
+
   private def getCategory(rs: js.ResultSet): Category = {
     Category(
       id = rs.getInt("id"),
