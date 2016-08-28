@@ -607,8 +607,8 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  def createSite(name: String, hostname: String, embeddingSiteUrl: Option[String],
-        creatorIp: String, creatorEmailAddress: String,
+  def createSite(name: String, status: SiteStatus, hostname: String,
+        embeddingSiteUrl: Option[String], creatorIp: String, creatorEmailAddress: String,
         quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
         isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan): Site = {
 
@@ -630,7 +630,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val id =
       if (isTestSiteOkayToDelete) TestSiteIdPrefix + nextRandomString().take(5)
       else "?"
-    val newSiteNoId = Site(id, SiteStatus.NoAdmin, name = name, createdAt = now,
+    val newSiteNoId = Site(id, status, name = name, createdAt = now,
       creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
       embeddingSiteUrl = embeddingSiteUrl, hosts = Nil)
 
