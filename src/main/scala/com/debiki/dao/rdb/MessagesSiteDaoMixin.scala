@@ -30,10 +30,11 @@ trait MessagesSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 
-  override def insertMessageMember(pageId: PageId, userId: UserId, addedById: UserId) {
+  override def insertMessageMember(pageId: PageId, userId: UserId, addedById: UserId): Boolean = {
     val statement = """
       insert into page_members3 (site_id, page_id, user_id, added_by_id, added_at)
       values (?, ?, ?, ?, now_utc())
+      on conflict (site_id, page_id, user_id) do nothing
       """
     val values = List[AnyRef](siteId, pageId, userId.asAnyRef, addedById.asAnyRef)
     runUpdateSingleRow(statement, values)
