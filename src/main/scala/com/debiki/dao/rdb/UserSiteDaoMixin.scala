@@ -156,11 +156,13 @@ trait UserSiteDaoMixin extends SiteTransaction {
             SITE_ID, USER_ID, DISPLAY_NAME, USERNAME, CREATED_AT,
             EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
-            COUNTRY, IS_OWNER, IS_ADMIN, IS_MODERATOR)
+            COUNTRY, IS_OWNER, IS_ADMIN, IS_MODERATOR,
+            trust_level, locked_trust_level, threat_level, locked_threat_level)
         values (
             ?, ?, ?, ?, ?,
             ?, ?, ?, false, ?,
             ?, ?, ?,
+            ?, ?, ?, ?,
             ?, ?, ?, ?)
         """,
         List[AnyRef](siteId, user.id.asAnyRef, user.fullName.orNullVarchar,
@@ -170,7 +172,9 @@ trait UserSiteDaoMixin extends SiteTransaction {
           user.isApproved.orNullBoolean, user.approvedAt.orNullTimestamp,
           user.approvedById.orNullInt,
           user.country.trimNullVarcharIfBlank, tOrNull(user.isOwner), tOrNull(user.isAdmin),
-          user.isModerator.asAnyRef))
+          user.isModerator.asAnyRef,
+          user.trustLevel.toInt.asAnyRef, user.lockedTrustLevel.map(_.toInt).orNullInt,
+          user.threatLevel.toInt.asAnyRef, user.lockedThreatLevel.map(_.toInt).orNullInt))
     }
     catch {
       case ex: js.SQLException =>
