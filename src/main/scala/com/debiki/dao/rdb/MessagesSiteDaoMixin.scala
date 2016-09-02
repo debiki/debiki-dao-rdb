@@ -41,6 +41,15 @@ trait MessagesSiteDaoMixin extends SiteTransaction {
   }
 
 
+  override def removePageMember(pageId: PageId, userId: UserId): Boolean = {
+    val statement = """
+      delete from page_members3 where site_id = ? and page_id = ? and user_id = ?
+      """
+    val values = List[AnyRef](siteId, pageId, userId.asAnyRef)
+    runUpdateSingleRow(statement, values)
+  }
+
+
   override def loadMessageMembers(pageId: PageId): Set[UserId] = {
     val query = """
       select user_id from page_members3 where site_id = ? and page_id = ?
