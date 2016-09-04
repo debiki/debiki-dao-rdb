@@ -153,6 +153,13 @@ object RdbUtil {
     s"$UserSelectListItemsNoGuests, u.GUEST_COOKIE u_guest_cookie, e.EMAIL_NOTFS g_email_notfs"
 
 
+  def readMember(rs: js.ResultSet): Member =
+    _User(rs) match {
+      case m: Member => m
+      case g: Guest => die("EsE5KFU0")
+    }
+
+
   def _User(rs: js.ResultSet): User = {
     val userId = rs.getInt("u_id")
     val emailNotfPrefs = {

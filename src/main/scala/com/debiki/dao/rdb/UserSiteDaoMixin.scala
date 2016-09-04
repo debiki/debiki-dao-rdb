@@ -497,6 +497,22 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadMembersWithPrefix(usernamePrefix: String): immutable.Seq[Member] = {
+    untestedIf(usernamePrefix.nonEmpty, "EsE5FK02", "searching for members by prefix")
+    val withPrefixAnd = usernamePrefix.isEmpty ? "" | "username like ? and"
+    val query = i"""
+      select $UserSelectListItemsNoGuests
+      from users3 u
+      where $withPrefixAnd u.site_id = ? and u.user_id >= ${User.LowestTalkToMemberId}
+      """
+    var values = List(siteId)
+    if (withPrefixAnd.nonEmpty) {
+      values ::= usernamePrefix
+    }
+    runQueryFindMany(query, values, readMember)
+  }
+
+
   def loadUsers(): immutable.Seq[User] = {
     val query = i"""
       select $UserSelectListItemsWithGuests
@@ -685,7 +701,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
   private def listUsernamesOnPage(pageId: PageId): Seq[NameAndUsername] = {
     val sql = """
-      select distinct u.DISPLAY_NAME, u.USERNAME
+      select distinct u.user_id, u.DISPLAY_NAME, u.USERNAME
       from posts3 p inner join users3 u
          on p.SITE_ID = u.SITE_ID
         and p.CREATED_BY_ID = u.USER_ID
@@ -695,10 +711,11 @@ trait UserSiteDaoMixin extends SiteTransaction {
     val result = mutable.ArrayBuffer[NameAndUsername]()
     db.queryAtnms(sql, values, rs => {
       while (rs.next()) {
+        val userId = rs.getInt("user_id")
         val fullName = Option(rs.getString("DISPLAY_NAME")) getOrElse ""
         val username = rs.getString("USERNAME")
         dieIf(username eq null, "DwE5BKG1")
-        result += NameAndUsername(fullName = fullName, username = username)
+        result += NameAndUsername(userId, fullName = fullName, username = username)
       }
     })
     result.to[immutable.Seq]
@@ -707,7 +724,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
   private def listUsernamesWithPrefix(prefix: String): Seq[NameAndUsername] = {
     val sql = s"""
-      select distinct DISPLAY_NAME, USERNAME
+      select distinct user_id, DISPLAY_NAME, USERNAME
       from users3
       where SITE_ID = ? and lower(USERNAME) like lower(?) and USER_ID >= $LowestNonGuestId
       """
@@ -716,6 +733,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     db.queryAtnms(sql, values, rs => {
       while (rs.next()) {
         result += NameAndUsername(
+          id = rs.getInt("user_id"),
           fullName = Option(rs.getString("DISPLAY_NAME")) getOrElse "",
           username = rs.getString("USERNAME"))
       }
