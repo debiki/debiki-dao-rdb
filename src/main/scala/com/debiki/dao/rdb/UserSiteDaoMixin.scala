@@ -447,34 +447,6 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadUsersOnPageAsMap2(pageId: PageId, siteId: Option[SiteId]): Map[UserId, User] = {
-    require(siteId.isEmpty || siteId.get == this.siteId, "DwE8YQB4") // for now
-    loadUsersOnPage2(pageId).groupBy(_.id).mapValues(_.head)
-  }
-
-
-  def loadUsersOnPage2(pageId: PageId): List[User] = {
-    val sql = s"""
-      select $UserSelectListItemsWithGuests
-      from posts3 p left join users3 u
-        on p.SITE_ID = u.SITE_ID and p.CREATED_BY_ID = u.USER_ID
-        left join guest_prefs3 e
-        on u.SITE_ID = e.SITE_ID and u.EMAIL = e.EMAIL
-        where p.SITE_ID = ?
-          and p.PAGE_ID = ?
-      """
-    val values = List[AnyRef](siteId, pageId)
-    var users: List[User] = Nil
-    runQuery(sql, values, rs => {
-      while (rs.next()) {
-        val user = _User(rs)
-        users ::= user
-      }
-    })
-    users
-  }
-
-
   def loadUser(userId: UserId): Option[User] =
     loadUsersAsSeq(userId::Nil).headOption
 
