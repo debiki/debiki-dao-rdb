@@ -1,3 +1,4 @@
+CLEAN_UP // remove guest_prefs3.version column, use the aduit_log3 table instead
 
 create table tags3(
   site_id

@@ -54,9 +54,11 @@ trait LoginSiteDaoMixin extends SiteTransaction {
       var isNewGuest = false
       for (i <- 1 to 2 if userId == 0) {
         runQuery("""
-          select u.USER_ID, e.EMAIL_NOTFS from users3 u
-            left join guest_prefs3 e
-            on u.EMAIL = e.EMAIL and e.VERSION = 'C'
+          select u.USER_ID, g.EMAIL_NOTFS from users3 u
+            left join guest_prefs3 g
+                   on u.site_id = g.site_id
+                  and u.EMAIL = g.EMAIL
+                  and g.VERSION = 'C'
           where u.SITE_ID = ?
             and u.DISPLAY_NAME = ?
             and u.EMAIL = ?
