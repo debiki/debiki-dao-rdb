@@ -536,7 +536,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       }): _*)
 
     val pagesBySitePageId = loadPagesBySitePageId(sitePageIds)
-    StuffToIndex(postsBySite, pagesBySitePageId)
+    val tagsBySitePostId = loadTagsBySitePostId(postsBySite)
+    StuffToIndex(postsBySite, pagesBySitePageId, tagsBySitePostId)
   }
 
 
@@ -547,6 +548,22 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
         sitePageId -> pageMeta
       }
     }): _*)
+  }
+
+
+  def loadTagsBySitePostId(postsBySite: Map[SiteId, immutable.Seq[Post]])
+        : Map[SitePostId, Set[TagLabel]] = {
+    COULD_OPTIMIZE // could load tags for all sites at once, instead of once per site
+    var tagsBySitePostId = Map[SitePostId, Set[TagLabel]]()
+    for ((siteId, posts) <- postsBySite) {
+
+      val tagsByPostId: Map[UniquePostId, Set[TagLabel]] =
+        siteTransaction(siteId).loadTagsByPostId(posts.map(_.uniqueId))
+      for ((postId, tags) <- tagsByPostId) {
+        tagsBySitePostId += SitePostId(siteId, postId) -> tags
+      }
+    }
+    tagsBySitePostId
   }
 
 
