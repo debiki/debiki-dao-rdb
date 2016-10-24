@@ -11,17 +11,7 @@ scalaVersion := "2.11.8"
 //   jdbc-112010-090769.html
 
 libraryDependencies ++= Seq(
-  "org.flywaydb" % "flyway-core" % "4.0.3",
-  "junit" % "junit" % "4.7" % "test",
-  // The test suite needs a sl4j implementation or it logs nothing on errors:
-  "ch.qos.logback" % "logback-classic" % "0.9.26" % "test",
-  "org.specs2" %% "specs2" % "2.3.12" % "test",
-  "org.scalatest" %% "scalatest" % "2.2.0" % "test",
-  // For loading test database connection info.
-  "com.typesafe" % "config" % "1.0.1" % "test",
-  // Jsoup removes HTML tags from a string.
-  "org.jsoup" % "jsoup" % "1.7.2"
-)
+  "org.flywaydb" % "flyway-core" % "4.0.3")
 
 // See: https://groups.google.com/forum/?fromgroups=#!topic/simple-build-tool/bkF1IDZj4L0
 ideaPackagePrefix := None
