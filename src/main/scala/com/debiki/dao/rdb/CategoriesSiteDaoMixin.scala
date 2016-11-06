@@ -116,7 +116,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         s"""
           g.page_role in (
             ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
-            ${Critique.toInt}) and  -- [plugin]
+            ${Critique.toInt}, ${UsabilityTesting.toInt}) and  -- [plugin]
           g.closed_at is null and
           """
       case _ =>
