@@ -518,6 +518,11 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadOwner(): Option[CompleteUser] = {
+    loadCompleteUserImpl("is_owner", "T")
+  }
+
+
   def loadCompleteUserImpl(field: String, value: AnyRef): Option[CompleteUser] = {
     val sql = s"""
       select $CompleteUserSelectListItemsWithUserId
