@@ -327,7 +327,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
       o2ts(post.hiddenAt),
       post.hiddenById.orNullInt,
-      NullVarchar,
+      post.hiddenReason.orNullVarchar,
 
       post.deletedStatus.underlying.asAnyRef,
       o2ts(post.deletedAt),
@@ -443,7 +443,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
       o2ts(post.hiddenAt),
       post.hiddenById.orNullInt,
-      NullVarchar,
+      post.hiddenReason.orNullVarchar,
 
       post.deletedStatus.underlying.asAnyRef,
       o2ts(post.deletedAt),
@@ -501,7 +501,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       closedById = getResultSetIntOption(rs, "CLOSED_BY_ID"),
       hiddenAt = getOptionalDate(rs, "HIDDEN_AT"),
       hiddenById = getResultSetIntOption(rs, "HIDDEN_BY_ID"),
-      // later: hidden_reason
+      hiddenReason = getOptionalStringNotEmpty(rs, "hidden_reason"),
       deletedStatus = new DeletedStatus(rs.getInt("DELETED_STATUS")),
       deletedAt = getOptionalDate(rs, "DELETED_AT"),
       deletedById = getOptionalInt(rs, "DELETED_BY_ID"),

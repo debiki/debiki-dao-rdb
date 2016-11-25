@@ -569,7 +569,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
   def deleteFromIndexQueue(post: Post, siteId: SiteId) {
     val statement = s"""
-      delete from index_queue3 where site_id = ? and post_id = ? and post_rev_nr <= ?
+      delete from index_queue3
+      where site_id = ? and post_id = ? and post_rev_nr <= ?
       """
     // [85YKF30] Only approved posts currently get indexed. Perhaps I should add a rule that
     // a post's approvedRevisionNr is never decremented? Because if it is, then impossible?
@@ -609,6 +610,72 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
+  def loadStuffToSpamCheck(limit: Int): StuffToSpamCheck = {
+    val postIdsBySite = mutable.Map[SiteId, ArrayBuffer[UniquePostId]]()
+    val userIdsBySite = mutable.Map[SiteId, ArrayBuffer[UserId]]()
+    var spamCheckTasks = Vector[SpamCheckTask]()
+
+    val query = s"""
+      select * from spam_check_queue3 order by action_at limit $limit
+      """
+
+    runQuery(query, Nil, rs => {
+      while (rs.next()) {
+        val siteId = rs.getString("site_id")
+        val postId = rs.getInt("post_id")
+        val postRevNr = rs.getInt("post_rev_nr")
+        val userId = rs.getInt("user_id")
+        val userIdCookie = rs.getString("user_id_cookie")
+        val fingerprint = rs.getInt("browser_fingerprint")
+        val userAgent = getOptionalStringNotEmpty(rs, "req_user_agent")
+        val referer = getOptionalStringNotEmpty(rs, "req_referer")
+        val ip = rs.getString("req_ip")
+        val uri = rs.getString("req_uri")
+
+        val browserIdData = BrowserIdData(ip, idCookie = userIdCookie, fingerprint = fingerprint)
+
+        spamCheckTasks :+= SpamCheckTask(siteId, postId = postId, postRevNr = postRevNr,
+          who = Who(userId, browserIdData),
+          requestStuff = SpamRelReqStuff(userAgent = userAgent, referer = referer, uri = uri))
+
+        val postIds = postIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[UniquePostId]())
+        postIds.append(postId)
+
+        val userIds = userIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[UserId]())
+        userIds.append(userId)
+      }
+    })
+
+    val postsBySite = Map[SiteId, immutable.Seq[Post]](
+      postIdsBySite.toSeq.map(siteAndPostIds => {
+        val siteId = siteAndPostIds._1
+        val siteTrans = siteTransaction(siteId)
+        val posts = siteTrans.loadPostsByUniqueId(siteAndPostIds._2).values.toVector
+        (siteId, posts)
+      }): _*)
+
+    val usersBySite = Map[SiteId, Map[UserId, User]](
+      userIdsBySite.toSeq.map(siteAndUserIds => {
+        val siteId = siteAndUserIds._1
+        val siteTrans = siteTransaction(siteId)
+        val users = siteTrans.loadUsersAsMap(siteAndUserIds._2)
+        (siteId, users)
+      }): _*)
+
+    StuffToSpamCheck(postsBySite, usersBySite, spamCheckTasks)
+  }
+
+
+  def deleteFromSpamCheckQueue(siteId: SiteId, postId: UniquePostId, postRevNr: Int) {
+    val statement = s"""
+      delete from spam_check_queue3
+      where site_id = ? and post_id = ? and post_rev_nr <= ?
+      """
+    val values = List(siteId, postId.asAnyRef, postRevNr.asAnyRef)
+    runUpdateSingleRow(statement, values)
+  }
+
+
   /** Finds all evolution scripts below src/main/resources/db/migration and applies them.
     */
   def applyEvolutions() {
@@ -642,6 +709,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
       s"""
       delete from index_queue3
+      delete from spam_check_queue3
       delete from audit_log3
       delete from review_tasks3
       delete from settings3

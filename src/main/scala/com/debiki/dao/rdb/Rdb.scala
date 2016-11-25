@@ -488,7 +488,8 @@ class Rdb(val readOnlyDataSource: jxs.DataSource, val readWriteDataSource: jxs.D
         case d: ju.Date => pstmt.setTimestamp(bindPos, new js.Timestamp(d.getTime),
                               RdbSystemDao.calendarUtcTimeZone)
         case Null(sqlType) => pstmt.setNull(bindPos, sqlType)
-        case x => die("DwE60KF2F5", "Cannot bind this: "+ classNameOf(x))
+        case x =>
+          die("DwE60KF2F5", "Cannot bind this: "+ classNameOf(x))
       }
       bindPos += 1
     }
