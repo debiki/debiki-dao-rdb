@@ -628,7 +628,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
     // Ought to move this id generation stuff to the caller instead, i.e. CreateSiteDao.
     val id =
-      if (isTestSiteOkayToDelete) TestSiteIdPrefix + nextRandomString().take(5)
+      if (isTestSiteOkayToDelete) Site.TestIdPrefix + nextRandomString().take(5)
       else "?"
     val newSiteNoId = Site(id, status, name = name, createdAt = now,
       creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
@@ -699,7 +699,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val query = s"""
         select count(*) WEBSITE_COUNT from sites3
         where (CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?)
-          and id $maybeNot like '$TestSiteIdPrefix%'
+          and id $maybeNot like '${Site.TestIdPrefix}%'
         """
     runQueryFindExactlyOne(query, List(createdFromIp, creatorEmailAddress), rs => {
       rs.getInt("WEBSITE_COUNT")
@@ -710,7 +710,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   def countWebsitesTotal(testSites: Boolean): Int = {
     val maybeNot = if (testSites) "" else "not"
     val query =
-      s"select count(*) site_count from sites3 where id $maybeNot like '$TestSiteIdPrefix%'"
+      s"select count(*) site_count from sites3 where id $maybeNot like '${Site.TestIdPrefix}%'"
     runQueryFindExactlyOne(query, Nil, rs => {
       rs.getInt("site_count")
     })
@@ -756,12 +756,6 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       where site_id = ? and canonical in ('D', 'R')
       """
     runUpdate(statement, List(letter, siteId))
-  }
-
-
-  def addSiteHost(host: SiteHost) = {
-    // SHOULD hard code max num hosts, e.g. 10.
-    asSystem.insertSiteHost(siteId, host)
   }
 
 

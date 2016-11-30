@@ -31,6 +31,16 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
   self: RdbSystemDao =>
 
 
+  def deleteAnyHostname(hostname: String): Boolean = {
+    // For now, safety check. Remove if needed.
+    require(hostname.startsWith(SiteHost.E2eTestPrefix), "EdE5GPQ0V")
+    val sql = """
+      delete from hosts3 where host = ?
+      """
+    runUpdateSingleRow(sql, List(hostname))
+  }
+
+
   def insertSiteHost(tenantId: String, host: SiteHost) {
     val cncl = host.role match {
       case SiteHost.RoleCanonical => "C"
@@ -42,8 +52,74 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       insert into hosts3 (SITE_ID, HOST, CANONICAL)
       values (?, ?, ?)
       """
-    val inserted = runUpdateSingleRow(sql, List(tenantId, host.hostname, cncl))
-    dieIf(!inserted, "DwE4KEWW2") // COULD throw helpful exception, probably only a unique key error
+    val inserted =
+      try runUpdateSingleRow(sql, List(tenantId, host.hostname, cncl))
+      catch {
+        case ex: js.SQLException =>
+          if (Rdb.isUniqueConstrViolation(ex) &&
+              Rdb.uniqueConstrViolatedIs("dw1_tnthsts_host__u", ex))
+            throw DuplicateHostnameException(host.hostname)
+          else
+            throw ex
+      }
+    dieIf(!inserted, "EdE4KEWW2")
+  }
+
+
+  def deleteSiteByName(name: String): Boolean = {
+    require(name startsWith SiteHost.E2eTestPrefix, "Can delete test sites only [EdE4PF0Y4]")
+    val site = loadSites().find(_.name == name) getOrElse {
+      return false
+    }
+    deleteSiteById(site.id)
+  }
+
+
+  def deleteSiteById(siteId: SiteId): Boolean = {
+    require(siteId startsWith Site.TestIdPrefix, "Can delete test sites only [EdE6FK02]")
+
+    runUpdate("set constraints all deferred")
+
+    // Dupl code [7KUW0ZT2]
+    val statements = (s"""
+      delete from index_queue3 where site_id = ?
+      delete from spam_check_queue3 where site_id = ?
+      delete from audit_log3 where site_id = ?
+      delete from review_tasks3 where site_id = ?
+      delete from settings3 where site_id = ?
+      delete from member_page_settings3 where site_id = ?
+      delete from post_read_stats3 where site_id = ?
+      delete from notifications3 where site_id = ?
+      delete from emails_out3 where site_id = ?
+      delete from upload_refs3 where site_id = ?""" +
+      // skip: uploads3
+      s"""
+      delete from page_members3 where site_id = ?
+      delete from tag_notf_levels3 where site_id = ?
+      delete from post_tags3 where site_id = ?
+      delete from post_actions3 where site_id = ?
+      delete from post_revisions3 where site_id = ?
+      delete from posts3 where site_id = ?
+      delete from page_paths3 where site_id = ?
+      delete from page_html3 where site_id = ?
+      delete from pages3 where site_id = ?
+      delete from categories3 where site_id = ?
+      delete from blocks3 where site_id = ?
+      delete from guest_prefs3 where site_id = ?
+      delete from identities3 where site_id = ?
+      delete from invites3 where site_id = ?
+      delete from users3 where site_id = ?
+      delete from hosts3 where site_id = ?
+      """).trim.split("\n")
+
+    statements foreach { statement =>
+      runUpdate(statement, List(siteId))
+    }
+
+    val isSiteGone = runUpdateSingleRow("delete from sites3 where id = ?", List(siteId))
+
+    runUpdate("set constraints all immediate")
+    isSiteGone
   }
 
 }

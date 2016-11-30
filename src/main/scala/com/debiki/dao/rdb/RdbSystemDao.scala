@@ -702,12 +702,13 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   override def emptyDatabase() {
-      require(daoFactory.isTest)
+    require(daoFactory.isTest)
 
-      // There are foreign keys from sites3 to other tables and back.
-      runUpdate("set constraints all deferred")
+    // There are foreign keys from sites3 to other tables and back.
+    runUpdate("set constraints all deferred")
 
-      s"""
+    // Dupl code [7KUW0ZT2]
+    s"""
       delete from index_queue3
       delete from spam_check_queue3
       delete from audit_log3
@@ -740,7 +741,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       alter sequence DW1_TENANTS_ID restart
       """.trim.split("\n") foreach { runUpdate(_) }
 
-      runUpdate(s"""
+    runUpdate(s"""
           update sites3 set
             quota_limit_mbs = null, num_guests = 0, num_identities = 0, num_roles = 0,
             num_role_settings = 0, num_pages = 0, num_posts = 0, num_post_text_bytes = 0,
@@ -750,7 +751,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           where id = '$FirstSiteId'
           """)
 
-      runUpdate("set constraints all immediate")
+    runUpdate("set constraints all immediate")
   }
 
 }
