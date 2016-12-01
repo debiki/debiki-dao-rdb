@@ -243,6 +243,21 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
+  def runQueryBuildMultiMap[K, V](query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => (K, V)): immutable.Map[K, immutable.Seq[V]] = {
+    var valuesByKey = immutable.HashMap[K, immutable.Seq[V]]()
+    runQuery(query, values, rs => {
+      while (rs.next) {
+        val (key: K, value: V) = singleRowHandler(rs)
+        var values = valuesByKey.getOrElse(key, Vector.empty)
+        values :+= value
+        valuesByKey += key -> values
+      }
+    })
+    valuesByKey
+  }
+
+
   // For backw compat with old non-transactional stuff.
   def runQueryPerhapsAtnms[R](query: String, values: List[AnyRef],
         resultSetHandler: js.ResultSet => R): R = {

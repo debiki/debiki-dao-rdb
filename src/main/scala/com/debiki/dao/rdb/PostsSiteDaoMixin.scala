@@ -172,6 +172,40 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   } */
 
 
+  def loadPopularPostsByPage(pageIds: Iterable[PageId], limitPerPage: Int)
+        : Map[PageId, immutable.Seq[Post]] = {
+    if (pageIds.isEmpty)
+      return Map.empty
+
+    // Finds the `limitPerPage` most like-voted replies on each page.
+    val query = s"""
+      select * from (
+        select
+          row_number() over (partition by page_id order by num_like_votes desc) as rownum,
+          p.*
+        from posts3 p
+        where p.site_id = ?
+          and p.page_id in (${makeInListFor(pageIds)})
+          and p.post_nr >= ${PageParts.FirstReplyNr}
+          and length(p.approved_html_sanitized) > 20
+          and p.collapsed_status = 0
+          and p.closed_status = 0
+          and p.hidden_at is null
+          and p.deleted_status = 0
+          and p.num_pending_flags = 0
+          and p.num_unwanted_votes <= p.num_like_votes / 20
+        ) by_page
+      where by_page.rownum <= $limitPerPage
+      """
+    val values = siteId :: pageIds.toList
+
+    runQueryBuildMultiMap(query, values, rs => {
+      val post = readPost(rs)
+      (post.pageId, post)
+    })
+  }
+
+
   def loadPostsToReview(): immutable.Seq[Post] = {
     val flaggedPosts = loadPostsToReviewImpl("""
       deleted_status = 0 and
