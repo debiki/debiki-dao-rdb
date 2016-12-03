@@ -315,6 +315,7 @@ object RdbUtil {
       |g.frequent_poster_1_id,
       |g.frequent_poster_2_id,
       |g.frequent_poster_3_id,
+      |g.layout,
       |g.PIN_ORDER,
       |g.PIN_WHERE,
       |g.PAGE_ROLE,
@@ -378,6 +379,7 @@ object RdbUtil {
       lastReplyById = getOptionalInt(resultSet, "last_reply_by_id"),
       authorId = resultSet.getInt("AUTHOR_ID"),
       frequentPosterIds = frequentPosterIds,
+      layout = new PageLayout(resultSet.getInt("layout")),
       pinOrder = getOptionalIntNoneNot0(resultSet, "PIN_ORDER"),
       pinWhere = getOptionalIntNoneNot0(resultSet, "PIN_WHERE").map(int =>
         PinPageWhere.fromInt(int).getOrElse(PinPageWhere.InCategory)),
