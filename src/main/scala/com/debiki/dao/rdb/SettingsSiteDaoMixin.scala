@@ -120,13 +120,13 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     val statement = mutable.StringBuilder.newBuilder.append("update settings3 set ")
     val values = mutable.ArrayBuffer[AnyRef]()
     var somethingToDo = false
-    var spaceOrComma = ""
+    var nothingOrComma = ""
 
     def maybeSet(column: String, anyValue: Option[AnyRef]) {
       anyValue foreach { value =>
         somethingToDo = true
-        statement.append(s"$spaceOrComma$column = ?")
-        spaceOrComma = ", "
+        statement.append(s"$nothingOrComma$column = ?")
+        nothingOrComma = ", "
         values += value
       }
     }
@@ -155,6 +155,14 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("google_analytics_id", s.googleUniversalAnalyticsTrackingId.map(_.orNullVarchar))
     maybeSet("experimental", s.showComplicatedStuff.map(_.orNullBoolean))
     maybeSet("html_tag_css_classes", s.htmlTagCssClasses.map(_.orNullVarchar))
+    maybeSet("num_flags_to_hide_post", s.numFlagsToHidePost.map(_.orNullInt))
+    maybeSet("cooldown_minutes_after_flagged_hidden",
+                s.cooldownMinutesAfterFlaggedHidden.map(_.orNullInt))
+    maybeSet("num_flags_to_block_new_user", s.numFlagsToBlockNewUser.map(_.orNullInt))
+    maybeSet("num_flaggers_to_block_new_user", s.numFlaggersToBlockNewUser.map(_.orNullInt))
+    maybeSet("notify_mods_if_user_blocked", s.notifyModsIfUserBlocked.map(_.orNullBoolean))
+    maybeSet("regular_member_flag_weight", s.regularMemberFlagWeight.map(_.orNullFloat))
+    maybeSet("core_member_flag_weight", s.coreMemberFlagWeight.map(_.orNullFloat))
 
     statement.append(" where site_id = ? and category_id is null and page_id is null")
     values.append(siteId)
@@ -189,7 +197,14 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       contentLicense = ContentLicense.fromInt(rs.getInt("content_license")), // 0 -> None, ok
       googleUniversalAnalyticsTrackingId = Option(rs.getString("google_analytics_id")),
       showComplicatedStuff = getOptionalBoolean(rs, "experimental"),
-      htmlTagCssClasses = Option(rs.getString("html_tag_css_classes")))
+      htmlTagCssClasses = Option(rs.getString("html_tag_css_classes")),
+      numFlagsToHidePost = getOptInt(rs, "num_flags_to_hide_post"),
+      cooldownMinutesAfterFlaggedHidden = getOptInt(rs, "cooldown_minutes_after_flagged_hidden"),
+      numFlagsToBlockNewUser = getOptInt(rs, "num_flags_to_block_new_user"),
+      numFlaggersToBlockNewUser = getOptInt(rs, "num_flaggers_to_block_new_user"),
+      notifyModsIfUserBlocked = getOptionalBoolean(rs, "notify_mods_if_user_blocked"),
+      regularMemberFlagWeight = getOptFloat(rs, "regular_member_flag_weight"),
+      coreMemberFlagWeight = getOptFloat(rs, "core_member_flag_weight"))
   }
 
 }

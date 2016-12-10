@@ -32,6 +32,7 @@ object Rdb {
   val NullSmallInt = Null(js.Types.SMALLINT)
   val NullInt = Null(js.Types.INTEGER)
   val NullDouble = Null(js.Types.DOUBLE)
+  val NullFloat = Null(js.Types.FLOAT)
   val NullTimestamp = Null(js.Types.TIMESTAMP)
 
   /**
@@ -49,6 +50,10 @@ object Rdb {
 
   implicit class PimpOptionWithNullByte(opt: Option[Byte]) {
     def orNullInt: AnyRef = opt.map(_.toInt.asInstanceOf[Integer]).getOrElse(NullSmallInt).asAnyRef
+  }
+
+  implicit class PimpOptionWithNullFloat(opt: Option[Float]) {
+    def orNullFloat: AnyRef = opt.map(_.asAnyRef).getOrElse(NullFloat)
   }
 
   implicit class PimpOptionWithNullBoolean(opt: Option[Boolean]) {
@@ -129,6 +134,16 @@ object Rdb {
     if (rs.wasNull) None
     else Some(value)
   }
+
+  def getOptFloat(rs: js.ResultSet, column: String): Option[Float] = {
+    // rs.getFloat() returns 0 instead of null.
+    var value = rs.getFloat(column)
+    if (rs.wasNull) None
+    else Some(value)
+  }
+
+  def getOptInt(rs: js.ResultSet, column: String): Option[Int] =
+    getResultSetIntOption(rs, column: String)
 
   def getOptionalInt(rs: js.ResultSet, column: String): Option[Int] =
     getResultSetIntOption(rs, column: String)

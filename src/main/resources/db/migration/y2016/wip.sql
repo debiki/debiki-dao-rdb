@@ -1,5 +1,13 @@
 CLEAN_UP // remove guest_prefs3.version column, use the aduit_log3 table instead
 
+
+
+alter table settings3 add column flag_fraction_to_close_topic real not null default 0.1;
+alter table settings3 add column num_flags_to_close_topic int not null default 10;
+alter table settings3 add column num_users_to_close_topic int not null default 3;
+
+
+
 create table tags3(
   site_id
   tag_id
