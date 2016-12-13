@@ -149,7 +149,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def insertAuthenticatedUser(user: CompleteUser) {
+  def insertAuthenticatedUser(user: MemberInclDetails) {
     try {
       runUpdate("""
         insert into users3(
@@ -507,23 +507,23 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadMemberInclDetailsByUsername(username: String): Option[CompleteUser] = {
+  def loadMemberInclDetailsByUsername(username: String): Option[MemberInclDetails] = {
     loadCompleteUserImpl("username", username)
   }
 
 
-  def loadCompleteUser(userId: UserId): Option[CompleteUser] = {
+  def loadMemberInclDetails(userId: UserId): Option[MemberInclDetails] = {
     require(User.isRoleId(userId), "DwE5FKE2")
     loadCompleteUserImpl("user_id", userId.asAnyRef)
   }
 
 
-  def loadOwner(): Option[CompleteUser] = {
+  def loadOwner(): Option[MemberInclDetails] = {
     loadCompleteUserImpl("is_owner", "T")
   }
 
 
-  def loadCompleteUserImpl(field: String, value: AnyRef): Option[CompleteUser] = {
+  def loadCompleteUserImpl(field: String, value: AnyRef): Option[MemberInclDetails] = {
     val sql = s"""
       select $CompleteUserSelectListItemsWithUserId
       from users3
@@ -535,9 +535,9 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadCompleteUsers(
+  def loadMembersInclDetails(
         onlyApproved: Boolean = false,
-        onlyPendingApproval: Boolean = false): immutable.Seq[CompleteUser] = {
+        onlyPendingApproval: Boolean = false): immutable.Seq[MemberInclDetails] = {
     require(!onlyApproved || !onlyPendingApproval)
 
     val andIsApprovedEqWhatever =
@@ -560,7 +560,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       """
 
     val values = List(siteId)
-    val result = ArrayBuffer[CompleteUser]()
+    val result = ArrayBuffer[MemberInclDetails]()
     db.queryAtnms(query, values, rs => {
       while (rs.next) {
         val user = getCompleteUser(rs)
@@ -571,7 +571,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def updateCompleteUser(user: CompleteUser): Boolean = {
+  def updateMemberInclDetails(user: MemberInclDetails): Boolean = {
     val statement = """
       update users3 set
         updated_at = now_utc(),

@@ -242,10 +242,10 @@ object RdbUtil {
     s"user_id, $CompleteUserSelectListItemsNoUserId"
 
 
-  def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): CompleteUser = {
+  def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): MemberInclDetails = {
     val theUserId = userId getOrElse rs.getInt("user_id")
     dieIf(User.isGuestId(theUserId), "DwE6P4K3")
-    CompleteUser(
+    MemberInclDetails(
       id = theUserId,
       fullName = Option(rs.getString("display_name")),
       username = rs.getString("username"),
