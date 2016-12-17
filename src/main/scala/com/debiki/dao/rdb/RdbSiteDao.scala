@@ -77,7 +77,6 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   @deprecated("now", "use this.now instead")
   lazy val currentTime: ju.Date = asSystem.currentTime
-  lazy val now: When = When.fromDate(asSystem.currentTime)
 
 
 
@@ -434,6 +433,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       while (rs.next) {
         val pageId = rs.getString("PAGE_ID")
         val meta = _PageMeta(rs, pageId = pageId)
+        dieIf(meta.pageId != pageId, "EdE7KFUW02")
         metaByPageId += pageId -> meta
       }
     })

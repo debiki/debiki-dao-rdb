@@ -178,6 +178,10 @@ object Rdb {
     else Some(new ju.Date(timestamp.getTime))
   }
 
+  def getOptWhen(rs: js.ResultSet, column: String): Option[When] = {
+    getOptionalWhen(rs, column)
+  }
+
   def getOptionalWhen(rs: js.ResultSet, column: String): Option[When] = {
     val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
     if (timestamp eq null) None
