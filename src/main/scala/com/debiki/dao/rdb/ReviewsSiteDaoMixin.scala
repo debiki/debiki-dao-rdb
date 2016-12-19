@@ -178,6 +178,13 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadReviewTasksAboutBrowser(browserIdData: BrowserIdData, limit: Int, orderBy: OrderBy)
+        : Seq[ReviewTask] = {
+    // Ooops. I don't currently store post ip & browser id data in review_tasks3.
+    ???
+  }
+
+
   override def loadReviewTaskCounts(isAdmin: Boolean): ReviewTaskCounts = {
     val urgentBits = ReviewReason.PostFlagged.toInt // + ... later if more urgent tasks
     val query = i"""

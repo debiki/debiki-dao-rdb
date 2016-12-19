@@ -172,6 +172,18 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   } */
 
 
+  def loadPostsByAuthor(userId: UserId, limit: Int, orderBy: OrderBy): immutable.Seq[Post] = {
+    dieIf(orderBy != OrderBy.MostRecentFirst, "EdE1DRJ7Y", "Unimpl")
+    val query = s"""
+      select * from posts3 where site_id = ? and created_by_id = ?
+      order by created_at desc limit $limit
+      """
+    runQueryFindMany(query, List(siteId, userId.asAnyRef), rs => {
+      readPost(rs)
+    })
+  }
+
+
   def loadPopularPostsByPage(pageIds: Iterable[PageId], limitPerPage: Int)
         : Map[PageId, immutable.Seq[Post]] = {
     if (pageIds.isEmpty)

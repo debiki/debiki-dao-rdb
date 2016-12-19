@@ -168,6 +168,29 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadCreatePostAuditLogEntriesBy(browserIdData: BrowserIdData, limit: Int, orderBy: OrderBy)
+        : Seq[AuditLogEntry] = {
+    UNTESTED
+    dieIf(orderBy != OrderBy.MostRecentFirst, "EdE5PKB20", "Unimpl")
+    val query = s"""
+      select * from audit_log3
+      where site_id = ? and ip = ?
+      and did_what = ${AuditLogEntryType.NewPost.toInt}
+      order by done_at desc limit $limit
+      union
+      select * from audit_log3
+      where site_id = ? and browser_id_cookie = ?
+      and did_what = ${AuditLogEntryType.NewPost.toInt}
+      order by done_at desc limit $limit
+      """
+    val values = List(siteId, browserIdData.ip, siteId, browserIdData.idCookie)
+    val entries = runQueryFindMany(query, values, rs => {
+      getAuditLogEntry(rs)
+    })
+    entries.sortBy(-_.doneAt.getTime)
+  }
+
+
   private def getAuditLogEntry(rs: js.ResultSet) =
     AuditLogEntry(
       siteId = siteId,

@@ -391,7 +391,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     loadPageMetaImpl(pageIds = Nil, all = true).values.to[immutable.Seq]
 
 
-  def loadPageMetas(pageIds: Seq[PageId]): immutable.Seq[PageMeta] =
+  def loadPageMetas(pageIds: Iterable[PageId]): immutable.Seq[PageMeta] =
     loadPageMetaImpl(pageIds, all = false).values.to[immutable.Seq]
 
   def loadPageMetasAsMap(pageIds: Iterable[PageId]): Map[PageId, PageMeta] =
@@ -412,7 +412,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   }
 
 
-  def loadPageMetaImpl(pageIds: Seq[PageId], all: Boolean = false,
+  def loadPageMetaImpl(pageIds: Iterable[PageId], all: Boolean = false,
         anySiteId: Option[SiteId] = None): Map[PageId, PageMeta] = {
     if (!all && pageIds.isEmpty)
       return Map.empty
@@ -481,7 +481,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       newMeta.authorId.asAnyRef,
       newMeta.publishedAt.orNullTimestamp,
       // Always write to bumped_at so SQL queries that sort by bumped_at works.
-      newMeta.bumpedOrPublishedOrCreatedAt,
+      newMeta.bumpedOrPublishedOrCreatedAt.asTimestamp,
       newMeta.lastReplyAt.orNullTimestamp,
       newMeta.lastReplyById.orNullInt,
       newMeta.frequentPosterIds.drop(0).headOption.orNullInt,
@@ -509,6 +509,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       newMeta.closedAt.orNullTimestamp,
       newMeta.lockedAt.orNullTimestamp,
       newMeta.frozenAt.orNullTimestamp,
+      newMeta.hiddenAt.orNullTimestamp,
       newMeta.deletedAt.orNullTimestamp,
       newMeta.htmlTagCssClasses.orIfEmpty(NullVarchar),
       newMeta.htmlHeadTitle.orIfEmpty(NullVarchar),
@@ -553,6 +554,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
         CLOSED_AT = ?,
         LOCKED_AT = ?,
         FROZEN_AT = ?,
+        hidden_at = ?,
         deleted_at = ?,
         html_tag_css_classes = ?,
         html_head_title = ?,
@@ -1141,21 +1143,27 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val sql = """
       insert into pages3 (
          SITE_ID, PAGE_ID, version, PAGE_ROLE, category_id, EMBEDDING_PAGE_URL,
-         CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, AUTHOR_ID,
+         CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, hidden_at, AUTHOR_ID,
          PLANNED_AT, PIN_ORDER, PIN_WHERE)
       values (
          ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?,
          ?, ?, ?)"""
 
     val values = List[AnyRef](
       siteId, pageMeta.pageId, pageMeta.version.asAnyRef,
-      pageMeta.pageRole.toInt.asAnyRef, pageMeta.categoryId.orNullInt,
+      pageMeta.pageRole.toInt.asAnyRef,
+      pageMeta.categoryId.orNullInt,
       pageMeta.embeddingPageUrl.orNullVarchar,
-      d2ts(pageMeta.createdAt), d2ts(pageMeta.updatedAt), o2ts(pageMeta.publishedAt),
-      pageMeta.bumpedOrPublishedOrCreatedAt, pageMeta.authorId.asAnyRef,
+      pageMeta.createdAt.asTimestamp,
+      pageMeta.updatedAt.asTimestamp,
+      pageMeta.publishedAt.orNullTimestamp,
+      pageMeta.bumpedOrPublishedOrCreatedAt.asTimestamp,
+      pageMeta.hiddenAt.orNullTimestamp,
+      pageMeta.authorId.asAnyRef,
       pageMeta.plannedAt.orNullTimestamp,
-      pageMeta.pinOrder.orNullInt, pageMeta.pinWhere.map(_.toInt).orNullInt)
+      pageMeta.pinOrder.orNullInt,
+      pageMeta.pinWhere.map(_.toInt).orNullInt)
 
     val numNewRows = runUpdate(sql, values)
 
