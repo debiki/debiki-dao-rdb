@@ -143,6 +143,8 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
 
   def loadAuditLogEntriesRecentFirst(userId: UserId, tyype: AuditLogEntryType, limit: Int)
         : immutable.Seq[AuditLogEntry] = {
+    dieIf(tyype == AuditLogEntryType.NewPage, "EdE4WK023X", "Probably wants NewReply too")
+    dieIf(tyype == AuditLogEntryType.NewReply, "EdE3ZCM238", "Probably wants NewPage too")
     val query = s"""
       select * from audit_log3
       where site_id = ? and doer_id = ?
@@ -159,7 +161,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     val query = s"""
       select * from audit_log3
       where site_id = ? and post_id = ?
-      and did_what = ${AuditLogEntryType.NewPost.toInt}
+      and did_what in (${AuditLogEntryType.NewPage.toInt}, ${AuditLogEntryType.NewReply.toInt})
       order by done_at limit 1
       """
     runQueryFindOneOrNone(query, List(siteId, postId.asAnyRef), rs => {
@@ -170,18 +172,17 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
 
   def loadCreatePostAuditLogEntriesBy(browserIdData: BrowserIdData, limit: Int, orderBy: OrderBy)
         : Seq[AuditLogEntry] = {
-    UNTESTED
     dieIf(orderBy != OrderBy.MostRecentFirst, "EdE5PKB20", "Unimpl")
-    val query = s"""
+    val query = s"""(
       select * from audit_log3
-      where site_id = ? and ip = ?
-      and did_what = ${AuditLogEntryType.NewPost.toInt}
-      order by done_at desc limit $limit
-      union
+      where site_id = ? and ip = ?::inet
+      and did_what in (${AuditLogEntryType.NewPage.toInt}, ${AuditLogEntryType.NewReply.toInt})
+      order by done_at desc limit $limit)
+      union (
       select * from audit_log3
       where site_id = ? and browser_id_cookie = ?
-      and did_what = ${AuditLogEntryType.NewPost.toInt}
-      order by done_at desc limit $limit
+      and did_what in (${AuditLogEntryType.NewPage.toInt}, ${AuditLogEntryType.NewReply.toInt})
+      order by done_at desc limit $limit)
       """
     val values = List(siteId, browserIdData.ip, siteId, browserIdData.idCookie)
     val entries = runQueryFindMany(query, values, rs => {

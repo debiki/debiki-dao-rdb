@@ -17,10 +17,12 @@
 
 package com.debiki.dao.rdb
 
+import collection.immutable
 import com.debiki.core._
 import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
 import Rdb._
+import RdbUtil.makeInListFor
 
 
 /** Loads and saves ReviewTask:s.
@@ -178,10 +180,18 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadReviewTasksAboutBrowser(browserIdData: BrowserIdData, limit: Int, orderBy: OrderBy)
-        : Seq[ReviewTask] = {
-    // Ooops. I don't currently store post ip & browser id data in review_tasks3.
-    ???
+  def loadReviewTasksAboutPostIds(postIds: Iterable[UniquePostId]): immutable.Seq[ReviewTask] = {
+    if (postIds.isEmpty) return Nil
+    val query = i"""
+      select * from review_tasks3
+      where site_id = ?
+        and post_id in (${ makeInListFor(postIds) })
+      """
+    runQueryFindMany(query, siteId :: postIds.toList.map(_.asAnyRef), rs => {
+      val task = readReviewTask(rs)
+      dieIf(task.postId.isEmpty, "EdE2KTP8V")
+      task
+    })
   }
 
 
