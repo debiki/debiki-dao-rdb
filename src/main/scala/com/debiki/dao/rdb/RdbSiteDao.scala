@@ -455,14 +455,16 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
 
   def updatePageMetaImpl(meta: PageMeta, oldMeta: PageMeta, markSectionPageStale: Boolean) {
-    transactionCheckQuota {
+    transactionCheckQuota { transaction =>
       if (markSectionPageStale) {
         oldMeta.categoryId.foreach(markSectionPageContentHtmlAsStale)
         if (meta.categoryId != oldMeta.categoryId) {
           meta.categoryId.foreach(markSectionPageContentHtmlAsStale)
         }
       }
-      _updatePageMeta(meta, anyOld = Some(oldMeta))(_)
+      if (meta != oldMeta) {
+        _updatePageMeta(meta, anyOld = Some(oldMeta))(transaction)
+      }
     }
   }
 
