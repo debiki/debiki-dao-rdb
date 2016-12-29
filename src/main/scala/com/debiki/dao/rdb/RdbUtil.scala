@@ -89,6 +89,9 @@ object RdbUtil {
 
   /** `rs.getBoolean` returns false instead of null.
     */
+  def getOptBoolean(rs: js.ResultSet, column: String): Option[Boolean] =
+    getOptionalBoolean(rs, column)
+
   def getOptionalBoolean(rs: js.ResultSet, column: String): Option[Boolean] = {
     val b = rs.getBoolean(column)
     if (rs.wasNull()) None

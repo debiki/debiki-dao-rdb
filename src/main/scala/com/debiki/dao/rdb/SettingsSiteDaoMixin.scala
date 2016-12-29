@@ -61,6 +61,9 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         page_id,
         user_must_be_auth,
         user_must_be_approved,
+        invite_only,
+        allow_signup,
+        allow_local_signup,
         allow_guest_login,
         num_first_posts_to_review,
         num_first_posts_to_approve,
@@ -82,7 +85,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         google_analytics_id,
         experimental,
         html_tag_css_classes)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId,
@@ -90,6 +93,9 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       NullVarchar,
       editedSettings2.userMustBeAuthenticated.getOrElse(None).orNullBoolean,
       editedSettings2.userMustBeApproved.getOrElse(None).orNullBoolean,
+      editedSettings2.inviteOnly.getOrElse(None).orNullBoolean,
+      editedSettings2.allowSignup.getOrElse(None).orNullBoolean,
+      editedSettings2.allowLocalSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowGuestLogin.getOrElse(None).orNullBoolean,
       editedSettings2.numFirstPostsToReview.getOrElse(None).orNullInt,
       editedSettings2.numFirstPostsToApprove.getOrElse(None).orNullInt,
@@ -134,6 +140,9 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     val s = editedSettings2
     maybeSet("user_must_be_auth", s.userMustBeAuthenticated.map(_.orNullBoolean))
     maybeSet("user_must_be_approved", s.userMustBeApproved.map(_.orNullBoolean))
+    maybeSet("invite_only", s.inviteOnly.map(_.orNullBoolean))
+    maybeSet("allow_signup", s.allowSignup.map(_.orNullBoolean))
+    maybeSet("allow_local_signup", s.allowLocalSignup.map(_.orNullBoolean))
     maybeSet("allow_guest_login", s.allowGuestLogin.map(_.orNullBoolean))
     maybeSet("num_first_posts_to_review", s.numFirstPostsToReview.map(_.orNullInt))
     maybeSet("num_first_posts_to_approve", s.numFirstPostsToApprove.map(_.orNullInt))
@@ -177,6 +186,9 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     EditedSettings(
       userMustBeAuthenticated = getOptionalBoolean(rs, "user_must_be_auth"),
       userMustBeApproved = getOptionalBoolean(rs, "user_must_be_approved"),
+      inviteOnly = getOptBoolean(rs, "invite_only"),
+      allowSignup = getOptBoolean(rs, "allow_signup"),
+      allowLocalSignup = getOptBoolean(rs, "allow_local_signup"),
       allowGuestLogin = getOptionalBoolean(rs, "allow_guest_login"),
       numFirstPostsToReview = getOptionalInt(rs, "num_first_posts_to_review"),
       numFirstPostsToApprove = getOptionalInt(rs, "num_first_posts_to_approve"),
