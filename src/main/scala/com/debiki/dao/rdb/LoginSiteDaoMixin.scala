@@ -102,7 +102,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
         guestCookie = Some(loginAttempt.guestCookie),
         email = loginAttempt.email,
         emailNotfPrefs = _toEmailNotfs(emailNotfsStr),
-        country = "")
+        country = None)
 
       GuestLoginResult(user, isNewGuest)
   }

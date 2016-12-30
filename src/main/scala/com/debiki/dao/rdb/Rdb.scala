@@ -42,6 +42,7 @@ object Rdb {
    */
   implicit class StringOptionPimpedWithNullVarchar(opt: Option[String]) {
     def orNullVarchar = opt.getOrElse(NullVarchar)
+    def trimOrNullVarchar = opt.trimNoneIfBlank.getOrElse(NullVarchar)
   }
 
   implicit class PimpOptionWithNullInt(opt: Option[Int]) {
@@ -100,6 +101,9 @@ object Rdb {
     val value = rs.getString(column)
     if (value eq null) "" else value
   }
+
+  def getOptString(rs: js.ResultSet, column: String): Option[String] =
+    getOptionalStringNotEmpty(rs, column)
 
   def getOptionalStringNotEmpty(rs: js.ResultSet, column: String): Option[String] = {
     val value = Option(rs.getString(column))

@@ -182,7 +182,7 @@ object RdbUtil {
         guestCookie = Option(rs.getString("u_guest_cookie")),
         email = dn2e(rs.getString("u_email")),
         emailNotfPrefs = emailNotfPrefs,
-        country = dn2e(rs.getString("u_country")),
+        country = dn2e(rs.getString("u_country")).trimNoneIfEmpty,
         lockedThreatLevel = lockedThreatLevel)
     else Member(
       id = userId,
@@ -192,8 +192,6 @@ object RdbUtil {
       emailNotfPrefs = emailNotfPrefs,
       emailVerifiedAt = getOptionalDate(rs, "u_email_verified_at"),
       passwordHash = Option(rs.getString("u_password_hash")),
-      country = dn2e(rs.getString("u_country")),
-      website = dn2e(rs.getString("u_website")),
       tinyAvatar = getAnyUploadRef(rs, "avatar_tiny_base_url", "avatar_tiny_hash_path"),
       smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path"),
       isApproved = getOptionalBoolean(rs, "u_is_approved"),
@@ -211,6 +209,7 @@ object RdbUtil {
   val CompleteUserSelectListItemsNoUserId = i"""
     |display_name,
     |email,
+    |about,
     |country,
     |website,
     |email_notfs,
@@ -261,8 +260,9 @@ object RdbUtil {
       tinyAvatar = getAnyUploadRef(rs, "avatar_tiny_base_url", "avatar_tiny_hash_path"),
       smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path"),
       mediumAvatar = getAnyUploadRef(rs, "avatar_medium_base_url", "avatar_medium_hash_path"),
-      country = dn2e(rs.getString("country")),
-      website = dn2e(rs.getString("website")),
+      country = getOptString(rs, "country"),
+      website = getOptString(rs, "website"),
+      about = getOptString(rs, "about"),
       isApproved = getOptionalBoolean(rs, "is_approved"),
       approvedAt = getOptionalDate(rs, "approved_at"),
       approvedById = getOptionalIntNoneNot0(rs, "approved_by_id"),
