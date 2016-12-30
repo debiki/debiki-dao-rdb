@@ -49,7 +49,6 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   with SearchSiteDaoMixin
   with SpamCheckQueueDaoMixin
   with UserSiteDaoMixin
-  with UserActionInfoSiteDaoMixin
   with LoginSiteDaoMixin
   with PostsReadStatsSiteDaoMixin
   with NotificationsSiteDaoMixin
