@@ -68,6 +68,34 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadPagesByUser(userId: UserId, isStaffOrSelf: Boolean, limit: Int): Seq[PagePathAndMeta] = {
+    val andNotGone = isStaffOrSelf ? "" | "and hidden_at is null and deleted_at is null"
+    val query = i"""
+        select
+          t.parent_folder,
+          t.page_id,
+          t.show_id,
+          t.page_slug,
+          ${_PageMetaSelectListItems}
+        from pages3 g inner join page_paths3 t
+          on g.site_id = t.site_id and g.page_id = t.page_id
+          and t.canonical = 'C'
+        where
+          g.site_id = ? and
+          g.author_id = ?
+          $andNotGone
+        order by g.published_at desc
+        limit $limit
+        """
+    val values = List(siteId, userId.asAnyRef)
+    runQueryFindMany(query, values, rs => {
+      val pagePath = _PagePath(rs, siteId)
+      val pageMeta = _PageMeta(rs, pagePath.pageId.get)
+      PagePathAndMeta(pagePath, pageMeta)
+    })
+  }
+
+
   def loadPagesInCategories(categoryIds: Seq[CategoryId], pageQuery: PageQuery, limit: Int)
         : Seq[PagePathAndMeta] = {
 
@@ -148,16 +176,11 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         $orderBy
         limit $limit"""
 
-    val result = ArrayBuffer[PagePathAndMeta]()
-
-    runQuery(sql, values.toList, rs => {
-        while (rs.next) {
-          val pagePath = _PagePath(rs, siteId)
-          val pageMeta = _PageMeta(rs, pagePath.pageId.get)
-          result.append(PagePathAndMeta(pagePath, pageMeta))
-        }
+    runQueryFindMany(sql, values.toList, rs => {
+      val pagePath = _PagePath(rs, siteId)
+      val pageMeta = _PageMeta(rs, pagePath.pageId.get)
+      PagePathAndMeta(pagePath, pageMeta)
     })
-    result.toSeq
   }
 
 
