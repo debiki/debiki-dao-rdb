@@ -172,10 +172,10 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   } */
 
 
-  def loadPostsByAuthor(userId: UserId, limit: Int, orderBy: OrderBy): immutable.Seq[Post] = {
+  def loadPostsByAuthorSkipTitles(userId: UserId, limit: Int, orderBy: OrderBy): immutable.Seq[Post] = {
     dieIf(orderBy != OrderBy.MostRecentFirst, "EdE1DRJ7Y", "Unimpl")
     val query = s"""
-      select * from posts3 where site_id = ? and created_by_id = ?
+      select * from posts3 where site_id = ? and created_by_id = ? and post_nr <> $TitleNr
       order by created_at desc limit $limit
       """
     runQueryFindMany(query, List(siteId, userId.asAnyRef), rs => {
