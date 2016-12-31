@@ -59,7 +59,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
 
   def loadTagsByPostId(postIds: Iterable[UniquePostId]): Map[UniquePostId, Set[TagLabel]] = {
     if (postIds.isEmpty)
-      return Map.empty
+      return Map.empty.withDefaultValue(Set.empty)
     val query = s"""
       select tag, post_id from post_tags3
       where site_id = ? and post_id in (${ makeInListFor(postIds) })

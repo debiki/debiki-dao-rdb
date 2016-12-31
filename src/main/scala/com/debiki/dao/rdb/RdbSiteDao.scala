@@ -393,18 +393,16 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   def loadPageMetas(pageIds: Iterable[PageId]): immutable.Seq[PageMeta] =
     loadPageMetaImpl(pageIds, all = false).values.to[immutable.Seq]
 
-  def loadPageMetasAsMap(pageIds: Iterable[PageId]): Map[PageId, PageMeta] =
-    loadPageMetaImpl(pageIds.toSeq, all = false)
 
-  def loadPageMeta(pageId: PageId): Option[PageMeta] = loadPageMeta(pageId, None)
+  def loadPageMeta(pageId: PageId): Option[PageMeta] =
+    loadPageMeta(pageId, anySiteId = None)
 
 
-  def loadPageMeta(pageId: PageId, anySiteId: Option[SiteId]): Option[PageMeta] = {
+  def loadPageMeta(pageId: PageId, anySiteId: Option[SiteId]): Option[PageMeta] =
     loadPageMetasAsMap(pageId::Nil, anySiteId) get pageId
-  }
 
 
-  def loadPageMetasAsMap(pageIds: Seq[PageId], anySiteId: Option[SiteId] = None)
+  def loadPageMetasAsMap(pageIds: Iterable[PageId], anySiteId: Option[SiteId] = None)
         : Map[PageId, PageMeta] = {
     if (pageIds.isEmpty) return Map.empty
     loadPageMetaImpl(pageIds, all = false, anySiteId)
