@@ -88,7 +88,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def insertUploadedFileReference(postId: UniquePostId, uploadRef: UploadRef,
+  def insertUploadedFileReference(postId: PostId, uploadRef: UploadRef,
         addedById: UserId) {
     val siteIdsUsingUploadBefore = loadSiteIdsUsingUpload(uploadRef)
 
@@ -121,7 +121,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def deleteUploadedFileReference(postId: UniquePostId, uploadRef: UploadRef): Boolean = {
+  def deleteUploadedFileReference(postId: PostId, uploadRef: UploadRef): Boolean = {
     val statement = """
       delete from upload_refs3
       where site_id = ? and post_id = ? and base_url = ? and hash_path = ?
@@ -138,7 +138,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadUploadedFileReferences(postId: UniquePostId): Set[UploadRef] = {
+  def loadUploadedFileReferences(postId: PostId): Set[UploadRef] = {
     val query = """
       select * from upload_refs3
       where site_id = ? and post_id = ?

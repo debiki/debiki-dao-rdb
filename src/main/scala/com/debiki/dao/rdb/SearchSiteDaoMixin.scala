@@ -55,7 +55,7 @@ trait SearchSiteDaoMixin extends SiteTransaction {
       """
     // What if appr rev nr gets decremented? should that perhaps not be allowed? [85YKF30]
     val revNr = post.approvedRevisionNr.getOrElse(post.currentRevisionNr)
-    val values = List(post.createdAt, siteId, siteId, post.uniqueId.asAnyRef, revNr.asAnyRef)
+    val values = List(post.createdAt, siteId, siteId, post.id.asAnyRef, revNr.asAnyRef)
     runUpdateSingleRow(statement, values)
   }
 

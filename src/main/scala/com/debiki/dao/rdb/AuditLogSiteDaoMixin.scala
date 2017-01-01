@@ -157,7 +157,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadCreatePostAuditLogEntry(postId: UniquePostId): Option[AuditLogEntry] = {
+  def loadCreatePostAuditLogEntry(postId: PostId): Option[AuditLogEntry] = {
     val query = s"""
       select * from audit_log3
       where site_id = ? and post_id = ?

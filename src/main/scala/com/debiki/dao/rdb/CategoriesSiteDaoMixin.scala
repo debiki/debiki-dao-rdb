@@ -184,7 +184,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def nextCategoryId(): UniquePostId = {
+  override def nextCategoryId(): PostId = {
     val query = """
       select max(id) max_id from categories3 where site_id = ?
       """

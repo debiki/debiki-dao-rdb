@@ -125,14 +125,14 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def loadPendingPostReviewTask(postId: UniquePostId): Option[ReviewTask] = {
+  override def loadPendingPostReviewTask(postId: PostId): Option[ReviewTask] = {
     loadReviewTaskImpl(
       s"completed_at is null and invalidated_at is null and post_id = ?",
       Seq(postId.asAnyRef))
   }
 
 
-  override def loadPendingPostReviewTask(postId: UniquePostId, taskCreatedById: UserId)
+  override def loadPendingPostReviewTask(postId: PostId, taskCreatedById: UserId)
         : Option[ReviewTask] = {
     loadReviewTaskImpl(
       s"completed_at is null and invalidated_at is null and created_by_id = ? and post_id = ?",
@@ -180,7 +180,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadReviewTasksAboutPostIds(postIds: Iterable[UniquePostId]): immutable.Seq[ReviewTask] = {
+  def loadReviewTasksAboutPostIds(postIds: Iterable[PostId]): immutable.Seq[ReviewTask] = {
     if (postIds.isEmpty) return Nil
     val query = i"""
       select * from review_tasks3

@@ -116,7 +116,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def listUsersNotifiedAboutPost(postId: UniquePostId): Set[UserId] = {
+  def listUsersNotifiedAboutPost(postId: PostId): Set[UserId] = {
     val query = s"""
       select to_user_id, notf_type
       from notifications3

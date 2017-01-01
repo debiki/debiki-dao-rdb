@@ -34,7 +34,7 @@ import PostsSiteDaoMixin._
 trait PostsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
-  override def loadPost(uniquePostId: UniquePostId): Option[Post] =
+  override def loadPost(uniquePostId: PostId): Option[Post] =
     loadPostsById(Seq(uniquePostId)).headOption
 
 
@@ -80,7 +80,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private def loadPostsById(postIds: Iterable[UniquePostId]): immutable.Seq[Post] = {
+  private def loadPostsById(postIds: Iterable[PostId]): immutable.Seq[Post] = {
     if (postIds.isEmpty)
       return Nil
     val values = ArrayBuffer[AnyRef](siteId)
@@ -130,7 +130,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadPostsByUniqueId(postIds: Iterable[UniquePostId]): immutable.Map[UniquePostId, Post] = {
+  def loadPostsByUniqueId(postIds: Iterable[PostId]): immutable.Map[PostId, Post] = {
     if (postIds.isEmpty)
       return Map.empty
 
@@ -140,7 +140,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
     val values = siteId :: postIds.map(_.asAnyRef).toList
     runQueryBuildMap(query, values, rs => {
       val post = readPost(rs)
-      post.uniqueId -> post
+      post.id -> post
     })
   }
 
@@ -252,7 +252,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def nextPostId(): UniquePostId = {
+  override def nextPostId(): PostId = {
     val query = """
       select max(unique_post_id) max_id from posts3 where site_id = ?
       """
@@ -339,7 +339,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
         ?, ?, ?, ?, ?)"""
 
     val values = List[AnyRef](
-      siteId, post.uniqueId.asAnyRef, post.pageId, post.nr.asAnyRef,
+      siteId, post.id.asAnyRef, post.pageId, post.nr.asAnyRef,
       post.parentNr.orNullInt, toDbMultireply(post.multireplyPostNrs),
       (post.tyype != PostType.Normal) ? post.tyype.toInt.asAnyRef | NullInt,
 
@@ -508,7 +508,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       post.numUnwantedVotes.asAnyRef,
       post.numTimesRead.asAnyRef,
 
-      siteId, post.uniqueId.asAnyRef)
+      siteId, post.id.asAnyRef)
 
     runUpdate(statement, values)
   }
@@ -516,7 +516,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
   private def readPost(rs: js.ResultSet, pageId: Option[PageId] = None): Post = {
     Post(
-      uniqueId = rs.getInt("UNIQUE_POST_ID"),
+      id = rs.getInt("UNIQUE_POST_ID"),
       pageId = pageId.getOrElse(rs.getString("PAGE_ID")),
       nr = rs.getInt("post_nr"),
       parentNr = getOptionalInt(rs, "parent_nr"),
@@ -578,7 +578,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def insertVote(uniquePostId: UniquePostId, pageId: PageId, postNr: PostNr, voteType: PostVoteType, voterId: UserId) {
+  def insertVote(uniquePostId: PostId, pageId: PageId, postNr: PostNr, voteType: PostVoteType, voterId: UserId) {
     insertPostAction(uniquePostId, pageId, postNr, actionType = voteType, doerId = voterId)
   }
 
@@ -671,7 +671,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def insertFlag(uniquePostId: UniquePostId, pageId: PageId, postNr: PostNr, flagType: PostFlagType, flaggerId: UserId) {
+  def insertFlag(uniquePostId: PostId, pageId: PageId, postNr: PostNr, flagType: PostFlagType, flaggerId: UserId) {
     insertPostAction(uniquePostId, pageId, postNr, actionType = flagType, doerId = flaggerId)
   }
 
@@ -687,7 +687,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def insertPostAction(uniquePostId: UniquePostId, pageId: PageId, postNr: PostNr, actionType: PostActionType, doerId: UserId) {
+  def insertPostAction(uniquePostId: PostId, pageId: PageId, postNr: PostNr, actionType: PostActionType, doerId: UserId) {
     val statement = """
       insert into post_actions3(site_id, unique_post_id, page_id, post_nr, type, created_by_id,
           created_at, sub_id)
@@ -705,15 +705,15 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadLastPostRevision(postId: UniquePostId) =
+  def loadLastPostRevision(postId: PostId) =
     loadPostRevisionImpl(postId, PostRevision.LastRevisionMagicNr)
 
 
-  def loadPostRevision(postId: UniquePostId, revisionNr: Int) =
+  def loadPostRevision(postId: PostId, revisionNr: Int) =
     loadPostRevisionImpl(postId, revisionNr)
 
 
-  private def loadPostRevisionImpl(postId: UniquePostId, revisionNr: Int): Option[PostRevision] = {
+  private def loadPostRevisionImpl(postId: PostId, revisionNr: Int): Option[PostRevision] = {
     var query = s"""
       select
         revision_nr, previous_nr, source_patch, full_source, title,

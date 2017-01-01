@@ -57,7 +57,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadTagsByPostId(postIds: Iterable[UniquePostId]): Map[UniquePostId, Set[TagLabel]] = {
+  def loadTagsByPostId(postIds: Iterable[PostId]): Map[PostId, Set[TagLabel]] = {
     if (postIds.isEmpty)
       return Map.empty.withDefaultValue(Set.empty)
     val query = s"""
@@ -67,9 +67,9 @@ trait TagsSiteDaoMixin extends SiteTransaction {
       """
     val tags = ArrayBuffer[String]()
     var currentPostId = NoPostId
-    var tagsByPostId = Map[UniquePostId, Set[TagLabel]]().withDefaultValue(Set.empty)
+    var tagsByPostId = Map[PostId, Set[TagLabel]]().withDefaultValue(Set.empty)
     runQueryAndForEachRow(query, siteId :: postIds.toList.map(_.asAnyRef), rs => {
-      val postId: UniquePostId = rs.getInt("post_id")
+      val postId: PostId = rs.getInt("post_id")
       val tag: TagLabel = rs.getString("tag")
       if (currentPostId == NoPostId || currentPostId == postId) {
         currentPostId = postId
@@ -89,7 +89,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def removeTagsFromPost(tags: Set[Tag], postId: UniquePostId) {
+  def removeTagsFromPost(tags: Set[Tag], postId: PostId) {
     if (tags.isEmpty)
       return
     val statement = s"""
@@ -100,7 +100,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def addTagsToPost(tags: Set[TagLabel], postId: UniquePostId, isPage: Boolean) {
+  def addTagsToPost(tags: Set[TagLabel], postId: PostId, isPage: Boolean) {
     if (tags.isEmpty)
       return
     val rows = ("(?, ?, ?, ?), " * tags.size) dropRight 2 // drops last ", "

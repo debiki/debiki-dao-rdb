@@ -505,7 +505,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   def loadStuffToIndex(limit: Int): StuffToIndex = {
-    val postIdsBySite = mutable.Map[SiteId, ArrayBuffer[UniquePostId]]()
+    val postIdsBySite = mutable.Map[SiteId, ArrayBuffer[PostId]]()
     // Hmm, use action_at or inserted_at? Normally, use inserted_at, but when
     // reindexing everything, everything gets inserted at the same time. Then should
     // instead use posts3.created_at, desc order, so most recent indexed first.
@@ -517,12 +517,12 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       while (rs.next()) {
         val siteId = rs.getString("site_id")
         val postId = rs.getInt("post_id")
-        val postIds = postIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[UniquePostId]())
+        val postIds = postIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[PostId]())
         postIds.append(postId)
       }
     })
 
-    val entries: Vector[(SiteId, ArrayBuffer[UniquePostId])] = postIdsBySite.iterator.toVector
+    val entries: Vector[(SiteId, ArrayBuffer[PostId])] = postIdsBySite.iterator.toVector
 
     val sitePageIds = mutable.Set[SitePageId]()
 
@@ -557,8 +557,8 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     var tagsBySitePostId = Map[SitePostId, Set[TagLabel]]()
     for ((siteId, posts) <- postsBySite) {
 
-      val tagsByPostId: Map[UniquePostId, Set[TagLabel]] =
-        siteTransaction(siteId).loadTagsByPostId(posts.map(_.uniqueId))
+      val tagsByPostId: Map[PostId, Set[TagLabel]] =
+        siteTransaction(siteId).loadTagsByPostId(posts.map(_.id))
       for ((postId, tags) <- tagsByPostId) {
         tagsBySitePostId += SitePostId(siteId, postId) -> tags
       }
@@ -580,7 +580,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     // gets updated in any way?
     // For now:
     val revNr = post.approvedRevisionNr.getOrElse(post.currentRevisionNr)
-    runUpdate(statement, List(siteId, post.uniqueId.asAnyRef, revNr.asAnyRef))
+    runUpdate(statement, List(siteId, post.id.asAnyRef, revNr.asAnyRef))
   }
 
 
@@ -611,7 +611,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   def loadStuffToSpamCheck(limit: Int): StuffToSpamCheck = {
-    val postIdsBySite = mutable.Map[SiteId, ArrayBuffer[UniquePostId]]()
+    val postIdsBySite = mutable.Map[SiteId, ArrayBuffer[PostId]]()
     val userIdsBySite = mutable.Map[SiteId, ArrayBuffer[UserId]]()
     var spamCheckTasks = Vector[SpamCheckTask]()
 
@@ -638,7 +638,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
           who = Who(userId, browserIdData),
           requestStuff = SpamRelReqStuff(userAgent = userAgent, referer = referer, uri = uri))
 
-        val postIds = postIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[UniquePostId]())
+        val postIds = postIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[PostId]())
         postIds.append(postId)
 
         val userIds = userIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[UserId]())
@@ -666,7 +666,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
   }
 
 
-  def deleteFromSpamCheckQueue(siteId: SiteId, postId: UniquePostId, postRevNr: Int) {
+  def deleteFromSpamCheckQueue(siteId: SiteId, postId: PostId, postRevNr: Int) {
     val statement = s"""
       delete from spam_check_queue3
       where site_id = ? and post_id = ? and post_rev_nr <= ?
