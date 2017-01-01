@@ -54,6 +54,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     }
     catch {
       case ex: js.SQLException =>
+        // Invited-email + inviter-id is unique. [5GPJ4A0]
         if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw2_invites_email__u", ex))
           throw DbDao.DuplicateUserEmail
 
@@ -93,33 +94,40 @@ trait UserSiteDaoMixin extends SiteTransaction {
       where site_id = ? and secret_key = ?
       """
     val values = List(siteId, secretKey)
-    runQuery(query, values, rs => {
-      if (!rs.next())
-        return None
-
-      val invite = getInvite(rs)
-      dieIf(rs.next(), "DwE7PK3W4")
-      Some(invite)
-    })
+    runQueryFindOneOrNone(query, values, rs => {
+      getInvite(rs)
+    }, "EdEB2KD0F")
   }
 
 
   def loadInvites(createdById: UserId): immutable.Seq[Invite] = {
+    loadInvitesImpl(createdById = Some(createdById), limit = 999)
+  }
+
+
+  def loadAllInvites(limit: Int): immutable.Seq[Invite] = {
+    loadInvitesImpl(createdById = None, limit = limit)
+  }
+
+
+  private def loadInvitesImpl(createdById: Option[UserId], limit: Int): immutable.Seq[Invite] = {
+    val values = ArrayBuffer[AnyRef](siteId)
+    val andSentBy = createdById match {
+      case Some(id) =>
+        values.append(id.asAnyRef)
+        "and created_by_id = ?"
+      case None =>
+        ""
+    }
     val query = s"""
       select $InviteSelectListItems
       from invites3
-      where site_id = ? and created_by_id = ?
+      where site_id = ? $andSentBy
       order by created_at desc
       """
-    val values = List(siteId, createdById.asAnyRef)
-    val result = ArrayBuffer[Invite]()
-    runQuery(query, values, rs => {
-      while (rs.next()) {
-        val invite = getInvite(rs)
-        result.append(invite)
-      }
+    runQueryFindMany(query, values.toList, rs => {
+      getInvite(rs)
     })
-    result.toVector
   }
 
 

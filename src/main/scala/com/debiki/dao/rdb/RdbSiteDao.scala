@@ -191,14 +191,14 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
 
   def runQueryFindOneOrNone[R](query: String, values: List[AnyRef],
-        singleRowHandler: js.ResultSet => R): Option[R] = {
+        singleRowHandler: js.ResultSet => R, debugCode: String = null): Option[R] = {
     runQuery(query, values, rs => {
       if (!rs.next()) {
         None
       }
       else {
         val result = singleRowHandler(rs)
-        dieIf(rs.next(), "DwE6GMY2")
+        dieIf(rs.next(), "DwE6GMY2" + (if (debugCode eq null) "" else '-' + debugCode))
         Some(result)
       }
     })
