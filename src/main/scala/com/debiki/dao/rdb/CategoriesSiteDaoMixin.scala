@@ -217,7 +217,8 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
       category.unlisted.asAnyRef, category.staffOnly.asAnyRef,
       category.onlyStaffMayCreateTopics.asAnyRef,
-      currentTime, currentTime, category.deletedAt.orNullTimestamp)
+      category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
+      category.deletedAt.orNullTimestamp)
     runUpdateSingleRow(statement, values)
     markSectionPageContentHtmlAsStale(category.id)
   }
