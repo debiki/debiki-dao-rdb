@@ -30,7 +30,7 @@ import Rdb._
 import RdbUtil._
 
 
-/** Creates and updates users and identities.
+/** Creates and updates users and identities.  Docs [8KFUT20].
   */
 trait UserSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
@@ -131,7 +131,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def nextAuthenticatedUserId: UserId = {
+  def nextMemberId: UserId = {
     val query = s"""
       select max(user_id) max_id from users3
       where site_id = ? and user_id >= $LowestAuthenticatedUserId
@@ -157,7 +157,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def insertAuthenticatedUser(user: MemberInclDetails) {
+  def insertMember(user: MemberInclDetails) {
     try {
       runUpdate("""
         insert into users3(

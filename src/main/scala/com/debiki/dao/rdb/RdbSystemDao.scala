@@ -734,6 +734,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from guest_prefs3
       delete from identities3
       delete from invites3
+      delete from usernames3
       delete from users3 where not (user_id in ($SystemUserId, $UnknownUserId) and site_id = '$FirstSiteId')
       delete from hosts3
       delete from sites3 where id <> '$FirstSiteId'
