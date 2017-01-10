@@ -65,6 +65,10 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         allow_signup,
         allow_local_signup,
         allow_guest_login,
+        show_categories,
+        show_topic_filter,
+        show_topic_types,
+        select_topic_type,
         num_first_posts_to_review,
         num_first_posts_to_approve,
         num_first_posts_to_allow,
@@ -85,7 +89,8 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         google_analytics_id,
         experimental,
         html_tag_css_classes)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId,
@@ -97,6 +102,10 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.allowSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowLocalSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowGuestLogin.getOrElse(None).orNullBoolean,
+      editedSettings2.showCategories.getOrElse(None).orNullBoolean,
+      editedSettings2.showTopicFilterButton.getOrElse(None).orNullBoolean,
+      editedSettings2.showTopicTypes.getOrElse(None).orNullBoolean,
+      editedSettings2.selectTopicType.getOrElse(None).orNullBoolean,
       editedSettings2.numFirstPostsToReview.getOrElse(None).orNullInt,
       editedSettings2.numFirstPostsToApprove.getOrElse(None).orNullInt,
       editedSettings2.numFirstPostsToAllow.getOrElse(None).orNullInt,
@@ -144,6 +153,10 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("allow_signup", s.allowSignup.map(_.orNullBoolean))
     maybeSet("allow_local_signup", s.allowLocalSignup.map(_.orNullBoolean))
     maybeSet("allow_guest_login", s.allowGuestLogin.map(_.orNullBoolean))
+    maybeSet("show_categories", s.showCategories.map(_.orNullBoolean))
+    maybeSet("show_topic_filter", s.showTopicFilterButton.map(_.orNullBoolean))
+    maybeSet("show_topic_types", s.showTopicTypes.map(_.orNullBoolean))
+    maybeSet("select_topic_type", s.selectTopicType.map(_.orNullBoolean))
     maybeSet("num_first_posts_to_review", s.numFirstPostsToReview.map(_.orNullInt))
     maybeSet("num_first_posts_to_approve", s.numFirstPostsToApprove.map(_.orNullInt))
     maybeSet("num_first_posts_to_allow", s.numFirstPostsToAllow.map(_.orNullInt))
@@ -190,6 +203,10 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       allowSignup = getOptBoolean(rs, "allow_signup"),
       allowLocalSignup = getOptBoolean(rs, "allow_local_signup"),
       allowGuestLogin = getOptionalBoolean(rs, "allow_guest_login"),
+      showCategories = getOptBoolean(rs, "show_categories"),
+      showTopicFilterButton = getOptBoolean(rs, "show_topic_filter"),
+      showTopicTypes = getOptBoolean(rs, "show_topic_types"),
+      selectTopicType = getOptBoolean(rs, "select_topic_type"),
       numFirstPostsToReview = getOptionalInt(rs, "num_first_posts_to_review"),
       numFirstPostsToApprove = getOptionalInt(rs, "num_first_posts_to_approve"),
       numFirstPostsToAllow = getOptionalInt(rs, "num_first_posts_to_allow"),
