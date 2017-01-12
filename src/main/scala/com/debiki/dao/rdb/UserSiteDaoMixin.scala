@@ -161,7 +161,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     try {
       runUpdate("""
         insert into users3(
-            SITE_ID, USER_ID, DISPLAY_NAME, USERNAME, CREATED_AT,
+            SITE_ID, USER_ID, full_name, USERNAME, CREATED_AT,
             EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
             COUNTRY, IS_OWNER, IS_ADMIN, IS_MODERATOR,
@@ -224,7 +224,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             List[AnyRef](identity.id.toInt.asAnyRef, tenantId, identity.userId.asAnyRef, identity.userId.asAnyRef,
               details.oidClaimedId, e2d(details.oidOpLocalId), e2d(details.oidRealm),
               e2d(details.oidEndpoint), e2d(details.oidVersion),
-              e2d(details.firstName), details.email.orNullVarchar, e2d(details.country)))
+              e2d(details.firstName), details.email.orNullVarchar, e2d(details.country.trim)))
   }
 
 
@@ -242,7 +242,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       List[AnyRef](identity.userId.asAnyRef, details.oidClaimedId,
         e2d(details.oidOpLocalId), e2d(details.oidRealm),
         e2d(details.oidEndpoint), e2d(details.oidVersion),
-        e2d(details.firstName), details.email.orNullVarchar, e2d(details.country),
+        e2d(details.firstName), details.email.orNullVarchar, e2d(details.country.trim),
         identity.id.toInt.asAnyRef, siteId))
   }
 
@@ -583,7 +583,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     val statement = """
       update users3 set
         updated_at = now_utc(),
-        display_name = ?,
+        full_name = ?,
         username = ?,
         email = ?,
         email_verified_at = ?,
@@ -658,7 +658,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     val statement = """
       update users3 set
         updated_at = now_utc(),
-        display_name = ?,
+        full_name = ?,
         locked_threat_level = ?
       where site_id = ? and user_id = ?
       """
@@ -688,7 +688,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
   private def listUsernamesOnPage(pageId: PageId): Seq[NameAndUsername] = {
     val sql = """
-      select distinct u.user_id, u.DISPLAY_NAME, u.USERNAME
+      select distinct u.user_id, u.full_name, u.USERNAME
       from posts3 p inner join users3 u
          on p.SITE_ID = u.SITE_ID
         and p.CREATED_BY_ID = u.USER_ID
@@ -699,7 +699,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     db.queryAtnms(sql, values, rs => {
       while (rs.next()) {
         val userId = rs.getInt("user_id")
-        val fullName = Option(rs.getString("DISPLAY_NAME")) getOrElse ""
+        val fullName = Option(rs.getString("full_name")) getOrElse ""
         val username = rs.getString("USERNAME")
         dieIf(username eq null, "DwE5BKG1")
         result += NameAndUsername(userId, fullName = fullName, username = username)
@@ -711,7 +711,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
   private def listUsernamesWithPrefix(prefix: String): Seq[NameAndUsername] = {
     val sql = s"""
-      select distinct user_id, DISPLAY_NAME, USERNAME
+      select distinct user_id, full_name, USERNAME
       from users3
       where SITE_ID = ? and lower(USERNAME) like lower(?) and USER_ID >= $LowestNonGuestId
       """
@@ -721,7 +721,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       while (rs.next()) {
         result += NameAndUsername(
           id = rs.getInt("user_id"),
-          fullName = Option(rs.getString("DISPLAY_NAME")) getOrElse "",
+          fullName = Option(rs.getString("full_name")) getOrElse "",
           username = rs.getString("USERNAME"))
       }
     })

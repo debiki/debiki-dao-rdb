@@ -60,7 +60,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
                   and u.EMAIL = g.EMAIL
                   and g.VERSION = 'C'
           where u.SITE_ID = ?
-            and u.DISPLAY_NAME = ?
+            and u.full_name = ?
             and u.EMAIL = ?
             and u.GUEST_COOKIE = ?
           """,
@@ -82,13 +82,13 @@ trait LoginSiteDaoMixin extends SiteTransaction {
           isNewGuest = true
           runUpdate(i"""
             insert into users3(
-              site_id, user_id, created_at, display_name, email, guest_cookie)
+              site_id, user_id, created_at, full_name, email, guest_cookie)
             select
               ?, least(min(user_id) - 1, $MaxCustomGuestId), now_utc(), ?, ?, ?
             from
               users3 where site_id = ?
             """,
-            List(siteId, loginAttempt.name, e2d(loginAttempt.email),
+            List(siteId, loginAttempt.name.trim, e2d(loginAttempt.email),
               loginAttempt.guestCookie, siteId))
           // (Could fix: `returning ID into ?`, saves 1 roundtrip.)
           // Loop one more lap to read ID.

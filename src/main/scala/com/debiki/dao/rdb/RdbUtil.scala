@@ -127,7 +127,7 @@ object RdbUtil {
 
   val UserSelectListItemsNoGuests =
     """u.USER_ID u_id,
-      |u.DISPLAY_NAME u_disp_name,
+      |u.full_name u_full_name,
       |u.USERNAME u_username,
       |u.IS_APPROVED u_is_approved,
       |u.APPROVED_AT u_approved_at,
@@ -178,7 +178,7 @@ object RdbUtil {
     if (isGuestId(userId))
       Guest(
         id = userId,
-        guestName = dn2e(rs.getString("u_disp_name")),
+        guestName = dn2e(rs.getString("u_full_name")),
         guestCookie = Option(rs.getString("u_guest_cookie")),
         email = dn2e(rs.getString("u_email")),
         emailNotfPrefs = emailNotfPrefs,
@@ -186,7 +186,7 @@ object RdbUtil {
         lockedThreatLevel = lockedThreatLevel)
     else Member(
       id = userId,
-      fullName = Option(rs.getString("u_disp_name")),
+      fullName = Option(rs.getString("u_full_name")),
       theUsername = rs.getString("u_username"),
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = emailNotfPrefs,
@@ -207,7 +207,7 @@ object RdbUtil {
 
 
   val CompleteUserSelectListItemsNoUserId = i"""
-    |display_name,
+    |full_name,
     |email,
     |about,
     |country,
@@ -249,7 +249,7 @@ object RdbUtil {
     dieIf(User.isGuestId(theUserId), "DwE6P4K3")
     MemberInclDetails(
       id = theUserId,
-      fullName = Option(rs.getString("display_name")),
+      fullName = Option(rs.getString("full_name")),
       username = rs.getString("username"),
       createdAt = getDate(rs, "created_at"),
       emailAddress = dn2e(rs.getString("email")),
