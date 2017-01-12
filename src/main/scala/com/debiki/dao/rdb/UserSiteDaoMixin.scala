@@ -650,7 +650,12 @@ trait UserSiteDaoMixin extends SiteTransaction {
       siteId,
       user.id.asAnyRef)
 
-    runUpdateSingleRow(statement, values)
+    try runUpdateSingleRow(statement, values)
+    catch {
+      case ex: js.SQLException if isUniqueConstrViolation(ex) && uniqueConstrViolatedIs(
+          "dw1_users_site_usernamelower__u", ex) =>
+        throw DuplicateUsernameException(user.username)
+    }
   }
 
 

@@ -37,30 +37,6 @@ end;
 $$;
 
 
-create or replace function is_trimmed(text character varying) returns boolean
-    language plpgsql
-    as $_$
-begin
-    if text ~ '^\s+' then
-      return false;
-    end if;
-    if text ~ '\s+$' then
-      return false;
-    end if;
-    return true;
-end;
-$_$;
-
-
-create or replace function contains_blank(text character varying) returns boolean
-    language plpgsql
-    as $_$
-begin
-    return text ~ '\s';
-end;
-$_$;
-
-
 CREATE or replace FUNCTION is_valid_css_class(text character varying) RETURNS boolean
     LANGUAGE plpgsql
     AS $_$
