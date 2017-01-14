@@ -108,6 +108,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       delete from guest_prefs3 where site_id = ?
       delete from identities3 where site_id = ?
       delete from invites3 where site_id = ?
+      delete from usernames3 where site_id = ?
       delete from users3 where site_id = ?
       delete from hosts3 where site_id = ?
       """).trim.split("\n")
