@@ -119,14 +119,9 @@ trait PostsSiteDaoMixin extends SiteTransaction {
     }
     queryBuilder.append(")")
 
-    var results = ArrayBuffer[Post]()
-    runQuery(queryBuilder.toString, values.toList, rs => {
-      while (rs.next()) {
-        val post = readPost(rs)
-        results += post
-      }
+    runQueryFindMany(queryBuilder.toString, values.toList, rs => {
+      readPost(rs)
     })
-    results.to[immutable.Seq]
   }
 
 
@@ -143,6 +138,56 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       post.id -> post
     })
   }
+
+
+  def loadAllUnapprovedPosts(pageId: PageId, limit: Int): immutable.Seq[Post] = {
+    loadUnapprovedPostsImpl(pageId, None, limit)
+  }
+
+
+  def loadUnapprovedPosts(pageId: PageId, by: UserId, limit: Int): immutable.Seq[Post] = {
+    loadUnapprovedPostsImpl(pageId, Some(by), limit)
+  }
+
+
+  private def loadUnapprovedPostsImpl(pageId: PageId, by: Option[UserId], limit: Int)
+        : immutable.Seq[Post] = {
+    var query = s"""
+      select * from posts3
+      where site_id = ?
+        and page_id = ?
+        and (type is null or type <> ${PostType.CompletedForm.toInt})
+      """
+
+    var values = ArrayBuffer[AnyRef](siteId, pageId.asAnyRef)
+
+    if (by.isDefined) {
+      query += " and created_by_id = ? "
+      values += by.get.asAnyRef
+    }
+
+    query += s" order by created_at desc limit $limit"
+
+    runQueryFindMany(query, values.toList, rs => {
+      readPost(rs, pageId = Some(pageId))
+    })
+  }
+
+
+  def loadCompletedForms(pageId: PageId, limit: Int): immutable.Seq[Post] = {
+    val query = s"""
+      select * from posts3
+      where site_id = ?
+        and page_id = ?
+        and type = ${PostType.CompletedForm.toInt}
+      order by created_at desc
+      limit $limit
+      """
+    runQueryFindMany(query, List(siteId, pageId.asAnyRef), rs => {
+      readPost(rs, pageId = Some(pageId))
+    })
+  }
+
 
   /*
   def loadPosts(authorId: UserId, includeTitles: Boolean, includeChatMessages: Boolean,
