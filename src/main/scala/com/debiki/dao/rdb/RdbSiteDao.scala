@@ -488,7 +488,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       newMeta.frequentPosterIds.drop(1).headOption.orNullInt,
       newMeta.frequentPosterIds.drop(2).headOption.orNullInt,
       newMeta.frequentPosterIds.drop(3).headOption.orNullInt,
-      newMeta.layout.bitmask.asAnyRef,
+      newMeta.layout.toInt.asAnyRef,
       newMeta.pinOrder.orNullInt,
       newMeta.pinWhere.map(_.toInt).orNullInt,
       newMeta.numLikes.asAnyRef,

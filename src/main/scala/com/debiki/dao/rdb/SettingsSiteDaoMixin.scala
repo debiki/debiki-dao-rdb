@@ -65,6 +65,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         allow_signup,
         allow_local_signup,
         allow_guest_login,
+        forum_main_view,
+        forum_topics_sort_buttons,
+        forum_category_links,
+        forum_topics_layout,
+        forum_categories_layout,
         show_categories,
         show_topic_filter,
         show_topic_types,
@@ -77,7 +82,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         end_of_body_html,
         header_html,
         footer_html,
-        show_forum_categories,
         horizontal_comments,
         social_links_html,
         logo_url_or_html,
@@ -90,7 +94,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         experimental,
         html_tag_css_classes)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?)
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId,
@@ -102,6 +106,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.allowSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowLocalSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowGuestLogin.getOrElse(None).orNullBoolean,
+      editedSettings2.forumMainView.getOrElse(None).orNullVarchar,
+      editedSettings2.forumTopicsSortButtons.getOrElse(None).orNullVarchar,
+      editedSettings2.forumCategoryLinks.getOrElse(None).orNullVarchar,
+      editedSettings2.forumTopicsLayout.getOrElse(None).map(_.toInt).orNullInt,
+      editedSettings2.forumCategoriesLayout.getOrElse(None).map(_.toInt).orNullInt,
       editedSettings2.showCategories.getOrElse(None).orNullBoolean,
       editedSettings2.showTopicFilterButton.getOrElse(None).orNullBoolean,
       editedSettings2.showTopicTypes.getOrElse(None).orNullBoolean,
@@ -114,7 +123,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.endOfBodyHtml.getOrElse(None).orNullVarchar,
       editedSettings2.headerHtml.getOrElse(None).orNullVarchar,
       editedSettings2.footerHtml.getOrElse(None).orNullVarchar,
-      editedSettings2.showForumCategories.getOrElse(None).orNullBoolean,
       editedSettings2.horizontalComments.getOrElse(None).orNullBoolean,
       editedSettings2.socialLinksHtml.getOrElse(None).orNullVarchar,
       editedSettings2.logoUrlOrHtml.getOrElse(None).orNullVarchar,
@@ -153,6 +161,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("allow_signup", s.allowSignup.map(_.orNullBoolean))
     maybeSet("allow_local_signup", s.allowLocalSignup.map(_.orNullBoolean))
     maybeSet("allow_guest_login", s.allowGuestLogin.map(_.orNullBoolean))
+    maybeSet("forum_main_view", s.forumMainView.map(_.orNullVarchar))
+    maybeSet("forum_topics_sort_buttons", s.forumTopicsSortButtons.map(_.orNullVarchar))
+    maybeSet("forum_category_links", s.forumCategoryLinks.map(_.orNullVarchar))
+    maybeSet("forum_topics_layout", s.forumTopicsLayout.map(_.map(_.toInt).orNullInt))
+    maybeSet("forum_categories_layout", s.forumCategoriesLayout.map(_.map(_.toInt).orNullInt))
     maybeSet("show_categories", s.showCategories.map(_.orNullBoolean))
     maybeSet("show_topic_filter", s.showTopicFilterButton.map(_.orNullBoolean))
     maybeSet("show_topic_types", s.showTopicTypes.map(_.orNullBoolean))
@@ -165,7 +178,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("end_of_body_html", s.endOfBodyHtml.map(_.orNullVarchar))
     maybeSet("header_html", s.headerHtml.map(_.orNullVarchar))
     maybeSet("footer_html", s.footerHtml.map(_.orNullVarchar))
-    maybeSet("show_forum_categories", s.showForumCategories.map(_.orNullBoolean))
     maybeSet("horizontal_comments", s.horizontalComments.map(_.orNullBoolean))
     maybeSet("social_links_html", s.socialLinksHtml.map(_.orNullVarchar))
     maybeSet("logo_url_or_html", s.logoUrlOrHtml.map(_.orNullVarchar))
@@ -203,6 +215,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       allowSignup = getOptBoolean(rs, "allow_signup"),
       allowLocalSignup = getOptBoolean(rs, "allow_local_signup"),
       allowGuestLogin = getOptionalBoolean(rs, "allow_guest_login"),
+      forumMainView = getOptString(rs, "forum_main_view"),
+      forumTopicsSortButtons = getOptString(rs, "forum_topics_sort_buttons"),
+      forumCategoryLinks = getOptString(rs, "forum_category_links"),
+      forumTopicsLayout = getOptInt(rs, "forum_topics_layout").flatMap(TopicListLayout.fromInt),
+      forumCategoriesLayout = getOptInt(rs, "forum_categories_layout").flatMap(CategoriesLayout.fromInt),
       showCategories = getOptBoolean(rs, "show_categories"),
       showTopicFilterButton = getOptBoolean(rs, "show_topic_filter"),
       showTopicTypes = getOptBoolean(rs, "show_topic_types"),
@@ -215,7 +232,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       endOfBodyHtml = Option(rs.getString("end_of_body_html")),
       headerHtml = Option(rs.getString("header_html")),
       footerHtml = Option(rs.getString("footer_html")),
-      showForumCategories = getOptionalBoolean(rs, "show_forum_categories"),
       horizontalComments = getOptionalBoolean(rs, "horizontal_comments"),
       socialLinksHtml = Option(rs.getString("social_links_html")),
       logoUrlOrHtml = Option(rs.getString("logo_url_or_html")),
