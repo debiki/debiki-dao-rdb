@@ -37,7 +37,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 
-  override def tryLogin(loginAttempt: LoginAttempt): LoginGrant = {
+  override def tryLoginAsMember(loginAttempt: MemberLoginAttempt): MemberLoginGrant = {
     val loginGrant = loginAttempt match {
       case x: PasswordLoginAttempt => loginWithPassword(x)
       case x: EmailLoginAttempt => loginWithEmailId(x)
@@ -108,7 +108,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private def loginWithPassword(loginAttempt: PasswordLoginAttempt): LoginGrant = {
+  private def loginWithPassword(loginAttempt: PasswordLoginAttempt): MemberLoginGrant = {
     val anyUser = loadMemberByEmailOrUsername(loginAttempt.email)
     val user = anyUser getOrElse {
       throw IdentityNotFoundException(s"No user found with email: ${loginAttempt.email}")
@@ -123,11 +123,11 @@ trait LoginSiteDaoMixin extends SiteTransaction {
     if (!okPassword)
       throw BadPasswordException
 
-    LoginGrant(identity = None, user, isNewIdentity = false, isNewRole = false)
+    MemberLoginGrant(identity = None, user, isNewIdentity = false, isNewMember = false)
   }
 
 
-  private def loginWithEmailId(loginAttempt: EmailLoginAttempt): LoginGrant = {
+  private def loginWithEmailId(loginAttempt: EmailLoginAttempt): MemberLoginGrant = {
     val emailId = loginAttempt.emailId
     val email: Email = loadEmailById(emailId = emailId) match {
       case Some(email) if email.toUserId.isDefined => email
@@ -144,11 +144,11 @@ trait LoginSiteDaoMixin extends SiteTransaction {
       throw new EmailAddressChangedException(email, user)
 
     val idtyWithId = IdentityEmailId(id = emailId, userId = user.id, emailSent = Some(email))
-    LoginGrant(Some(idtyWithId), user, isNewIdentity = false, isNewRole = false)
+    MemberLoginGrant(Some(idtyWithId), user, isNewIdentity = false, isNewMember = false)
   }
 
 
-  private def loginOpenId(loginAttempt: OpenIdLoginAttempt): LoginGrant = {
+  private def loginOpenId(loginAttempt: OpenIdLoginAttempt): MemberLoginGrant = {
     die("EsE6UYKJ2", "Unimpl") /*
     transactionCheckQuota { implicit connection =>
 
@@ -213,7 +213,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private def loginOpenAuth(loginAttempt: OpenAuthLoginAttempt): LoginGrant = {
+  private def loginOpenAuth(loginAttempt: OpenAuthLoginAttempt): MemberLoginGrant = {
     transactionCheckQuota { connection =>
       loginOpenAuthImpl(loginAttempt)(connection)
     }
@@ -221,7 +221,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
 
   private def loginOpenAuthImpl(loginAttempt: OpenAuthLoginAttempt)
-        (connection: js.Connection): LoginGrant = {
+        (connection: js.Connection): MemberLoginGrant = {
     val (identityInDb: Option[Identity], userInDb: Option[Member]) =
       _loadIdtyDetailsAndUser(
         forOpenAuthProfile = loginAttempt.profileProviderAndKey)(connection)
@@ -246,8 +246,8 @@ trait LoginSiteDaoMixin extends SiteTransaction {
         throwBadDatabaseData("DwE21GSh0", s"A non-SecureSocial identity found in database: $x")
     }
 
-    LoginGrant(Some(identity), user, isNewIdentity = identityInDb.isEmpty,
-      isNewRole = userInDb.isEmpty)
+    MemberLoginGrant(Some(identity), user, isNewIdentity = identityInDb.isEmpty,
+      isNewMember = userInDb.isEmpty)
   }
 
 }

@@ -17,12 +17,10 @@
 
 package com.debiki.dao.rdb
 
-import collection.mutable
+import collection.immutable
 import collection.mutable.ArrayBuffer
 import com.debiki.core._
-import com.debiki.core.DbDao._
-import com.debiki.core.Prelude._
-import java.{sql => js, util => ju}
+import java.{sql => js}
 import scala.collection.mutable
 import Rdb._
 import RdbUtil._
@@ -30,7 +28,7 @@ import RdbUtil._
 
 /** Saves and loads info on how many times each post has been read and by whom.
   */
-trait PostsReadStatsSiteDaoMixin extends SiteTransaction {
+trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStats...
   self: RdbSiteDao =>
 
 
@@ -141,6 +139,190 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction {
       """
     values.appendAll(oldPostNrs.map(_.asAnyRef))
     runUpdate(statement, values.toList)
+  }
+
+
+  def loadUserStats(userId: UserId): Option[UserStats] = {
+    val query = """
+      select * from user_stats3
+      where site_id = ? and user_id = ?
+      """
+    runQueryFindOneOrNone(query, List(siteId, userId.asAnyRef), rs => {
+      UserStats(
+        userId = userId,
+        lastSeenAt = getWhen(rs, "last_seen_at"),
+        lastPostedAt = getOptWhen(rs, "last_posted_at"),
+        lastEmailedAt = getOptWhen(rs, "last_emailed_at"),
+        emailBounceSum = rs.getFloat("email_bounce_sum"),
+        firstSeenAt = getWhen(rs, "first_seen_at"),
+        firstNewTopicAt = getOptWhen(rs, "first_new_topic_at"),
+        firstDiscourseReplyAt = getOptWhen(rs, "first_discourse_reply_at"),
+        firstChatMessageAt = getOptWhen(rs, "first_chat_message_at"),
+        topicsNewSince = getWhen(rs, "topics_new_since"),
+        notfsNewSinceId = rs.getInt("notfs_new_since_id"),
+        numDaysVisited = rs.getInt("num_days_visited"),
+        numMinutesReading = rs.getInt("num_minutes_reading"),
+        numDiscourseRepliesRead = rs.getInt("num_discourse_replies_read"),
+        numDiscourseRepliesPosted = rs.getInt("num_discourse_replies_posted"),
+        numDiscourseTopicsEntered = rs.getInt("num_discourse_topics_entered"),
+        numDiscourseTopicsRepliedIn = rs.getInt("num_discourse_topics_replied_in"),
+        numDiscourseTopicsCreated = rs.getInt("num_discourse_topics_created"),
+        numChatMessagesRead = rs.getInt("num_chat_messages_read"),
+        numChatMessagesPosted = rs.getInt("num_chat_messages_posted"),
+        numChatTopicsEntered = rs.getInt("num_chat_topics_entered"),
+        numChatTopicsRepliedIn = rs.getInt("num_chat_topics_replied_in"),
+        numChatTopicsCreated = rs.getInt("num_chat_topics_created"),
+        numLikesGiven = rs.getInt("num_likes_given"),
+        numLikesReceived = rs.getInt("num_likes_received"),
+        numSolutionsProvided = rs.getInt("num_solutions_provided"))
+    })
+  }
+
+
+  def upsertUserStats(userStats: UserStats) {
+    val statement = s"""
+      insert into user_stats3 (
+        site_id,
+        user_id,
+        last_seen_at,
+        last_posted_at,
+        last_emailed_at,
+        email_bounce_sum,
+        first_seen_at,
+        first_new_topic_at,
+        first_discourse_reply_at,
+        first_chat_message_at,
+        topics_new_since,
+        notfs_new_since_id,
+        num_days_visited,
+        num_minutes_reading,
+        num_discourse_replies_read,
+        num_discourse_replies_posted,
+        num_discourse_topics_entered,
+        num_discourse_topics_replied_in,
+        num_discourse_topics_created,
+        num_chat_messages_read,
+        num_chat_messages_posted,
+        num_chat_topics_entered,
+        num_chat_topics_replied_in,
+        num_chat_topics_created,
+        num_likes_given,
+        num_likes_received,
+        num_solutions_provided)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict (site_id, user_id) do update set
+        last_seen_at = excluded.last_seen_at,
+        last_posted_at = excluded.last_posted_at,
+        last_emailed_at = excluded.last_emailed_at,
+        email_bounce_sum = excluded.email_bounce_sum,
+        first_seen_at = excluded.first_seen_at,
+        first_new_topic_at = excluded.first_new_topic_at,
+        first_discourse_reply_at = excluded.first_discourse_reply_at,
+        first_chat_message_at = excluded.first_chat_message_at,
+        topics_new_since = excluded.topics_new_since,
+        notfs_new_since_id = excluded.notfs_new_since_id,
+        num_days_visited = excluded.num_days_visited,
+        num_minutes_reading = excluded.num_minutes_reading,
+        num_discourse_replies_read = excluded.num_discourse_replies_read,
+        num_discourse_replies_posted = excluded.num_discourse_replies_posted,
+        num_discourse_topics_entered = excluded.num_discourse_topics_entered,
+        num_discourse_topics_replied_in = excluded.num_discourse_topics_replied_in,
+        num_discourse_topics_created = excluded.num_discourse_topics_created,
+        num_chat_messages_read = excluded.num_chat_messages_read,
+        num_chat_messages_posted = excluded.num_chat_messages_posted,
+        num_chat_topics_entered = excluded.num_chat_topics_entered,
+        num_chat_topics_replied_in = excluded.num_chat_topics_replied_in,
+        num_chat_topics_created = excluded.num_chat_topics_created,
+        num_likes_given = excluded.num_likes_given,
+        num_likes_received = excluded.num_likes_received,
+        num_solutions_provided = excluded.num_solutions_provided
+      """
+
+    val values = List(
+      siteId,
+      userStats.userId.asAnyRef,
+      userStats.lastSeenAt.asTimestamp,
+      userStats.lastPostedAt.orNullTimestamp,
+      userStats.lastEmailedAt.orNullTimestamp,
+      userStats.emailBounceSum.asAnyRef,
+      userStats.firstSeenAt.asTimestamp,
+      userStats.firstNewTopicAt.orNullTimestamp,
+      userStats.firstDiscourseReplyAt.orNullTimestamp,
+      userStats.firstChatMessageAt.orNullTimestamp,
+      userStats.topicsNewSince.asTimestamp,
+      userStats.notfsNewSinceId.asAnyRef,
+      userStats.numDaysVisited.asAnyRef,
+      userStats.numMinutesReading.asAnyRef,
+      userStats.numDiscourseRepliesRead.asAnyRef,
+      userStats.numDiscourseRepliesPosted.asAnyRef,
+      userStats.numDiscourseTopicsEntered.asAnyRef,
+      userStats.numDiscourseTopicsRepliedIn.asAnyRef,
+      userStats.numDiscourseTopicsCreated.asAnyRef,
+      userStats.numChatMessagesRead.asAnyRef,
+      userStats.numChatMessagesPosted.asAnyRef,
+      userStats.numChatTopicsEntered.asAnyRef,
+      userStats.numChatTopicsRepliedIn.asAnyRef,
+      userStats.numChatTopicsCreated.asAnyRef,
+      userStats.numLikesGiven.asAnyRef,
+      userStats.numLikesReceived.asAnyRef,
+      userStats.numSolutionsProvided.asAnyRef)
+
+    runUpdateExactlyOneRow(statement, values)
+  }
+
+
+
+  def loadUserVisitStats(memberId: UserId): immutable.Seq[UserVisitStats] = {
+    require(memberId >= LowestNonGuestId, "EdE84SZMI8")
+    val query = """
+      select * from user_visit_stats3
+      where site_id = ? and user_id = ?
+      order by visit_date desc
+      """
+    runQueryFindMany(query, List(siteId, memberId.asAnyRef), rs => {
+      UserVisitStats(
+        userId = memberId,
+        visitDate = getWhen(rs, "visit_date").toDays,
+        numMinutesReading = rs.getInt("num_minutes_reading"),
+        numDiscourseRepliesRead = rs.getInt("num_discourse_replies_read"),
+        numDiscourseTopicsEntered = rs.getInt("num_discourse_topics_entered"),
+        numChatMessagesRead = rs.getInt("num_chat_messages_read"),
+        numChatTopicsEntered = rs.getInt("num_chat_topics_entered"))
+    })
+  }
+
+
+  def upsertUserVisitStats(visitStats: UserVisitStats) {
+    val statement = s"""
+      insert into user_visit_stats3 (
+        site_id,
+        user_id,
+        visit_date,
+        num_minutes_reading,
+        num_discourse_replies_read,
+        num_discourse_topics_entered,
+        num_chat_messages_read,
+        num_chat_topics_entered)
+      values (?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict (site_id, user_id, visit_date) do update set
+        num_minutes_reading = excluded.num_minutes_reading,
+        num_discourse_replies_read = excluded.num_discourse_replies_read,
+        num_discourse_topics_entered = excluded.num_discourse_topics_entered,
+        num_chat_messages_read = excluded.num_chat_messages_read,
+        num_chat_topics_entered = excluded.num_chat_topics_entered
+      """
+
+    val values = List(
+      siteId,
+      visitStats.userId.asAnyRef,
+      visitStats.visitDate.toJavaDate.asTimestamp,
+      visitStats.numMinutesReading.asAnyRef,
+      visitStats.numDiscourseRepliesRead.asAnyRef,
+      visitStats.numDiscourseTopicsEntered.asAnyRef,
+      visitStats.numChatMessagesRead.asAnyRef,
+      visitStats.numChatTopicsEntered.asAnyRef)
+
+    runUpdateExactlyOneRow(statement, values)
   }
 
 }
