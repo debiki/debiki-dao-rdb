@@ -72,11 +72,11 @@ create table user_stats3(
   constraint memstats_r_people foreign key (site_id, user_id) references users3 (site_id, user_id),
   constraint memstats_c_lastseen_greatest check (
     (last_seen_at >= last_posted_at or last_posted_at is null) and
-    (last_seen_at >= first_seen_at or first_seen_at is null) and
+    (last_seen_at >= first_seen_at) and
     (last_seen_at >= first_new_topic_at or first_new_topic_at is null) and
     (last_seen_at >= first_discourse_reply_at or first_discourse_reply_at is null) and
     (last_seen_at >= first_chat_message_at or first_chat_message_at is null) and
-    (last_seen_at >= topics_new_since or topics_new_since is null)),
+    (last_seen_at >= topics_new_since)),
   constraint memstats_c_firstseen_smallest check (
     (first_seen_at <= last_posted_at or last_posted_at is null) and
     (first_seen_at <= first_new_topic_at or first_new_topic_at is null) and
@@ -128,4 +128,59 @@ create table user_visit_stats3(
     and num_chat_topics_entered >= 0)
 );
 
+
+-- Adding another trust level, the Helpful member, so now there're 6 trust levels not 5.
+alter table users3 drop constraint users3_lockedtrustlevel__c_betw;
+alter table users3 drop constraint users3_trustlevel__c_betw;
+
+alter table users3 add constraint users_lockedtrustlevel__c_betw check (
+  locked_trust_level between 1 and 6);
+
+alter table users3 add constraint users_trustlevel__c_betw check (
+  trust_level between 1 and 6);
+
+
+-- Replaces both page_members3 and member_page_settings3: (will drop them later + add trigger here?)
+create table page_users3 (
+  site_id varchar not null,
+  page_id varchar not null,
+  user_id int not null,
+  joined_by_id int,
+  kicked_by_id int,
+  any_pin_cleared boolean,
+  notf_level smallint,
+  notf_reason smallint,
+  num_posts_read int not null default 0,
+  num_seconds_reading int not null default 0,
+  first_visited_at timestamp,
+  last_visited_at timestamp,
+  last_read_at timestamp,
+  last_read_post_nr int,
+  post_nrs_read_bitflags bytea,
+  constraint pageusers_page_user_p primary key (site_id, page_id, user_id),
+  constraint pageusers_user_r_users foreign key (site_id, user_id) references users3 (site_id, user_id),
+  constraint pageusers_joinedby_r_users foreign key (site_id, joined_by_id) references users3 (site_id, user_id),
+  constraint pageusers_kickedby_r_users foreign key (site_id, kicked_by_id) references users3 (site_id, user_id),
+  constraint pageusers_page_r_pages foreign key (site_id, page_id) references pages3 (site_id, page_id),
+  constraint pageusers_notflevel_c_in check (notf_level between 1 and 20),
+  constraint pageusers_notfreason_c_in check (notf_reason between 1 and 20),
+  constraint pageusers_c_nulls check (
+    (notf_reason is null or notf_level is not null)
+    and ((last_visited_at is null) = (first_visited_at is null))
+    and (last_read_at is null or last_visited_at is not null)
+    and ((last_read_at is null) = (last_read_post_nr is null))
+    and ((last_read_at is null) = (post_nrs_read_bitflags is null))),
+  constraint pageusers_c_gez check (
+    num_posts_read >= 0
+    and num_seconds_reading >= 0
+    and (last_visited_at >= first_visited_at or last_visited_at is null)
+    and (last_read_at >= first_visited_at or last_read_at is null)
+    and (last_read_post_nr >= 0 or last_read_post_nr is null))
+);
+
+create index pageusers_user_i on page_users3 (site_id, user_id);
+
+insert into page_users3 (site_id, page_id, user_id, joined_by_id)
+  select site_id, page_id, user_id, added_by_id
+  from page_members3;
 

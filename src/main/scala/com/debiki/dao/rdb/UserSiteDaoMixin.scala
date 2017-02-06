@@ -23,9 +23,8 @@ import com.debiki.core.Prelude._
 import com.debiki.core.User.{LowestNonGuestId, LowestAuthenticatedUserId}
 import _root_.java.{util => ju, io => jio}
 import java.{sql => js}
-import scala.collection.{immutable, mutable}
-import scala.collection.{mutable => mut}
-import scala.collection.mutable.{ArrayBuffer, StringBuilder}
+import scala.collection.immutable
+import scala.collection.mutable.ArrayBuffer
 import Rdb._
 import RdbUtil._
 
@@ -700,7 +699,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         and u.USERNAME is not null
       where p.SITE_ID = ? and p.PAGE_ID = ?"""
     val values = List(siteId, pageId)
-    val result = mutable.ArrayBuffer[NameAndUsername]()
+    val result = ArrayBuffer[NameAndUsername]()
     db.queryAtnms(sql, values, rs => {
       while (rs.next()) {
         val userId = rs.getInt("user_id")
@@ -721,7 +720,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       where SITE_ID = ? and lower(USERNAME) like lower(?) and USER_ID >= $LowestNonGuestId
       """
     val values = List(siteId, prefix + "%")
-    val result = mutable.ArrayBuffer[NameAndUsername]()
+    val result = ArrayBuffer[NameAndUsername]()
     db.queryAtnms(sql, values, rs => {
       while (rs.next()) {
         result += NameAndUsername(
@@ -765,51 +764,44 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadRolePageSettings(roleId: RoleId, pageId: PageId): Option[RolePageSettings] = {
+  def loadUsersPageSettings(userId: UserId, pageId: PageId): Option[UsersPageSettings] = {
     val query = i"""
-      select NOTF_LEVEL
-      from member_page_settings3
-      where SITE_ID = ? and ROLE_ID = ? and PAGE_ID = ?"""
-    val values = List(siteId, roleId.asAnyRef, pageId)
-    db.queryAtnms(query, values, rs => {
-      if (!rs.next)
-        return None
-
-      val notfLevel = flagToNotfLevel(rs.getString("NOTF_LEVEL"))
-      return Some(RolePageSettings(notfLevel))
+      select notf_level
+      from page_users3
+      where site_id = ? and user_id = ? and page_id = ?
+      """
+    val values = List(siteId, userId.asAnyRef, pageId)
+    runQueryFindOneOrNone(query, values, rs => {
+      val notfLevel = NotfLevel.fromInt(rs.getInt("notf_level")).getOrElse(NotfLevel.Normal)
+      UsersPageSettings(notfLevel)
     })
   }
 
 
-  def saveRolePageSettings(roleId: RoleId, pageId: PageId, settings: RolePageSettings)  {
-    // Race condition below. Ignore it; a single user is unlikely to update itself
-    // two times simultaneously.
-    val updateDontInsert = loadRolePageSettings(roleId, pageId = pageId).isDefined
-    val sql =
-      if (updateDontInsert) """
-        update member_page_settings3
-        set NOTF_LEVEL = ?
-        where SITE_ID = ? and ROLE_ID = ? and PAGE_ID = ?"""
-      else """
-        insert into member_page_settings3(
-          NOTF_LEVEL, SITE_ID, ROLE_ID, PAGE_ID)
-        values (?, ?, ?, ?)"""
-    val values = List(notfLevelToFlag(settings.notfLevel), siteId, roleId.asAnyRef, pageId)
-    transactionCheckQuota { implicit connection =>
-      db.update(sql, values)
-    }
+  def saveUsersPageSettings(userId: UserId, pageId: PageId, settings: UsersPageSettings)  {
+    val sql = """
+      insert into page_users3(site_id, user_id, page_id, notf_level)
+      values (?, ?, ?, ?)
+      on conflict (site_id, user_id, page_id) do update set
+        notf_level = excluded.notf_level
+      """
+    val values = List(siteId, userId.asAnyRef, pageId, settings.notfLevel.toInt.asAnyRef)
+    runUpdate(sql, values)
   }
 
 
   def loadUserIdsWatchingPage(pageId: PageId): Seq[UserId] = {
+    val result = ArrayBuffer[UserId]()
+
     // Load people watching pageId only.
     // For now, ignore users watching any parent categories, consider `pageId` itself only.
-    val sql = """
-      select ROLE_ID
-      from member_page_settings3
-      where SITE_ID = ? and PAGE_ID = ? and NOTF_LEVEL = 'W'"""
-    var result = mutable.ArrayBuffer[UserId]()
-    db.queryAtnms(sql, List(siteId, pageId), rs => {
+    val sql = s"""
+      select user_id from page_users3
+      where site_id = ?
+        and page_id = ?
+        and notf_level = ${NotfLevel.WatchingAll.toInt}
+      """
+    runQuery(sql, List(siteId, pageId), rs => {
       while (rs.next()) {
         result += rs.getInt("ROLE_ID")
       }
@@ -818,29 +810,12 @@ trait UserSiteDaoMixin extends SiteTransaction {
     // Load people watching the whole site.
     val sqlWholeSite = """
       select USER_ID from users3 where SITE_ID = ? and EMAIL_FOR_EVERY_NEW_POST = true"""
-    db.queryAtnms(sqlWholeSite, List(siteId), rs => {
+    runQuery(sqlWholeSite, List(siteId), rs => {
       while (rs.next()) {
         result += rs.getInt("USER_ID")
       }
     })
     result.distinct.to[immutable.Seq]
-  }
-
-
-  private def notfLevelToFlag(notfLevel: NotfLevel) = notfLevel match {
-    case NotfLevel.WatchingAll => "W"
-    case NotfLevel.Tracking => "T"
-    case NotfLevel.Normal => "R"
-    case NotfLevel.Muted => "M"
-  }
-
-
-  private def flagToNotfLevel(flag: String) = flag match {
-    case "W" => NotfLevel.WatchingAll
-    case "T" => NotfLevel.Tracking
-    case "R" => NotfLevel.Normal
-    case "M" => NotfLevel.Muted
-    case x => die("DwE7FK02", s"Bad notf level: `$x'")
   }
 
 }

@@ -1,6 +1,16 @@
 CLEAN_UP // remove guest_prefs3.version column, use the aduit_log3 table instead
 
+create table page_views_by_strangers3 (
+  site_id varchar not null,
+  page_id varchar not null,
+  ip varchar not null);
 
+Triggers to add on page_users3:
+    member_page_settings3_sum_quota AFTER INSERT OR DELETE OR UPDATE ON member_page_settings3 FOR EACH ROW EXECUTE PROCEDURE member_page_settings3_sum_quota()
+
+
+
+----
 
 alter table settings3 add column flag_fraction_to_close_topic real not null default 0.1;
 alter table settings3 add column num_flags_to_close_topic int not null default 10;

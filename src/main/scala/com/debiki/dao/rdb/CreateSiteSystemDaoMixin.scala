@@ -95,6 +95,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       // skip: uploads3
       s"""
       delete from page_members3 where site_id = ?
+      delete from page_users3 where site_id = ?
       delete from tag_notf_levels3 where site_id = ?
       delete from post_tags3 where site_id = ?
       delete from post_actions3 where site_id = ?

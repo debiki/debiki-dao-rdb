@@ -180,6 +180,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
 
 
   def upsertUserStats(userStats: UserStats) {
+    // Dupl code, also in Scala [7FKTU02], perhaps add param `addToOldStats: Boolean`?
     val statement = s"""
       insert into user_stats3 (
         site_id,
@@ -211,16 +212,26 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
         num_solutions_provided)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict (site_id, user_id) do update set
-        last_seen_at = excluded.last_seen_at,
-        last_posted_at = excluded.last_posted_at,
-        last_emailed_at = excluded.last_emailed_at,
-        email_bounce_sum = excluded.email_bounce_sum,
-        first_seen_at = excluded.first_seen_at,
-        first_new_topic_at = excluded.first_new_topic_at,
-        first_discourse_reply_at = excluded.first_discourse_reply_at,
-        first_chat_message_at = excluded.first_chat_message_at,
-        topics_new_since = excluded.topics_new_since,
-        notfs_new_since_id = excluded.notfs_new_since_id,
+        last_seen_at =
+            greatest(user_stats3.last_seen_at, excluded.last_seen_at),
+        last_posted_at =
+            greatest(user_stats3.last_posted_at, excluded.last_posted_at),
+        last_emailed_at =
+            greatest(user_stats3.last_emailed_at, excluded.last_emailed_at),
+        email_bounce_sum =
+            excluded.email_bounce_sum,
+        first_seen_at =
+            least(user_stats3.first_seen_at, excluded.first_seen_at),
+        first_new_topic_at =
+            least(user_stats3.first_new_topic_at, excluded.first_new_topic_at),
+        first_discourse_reply_at =
+            least(user_stats3.first_discourse_reply_at, excluded.first_discourse_reply_at),
+        first_chat_message_at =
+            least(user_stats3.first_chat_message_at, excluded.first_chat_message_at),
+        topics_new_since =
+            greatest(user_stats3.topics_new_since, excluded.topics_new_since),
+        notfs_new_since_id =
+            greatest(user_stats3.notfs_new_since_id, excluded.notfs_new_since_id),
         num_days_visited = excluded.num_days_visited,
         num_minutes_reading = excluded.num_minutes_reading,
         num_discourse_replies_read = excluded.num_discourse_replies_read,

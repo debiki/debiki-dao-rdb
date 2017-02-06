@@ -32,27 +32,35 @@ trait MessagesSiteDaoMixin extends SiteTransaction {
 
   override def insertMessageMember(pageId: PageId, userId: UserId, addedById: UserId): Boolean = {
     val statement = """
-      insert into page_members3 (site_id, page_id, user_id, added_by_id, added_at)
-      values (?, ?, ?, ?, now_utc())
-      on conflict (site_id, page_id, user_id) do nothing
+      insert into page_users3 (site_id, page_id, user_id, joined_by_id)
+      values (?, ?, ?, ?)
+      on conflict (site_id, page_id, user_id) do update set
+        joined_by_id = excluded.joined_by_id,
+        kicked_by_id = null
       """
     val values = List[AnyRef](siteId, pageId, userId.asAnyRef, addedById.asAnyRef)
     runUpdateSingleRow(statement, values)
   }
 
 
-  override def removePageMember(pageId: PageId, userId: UserId): Boolean = {
+  override def removePageMember(pageId: PageId, userId: UserId, removedById: UserId): Boolean = {
     val statement = """
-      delete from page_members3 where site_id = ? and page_id = ? and user_id = ?
+      update page_users3
+      set kicked_by_id = ?
+      where site_id = ? and page_id = ? and user_id = ?
       """
-    val values = List[AnyRef](siteId, pageId, userId.asAnyRef)
+    val values = List[AnyRef](removedById.asAnyRef, siteId, pageId, userId.asAnyRef)
     runUpdateSingleRow(statement, values)
   }
 
 
   override def loadMessageMembers(pageId: PageId): Set[UserId] = {
     val query = """
-      select user_id from page_members3 where site_id = ? and page_id = ?
+      select user_id from page_users3
+      where site_id = ?
+        and page_id = ?
+        and joined_by_id is not null
+        and kicked_by_id is null
       """
     runQueryFindManyAsSet(query, List(siteId, pageId), rs => {
       rs.getInt("user_id")
@@ -66,11 +74,11 @@ trait MessagesSiteDaoMixin extends SiteTransaction {
     // Inline the page roles (rather than (?, ?, ?, ...)) because they'll always be the same
     // for each caller (hardcoded somewhere).
     val query = s"""
-      select m.page_id, p.page_role
-      from page_members3 m inner join pages3 p
-        on m.site_id = p.site_id and m.page_id = p.page_id and p.page_role in (
+      select tu.page_id, p.page_role
+      from page_users3 tu inner join pages3 p
+        on tu.site_id = p.site_id and tu.page_id = p.page_id and p.page_role in (
             ${ onlyPageRoles.map(_.toInt).mkString(",") })
-      where m.site_id = ? and m.user_id = ?
+      where tu.site_id = ? and tu.user_id = ?
       order by p.last_reply_at desc
       """
     runQueryFindMany(query, List(siteId, userId.asAnyRef), rs => {
