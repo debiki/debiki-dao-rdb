@@ -26,7 +26,7 @@ import Rdb._
 
 /** Loads and saves members of direct message conversations.
   */
-trait MessagesSiteDaoMixin extends SiteTransaction {
+trait PageUsersSiteDaoMixin extends SiteTransaction {
   self: RdbSiteDao =>
 
 

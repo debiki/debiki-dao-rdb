@@ -43,7 +43,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   with PagesSiteDaoMixin
   with PostsSiteDaoMixin
   with TagsSiteDaoMixin
-  with MessagesSiteDaoMixin
+  with PageUsersSiteDaoMixin
   with UploadsSiteDaoMixin
   with CategoriesSiteDaoMixin
   with SearchSiteDaoMixin
