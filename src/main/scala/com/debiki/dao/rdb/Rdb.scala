@@ -34,6 +34,7 @@ object Rdb {
   val NullDouble = Null(js.Types.DOUBLE)
   val NullFloat = Null(js.Types.FLOAT)
   val NullTimestamp = Null(js.Types.TIMESTAMP)
+  val NullBytea = Null(js.Types.VARBINARY)
 
   /**
    * Pimps `Option[String]` with `orNullVarchar`, which means
@@ -84,6 +85,13 @@ object Rdb {
       val trimmed = string.trim
       if (trimmed.nonEmpty) trimmed
       else NullVarchar
+    }
+  }
+
+  implicit class PimpByteArrayWithNullIfEmpty(array: Array[Byte]) {
+    def orNullByteaIfEmpty: AnyRef = {
+      if (array.isEmpty) NullBytea
+      else array
     }
   }
 
@@ -184,6 +192,17 @@ object Rdb {
     val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
     if (timestamp eq null) When.fromMillis(0)
     else When.fromMillis(timestamp.getTime)
+  }
+
+  def getWhenMinutes(rs: js.ResultSet, column: String): When = {
+    val unixMinutes = rs.getInt(column)
+    When.fromMillis(unixMinutes * 60L * 1000)
+  }
+
+  def getOptWhenMinutes(rs: js.ResultSet, column: String): Option[When] = {
+    val unixMinutes = rs.getInt(column)
+    if (rs.wasNull()) None
+    else Some(When.fromMillis(unixMinutes * 60L * 1000))
   }
 
   def getOptionalDate(rs: js.ResultSet, column: String): Option[ju.Date] = {
@@ -516,11 +535,16 @@ class Rdb(val readOnlyDataSource: jxs.DataSource, val readWriteDataSource: jxs.D
         case l: jl.Double => pstmt.setDouble(bindPos, l.doubleValue)
         case b: jl.Boolean => pstmt.setBoolean(bindPos, b.booleanValue)
         case s: String => pstmt.setString(bindPos, s)
-        case t: js.Time => assErr("DwE96SK3X8", "Use Timestamp not Time")
-        case t: js.Timestamp => pstmt.setTimestamp(bindPos, t, RdbSystemDao.calendarUtcTimeZone)
-        case d: ju.Date => pstmt.setTimestamp(bindPos, new js.Timestamp(d.getTime),
-                              RdbSystemDao.calendarUtcTimeZone)
-        case Null(sqlType) => pstmt.setNull(bindPos, sqlType)
+        case t: js.Time =>
+          die("DwE96SK3X8", "Use Timestamp not Time")
+        case t: js.Timestamp =>
+          pstmt.setTimestamp(bindPos, t, RdbSystemDao.calendarUtcTimeZone)
+        case d: ju.Date =>
+          pstmt.setTimestamp(bindPos, new js.Timestamp(d.getTime), RdbSystemDao.calendarUtcTimeZone)
+        case bs: Array[Byte] =>
+          pstmt.setBytes(bindPos, bs)
+        case Null(sqlType) =>
+          pstmt.setNull(bindPos, sqlType)
         case x =>
           die("DwE60KF2F5", "Cannot bind this: "+ classNameOf(x))
       }

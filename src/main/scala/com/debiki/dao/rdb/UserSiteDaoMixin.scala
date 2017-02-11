@@ -764,6 +764,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  // COULD move to PageUsersSiteDaoMixin.
   def loadUsersPageSettings(userId: UserId, pageId: PageId): Option[UsersPageSettings] = {
     val query = i"""
       select notf_level
@@ -778,6 +779,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  // COULD move to PageUsersSiteDaoMixin.
   def saveUsersPageSettings(userId: UserId, pageId: PageId, settings: UsersPageSettings)  {
     val sql = """
       insert into page_users3(site_id, user_id, page_id, notf_level)
@@ -795,6 +797,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
     // Load people watching pageId only.
     // For now, ignore users watching any parent categories, consider `pageId` itself only.
+    // COULD move this query only to PageUsersSiteDaoMixin.
     val sql = s"""
       select user_id from page_users3
       where site_id = ?

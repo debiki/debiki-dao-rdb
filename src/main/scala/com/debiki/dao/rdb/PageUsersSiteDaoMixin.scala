@@ -86,4 +86,95 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
     })
   }
 
+
+  def loadReadProgress(userId: UserId, pageId: PageId): Option[ReadingProgress] = {
+    val query = """
+      select
+        num_seconds_reading,
+        first_visited_at_mins,
+        last_visited_at_mins,
+        last_viewed_post_nr,
+        last_read_at_mins,
+        last_read_post_nr,
+        recently_read_nrs,
+        low_post_nrs_read
+      from page_users3
+      where site_id = ?
+        and page_id = ?
+        and user_id = ?
+      """
+    runQueryFindOneOrNone(query, List(siteId, pageId, userId.asAnyRef), rs => {
+      // This is the very last post nr read.
+      val lastReadPostNr = rs.getInt("last_read_post_nr")
+      // These bits store even more recently read posts: the 2nd, 3rd, 4th, ... most recent ones.
+      val recentlyReadNrsBytes: Array[Byte] =
+        Option(rs.getBytes("recently_read_nrs")) getOrElse Array.empty
+
+      // (For now, skip the bytes, not impl anywhere.)
+      val lastPostNrsRead =
+        if (lastReadPostNr != 0) Vector(lastReadPostNr)
+        else Vector.empty
+
+      val lowPostNrsReadBytes: Array[Byte] =
+        Option(rs.getBytes("low_post_nrs_read")) getOrElse Array.empty
+      val lowPostNrsRead = ReadingProgress.parseLowPostNrsReadBitsetBytes(lowPostNrsReadBytes)
+
+      ReadingProgress(
+        firstVisitedAt = getWhenMinutes(rs, "first_visited_at_mins"),
+        lastVisitedAt = getWhenMinutes(rs, "last_visited_at_mins"),
+        lastViewedPostNr = rs.getInt("last_viewed_post_nr"),
+        lastReadAt = getOptWhenMinutes(rs, "last_read_at_mins"),
+        lastPostNrsReadRecentFirst = lastPostNrsRead,
+        lowPostNrsRead = lowPostNrsRead,
+        secondsReading = rs.getInt("num_seconds_reading"))
+    })
+  }
+
+
+  def upsertReadProgress(userId: UserId, pageId: PageId, progress: ReadingProgress) {
+    val statement = """
+      insert into page_users3 (
+        site_id,
+        page_id,
+        user_id,
+        num_seconds_reading,
+        num_low_posts_read,
+        first_visited_at_mins,
+        last_visited_at_mins,
+        last_viewed_post_nr,
+        last_read_at_mins,
+        last_read_post_nr,
+        recently_read_nrs,
+        low_post_nrs_read)
+      values (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict (site_id, page_id, user_id) do update set
+        num_seconds_reading = excluded.num_seconds_reading,
+        num_low_posts_read = excluded.num_low_posts_read,
+        first_visited_at_mins = excluded.first_visited_at_mins,
+        last_visited_at_mins = excluded.last_visited_at_mins,
+        last_viewed_post_nr = excluded.last_viewed_post_nr,
+        last_read_at_mins = excluded.last_read_at_mins,
+        last_read_post_nr = excluded.last_read_post_nr,
+        recently_read_nrs = excluded.recently_read_nrs,
+        low_post_nrs_read = excluded.low_post_nrs_read
+      """
+
+    val values = List(
+      siteId,
+      pageId,
+      userId.asAnyRef,
+      progress.secondsReading.asAnyRef,
+      progress.lowPostNrsRead.size.asAnyRef,
+      progress.firstVisitedAt.unixMinutes.asAnyRef,
+      progress.lastVisitedAt.unixMinutes.asAnyRef,
+      progress.lastViewedPostNr.asAnyRef,
+      progress.lastReadAt.map(_.unixMinutes).orNullInt,
+      progress.lastPostNrsReadRecentFirst.headOption.orNullInt,
+      NullBytea, // for now
+      progress.lowPostNrsReadAsBitsetBytes.orNullByteaIfEmpty)
+
+    runUpdateExactlyOneRow(statement, values)
+  }
+
 }

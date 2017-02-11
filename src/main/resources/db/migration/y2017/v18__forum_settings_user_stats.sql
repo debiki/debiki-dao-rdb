@@ -68,21 +68,22 @@ create table user_stats3(
   num_likes_given int not null default 0,
   num_likes_received int not null default 0,
   num_solutions_provided int not null default 0,
-  constraint memstats_p primary key (site_id, user_id),
-  constraint memstats_r_people foreign key (site_id, user_id) references users3 (site_id, user_id),
-  constraint memstats_c_lastseen_greatest check (
+  constraint userstats_p primary key (site_id, user_id),
+  constraint userstats_r_people foreign key (site_id, user_id) references users3 (site_id, user_id),
+  constraint userstats_c_lastseen_greatest check (
     (last_seen_at >= last_posted_at or last_posted_at is null) and
     (last_seen_at >= first_seen_at) and
     (last_seen_at >= first_new_topic_at or first_new_topic_at is null) and
     (last_seen_at >= first_discourse_reply_at or first_discourse_reply_at is null) and
     (last_seen_at >= first_chat_message_at or first_chat_message_at is null) and
     (last_seen_at >= topics_new_since)),
-  constraint memstats_c_firstseen_smallest check (
+  constraint userstats_c_firstseen_gz check (extract (epoch from first_seen_at) > 0),
+  constraint userstats_c_firstseen_smallest check (
     (first_seen_at <= last_posted_at or last_posted_at is null) and
     (first_seen_at <= first_new_topic_at or first_new_topic_at is null) and
     (first_seen_at <= first_discourse_reply_at or first_discourse_reply_at is null) and
     (first_seen_at <= first_chat_message_at or first_chat_message_at is null)),
-  constraint memstats_c_gez check (
+  constraint userstats_c_gez check (
     email_bounce_sum >= 0 and
     notfs_new_since_id >= 0 and
     num_days_visited >= 0 and
@@ -133,10 +134,10 @@ create table user_visit_stats3(
 alter table users3 drop constraint users3_lockedtrustlevel__c_betw;
 alter table users3 drop constraint users3_trustlevel__c_betw;
 
-alter table users3 add constraint users_lockedtrustlevel__c_betw check (
+alter table users3 add constraint users_lockedtrustlevel_c_betw check (
   locked_trust_level between 1 and 6);
 
-alter table users3 add constraint users_trustlevel__c_betw check (
+alter table users3 add constraint users_trustlevel_c_betw check (
   trust_level between 1 and 6);
 
 
@@ -150,13 +151,16 @@ create table page_users3 (
   any_pin_cleared boolean,
   notf_level smallint,
   notf_reason smallint,
-  num_posts_read int not null default 0,
   num_seconds_reading int not null default 0,
-  first_visited_at timestamp,
-  last_visited_at timestamp,
-  last_read_at timestamp,
+  num_low_posts_read smallint not null default 0,
+  -- Per page and user = many rows, so store timestamps with minute resolution only.
+  first_visited_at_mins int,
+  last_visited_at_mins int,
+  last_viewed_post_nr int,
+  last_read_at_mins int,
   last_read_post_nr int,
-  post_nrs_read_bitflags bytea,
+  recently_read_nrs bytea,
+  low_post_nrs_read bytea,
   constraint pageusers_page_user_p primary key (site_id, page_id, user_id),
   constraint pageusers_user_r_users foreign key (site_id, user_id) references users3 (site_id, user_id),
   constraint pageusers_joinedby_r_users foreign key (site_id, joined_by_id) references users3 (site_id, user_id),
@@ -164,21 +168,34 @@ create table page_users3 (
   constraint pageusers_page_r_pages foreign key (site_id, page_id) references pages3 (site_id, page_id),
   constraint pageusers_notflevel_c_in check (notf_level between 1 and 20),
   constraint pageusers_notfreason_c_in check (notf_reason between 1 and 20),
-  constraint pageusers_c_nulls check (
-    (notf_reason is null or notf_level is not null)
-    and ((last_visited_at is null) = (first_visited_at is null))
-    and (last_read_at is null or last_visited_at is not null)
-    and ((last_read_at is null) = (last_read_post_nr is null))
-    and ((last_read_at is null) = (post_nrs_read_bitflags is null))),
+  constraint pageusers_reason_level_c_null check ((notf_reason is null) or (notf_level is not null)),
+  constraint pageusers_lastvisited_firstvisited_c_null check (
+    (last_visited_at_mins is null) = (first_visited_at_mins is null)),
+  constraint pageusers_lastvisited_lastviewedpostnr_c_null check (
+    (last_visited_at_mins is not null) or (last_viewed_post_nr is null)),
+  constraint pageusers_lastvisited_lastreadat_c_null check (
+    (last_visited_at_mins is not null) or (last_read_at_mins is null)),
+  constraint pageusers_lastreadat_lastreadpostnr_c_null check (
+    (last_read_at_mins is not null) or (last_read_post_nr is null)),
+  constraint pageusers_lastreadat_numsecondsreading_c_0 check (
+    (last_read_at_mins is null) = (num_seconds_reading = 0)),
+  constraint pageusers_lastreadat_low_last_nrs_c_null check (
+    (last_read_at_mins is not null) or (low_post_nrs_read is null and recently_read_nrs is null)),
   constraint pageusers_c_gez check (
-    num_posts_read >= 0
-    and num_seconds_reading >= 0
-    and (last_visited_at >= first_visited_at or last_visited_at is null)
-    and (last_read_at >= first_visited_at or last_read_at is null)
+    num_seconds_reading >= 0
+    and num_low_posts_read >= 0
+    and (last_visited_at_mins >= first_visited_at_mins or last_visited_at_mins is null)
+    and (last_viewed_post_nr >= 0 or last_viewed_post_nr is null)
+    and (last_read_at_mins >= first_visited_at_mins or last_read_at_mins is null)
     and (last_read_post_nr >= 0 or last_read_post_nr is null))
 );
 
+-- To lookup per-user statistics quickly.
 create index pageusers_user_i on page_users3 (site_id, user_id);
+
+-- Foreign key constraints.
+create index pageusers_joinedby_i on page_users3 (site_id, joined_by_id);
+create index pageusers_kickedby_i on page_users3 (site_id, kicked_by_id);
 
 insert into page_users3 (site_id, page_id, user_id, joined_by_id)
   select site_id, page_id, user_id, added_by_id
