@@ -742,6 +742,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
       delete from hosts3
       delete from sites3 where id <> '$FirstSiteId'
       update sites3 set next_page_id = 1
+      insert into user_stats3 (site_id, user_id, last_seen_at, first_seen_at, topics_new_since) select site_id, user_id, created_at, created_at, created_at from users3
       alter sequence DW1_TENANTS_ID restart
       """.trim.split("\n") foreach { runUpdate(_) }
 

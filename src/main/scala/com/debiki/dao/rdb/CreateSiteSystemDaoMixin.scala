@@ -77,6 +77,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
 
   def deleteSiteById(siteId: SiteId): Boolean = {
     require(siteId startsWith Site.TestIdPrefix, "Can delete test sites only [EdE6FK02]")
+    require(siteId != FirstSiteId, "Cannot delete site 1 [EdE5RCTW3]")
 
     runUpdate("set constraints all deferred")
 
