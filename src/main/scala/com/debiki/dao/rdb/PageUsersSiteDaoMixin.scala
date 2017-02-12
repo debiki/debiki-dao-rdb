@@ -104,6 +104,13 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
         and user_id = ?
       """
     runQueryFindOneOrNone(query, List(siteId, pageId, userId.asAnyRef), rs => {
+      val firstVisitedAt = getWhenMinutes(rs, "first_visited_at_mins")
+      if (rs.wasNull) {
+        // There's a row for this user, although hen hasn't visited the page — apparently
+        // someone else has made hen a page member, e.g. added hen to a chat channel.
+        return None
+      }
+
       // This is the very last post nr read.
       val lastReadPostNr = rs.getInt("last_read_post_nr")
       // These bits store even more recently read posts: the 2nd, 3rd, 4th, ... most recent ones.
@@ -120,7 +127,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
       val lowPostNrsRead = ReadingProgress.parseLowPostNrsReadBitsetBytes(lowPostNrsReadBytes)
 
       ReadingProgress(
-        firstVisitedAt = getWhenMinutes(rs, "first_visited_at_mins"),
+        firstVisitedAt = firstVisitedAt,
         lastVisitedAt = getWhenMinutes(rs, "last_visited_at_mins"),
         lastViewedPostNr = rs.getInt("last_viewed_post_nr"),
         lastReadAt = getOptWhenMinutes(rs, "last_read_at_mins"),

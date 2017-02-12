@@ -54,7 +54,7 @@ create table user_stats3(
   topics_new_since timestamp not null,
   notfs_new_since_id int not null default 0,
   num_days_visited int not null default 0,
-  num_minutes_reading int not null default 0,
+  num_seconds_reading int not null default 0,
   num_discourse_replies_read int not null default 0,
   num_discourse_replies_posted int not null default 0,
   num_discourse_topics_entered int not null default 0,
@@ -87,7 +87,7 @@ create table user_stats3(
     email_bounce_sum >= 0 and
     notfs_new_since_id >= 0 and
     num_days_visited >= 0 and
-    num_minutes_reading >= 0 and
+    num_seconds_reading >= 0 and
     num_discourse_replies_read >= 0 and
     num_discourse_replies_posted >= 0 and
     num_discourse_topics_entered >= 0 and
@@ -114,7 +114,7 @@ create table user_visit_stats3(
   site_id varchar not null,
   user_id int not null,
   visit_date date not null,
-  num_minutes_reading int not null default 0,
+  num_seconds_reading int not null default 0,
   num_discourse_replies_read int not null default 0,
   num_discourse_topics_entered int not null default 0,
   num_chat_messages_read int not null default 0,
@@ -122,7 +122,7 @@ create table user_visit_stats3(
   constraint uservisitstats_p primary key (site_id, user_id, visit_date),
   constraint uservisitstats_r_people foreign key (site_id, user_id) references users3 (site_id, user_id),
   constraint uservisitstats_c_gez check (
-    num_minutes_reading >= 0
+    num_seconds_reading >= 0
     and num_discourse_replies_read >= 0
     and num_discourse_topics_entered >= 0
     and num_chat_messages_read >= 0
