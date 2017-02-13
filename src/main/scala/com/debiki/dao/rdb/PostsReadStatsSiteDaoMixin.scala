@@ -52,9 +52,9 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
         val sql = s"""
           insert into post_read_stats3(
             SITE_ID, PAGE_ID, post_nr, IP, USER_ID, READ_AT)
-          values (?, ?, ?, ?, ?, ?)"""
+          values (?, ?, ?, ?, ?, now_utc())"""
         val values = List[AnyRef](siteId, pageId, postNr.asAnyRef,
-          readFromIp, readById.asAnyRef, currentTime)
+          readFromIp, readById.asAnyRef)
         try {
           db.update(sql, values)
         }

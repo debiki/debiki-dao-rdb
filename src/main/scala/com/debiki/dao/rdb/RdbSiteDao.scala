@@ -18,15 +18,11 @@
 package com.debiki.dao.rdb
 
 import com.debiki.core._
-import com.debiki.core.DbDao._
-import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
-import com.debiki.core.PagePath._
 import com.debiki.core.Prelude._
-import _root_.java.{util => ju, io => jio}
+import _root_.java.{util => ju}
 import java.{sql => js}
-import scala.collection.{immutable, mutable}
-import scala.collection.{mutable => mut}
-import scala.collection.mutable.{ArrayBuffer, StringBuilder}
+import scala.collection.immutable
+import scala.collection.mutable.ArrayBuffer
 import DbDao._
 import Rdb._
 import RdbUtil._
@@ -38,7 +34,7 @@ import RdbUtil._
   * FullTextSearchSiteDaoMixin. But not very important, because
   * it doesn't have any mutable state.
   */
-class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
+class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory, val now: When)
   extends SiteTransaction
   with PagesSiteDaoMixin
   with PostsSiteDaoMixin
@@ -61,12 +57,12 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
 
   val LocalhostAddress = "127.0.0.1"
 
-  def db = daoFactory.db
+  def db: Rdb = daoFactory.db
 
   /** Lets us call SystemTransaction functions, in the same transaction.
     */
   lazy val asSystem: RdbSystemDao = {
-    val transaction = new RdbSystemDao(daoFactory)
+    val transaction = new RdbSystemDao(daoFactory, now)
     transaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
     transaction
   }
@@ -75,21 +71,17 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     siteId = newId
   }
 
-  @deprecated("now", "use this.now instead")
-  lazy val currentTime: ju.Date = asSystem.currentTime
-
-
 
   /** If set, should be the only connection that this dao uses. Some old code doesn't
     * create it though, then different connections are used instead :-(
     * I'll rename it to 'connection', when all that old code is gone and there's only
     * one connection always.
     */
-  def anyOneAndOnlyConnection =
+  def anyOneAndOnlyConnection: Option[js.Connection] =
     _theOneAndOnlyConnection
 
   // COULD move to new superclass?
-  def theOneAndOnlyConnection = {
+  def theOneAndOnlyConnection: js.Connection = {
     if (transactionEnded)
       throw new IllegalStateException("Transaction has ended [DwE4GKP53]")
     _theOneAndOnlyConnection getOrElse {
@@ -629,7 +621,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
   def createSite(name: String, status: SiteStatus, hostname: String,
         embeddingSiteUrl: Option[String], creatorIp: String, creatorEmailAddress: String,
         quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
-        isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan): Site = {
+        isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan, createdAt: When): Site = {
 
     // Unless apparently testing from localhost, don't allow someone to create
     // very many sites.
@@ -649,7 +641,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
     val id =
       if (isTestSiteOkayToDelete) Site.TestIdPrefix + nextRandomString().take(5)
       else "?"
-    val newSiteNoId = Site(id, status, name = name, createdAt = now,
+    val newSiteNoId = Site(id, status, name = name, createdAt = createdAt,
       creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
       embeddingSiteUrl = embeddingSiteUrl, hosts = Nil)
 
@@ -658,7 +650,7 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory)
       catch {
         case ex: js.SQLException =>
           if (!isUniqueConstrViolation(ex)) throw ex
-          throw new SiteAlreadyExistsException(name)
+          throw SiteAlreadyExistsException(name)
       }
 
     newSite

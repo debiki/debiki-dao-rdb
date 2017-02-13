@@ -25,23 +25,20 @@ import com.debiki.core._
 class RdbDaoFactory(
   val db: Rdb,
   val migrations: ScalaBasedDatabaseMigrations,
+  val getCurrentTime: () => When,
   val isTest: Boolean = false) extends DbDaoFactory {
-
-
-  def newSiteDbDao(siteId: SiteId) =
-    new RdbSiteDao(siteId, this)
 
 
   override def newSiteTransaction(siteId: SiteId, readOnly: Boolean, mustBeSerializable: Boolean)
       : SiteTransaction = {
-    val dao = newSiteDbDao(siteId)
+    val dao = new RdbSiteDao(siteId, this, getCurrentTime())
     dao.createTheOneAndOnlyConnection(readOnly = readOnly, mustBeSerializable = mustBeSerializable)
     dao
   }
 
 
   override def newSystemTransaction(readOnly: Boolean): SystemTransaction = {
-    val dao = new RdbSystemDao(this)
+    val dao = new RdbSystemDao(this, getCurrentTime())
     dao.createTheOneAndOnlyConnection(readOnly = readOnly)
     dao
   }

@@ -22,7 +22,7 @@ import com.debiki.core.Prelude._
 import _root_.java.{util => ju}
 import java.{sql => js}
 import org.flywaydb.core.Flyway
-import scala.collection.{mutable, immutable}
+import scala.collection.{immutable, mutable}
 import scala.collection.mutable.{ArrayBuffer, StringBuilder}
 import Rdb._
 import RdbUtil._
@@ -42,10 +42,10 @@ object RdbSystemDao {
 }
 
 
-class RdbSystemDao(val daoFactory: RdbDaoFactory)
+class RdbSystemDao(val daoFactory: RdbDaoFactory, val now: When)
   extends SystemTransaction with CreateSiteSystemDaoMixin {
 
-  def db = daoFactory.db
+  def db: Rdb = daoFactory.db
 
 
   /** If set, should be the only connection that this dao uses. Some old code doesn't
@@ -54,7 +54,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     * one connection always.
     */
   // COULD move to new superclass?
-  def theOneAndOnlyConnection = {
+  def theOneAndOnlyConnection: js.Connection = {
     if (transactionEnded)
       throw new IllegalStateException("Transaction has ended [DwE5KD3W2]")
     _theOneAndOnlyConnection getOrElse {
@@ -117,7 +117,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
 
 
   override def siteTransaction(siteId: SiteId): SiteTransaction = {
-    val siteTransaction = new RdbSiteDao(siteId, daoFactory)
+    val siteTransaction = new RdbSiteDao(siteId, daoFactory, now)
     siteTransaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
     siteTransaction
   }
@@ -128,15 +128,7 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory)
     // The site dao should use the same transaction connection, if we have any;
     dieIf(_theOneAndOnlyConnection ne null, "DwE6KEG3")
     dieIf(transactionEnded, "EsE5MGUW2")
-    daoFactory.newSiteDbDao(siteId)
-  }
-
-
-  lazy val currentTime: ju.Date = {
-    runQuery("select now_utc() as current_time", Nil, rs => {
-      rs.next()
-      getDate(rs, "current_time")
-    })
+    new RdbSiteDao(siteId, daoFactory, now)
   }
 
 

@@ -22,8 +22,7 @@ import collection.mutable.ArrayBuffer
 import com.debiki.core._
 import com.debiki.core.PageParts.TitleNr
 import com.debiki.core.Prelude._
-import java.{sql => js, util => ju}
-import scala.collection.mutable
+import java.{sql => js}
 import Rdb._
 import RdbUtil._
 import PostsSiteDaoMixin._
@@ -284,10 +283,10 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
 
   private def loadPostsToReviewImpl(whereTests: String): ArrayBuffer[Post] = {
-    var query = s"select * from posts3 where site_id = ? and $whereTests"
+    val query = s"select * from posts3 where site_id = ? and $whereTests"
     val values = List(siteId)
     var results = ArrayBuffer[Post]()
-    runQuery(query, values.toList, rs => {
+    runQuery(query, values, rs => {
       while (rs.next()) {
         val post = readPost(rs)
         results += post
@@ -574,24 +573,24 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       currentRevLastEditedAt = getOptionalDate(rs, "curr_rev_last_edited_at"),
       currentSourcePatch = Option(rs.getString("curr_rev_source_patch")),
       currentRevisionNr = rs.getInt("curr_rev_nr"),
-      previousRevisionNr = getOptionalIntNoneNot0(rs, "prev_rev_nr"),
+      previousRevisionNr = getOptInt(rs, "prev_rev_nr"),
       lastApprovedEditAt = getOptionalDate(rs, "LAST_APPROVED_EDIT_AT"),
-      lastApprovedEditById = getResultSetIntOption(rs, "LAST_APPROVED_EDIT_BY_ID"),
+      lastApprovedEditById = getOptInt(rs, "LAST_APPROVED_EDIT_BY_ID"),
       numDistinctEditors = rs.getInt("NUM_DISTINCT_EDITORS"),
-      safeRevisionNr = getResultSetIntOption(rs, "safe_rev_nr"),
+      safeRevisionNr = getOptInt(rs, "safe_rev_nr"),
       approvedSource = Option(rs.getString("APPROVED_SOURCE")),
       approvedHtmlSanitized = Option(rs.getString("APPROVED_HTML_SANITIZED")),
       approvedAt = getOptionalDate(rs, "APPROVED_AT"),
-      approvedById = getResultSetIntOption(rs, "APPROVED_BY_ID"),
-      approvedRevisionNr = getResultSetIntOption(rs, "approved_rev_nr"),
+      approvedById = getOptInt(rs, "APPROVED_BY_ID"),
+      approvedRevisionNr = getOptInt(rs, "approved_rev_nr"),
       collapsedStatus = new CollapsedStatus(rs.getInt("COLLAPSED_STATUS")),
       collapsedAt = getOptionalDate(rs, "COLLAPSED_AT"),
-      collapsedById = getResultSetIntOption(rs, "COLLAPSED_BY_ID"),
+      collapsedById = getOptInt(rs, "COLLAPSED_BY_ID"),
       closedStatus = new ClosedStatus(rs.getInt("CLOSED_STATUS")),
       closedAt = getOptionalDate(rs, "CLOSED_AT"),
-      closedById = getResultSetIntOption(rs, "CLOSED_BY_ID"),
+      closedById = getOptInt(rs, "CLOSED_BY_ID"),
       bodyHiddenAt = getOptionalDate(rs, "HIDDEN_AT"),
-      bodyHiddenById = getResultSetIntOption(rs, "HIDDEN_BY_ID"),
+      bodyHiddenById = getOptInt(rs, "HIDDEN_BY_ID"),
       bodyHiddenReason = getOptionalStringNotEmpty(rs, "hidden_reason"),
       deletedStatus = new DeletedStatus(rs.getInt("DELETED_STATUS")),
       deletedAt = getOptionalDate(rs, "DELETED_AT"),
@@ -629,7 +628,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
 
   def loadActionsByUserOnPage(userId: UserId, pageId: PageId): immutable.Seq[PostAction] = {
-    var query = """
+    val query = """
       select unique_post_id, post_nr, type, created_at, created_by_id
       from post_actions3
       where site_id = ? and page_id = ? and created_by_id = ?
@@ -653,7 +652,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
 
   def loadActionsDoneToPost(pageId: PageId, postNr: PostNr): immutable.Seq[PostAction] = {
-    var query = """
+    val query = """
       select unique_post_id, type, created_at, created_by_id
       from post_actions3
       where site_id = ? and page_id = ? and post_nr = ?
@@ -722,12 +721,12 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
 
   def clearFlags(pageId: PageId, postNr: PostNr, clearedById: UserId) {
-    var statement = s"""
+    val statement = s"""
       update post_actions3
-      set deleted_at = ?, deleted_by_id = ?, updated_at = now_utc()
+      set deleted_at = now_utc(), deleted_by_id = ?, updated_at = now_utc()
       where site_id = ? and page_id = ? and post_nr = ? and deleted_at is null
       """
-    val values = List(d2ts(currentTime), clearedById.asAnyRef, siteId, pageId, postNr.asAnyRef)
+    val values = List(clearedById.asAnyRef, siteId, pageId, postNr.asAnyRef)
     runUpdate(statement, values)
   }
 
@@ -736,10 +735,10 @@ trait PostsSiteDaoMixin extends SiteTransaction {
     val statement = """
       insert into post_actions3(site_id, unique_post_id, page_id, post_nr, type, created_by_id,
           created_at, sub_id)
-      values (?, ?, ?, ?, ?, ?, ?, 1)
+      values (?, ?, ?, ?, ?, ?, now_utc(), 1)
       """
     val values = List[AnyRef](siteId, uniquePostId.asAnyRef, pageId, postNr.asAnyRef,
-      toActionTypeInt(actionType), doerId.asAnyRef, currentTime)
+      toActionTypeInt(actionType), doerId.asAnyRef)
     val numInserted =
       try { runUpdate(statement, values) }
       catch {
@@ -750,11 +749,11 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadLastPostRevision(postId: PostId) =
+  def loadLastPostRevision(postId: PostId): Option[PostRevision] =
     loadPostRevisionImpl(postId, PostRevision.LastRevisionMagicNr)
 
 
-  def loadPostRevision(postId: PostId, revisionNr: Int) =
+  def loadPostRevision(postId: PostId, revisionNr: Int): Option[PostRevision] =
     loadPostRevisionImpl(postId, revisionNr)
 
 
@@ -788,16 +787,16 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       Some(PostRevision(
         postId = postId,
         revisionNr = rs.getInt("revision_nr"),
-        previousNr = getOptionalIntNoneNot0(rs, "previous_nr"),
+        previousNr = getOptInt(rs, "previous_nr"),
         sourcePatch = Option(rs.getString("source_patch")),
         fullSource = Option(rs.getString("full_source")),
         title = Option(rs.getString("title")),
         composedAt = getDate(rs, "composed_at"),
         composedById = rs.getInt("composed_by_id"),
         approvedAt = getOptionalDate(rs, "approved_at"),
-        approvedById = getOptionalIntNoneNot0(rs, "approved_by_id"),
+        approvedById = getOptInt(rs, "approved_by_id"),
         hiddenAt = getOptionalDate(rs, "hidden_at"),
-        hiddenById = getOptionalIntNoneNot0(rs, "hidden_by_id")))
+        hiddenById = getOptInt(rs, "hidden_by_id")))
     })
   }
 
