@@ -29,7 +29,7 @@ import RdbUtil._
   * of the site (e.g. a blog or a forum), a category, single pages.
   */
 trait SettingsSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   override def loadSiteSettings(): Option[EditedSettings] = {

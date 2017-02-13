@@ -29,20 +29,8 @@ import RdbUtil._
 import PostsSiteDaoMixin.fromActionTypeInt
 
 
-object RdbSystemDao {
 
-  // Calendar is very thread unsafe, and reportedly slow, because of creation of
-  // the TimeZone and Locale objects, so cache them.
-  // (Source: http://stackoverflow.com/questions/6245053/how-to-make-a-static-calendar-thread-safe#comment24522525_6245117 )
-  def calendarUtcTimeZone = ju.Calendar.getInstance(UtcTimeZone, DefaultLocale)
-
-  // These are not thread safe (at least not TimeZone), but we never modify them.
-  private val UtcTimeZone = ju.TimeZone.getTimeZone("UTC")
-  private val DefaultLocale = ju.Locale.getDefault(ju.Locale.Category.FORMAT)
-}
-
-
-class RdbSystemDao(val daoFactory: RdbDaoFactory, val now: When)
+class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
   extends SystemTransaction with CreateSiteSystemDaoMixin {
 
   def db: Rdb = daoFactory.db
@@ -117,18 +105,18 @@ class RdbSystemDao(val daoFactory: RdbDaoFactory, val now: When)
 
 
   override def siteTransaction(siteId: SiteId): SiteTransaction = {
-    val siteTransaction = new RdbSiteDao(siteId, daoFactory, now)
+    val siteTransaction = new RdbSiteTransaction(siteId, daoFactory, now)
     siteTransaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
     siteTransaction
   }
 
 
   /** Creates a site specific dao. */
-  def newSiteDao(siteId: SiteId): RdbSiteDao = {
+  def newSiteDao(siteId: SiteId): RdbSiteTransaction = {
     // The site dao should use the same transaction connection, if we have any;
     dieIf(_theOneAndOnlyConnection ne null, "DwE6KEG3")
     dieIf(transactionEnded, "EsE5MGUW2")
-    new RdbSiteDao(siteId, daoFactory, now)
+    new RdbSiteTransaction(siteId, daoFactory, now)
   }
 
 

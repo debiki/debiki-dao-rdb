@@ -28,7 +28,7 @@ import Rdb._
   * in the filesystem or in Google Cloud Storage or Amazon S3 + a CDN.
   */
 trait UploadsSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   def loadUploadedFileMeta(uploadRef: UploadRef): Option[(Int, String)] = {

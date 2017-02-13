@@ -31,7 +31,7 @@ import PostsSiteDaoMixin._
 /** Loads and saves pages and cached page content html.
   */
 trait PagesSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   def markPagesWithUserAvatarAsStale(userId: UserId) {

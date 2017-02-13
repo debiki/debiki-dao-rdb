@@ -28,7 +28,7 @@ import RdbUtil.makeInListFor
 /** Loads and saves ReviewTask:s.
   */
 trait ReviewsSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   override def nextReviewTaskId(): ReviewTaskId = {

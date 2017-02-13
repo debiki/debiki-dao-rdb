@@ -25,7 +25,7 @@ import SearchSiteDaoMixin._
 
 
 trait SpamCheckQueueDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   def spamCheckPostsSoon(byWho: Who, spamRelReqStuff: SpamRelReqStuff, posts: Post*) {

@@ -30,7 +30,7 @@ import RdbUtil._
 /** Loads and saves categories, and lists all pages in a category or all categories.
   */
 trait CategoriesSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   def loadCategory(categoryId: CategoryId): Option[Category] = {

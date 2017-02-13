@@ -27,7 +27,7 @@ import RdbUtil._
 /** Adds and removes post tags. Page tags = tags added to the page body post (post nr 1).
   */
 trait TagsSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   def loadAllTagsAsSet(): Set[TagLabel] = {

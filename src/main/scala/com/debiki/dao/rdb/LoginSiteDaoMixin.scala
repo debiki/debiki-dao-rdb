@@ -34,7 +34,7 @@ object LoginSiteDaoMixin {
 
 
 trait LoginSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   override def tryLoginAsMember(loginAttempt: MemberLoginAttempt): MemberLoginGrant = {

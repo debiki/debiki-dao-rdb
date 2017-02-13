@@ -32,7 +32,7 @@ import RdbUtil._
 /** Creates and updates users and identities.  Docs [8KFUT20].
   */
 trait UserSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
   // COULD convert these 'T' columns to booleans.
   val IsOwnerOrStaff = o"""(is_owner is not null and is_owner = 'T' or

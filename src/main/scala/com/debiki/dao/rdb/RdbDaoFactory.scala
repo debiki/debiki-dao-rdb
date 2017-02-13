@@ -31,16 +31,16 @@ class RdbDaoFactory(
 
   override def newSiteTransaction(siteId: SiteId, readOnly: Boolean, mustBeSerializable: Boolean)
       : SiteTransaction = {
-    val dao = new RdbSiteDao(siteId, this, getCurrentTime())
-    dao.createTheOneAndOnlyConnection(readOnly = readOnly, mustBeSerializable = mustBeSerializable)
-    dao
+    val transaction = new RdbSiteTransaction(siteId, this, getCurrentTime())
+    transaction.createTheOneAndOnlyConnection(readOnly, mustBeSerializable = mustBeSerializable)
+    transaction
   }
 
 
   override def newSystemTransaction(readOnly: Boolean): SystemTransaction = {
-    val dao = new RdbSystemDao(this, getCurrentTime())
-    dao.createTheOneAndOnlyConnection(readOnly = readOnly)
-    dao
+    val transaction = new RdbSystemTransaction(this, getCurrentTime())
+    transaction.createTheOneAndOnlyConnection(readOnly = readOnly)
+    transaction
   }
 
 }

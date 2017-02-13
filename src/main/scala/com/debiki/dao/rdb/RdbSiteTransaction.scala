@@ -34,7 +34,7 @@ import RdbUtil._
   * FullTextSearchSiteDaoMixin. But not very important, because
   * it doesn't have any mutable state.
   */
-class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory, val now: When)
+class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val now: When)
   extends SiteTransaction
   with PagesSiteDaoMixin
   with PostsSiteDaoMixin
@@ -61,8 +61,8 @@ class RdbSiteDao(var siteId: SiteId, val daoFactory: RdbDaoFactory, val now: Whe
 
   /** Lets us call SystemTransaction functions, in the same transaction.
     */
-  lazy val asSystem: RdbSystemDao = {
-    val transaction = new RdbSystemDao(daoFactory, now)
+  lazy val asSystem: RdbSystemTransaction = {
+    val transaction = new RdbSystemTransaction(daoFactory, now)
     transaction.setTheOneAndOnlyConnection(theOneAndOnlyConnection)
     transaction
   }

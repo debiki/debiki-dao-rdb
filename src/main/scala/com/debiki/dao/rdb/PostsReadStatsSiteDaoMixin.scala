@@ -29,7 +29,7 @@ import RdbUtil._
 /** Saves and loads info on how many times each post has been read and by whom.
   */
 trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStats...
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   def updatePostsReadStats(pageId: PageId, postNrsRead: Set[PostNr],

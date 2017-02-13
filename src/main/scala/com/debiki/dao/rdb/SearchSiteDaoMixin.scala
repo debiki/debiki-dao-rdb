@@ -38,7 +38,7 @@ object SearchSiteDaoMixin {
 
 
 trait SearchSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
   val selectSiteVersion = "select version from sites3 where id = ?"
 

@@ -27,7 +27,7 @@ import Rdb._
 /** Saves and deletes notifications.
   */
 trait NotificationsSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   def saveDeleteNotifications(notifications: Notifications) {

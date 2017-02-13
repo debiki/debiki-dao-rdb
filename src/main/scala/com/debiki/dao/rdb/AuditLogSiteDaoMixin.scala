@@ -30,7 +30,7 @@ import RdbUtil._
 /** Inserts, updates, loads audit log entries.
   */
 trait AuditLogSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
   var batchId: Option[AuditLogEntryId] = None
   var batchOffset = 0

@@ -38,7 +38,7 @@ import RdbUtil._
   * after a grace period? 3 months? a year?
   */
 trait UsernamesSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
   private val orderBy = "order by in_use_from"
 

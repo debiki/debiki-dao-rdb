@@ -31,7 +31,7 @@ import RdbUtil._
 /** Manages blocks (i.e. bans) of ip addresses, browser id cookies etc.
   */
 trait BlocksSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   override def insertBlock(block: Block) {

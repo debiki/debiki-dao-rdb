@@ -27,7 +27,7 @@ import Rdb._
 /** Loads and saves members of direct message conversations.
   */
 trait PageUsersSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteDao =>
+  self: RdbSiteTransaction =>
 
 
   override def insertMessageMember(pageId: PageId, userId: UserId, addedById: UserId): Boolean = {

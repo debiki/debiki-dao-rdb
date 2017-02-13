@@ -28,7 +28,7 @@ import collection.mutable.StringBuilder
 
 
 trait CreateSiteSystemDaoMixin extends SystemTransaction {
-  self: RdbSystemDao =>
+  self: RdbSystemTransaction =>
 
 
   def deleteAnyHostname(hostname: String): Boolean = {

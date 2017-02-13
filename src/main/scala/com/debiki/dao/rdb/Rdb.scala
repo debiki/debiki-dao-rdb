@@ -26,6 +26,17 @@ import javax.{sql => jxs}
 
 object Rdb {
 
+
+  // Calendar is very thread unsafe, and reportedly slow, because of creation of
+  // the TimeZone and Locale objects, so cache those (three lines below).
+  // (Source: http://stackoverflow.com/questions/6245053/how-to-make-a-static-calendar-thread-safe#comment24522525_6245117 )
+  def calendarUtcTimeZone = ju.Calendar.getInstance(UtcTimeZone, DefaultLocale)
+
+  // These are not thread safe (at least not TimeZone), but we never modify them.
+  private val UtcTimeZone = ju.TimeZone.getTimeZone("UTC")
+  private val DefaultLocale = ju.Locale.getDefault(ju.Locale.Category.FORMAT)
+
+
   case class Null(sqlType: Int)
   val NullVarchar = Null(js.Types.VARCHAR)
   val NullBoolean = Null(js.Types.BOOLEAN)
@@ -183,13 +194,13 @@ object Rdb {
     * when saving and loading.)
     */
   def getDate(rs: js.ResultSet, column: String): ju.Date = {
-    val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
+    val timestamp = rs.getTimestamp(column, calendarUtcTimeZone)
     if (timestamp eq null) null: ju.Date
     else new ju.Date(timestamp.getTime)
   }
 
   def getWhen(rs: js.ResultSet, column: String): When = {
-    val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
+    val timestamp = rs.getTimestamp(column, calendarUtcTimeZone)
     if (timestamp eq null) When.fromMillis(0)
     else When.fromMillis(timestamp.getTime)
   }
@@ -206,7 +217,7 @@ object Rdb {
   }
 
   def getOptionalDate(rs: js.ResultSet, column: String): Option[ju.Date] = {
-    val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
+    val timestamp = rs.getTimestamp(column, calendarUtcTimeZone)
     if (timestamp eq null) None
     else Some(new ju.Date(timestamp.getTime))
   }
@@ -216,7 +227,7 @@ object Rdb {
   }
 
   def getOptionalWhen(rs: js.ResultSet, column: String): Option[When] = {
-    val timestamp = rs.getTimestamp(column, RdbSystemDao.calendarUtcTimeZone)
+    val timestamp = rs.getTimestamp(column, calendarUtcTimeZone)
     if (timestamp eq null) None
     else Some(When.fromMillis(timestamp.getTime))
   }
@@ -538,9 +549,9 @@ class Rdb(val readOnlyDataSource: jxs.DataSource, val readWriteDataSource: jxs.D
         case t: js.Time =>
           die("DwE96SK3X8", "Use Timestamp not Time")
         case t: js.Timestamp =>
-          pstmt.setTimestamp(bindPos, t, RdbSystemDao.calendarUtcTimeZone)
+          pstmt.setTimestamp(bindPos, t, calendarUtcTimeZone)
         case d: ju.Date =>
-          pstmt.setTimestamp(bindPos, new js.Timestamp(d.getTime), RdbSystemDao.calendarUtcTimeZone)
+          pstmt.setTimestamp(bindPos, new js.Timestamp(d.getTime), calendarUtcTimeZone)
         case bs: Array[Byte] =>
           pstmt.setBytes(bindPos, bs)
         case Null(sqlType) =>

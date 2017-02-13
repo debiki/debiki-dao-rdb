@@ -174,7 +174,7 @@ object RdbUtil {
     val lockedThreatLevel = getOptionalInt(rs, "u_locked_threat_level").flatMap(ThreatLevel.fromInt)
       // Use dn2e not n2e. ((So works if joined w/ DW1_IDS_SIMPLE, which
       // uses '-' instead of null to indicate absence of email address etc.
-      // See usage of this function in RdbSystemDao.loadUsers(). ))
+      // See usage of this function in RdbSystemTransaction.loadUsers(). ))
     if (isGuestId(userId))
       Guest(
         id = userId,
