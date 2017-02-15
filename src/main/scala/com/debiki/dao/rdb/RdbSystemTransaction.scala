@@ -337,9 +337,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         val whereOrderBy =
           o"""EMAIL_STATUS = ${NotfEmailStatus.Undecided.toInt}
              and CREATED_AT <= ? order by CREATED_AT asc"""
-        val nowInMillis = (new ju.Date).getTime
-        val someMinsAgo =
-          new ju.Date(nowInMillis - delayMinsOpt.get.toLong * 60 * 1000)
+        val someMinsAgo = new ju.Date(now.millis - delayMinsOpt.get.toLong * 60 * 1000)
         val vals = someMinsAgo::Nil
         (whereOrderBy, vals)
       case _ =>

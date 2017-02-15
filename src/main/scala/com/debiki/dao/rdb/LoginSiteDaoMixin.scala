@@ -111,13 +111,13 @@ trait LoginSiteDaoMixin extends SiteTransaction {
   private def loginWithPassword(loginAttempt: PasswordLoginAttempt): MemberLoginGrant = {
     val anyUser = loadMemberByEmailOrUsername(loginAttempt.email)
     val user = anyUser getOrElse {
-      throw IdentityNotFoundException(s"No user found with email: ${loginAttempt.email}")
+      throw NoMemberWithThatEmailException
     }
     if (user.emailVerifiedAt.isEmpty) {
       throw DbDao.EmailNotVerifiedException
     }
     val correctHash = user.passwordHash getOrElse {
-      throw IdentityNotFoundException(s"User with email `${loginAttempt.email}' has no password")
+      throw MemberHasNoPasswordException
     }
     val okPassword = checkPassword(loginAttempt.password, hash = correctHash)
     if (!okPassword)
@@ -228,13 +228,13 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
     val user = userInDb match {
       case Some(u) => u
-      case None => throw IdentityNotFoundException("")
+      case None => throw IdentityNotFoundException
     }
 
     // (For some unimportant comments, see the corresponding comment in loginOpenId() above.)
 
     val identity: OpenAuthIdentity = identityInDb match {
-      case None => throw IdentityNotFoundException("")
+      case None => throw IdentityNotFoundException
       case Some(old: OpenAuthIdentity) =>
         val nev = OpenAuthIdentity(id = old.id, userId = user.id,
           loginAttempt.openAuthDetails)
