@@ -118,6 +118,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
         Option(rs.getBytes("recently_read_nrs")) getOrElse Array.empty
 
       // (For now, skip the bytes, not impl anywhere.)
+      // *Add test* when implementing: [7GPKW205]
       val lastPostNrsRead =
         if (lastReadPostNr != 0) Vector(lastReadPostNr)
         else Vector.empty
