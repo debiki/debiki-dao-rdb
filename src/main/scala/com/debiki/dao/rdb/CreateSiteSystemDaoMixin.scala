@@ -18,13 +18,9 @@
 package com.debiki.dao.rdb
 
 import com.debiki.core._
-import com.debiki.core.DbDao._
-import com.debiki.core.EmailNotfPrefs.EmailNotfPrefs
-import com.debiki.core.PagePath._
 import com.debiki.core.Prelude._
-import _root_.java.{util => ju, io => jio, sql => js}
-import RdbUtil._
-import collection.mutable.StringBuilder
+import _root_.java.{sql => js}
+import Rdb._
 
 
 trait CreateSiteSystemDaoMixin extends SystemTransaction {
@@ -41,7 +37,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
   }
 
 
-  def insertSiteHost(tenantId: String, host: SiteHost) {
+  def insertSiteHost(siteId: SiteId, host: SiteHost) {
     val cncl = host.role match {
       case SiteHost.RoleCanonical => "C"
       case SiteHost.RoleRedirect => "R"
@@ -53,7 +49,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       values (?, ?, ?)
       """
     val inserted =
-      try runUpdateSingleRow(sql, List(tenantId, host.hostname, cncl))
+      try runUpdateSingleRow(sql, List(siteId.asAnyRef, host.hostname, cncl))
       catch {
         case ex: js.SQLException =>
           if (Rdb.isUniqueConstrViolation(ex) &&
@@ -76,7 +72,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
 
 
   def deleteSiteById(siteId: SiteId): Boolean = {
-    require(siteId startsWith Site.TestIdPrefix, "Can delete test sites only [EdE6FK02]")
+    require(siteId <= MaxTestSiteId, "Can delete test sites only [EdE6FK02]")
     require(siteId != FirstSiteId, "Cannot delete site 1 [EdE5RCTW3]")
 
     runUpdate("set constraints all deferred")
@@ -88,14 +84,13 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       delete from audit_log3 where site_id = ?
       delete from review_tasks3 where site_id = ?
       delete from settings3 where site_id = ?
-      delete from member_page_settings3 where site_id = ?
       delete from post_read_stats3 where site_id = ?
       delete from notifications3 where site_id = ?
       delete from emails_out3 where site_id = ?
       delete from upload_refs3 where site_id = ?""" +
-      // skip: uploads3
+      // skip: uploads3, not per-site. But... latent BUG: should update upload ref counts,
+      // since we deleted a site & emptied upload_refs3.
       s"""
-      delete from page_members3 where site_id = ?
       delete from page_users3 where site_id = ?
       delete from tag_notf_levels3 where site_id = ?
       delete from post_tags3 where site_id = ?
@@ -118,10 +113,10 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       """).trim.split("\n")
 
     statements foreach { statement =>
-      runUpdate(statement, List(siteId))
+      runUpdate(statement, List(siteId.asAnyRef))
     }
 
-    val isSiteGone = runUpdateSingleRow("delete from sites3 where id = ?", List(siteId))
+    val isSiteGone = runUpdateSingleRow("delete from sites3 where id = ?", List(siteId.asAnyRef))
 
     runUpdate("set constraints all immediate")
     isSiteGone

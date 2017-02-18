@@ -34,7 +34,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
     val query = """
       select distinct tag from post_tags3 where site_id = ?
       """
-    runQueryFindManyAsSet(query, List(siteId), rs => rs.getString("tag"))
+    runQueryFindManyAsSet(query, List(siteId.asAnyRef), rs => rs.getString("tag"))
   }
 
 
@@ -46,7 +46,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
         sum(is_page::int) num_pages
       from post_tags3 where site_id = ? group by tag
       """
-    runQueryFindMany(query, List(siteId), rs => {
+    runQueryFindMany(query, List(siteId.asAnyRef), rs => {
       TagAndStats(
         label = rs.getString("tag"),
         numTotal = rs.getInt("num_total"),
@@ -68,7 +68,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
     val tags = ArrayBuffer[String]()
     var currentPostId = NoPostId
     var tagsByPostId = Map[PostId, Set[TagLabel]]().withDefaultValue(Set.empty)
-    runQueryAndForEachRow(query, siteId :: postIds.toList.map(_.asAnyRef), rs => {
+    runQueryAndForEachRow(query, siteId.asAnyRef :: postIds.toList.map(_.asAnyRef), rs => {
       val postId: PostId = rs.getInt("post_id")
       val tag: TagLabel = rs.getString("tag")
       if (currentPostId == NoPostId || currentPostId == postId) {
@@ -95,7 +95,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
     val statement = s"""
       delete from post_tags3 where site_id = ? and post_id = ? and tag in (${makeInListFor(tags)})
       """
-    val values = siteId :: postId.asAnyRef :: tags.toList
+    val values = siteId.asAnyRef :: postId.asAnyRef :: tags.toList
     runUpdate(statement, values)
   }
 
@@ -104,7 +104,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
     if (tags.isEmpty)
       return
     val rows = ("(?, ?, ?, ?), " * tags.size) dropRight 2 // drops last ", "
-    val values = tags.toList.flatMap(List(siteId, postId.asAnyRef, _, isPage.asAnyRef))
+    val values = tags.toList.flatMap(List(siteId.asAnyRef, postId.asAnyRef, _, isPage.asAnyRef))
     val statement = s"""
       insert into post_tags3 (site_id, post_id, tag, is_page) values $rows
       """
@@ -125,7 +125,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
       on conflict (site_id, user_id, tag) do update
         set notf_level = excluded.notf_level
       """
-    val values = List(siteId, userId.asAnyRef, tagLabel, notfLevel.toInt.asAnyRef)
+    val values = List(siteId.asAnyRef, userId.asAnyRef, tagLabel, notfLevel.toInt.asAnyRef)
     runUpdateExactlyOneRow(statement, values)
   }
 
@@ -136,7 +136,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
       from tag_notf_levels3
       where site_id = ? and user_id = ?
       """
-    runQueryBuildMap(query, List(siteId, userId.asAnyRef), rs => {
+    runQueryBuildMap(query, List(siteId.asAnyRef, userId.asAnyRef), rs => {
       val label = rs.getString("tag")
       val notfLevelInt = rs.getInt("notf_level")
       label -> NotfLevel.fromInt(notfLevelInt).getOrElse(NotfLevel.Normal)
@@ -154,7 +154,7 @@ trait TagsSiteDaoMixin extends SiteTransaction {
         and tag in (${ makeInListFor(tags) })
         and notf_level in (${ NotfLevel.WatchingFirst.toInt }, ${ NotfLevel.WatchingAll.toInt })
       """
-    runQueryFindManyAsSet(query, siteId :: tags.toList, rs => {
+    runQueryFindManyAsSet(query, siteId.asAnyRef :: tags.toList, rs => {
       val userId = rs.getInt("user_id")
       val notfLevelInt = rs.getInt("notf_level")
       userId

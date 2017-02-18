@@ -46,7 +46,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       values (?, ?, ?, ?, ?)
       """
     val values = List(
-      siteId, invite.secretKey, invite.emailAddress,
+      siteId.asAnyRef, invite.secretKey, invite.emailAddress,
       invite.createdById.asAnyRef, invite.createdAt.asTimestamp)
     try {
       runUpdate(statement, values)
@@ -80,7 +80,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       invite.deletedAt.orNullTimestamp,
       invite.deletedById.orNullInt,
       invite.invalidatedAt.orNullTimestamp,
-      siteId,
+      siteId.asAnyRef,
       invite.secretKey)
     runUpdateSingleRow(statement, values)
   }
@@ -92,7 +92,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       from invites3
       where site_id = ? and secret_key = ?
       """
-    val values = List(siteId, secretKey)
+    val values = List(siteId.asAnyRef, secretKey)
     runQueryFindOneOrNone(query, values, rs => {
       getInvite(rs)
     }, "EdEB2KD0F")
@@ -110,7 +110,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   private def loadInvitesImpl(createdById: Option[UserId], limit: Int): immutable.Seq[Invite] = {
-    val values = ArrayBuffer[AnyRef](siteId)
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef)
     val andSentBy = createdById match {
       case Some(id) =>
         values.append(id.asAnyRef)
@@ -135,7 +135,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       select max(user_id) max_id from users3
       where site_id = ? and user_id >= $LowestAuthenticatedUserId
       """
-    runQuery(query, List(siteId), rs => {
+    runQuery(query, List(siteId.asAnyRef), rs => {
       rs.next()
       val maxId = rs.getInt("max_id")
       math.max(LowestAuthenticatedUserId, maxId + 1)
@@ -148,7 +148,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       select max(id) max_id from identities3
       where site_id = ?
       """
-    runQuery(query, List(siteId), rs => {
+    runQuery(query, List(siteId.asAnyRef), rs => {
       rs.next()
       val maxId = rs.getInt("max_id")
       (maxId + 1).toString
@@ -172,7 +172,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             ?, ?, ?, ?,
             ?, ?, ?, ?)
         """,
-        List[AnyRef](siteId, user.id.asAnyRef, user.fullName.orNullVarchar,
+        List[AnyRef](siteId.asAnyRef, user.id.asAnyRef, user.fullName.orNullVarchar,
           user.username, user.createdAt, user.emailAddress.trimNullVarcharIfBlank,
           _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
           user.passwordHash.orNullVarchar,
@@ -211,7 +211,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private[rdb] def insertOpenIdIdentity(tenantId: SiteId, identity: IdentityOpenId) {
+  private[rdb] def insertOpenIdIdentity(otherSiteId: SiteId, identity: IdentityOpenId) {
     val details = identity.openIdDetails
     runUpdate("""
             insert into identities3(
@@ -220,7 +220,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
                 FIRST_NAME, EMAIL, COUNTRY)
             values (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            List[AnyRef](identity.id.toInt.asAnyRef, tenantId, identity.userId.asAnyRef, identity.userId.asAnyRef,
+            List[AnyRef](identity.id.toInt.asAnyRef, otherSiteId.asAnyRef, identity.userId.asAnyRef,
+              identity.userId.asAnyRef,
               details.oidClaimedId, e2d(details.oidOpLocalId), e2d(details.oidRealm),
               e2d(details.oidEndpoint), e2d(details.oidVersion),
               e2d(details.firstName), details.email.orNullVarchar, e2d(details.country.trim)))
@@ -242,7 +243,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         e2d(details.oidOpLocalId), e2d(details.oidRealm),
         e2d(details.oidEndpoint), e2d(details.oidVersion),
         e2d(details.firstName), details.email.orNullVarchar, e2d(details.country.trim),
-        identity.id.toInt.asAnyRef, siteId))
+        identity.id.toInt.asAnyRef, siteId.asAnyRef))
   }
 
 
@@ -260,7 +261,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
     val ds = identity.openAuthDetails
     val method = "OAuth" // should probably remove this column
     val values = List[AnyRef](
-      identity.id.toInt.asAnyRef, otherSiteId, identity.userId.asAnyRef, identity.userId.asAnyRef,
+      identity.id.toInt.asAnyRef, otherSiteId.asAnyRef, identity.userId.asAnyRef,
+      identity.userId.asAnyRef,
       ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
       ds.fullName.orNullVarchar, ds.email.orNullVarchar, ds.avatarUrl.orNullVarchar,
       method, ds.providerId, ds.providerKey)
@@ -280,7 +282,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     val values = List[AnyRef](
       identity.userId.asAnyRef, method, ds.firstName.orNullVarchar, ds.lastName.orNullVarchar,
       ds.fullName.orNullVarchar, ds.email.orNullVarchar, ds.avatarUrl.orNullVarchar,
-      identity.id.toInt.asAnyRef, siteId)
+      identity.id.toInt.asAnyRef, siteId.asAnyRef)
     db.update(sql, values)
   }
 
@@ -337,7 +339,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
       case (Some(userId: UserId), None, None) =>
         ("""where i.SITE_ID = ? and i.USER_ID = ?""",
-           List(siteId, userId.asAnyRef))
+           List(siteId.asAnyRef, userId.asAnyRef))
 
       case (None, Some(openIdDetails: OpenIdDetails), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
@@ -358,14 +360,14 @@ trait UserSiteDaoMixin extends SiteTransaction {
         }
         ("""where i.SITE_ID = ?
             and """+ claimedIdOrEmailCheck +"""
-          """, List(siteId, idOrEmail))
+          """, List(siteId.asAnyRef, idOrEmail))
 
       case (None, None, Some(openAuthKey: OpenAuthProviderIdKey)) =>
         val whereClause =
           """where i.SITE_ID = ?
                and i.SECURESOCIAL_PROVIDER_ID = ?
                and i.SECURESOCIAL_USER_ID = ?"""
-        val values = List(siteId, openAuthKey.providerId, openAuthKey.providerKey)
+        val values = List(siteId.asAnyRef, openAuthKey.providerId, openAuthKey.providerKey)
         (whereClause, values)
 
       case _ => assErr("DwE98239k2a2", "None, or more than one, lookup method specified")
@@ -445,7 +447,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         and u.USER_ID >= $LowestNonGuestId
         and (u.EMAIL = ? or lower(u.USERNAME) = lower(?))
       """
-    val values = List(siteId, emailOrUsername, emailOrUsername)
+    val values = List(siteId.asAnyRef, emailOrUsername, emailOrUsername)
     runQueryFindOneOrNone(sql, values, rs => {
       val user = _User(rs)
       dieIf(user.isGuest, "EsE7YKP4")
@@ -484,7 +486,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       from users3 u
       where $withPrefixAnd u.site_id = ? and u.user_id >= ${User.LowestTalkToMemberId}
       """
-    var values = List(siteId)
+    var values = List(siteId.asAnyRef)
     if (withPrefixAnd.nonEmpty) {
       values ::= usernamePrefix
     }
@@ -502,7 +504,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       where
         u.SITE_ID = ?
       """
-    val values = List(siteId)
+    val values = List(siteId.asAnyRef)
     val result = ArrayBuffer[User]()
     db.queryAtnms(query, values, rs => {
       while (rs.next) {
@@ -536,7 +538,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       from users3
       where site_id = ? and $field = ?
       """
-    runQueryFindOneOrNone(sql, List(siteId, value), rs => {
+    runQueryFindOneOrNone(sql, List(siteId.asAnyRef, value), rs => {
       getCompleteUser(rs)
     })
   }
@@ -566,7 +568,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         $anyOrderBy
       """
 
-    val values = List(siteId)
+    val values = List(siteId.asAnyRef)
     val result = ArrayBuffer[MemberInclDetails]()
     db.queryAtnms(query, values, rs => {
       while (rs.next) {
@@ -646,7 +648,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       tOrNull(user.isOwner),
       tOrNull(user.isAdmin),
       user.isModerator.asAnyRef,
-      siteId,
+      siteId.asAnyRef,
       user.id.asAnyRef)
 
     try runUpdateSingleRow(statement, values)
@@ -667,7 +669,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       where site_id = ? and user_id = ?
       """
     val values = List(user.guestName, user.lockedThreatLevel.map(_.toInt).orNullInt,
-      siteId, user.id.asAnyRef)
+      siteId.asAnyRef, user.id.asAnyRef)
 
     try runUpdateSingleRow(statement, values)
     catch {
@@ -698,7 +700,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         and p.CREATED_BY_ID = u.USER_ID
         and u.USERNAME is not null
       where p.SITE_ID = ? and p.PAGE_ID = ?"""
-    val values = List(siteId, pageId)
+    val values = List(siteId.asAnyRef, pageId)
     val result = ArrayBuffer[NameAndUsername]()
     db.queryAtnms(sql, values, rs => {
       while (rs.next()) {
@@ -719,7 +721,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       from users3
       where SITE_ID = ? and lower(USERNAME) like lower(?) and USER_ID >= $LowestNonGuestId
       """
-    val values = List(siteId, prefix + "%")
+    val values = List(siteId.asAnyRef, prefix + "%")
     val result = ArrayBuffer[NameAndUsername]()
     db.queryAtnms(sql, values, rs => {
       while (rs.next()) {
@@ -748,7 +750,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
           where SITE_ID = ? and EMAIL = ? and VERSION = 'C'
             and EMAIL_NOTFS != 'F'
           """,
-          List(siteId, emailAddr))
+          List(siteId.asAnyRef, emailAddr))
 
       // Create a new row with the desired email notification setting.
       // Or, for now, fail and throw some SQLException if EMAIL_NOTFS is 'F'
@@ -759,7 +761,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
               SITE_ID, CTIME, VERSION, EMAIL, EMAIL_NOTFS)
           values (?, ?, 'C', ?, ?)
           """,
-          List(siteId, d2ts(ctime), emailAddr, _toFlag(emailNotfPrefs)))
+          List(siteId.asAnyRef, d2ts(ctime), emailAddr, _toFlag(emailNotfPrefs)))
     }
   }
 
@@ -771,7 +773,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       from page_users3
       where site_id = ? and user_id = ? and page_id = ?
       """
-    val values = List(siteId, userId.asAnyRef, pageId)
+    val values = List(siteId.asAnyRef, userId.asAnyRef, pageId)
     runQueryFindOneOrNone(query, values, rs => {
       val notfLevel = NotfLevel.fromInt(rs.getInt("notf_level")).getOrElse(NotfLevel.Normal)
       UsersPageSettings(notfLevel)
@@ -787,7 +789,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       on conflict (site_id, user_id, page_id) do update set
         notf_level = excluded.notf_level
       """
-    val values = List(siteId, userId.asAnyRef, pageId, settings.notfLevel.toInt.asAnyRef)
+    val values = List(siteId.asAnyRef, userId.asAnyRef, pageId, settings.notfLevel.toInt.asAnyRef)
     runUpdate(sql, values)
   }
 
@@ -804,7 +806,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         and page_id = ?
         and notf_level = ${NotfLevel.WatchingAll.toInt}
       """
-    runQuery(sql, List(siteId, pageId), rs => {
+    runQuery(sql, List(siteId.asAnyRef, pageId), rs => {
       while (rs.next()) {
         result += rs.getInt("ROLE_ID")
       }
@@ -813,7 +815,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     // Load people watching the whole site.
     val sqlWholeSite = """
       select USER_ID from users3 where SITE_ID = ? and EMAIL_FOR_EVERY_NEW_POST = true"""
-    runQuery(sqlWholeSite, List(siteId), rs => {
+    runQuery(sqlWholeSite, List(siteId.asAnyRef), rs => {
       while (rs.next()) {
         result += rs.getInt("USER_ID")
       }

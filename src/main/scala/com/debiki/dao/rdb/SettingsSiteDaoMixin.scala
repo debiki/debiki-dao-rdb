@@ -38,7 +38,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       from settings3
       where site_id = ? and category_id is null and page_id is null
       """
-    runQueryFindOneOrNone(query, List(siteId), readSettingsFromResultSet)
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef), readSettingsFromResultSet)
   }
 
 
@@ -97,7 +97,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
-      siteId,
+      siteId.asAnyRef,
       NullInt,
       NullVarchar,
       editedSettings2.userMustBeAuthenticated.getOrElse(None).orNullBoolean,
@@ -199,7 +199,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("core_member_flag_weight", s.coreMemberFlagWeight.map(_.orNullFloat))
 
     statement.append(" where site_id = ? and category_id is null and page_id is null")
-    values.append(siteId)
+    values.append(siteId.asAnyRef)
 
     if (somethingToDo) {
       runUpdateExactlyOneRow(statement.toString(), values.toList)

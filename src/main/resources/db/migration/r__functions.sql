@@ -22,7 +22,7 @@ END;
 $$;
 
 
-CREATE or replace FUNCTION inc_next_page_id(site_id character varying) RETURNS integer
+CREATE or replace FUNCTION inc_next_page_id(site_id integer) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 declare

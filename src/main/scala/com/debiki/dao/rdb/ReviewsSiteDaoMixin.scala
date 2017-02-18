@@ -35,7 +35,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
     val query = """
       select max(id) max_id from review_tasks3 where site_id = ?
       """
-    runQueryFindExactlyOne(query, List(siteId), rs => {
+    runQueryFindExactlyOne(query, List(siteId.asAnyRef), rs => {
       val maxId = rs.getInt("max_id") // null becomes 0, fine
       maxId + 1
     })
@@ -77,7 +77,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       reviewTask.pageId.orNullVarchar,
       reviewTask.postId.orNullInt,
       reviewTask.postNr.orNullInt,
-      siteId,
+      siteId.asAnyRef,
       reviewTask.id.asAnyRef)
 
     val found = runUpdateSingleRow(updateStatement, updateValues)
@@ -105,7 +105,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List[AnyRef](
-      siteId,
+      siteId.asAnyRef,
       reviewTask.id.asAnyRef,
       ReviewReason.toLong(reviewTask.reasons).asAnyRef,
       reviewTask.createdById.asAnyRef,
@@ -149,7 +149,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
     val query = i"""
       select * from review_tasks3 where site_id = ? and
       """ + whereClauses
-    runQueryFindOneOrNone(query, (siteId +: values).toList, rs => {
+    runQueryFindOneOrNone(query, (siteId.asAnyRef +: values).toList, rs => {
       readReviewTask(rs)
     })
   }
@@ -161,7 +161,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       select * from review_tasks3 where site_id = ? and created_at <= ?
       order by created_at desc, id desc limit ?
       """
-    runQueryFindMany(query, List(siteId, olderOrEqualTo, limit.asAnyRef), rs => {
+    runQueryFindMany(query, List(siteId.asAnyRef, olderOrEqualTo, limit.asAnyRef), rs => {
       readReviewTask(rs)
     })
   }
@@ -174,7 +174,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       select * from review_tasks3 where site_id = ? and user_id = ?
       order by created_at $desc, id $desc limit ?
       """
-    runQueryFindMany(query, List(siteId, userId.asAnyRef, limit.asAnyRef), rs => {
+    runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef, limit.asAnyRef), rs => {
       readReviewTask(rs)
     })
   }
@@ -187,7 +187,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       where site_id = ?
         and post_id in (${ makeInListFor(postIds) })
       """
-    runQueryFindMany(query, siteId :: postIds.toList.map(_.asAnyRef), rs => {
+    runQueryFindMany(query, siteId.asAnyRef :: postIds.toList.map(_.asAnyRef), rs => {
       val task = readReviewTask(rs)
       dieIf(task.postId.isEmpty, "EdE2KTP8V")
       task
@@ -204,7 +204,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
         (select count(1) from review_tasks3
           where site_id = ? and reasons & $urgentBits = 0 and resolution is null) num_other
       """
-    runQueryFindExactlyOne(query, List(siteId, siteId), rs => {
+    runQueryFindExactlyOne(query, List(siteId.asAnyRef, siteId.asAnyRef), rs => {
       ReviewTaskCounts(rs.getInt("num_urgent"), rs.getInt("num_other"))
     })
   }

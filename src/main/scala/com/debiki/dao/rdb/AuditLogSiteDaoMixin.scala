@@ -50,7 +50,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       return result
     }
     val query = "select max(audit_id) max_id from audit_log3 where site_id = ?"
-    runQuery(query, List(siteId), rs => {
+    runQuery(query, List(siteId.asAnyRef), rs => {
       rs.next()
       val maxId = rs.getInt("max_id") // null becomes 0, fine
       (maxId + 1, None)
@@ -107,7 +107,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       """
 
     val values = List[AnyRef](
-      entry.siteId,
+      entry.siteId.asAnyRef,
       entry.id.asAnyRef,
       entry.batchId.orNullInt,
       entry.doerId.asAnyRef,
@@ -135,7 +135,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       entry.targetUniquePostId.orNullInt,
       entry.targetPostNr.orNullInt,
       entry.targetUserId.orNullInt,
-      entry.targetSiteId.orNullVarchar)
+      entry.targetSiteId.orNullInt)
 
     runUpdateSingleRow(statement, values)
   }
@@ -151,7 +151,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       and did_what = ?
       order by done_at desc limit $limit
       """
-    runQueryFindMany(query, List(siteId, userId.asAnyRef, tyype.toInt.asAnyRef), rs => {
+    runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef, tyype.toInt.asAnyRef), rs => {
       getAuditLogEntry(rs)
     })
   }
@@ -164,7 +164,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       and did_what in (${AuditLogEntryType.NewPage.toInt}, ${AuditLogEntryType.NewReply.toInt})
       order by done_at limit 1
       """
-    runQueryFindOneOrNone(query, List(siteId, postId.asAnyRef), rs => {
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, postId.asAnyRef), rs => {
       getAuditLogEntry(rs)
     })
   }
@@ -184,7 +184,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       and did_what in (${AuditLogEntryType.NewPage.toInt}, ${AuditLogEntryType.NewReply.toInt})
       order by done_at desc limit $limit)
       """
-    val values = List(siteId, browserIdData.ip, siteId, browserIdData.idCookie)
+    val values = List(siteId.asAnyRef, browserIdData.ip, siteId.asAnyRef, browserIdData.idCookie)
     val entries = runQueryFindMany(query, values, rs => {
       getAuditLogEntry(rs)
     })
@@ -196,7 +196,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     AuditLogEntry(
       siteId = siteId,
       id = rs.getInt("audit_id"),
-      batchId = getOptionalInt(rs, "audit_id"),
+      batchId = getOptInt(rs, "audit_id"),
       didWhat = AuditLogEntryType.fromInt(rs.getInt("did_what")) getOrDie "EsE7YKG83",
       doerId = rs.getInt("doer_id"),
       doneAt = getDate(rs, "done_at"),
@@ -204,17 +204,17 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       browserIdData = getBrowserIdData(rs),
       browserLocation = None,
       pageId = Option(rs.getString("page_id")),
-      pageRole = getOptionalInt(rs, "page_role").flatMap(PageRole.fromInt),
-      uniquePostId = getOptionalInt(rs, "post_id"),
-      postNr = getOptionalInt(rs, "post_nr"),
+      pageRole = getOptInt(rs, "page_role").flatMap(PageRole.fromInt),
+      uniquePostId = getOptInt(rs, "post_id"),
+      postNr = getOptInt(rs, "post_nr"),
       uploadHashPathSuffix = Option(rs.getString("upload_hash_path")),
       uploadFileName = Option(rs.getString("upload_file_name")),
-      sizeBytes = getOptionalInt(rs, "size_bytes"),
-      targetUniquePostId = getOptionalInt(rs, "target_post_id"),
+      sizeBytes = getOptInt(rs, "size_bytes"),
+      targetUniquePostId = getOptInt(rs, "target_post_id"),
       targetPageId = Option(rs.getString("target_page_id")),
-      targetPostNr = getOptionalInt(rs, "target_post_nr"),
-      targetUserId = getOptionalInt(rs, "target_user_id"),
-      targetSiteId = Option(rs.getString("target_site_id")),
+      targetPostNr = getOptInt(rs, "target_post_nr"),
+      targetUserId = getOptInt(rs, "target_user_id"),
+      targetSiteId = getOptInt(rs, "target_site_id"),
       isLoading = true)
 
 

@@ -296,10 +296,10 @@ object RdbUtil {
   }
 
 
-  def _PagePath(resultSet: js.ResultSet, tenantId: String,
+  def _PagePath(resultSet: js.ResultSet, siteId: SiteId,
         pageId: Option[Option[String]] = None) =
     PagePath(
-      tenantId = tenantId,
+      siteId = siteId,
       folder = resultSet.getString("PARENT_FOLDER"),
       pageId = pageId getOrElse Some(resultSet.getString("PAGE_ID")),
       showId = resultSet.getString("SHOW_ID") == "T",

@@ -34,36 +34,16 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
 
   def updatePostsReadStats(pageId: PageId, postNrsRead: Set[PostNr],
         readById: UserId, readFromIp: String) {
-
-    // There's an ignore-duplicate-inserts rule in the database (DW1_PSTSRD_IGNORE_DUPL_INS).
-    // However, if two transactions insert the same PK data at the same time that rule
-    // will have no effect, see:
-    //  http://postgresql.1045698.n5.nabble.com/Duplicated-entries-are-not-ignored-even-if-a-quot-do-instead-nothing-quot-rule-is-added-td5116004.html
-    //   """if a concurrent transaction tries to create the same record, one of the transactions
-    //   is going to find that it already exists on transaction commit. An INSERT-rule is not
-    //   going to protect you against that."""
-    // So let's insert each row in its own transaction and ignore any PK error.
-    // (One single transaction for all rows won't work, because the whole transaction would
-    // fail on any single unique key error.)
-    // (If we'd like to avoid roundtrips for separate commits, we could enable autocommit?
-    // Or insert via a stored procedure? Well, performance hardly matters.)
     for (postNr <- postNrsRead) {
-      transactionCheckQuota { implicit connection =>
-        val sql = s"""
-          insert into post_read_stats3(
-            SITE_ID, PAGE_ID, post_nr, IP, USER_ID, READ_AT)
-          values (?, ?, ?, ?, ?, now_utc())"""
-        val values = List[AnyRef](siteId, pageId, postNr.asAnyRef,
-          readFromIp, readById.asAnyRef)
-        try {
-          db.update(sql, values)
-        }
-        catch {
-          case ex: js.SQLException if isUniqueConstrViolation(ex) =>
-            // Ignore, simply means the user has already read the post.
-            // And see the long comment above.
-        }
-      }
+      // Do nothing if the row already exists — simply means the user has already read the post.
+      val sql = s"""
+        insert into post_read_stats3 (site_id, page_id, post_nr, ip, user_id, read_at)
+        values (?, ?, ?, ?, ?, ?)
+        on conflict do nothing
+        """
+      val values = List[AnyRef](siteId.asAnyRef, pageId, postNr.asAnyRef,
+        readFromIp, readById.asAnyRef, now.asTimestamp)
+      runUpdate(sql, values)
     }
   }
 
@@ -76,7 +56,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
     var sql = s"""
       select post_nr, IP, USER_ID from post_read_stats3
       where SITE_ID = ? and PAGE_ID = ?"""
-    val values = ArrayBuffer[AnyRef](siteId, pageId)
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef, pageId)
     postNr foreach { id =>
       sql += " and post_nr = ?"
       values.append(id.asAnyRef)
@@ -125,7 +105,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
         values.append(newNr.asAnyRef)
         s"when ? then ?"
     }).mkString(" ")
-    values.append(siteId)
+    values.append(siteId.asAnyRef)
     values.append(oldPageId)
     val statement = s"""
       update post_read_stats3 set
@@ -147,7 +127,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
       select * from user_stats3
       where site_id = ? and user_id = ?
       """
-    runQueryFindOneOrNone(query, List(siteId, userId.asAnyRef), rs => {
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, userId.asAnyRef), rs => {
       UserStats(
         userId = userId,
         lastSeenAt = getWhen(rs, "last_seen_at"),
@@ -250,7 +230,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
       """
 
     val values = List(
-      siteId,
+      siteId.asAnyRef,
       userStats.userId.asAnyRef,
       userStats.lastSeenAt.asTimestamp,
       userStats.lastPostedAt.orNullTimestamp,
@@ -290,7 +270,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
       where site_id = ? and user_id = ?
       order by visit_date desc
       """
-    runQueryFindMany(query, List(siteId, memberId.asAnyRef), rs => {
+    runQueryFindMany(query, List(siteId.asAnyRef, memberId.asAnyRef), rs => {
       UserVisitStats(
         userId = memberId,
         visitDate = getWhen(rs, "visit_date").toDays,
@@ -324,7 +304,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
       """
 
     val values = List(
-      siteId,
+      siteId.asAnyRef,
       visitStats.userId.asAnyRef,
       visitStats.visitDate.toJavaDate.asTimestamp,
       visitStats.numSecondsReading.asAnyRef,

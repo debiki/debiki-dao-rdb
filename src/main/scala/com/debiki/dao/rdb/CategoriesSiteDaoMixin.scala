@@ -43,7 +43,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       select * from categories3 where site_id = ?
       """
     var result = Map[CategoryId, Category]()
-    runQueryPerhapsAtnms(query, List(siteId), rs => {
+    runQueryPerhapsAtnms(query, List(siteId.asAnyRef), rs => {
       while (rs.next()) {
         val category = getCategory(rs)
         result += category.id -> category
@@ -87,7 +87,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         order by g.published_at desc
         limit $limit
         """
-    val values = List(siteId, userId.asAnyRef)
+    val values = List(siteId.asAnyRef, userId.asAnyRef)
     runQueryFindMany(query, values, rs => {
       val pagePath = _PagePath(rs, siteId)
       val pageMeta = _PageMeta(rs, pagePath.pageId.get)
@@ -136,7 +136,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         unimplemented(s"Sort order unsupported: ${pageQuery.orderOffset} [DwE2GFU06]")
     }
 
-    values :+= siteId
+    values :+= siteId.asAnyRef
 
     val pageFilterAnd = pageQuery.pageFilter match {
       case PageFilter.ShowWaiting =>
@@ -188,7 +188,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
     val query = """
       select max(id) max_id from categories3 where site_id = ?
       """
-    runQuery(query, List(siteId), rs => {
+    runQuery(query, List(siteId.asAnyRef), rs => {
       rs.next()
       val maxId = rs.getInt("max_id") // null becomes 0, fine
       maxId + 1
@@ -211,7 +211,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         ?, ?, ?,
         ?, ?, ?)"""
     val values = List[AnyRef](
-      siteId, category.id.asAnyRef, category.sectionPageId, category.parentId.orNullInt,
+      siteId.asAnyRef, category.id.asAnyRef, category.sectionPageId, category.parentId.orNullInt,
       category.defaultCategoryId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
@@ -241,7 +241,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       category.unlisted.asAnyRef, category.staffOnly.asAnyRef, category.onlyStaffMayCreateTopics.asAnyRef,
       category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
       category.deletedAt.orNullTimestamp,
-      siteId, category.id.asAnyRef)
+      siteId.asAnyRef, category.id.asAnyRef)
     runUpdateSingleRow(statement, values)
     // In the future: mark any old section page html as stale too, if moving to new section.
     markSectionPageContentHtmlAsStale(category.id)
@@ -255,7 +255,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         and category_id = ?
         and page_role = ${PageRole.AboutCategory.toInt}
       """
-    runQueryFindOneOrNone(query, List(siteId, categoryId.asAnyRef), rs => {
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, categoryId.asAnyRef), rs => {
       rs.getString("page_id")
     })
   }

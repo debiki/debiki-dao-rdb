@@ -103,8 +103,8 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
         where site_id = ? and post_id = ? and base_url = ? and hash_path = ?)
       """
     val values = List(
-      siteId, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPath, addedById.asAnyRef,
-      siteId, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPath)
+      siteId.asAnyRef, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPath, addedById.asAnyRef,
+      siteId.asAnyRef, postId.asAnyRef, uploadRef.baseUrl, uploadRef.hashPath)
 
     try runUpdateSingleRow(statement, values)
     catch {
@@ -126,7 +126,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       delete from upload_refs3
       where site_id = ? and post_id = ? and base_url = ? and hash_path = ?
       """
-    val values = List(siteId, postId.asAnyRef, uploadRef.baseUrl,
+    val values = List(siteId.asAnyRef, postId.asAnyRef, uploadRef.baseUrl,
       uploadRef.hashPath)
     val gone = runUpdateSingleRow(statement, values)
     updateUploadedFileReferenceCount(uploadRef)
@@ -144,7 +144,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       where site_id = ? and post_id = ?
       """
     val result = ArrayBuffer[UploadRef]()
-    runQuery(query, List(siteId, postId.asAnyRef), rs => {
+    runQuery(query, List(siteId.asAnyRef, postId.asAnyRef), rs => {
       while (rs.next) {
         result.append(UploadRef(
           baseUrl = rs.getString("base_url"),
@@ -223,7 +223,7 @@ trait UploadsSiteDaoMixin extends SiteTransaction {
       ref.baseUrl, ref.hashPath,
       ref.baseUrl, ref.hashPath)
     val ids = runQueryFindMany[SiteId](query, values, row => {
-      row.getString("site_id")
+      row.getInt("site_id")
     })
     ids.toSet
   }

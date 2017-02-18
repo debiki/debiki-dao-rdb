@@ -51,7 +51,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
         ?, ?::inet, ?)
       """
     val values = List[AnyRef](
-      siteId,
+      siteId.asAnyRef,
       block.threatLevel.toInt.asAnyRef,
       block.blockedAt.asTimestamp,
       block.blockedTill.orNullTimestamp,
@@ -77,7 +77,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
      delete from blocks3
      where site_id = ? and $whereTest
      """
-    runUpdateSingleRow(statement, List(siteId, value))
+    runUpdateSingleRow(statement, List(siteId.asAnyRef, value))
   }
 
 
@@ -95,7 +95,7 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
         site_id = ? and (ip = ?::inet or browser_id_cookie = ?)
       """
     var result = ArrayBuffer[Block]()
-    runQuery(query, List(siteId, ip, browserIdCookie), rs => {
+    runQuery(query, List(siteId.asAnyRef, ip, browserIdCookie), rs => {
       while (rs.next()) {
         result += getBlock(rs)
       }

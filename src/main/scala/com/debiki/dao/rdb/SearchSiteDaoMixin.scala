@@ -55,7 +55,8 @@ trait SearchSiteDaoMixin extends SiteTransaction {
       """
     // What if appr rev nr gets decremented? should that perhaps not be allowed? [85YKF30]
     val revNr = post.approvedRevisionNr.getOrElse(post.currentRevisionNr)
-    val values = List(post.createdAt, siteId, siteId, post.id.asAnyRef, revNr.asAnyRef)
+    val values = List(post.createdAt, siteId.asAnyRef, siteId.asAnyRef,
+      post.id.asAnyRef, revNr.asAnyRef)
     runUpdateSingleRow(statement, values)
   }
 
@@ -77,7 +78,7 @@ trait SearchSiteDaoMixin extends SiteTransaction {
         $PostShouldBeIndexedTests
       ${SearchSiteDaoMixin.OnPostConflictAction}
       """
-    runUpdate(statement, List(siteId, pageId))
+    runUpdate(statement, List(siteId.asAnyRef, pageId))
   }
 
 
@@ -93,7 +94,7 @@ trait SearchSiteDaoMixin extends SiteTransaction {
       on conflict (site_id, page_id) do update set
         page_version = greatest(index_queue3.page_version, excluded.page_version)
       """
-    val values = List(pageMeta.createdAt, siteId, siteId, pageMeta.pageId,
+    val values = List(pageMeta.createdAt, siteId.asAnyRef, siteId.asAnyRef, pageMeta.pageId,
       pageMeta.version.asAnyRef)
     runUpdateSingleRow(statement, values)
   }

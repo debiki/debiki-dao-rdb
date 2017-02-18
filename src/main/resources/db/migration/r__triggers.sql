@@ -27,7 +27,7 @@ CREATE or replace FUNCTION identities3_sum_quota() RETURNS trigger
     AS $$
     declare
         delta_rows integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -52,7 +52,7 @@ CREATE or replace FUNCTION notfs3_sum_quota() RETURNS trigger
     AS $$
     declare
         delta_rows integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -77,7 +77,7 @@ CREATE or replace FUNCTION pages3_sum_quota() RETURNS trigger
     AS $$
     declare
         delta_rows integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -102,7 +102,7 @@ CREATE or replace FUNCTION post_read_stats3_sum_quota() RETURNS trigger
     AS $$
     declare
         delta_rows integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -122,12 +122,12 @@ CREATE or replace FUNCTION post_read_stats3_sum_quota() RETURNS trigger
 $$;
 
 
-CREATE or replace FUNCTION member_page_settings3_sum_quota() RETURNS trigger
+CREATE or replace FUNCTION page_users3_sum_quota() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
     declare
         delta_rows integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -152,7 +152,7 @@ CREATE or replace FUNCTION users3_sum_quota() RETURNS trigger
     AS $$
     declare
         delta_rows integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -177,7 +177,7 @@ CREATE or replace FUNCTION post_actions3_sum_quota() RETURNS trigger
     AS $$
     declare
         delta_rows integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -202,7 +202,7 @@ CREATE or replace FUNCTION posts3_sum_quota() RETURNS trigger
     declare
         delta_rows integer;
         delta_text_bytes integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -240,7 +240,7 @@ CREATE or replace FUNCTION post_revs3_sum_quota() RETURNS trigger
     declare
         delta_rows integer;
         delta_bytes integer;
-        site_id varchar;
+        site_id integer;
     begin
         if (tg_op = 'DELETE') then
             delta_rows = -1;
@@ -296,8 +296,8 @@ drop trigger if exists post_read_stats3_sum_quota on post_read_stats3;
 CREATE TRIGGER post_read_stats3_sum_quota AFTER INSERT OR DELETE OR UPDATE ON post_read_stats3 FOR EACH ROW EXECUTE PROCEDURE post_read_stats3_sum_quota();
 
 
-drop trigger if exists member_page_settings3_sum_quota on member_page_settings3;
-CREATE TRIGGER member_page_settings3_sum_quota AFTER INSERT OR DELETE OR UPDATE ON member_page_settings3 FOR EACH ROW EXECUTE PROCEDURE member_page_settings3_sum_quota();
+drop trigger if exists page_users3_sum_quota on page_users3;
+CREATE TRIGGER page_users3_sum_quota AFTER INSERT OR DELETE OR UPDATE ON page_users3 FOR EACH ROW EXECUTE PROCEDURE page_users3_sum_quota();
 
 
 drop trigger if exists users3_sum_quota on users3;

@@ -38,7 +38,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
         joined_by_id = excluded.joined_by_id,
         kicked_by_id = null
       """
-    val values = List[AnyRef](siteId, pageId, userId.asAnyRef, addedById.asAnyRef)
+    val values = List[AnyRef](siteId.asAnyRef, pageId, userId.asAnyRef, addedById.asAnyRef)
     runUpdateSingleRow(statement, values)
   }
 
@@ -49,7 +49,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
       set kicked_by_id = ?
       where site_id = ? and page_id = ? and user_id = ?
       """
-    val values = List[AnyRef](removedById.asAnyRef, siteId, pageId, userId.asAnyRef)
+    val values = List[AnyRef](removedById.asAnyRef, siteId.asAnyRef, pageId, userId.asAnyRef)
     runUpdateSingleRow(statement, values)
   }
 
@@ -62,7 +62,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
         and joined_by_id is not null
         and kicked_by_id is null
       """
-    runQueryFindManyAsSet(query, List(siteId, pageId), rs => {
+    runQueryFindManyAsSet(query, List(siteId.asAnyRef, pageId), rs => {
       rs.getInt("user_id")
     })
   }
@@ -81,7 +81,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
       where tu.site_id = ? and tu.user_id = ?
       order by p.last_reply_at desc
       """
-    runQueryFindMany(query, List(siteId, userId.asAnyRef), rs => {
+    runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef), rs => {
       rs.getString("page_id")
     })
   }
@@ -103,7 +103,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
         and page_id = ?
         and user_id = ?
       """
-    runQueryFindOneOrNone(query, List(siteId, pageId, userId.asAnyRef), rs => {
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, pageId, userId.asAnyRef), rs => {
       val firstVisitedAt = getWhenMinutes(rs, "first_visited_at_mins")
       if (rs.wasNull) {
         // There's a row for this user, although hen hasn't visited the page — apparently
@@ -169,7 +169,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
       """
 
     val values = List(
-      siteId,
+      siteId.asAnyRef,
       pageId,
       userId.asAnyRef,
       progress.secondsReading.asAnyRef,

@@ -44,7 +44,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     val query = """
       select max(notf_id) max_id from notifications3 where site_id = ?
       """
-    runQueryFindExactlyOne(query, List(siteId), rs => {
+    runQueryFindExactlyOne(query, List(siteId.asAnyRef), rs => {
       val maxId = rs.getInt("max_id") // null becomes 0, fine
       maxId + 1
     })
@@ -61,7 +61,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
       """
 
 
-    val values = mutable.ArrayBuffer[AnyRef](siteId, notf.id.asAnyRef, d2ts(notf.createdAt),
+    val values = mutable.ArrayBuffer[AnyRef](siteId.asAnyRef, notf.id.asAnyRef, d2ts(notf.createdAt),
       notf.tyype.toInt.asAnyRef)
 
     notf match {
@@ -88,7 +88,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
             and NOTF_TYPE = ${Mention.toInt}
             and unique_post_id = ?
             and TO_USER_ID = ?"""
-        val values = List(siteId, mentionToDelete.uniquePostId.asAnyRef,
+        val values = List(siteId.asAnyRef, mentionToDelete.uniquePostId.asAnyRef,
           mentionToDelete.toUserId.asAnyRef)
         (sql, values)
       case postToDelete: NotificationToDelete.NewPostToDelete =>
@@ -98,7 +98,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
             and NOTF_TYPE in (
               ${Mention.toInt}, ${DirectReply.toInt}, ${NewPost.toInt})
             and unique_post_id = ?"""
-        val values = List(siteId, postToDelete.uniquePostId.asAnyRef)
+        val values = List(siteId.asAnyRef, postToDelete.uniquePostId.asAnyRef)
         (sql, values)
     }
 
@@ -123,7 +123,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
       where site_id = ?
         and unique_post_id = ?
       """
-    runQueryFindManyAsSet(query, List(siteId, postId.asAnyRef), rs => {
+    runQueryFindManyAsSet(query, List(siteId.asAnyRef, postId.asAnyRef), rs => {
       val userId = rs.getInt("to_user_id")
       val notfTypeInt = rs.getInt("notf_type")
       userId
@@ -159,7 +159,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     val values = List(
       email.map(_.id).orNullVarchar,
       emailStatus.toInt.asAnyRef,
-      siteId,
+      siteId.asAnyRef,
       notification.id.asAnyRef)
 
     db.update(statement, values)(connection)
@@ -183,7 +183,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
           end
       where site_id = ? and to_user_id = ? and notf_id = ?
       """
-    runUpdate(statement, List(siteId, userId.asAnyRef, notfId.asAnyRef))
+    runUpdate(statement, List(siteId.asAnyRef, userId.asAnyRef, notfId.asAnyRef))
   }
 
 }

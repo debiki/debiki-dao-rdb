@@ -64,7 +64,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
             and u.EMAIL = ?
             and u.GUEST_COOKIE = ?
           """,
-          List(siteId, e2d(loginAttempt.name), e2d(loginAttempt.email), loginAttempt.guestCookie),
+          List(siteId.asAnyRef, e2d(loginAttempt.name), e2d(loginAttempt.email), loginAttempt.guestCookie),
           rs => {
             if (rs.next) {
               userId = rs.getInt("USER_ID")
@@ -88,8 +88,8 @@ trait LoginSiteDaoMixin extends SiteTransaction {
             from
               users3 where site_id = ?
             """,
-            List(siteId, loginAttempt.name.trim, e2d(loginAttempt.email),
-              loginAttempt.guestCookie, siteId))
+            List(siteId.asAnyRef, loginAttempt.name.trim, e2d(loginAttempt.email),
+              loginAttempt.guestCookie, siteId.asAnyRef))
           // (Could fix: `returning ID into ?`, saves 1 roundtrip.)
           // Loop one more lap to read ID.
         }

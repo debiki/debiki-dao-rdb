@@ -44,7 +44,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
             select distinct page_id from posts3
             where site_id = ? and created_by_id = ?)
       """
-    runUpdate(statement, List(siteId, siteId, userId.asAnyRef))
+    runUpdate(statement, List(siteId.asAnyRef, siteId.asAnyRef, userId.asAnyRef))
   }
 
 
@@ -57,7 +57,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
             select page_id from categories3
             where site_id = ? and id = ?)
       """
-    runUpdateSingleRow(statement, List(siteId, siteId, categoryId.asAnyRef))
+    runUpdateSingleRow(statement, List(siteId.asAnyRef, siteId.asAnyRef, categoryId.asAnyRef))
   }
 
 
@@ -67,7 +67,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
       from page_html3
       where site_id = ? and page_id = ?
       """
-    runQuery(query, List(siteId, pageId.asAnyRef), rs => {
+    runQuery(query, List(siteId.asAnyRef, pageId.asAnyRef), rs => {
       if (!rs.next())
         return None
 
@@ -105,7 +105,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
       """
     val rowFound = runUpdateSingleRow(updateStatement, List(
       version.siteVersion.asAnyRef, version.pageVersion.asAnyRef,
-      version.appVersion, version.dataHash, html, siteId, pageId,
+      version.appVersion, version.dataHash, html, siteId.asAnyRef, pageId,
       version.siteVersion.asAnyRef, version.pageVersion.asAnyRef))
 
     if (!rowFound) {
@@ -118,7 +118,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
         """
       try {
         runUpdateSingleRow(insertStatement, List(
-          siteId, pageId,
+          siteId.asAnyRef, pageId,
           version.siteVersion.asAnyRef, version.pageVersion.asAnyRef, version.appVersion,
           version.dataHash, html))
       }

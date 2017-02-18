@@ -23,7 +23,7 @@ import _root_.java.{util => ju}
 import java.{sql => js}
 import org.flywaydb.core.Flyway
 import scala.collection.{immutable, mutable}
-import scala.collection.mutable.{ArrayBuffer, StringBuilder}
+import scala.collection.mutable.ArrayBuffer
 import Rdb._
 import RdbUtil._
 import PostsSiteDaoMixin.fromActionTypeInt
@@ -143,10 +143,10 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
          left join guest_prefs3 e on u.site_id = e.site_id and u.email = e.email
          where u.SITE_ID = ?
          and u.USER_ID in (""" + inList +")"
-      (q, siteId :: idsAu.map(_.asAnyRef))
+      (q, siteId.asAnyRef :: idsAu.map(_.asAnyRef))
     }
 
-    val totalQuery = StringBuilder.newBuilder
+    val totalQuery = mutable.StringBuilder.newBuilder
     var allValsReversed = List[AnyRef]()
 
     def growQuery(moreQueryAndVals: (String, List[AnyRef])) {
@@ -157,9 +157,9 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
     }
 
     // Build query.
-    for ((tenantId, userIds) <- userIdsByTenant.toList) {
-      if (userIds nonEmpty) {
-        growQuery(makeSingleSiteQuery(tenantId, userIds.toList))
+    for ((siteId, userIds) <- userIdsByTenant.toList) {
+      if (userIds.nonEmpty) {
+        growQuery(makeSingleSiteQuery(siteId, userIds.toList))
       }
     }
 
@@ -170,9 +170,9 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
     runQuery(totalQuery.toString, allValsReversed.reverse, rs => {
       while (rs.next) {
-        val tenantId = rs.getString("SITE_ID")
+        val siteId = rs.getInt("SITE_ID")
         val user = _User(rs)
-        usersByTenantAndId = usersByTenantAndId + ((tenantId, user.id) -> user)
+        usersByTenantAndId = usersByTenantAndId + ((siteId, user.id) -> user)
       }
     })
 
@@ -186,29 +186,29 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
   def loadSitesWithIds(siteIds: Seq[SiteId]): Seq[Site] =
     if (siteIds.isEmpty) Nil
-    else loadSitesImpl(tenantIds = siteIds)
+    else loadSitesImpl(siteIds)
 
 
-  def loadSitesImpl(tenantIds: Seq[String] = Nil, all: Boolean = false): Seq[Site] = {
+  def loadSitesImpl(siteIds: Seq[SiteId] = Nil, all: Boolean = false): Seq[Site] = {
     // For now, load only 1 tenant.
-    require(tenantIds.length == 1 || all)
+    require(siteIds.length == 1 || all)
 
-    var hostsByTenantId = Map[String, List[SiteHost]]().withDefaultValue(Nil)
+    var hostsByTenantId = Map[SiteId, List[SiteHost]]().withDefaultValue(Nil)
     var hostsQuery = "select SITE_ID, HOST, CANONICAL from hosts3"
     var hostsValues: List[AnyRef] = Nil
     if (!all) {
       UNTESTED
       hostsQuery += " where SITE_ID = ?" // for now, later: in (...)
-      hostsValues = List(tenantIds.head)
+      hostsValues = List(siteIds.head.asAnyRef)
     }
     runQuery(hostsQuery, hostsValues, rs => {
         while (rs.next) {
-          val tenantId = rs.getString("SITE_ID")
-          var hosts = hostsByTenantId(tenantId)
+          val siteId = rs.getInt("SITE_ID")
+          var hosts = hostsByTenantId(siteId)
           hosts ::= SiteHost(
              hostname = rs.getString("HOST"),
              role = _toTenantHostRole(rs.getString("CANONICAL")))
-          hostsByTenantId = hostsByTenantId.updated(tenantId, hosts)
+          hostsByTenantId = hostsByTenantId.updated(siteId, hosts)
         }
       })
 
@@ -219,15 +219,15 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
     var sitesValues: List[AnyRef] = Nil
     if (!all) {
       sitesQuery += " where ID = ?"  // for now, later: in (...)
-      sitesValues = List(tenantIds.head)
+      sitesValues = List(siteIds.head.asAnyRef)
     }
     var tenants = List[Site]()
     runQuery(sitesQuery, sitesValues, rs => {
       while (rs.next) {
-        val tenantId = rs.getString("ID")
-        val hosts = hostsByTenantId(tenantId)
+        val siteId = rs.getInt("ID")
+        val hosts = hostsByTenantId(siteId)
         tenants ::= Site(
-          id = tenantId,
+          id = siteId,
           status = SiteStatus.fromInt(rs.getInt("status")).getOrDie("EsE2KUY67"),
           name = rs.getString("NAME"),
           createdAt = getWhen(rs, "ctime"),
@@ -246,7 +246,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
        update sites3 set status = ? where id = ?
        """
     for ((siteId, newStatus) <- sites) {
-      val num = runUpdate(statement, List(newStatus.toInt.asAnyRef, siteId))
+      val num = runUpdate(statement, List(newStatus.toInt.asAnyRef, siteId.asAnyRef))
       dieIf(num != 1, "EsE24KF90", s"num = $num when changing site status, site id: $siteId")
     }
   }
@@ -266,7 +266,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         return None
 
       return Some(CanonicalHostLookup(
-        siteId = rs.getString("TID"),
+        siteId = rs.getInt("TID"),
         thisHost = SiteHost(
           hostname = hostname,
           role = _toTenantHostRole(rs.getString("THIS_CANONICAL"))),
@@ -288,7 +288,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
    * tenantIdOpt + userIdOpt --> loads that user's notfs
    * tenantIdOpt + emailIdOpt --> loads a single email and notf
    */
-  def loadNotfsImpl(limit: Int, unseenFirst: Boolean, tenantIdOpt: Option[String] = None,
+  def loadNotfsImpl(limit: Int, unseenFirst: Boolean, tenantIdOpt: Option[SiteId] = None,
         delayMinsOpt: Option[Int] = None, userIdOpt: Option[UserId] = None,
         emailIdOpt: Option[String] = None, upToWhen: Option[ju.Date] = None)
         : Map[SiteId, Seq[Notification]] = {
@@ -326,11 +326,11 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
           else
             "created_at desc"
         val whereOrderBy = s"site_id = ? and to_user_id = ? order by $orderHow"
-        val vals = List(tenantIdOpt.get, uid.asAnyRef)
+        val vals = List(tenantIdOpt.get.asAnyRef, uid.asAnyRef)
         (whereOrderBy, vals)
       case (None, Some(emailId)) =>
         val whereOrderBy = "SITE_ID = ? and EMAIL_ID = ?"
-        val vals = List(tenantIdOpt.get, emailId)
+        val vals = List(tenantIdOpt.get.asAnyRef, emailId)
         (whereOrderBy, vals)
       case (None, None) =>
         // Load notfs for which emails perhaps are to be sent, for all tenants.
@@ -350,7 +350,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
     runQuery(query, values, rs => {
       while (rs.next) {
-        val siteId = rs.getString("SITE_ID")
+        val siteId = rs.getInt("SITE_ID")
         val notfId = rs.getInt("notf_id")
         val notfTypeInt = rs.getInt("NOTF_TYPE")
         val createdAt = getDate(rs, "CREATED_AT")
@@ -409,7 +409,8 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       where p.site_id = ?
         and p.page_id = ?
       """
-    runQuery(query, List(sitePageId.siteId, sitePageId.siteId, sitePageId.pageId.asAnyRef), rs => {
+    runQuery(query, List(sitePageId.siteId.asAnyRef, sitePageId.siteId.asAnyRef,
+        sitePageId.pageId.asAnyRef), rs => {
       if (!rs.next())
         return None
 
@@ -469,16 +470,16 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       })
     }
 
-    results.to[Seq]
+    results
   }
 
 
   private def getPageIdToRerender(rs: js.ResultSet): PageIdToRerender = {
     PageIdToRerender(
-      siteId = rs.getString("site_id"),
+      siteId = rs.getInt("site_id"),
       pageId = rs.getString("page_id"),
       currentVersion = rs.getInt("current_version"),
-      cachedVersion = getOptionalIntNoneNot0(rs, "cached_version"))
+      cachedVersion = getOptInt(rs, "cached_version"))
   }
 
 
@@ -493,7 +494,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
     runQuery(query, Nil, rs => {
       while (rs.next()) {
-        val siteId = rs.getString("site_id")
+        val siteId = rs.getInt("site_id")
         val postId = rs.getInt("post_id")
         val postIds = postIdsBySite.getOrElseUpdate(siteId, ArrayBuffer[PostId]())
         postIds.append(postId)
@@ -558,7 +559,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
     // gets updated in any way?
     // For now:
     val revNr = post.approvedRevisionNr.getOrElse(post.currentRevisionNr)
-    runUpdate(statement, List(siteId, post.id.asAnyRef, revNr.asAnyRef))
+    runUpdate(statement, List(siteId.asAnyRef, post.id.asAnyRef, revNr.asAnyRef))
   }
 
 
@@ -599,7 +600,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
     runQuery(query, Nil, rs => {
       while (rs.next()) {
-        val siteId = rs.getString("site_id")
+        val siteId = rs.getInt("site_id")
         val postId = rs.getInt("post_id")
         val postRevNr = rs.getInt("post_rev_nr")
         val userId = rs.getInt("user_id")
@@ -649,7 +650,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       delete from spam_check_queue3
       where site_id = ? and post_id = ? and post_rev_nr <= ?
       """
-    val values = List(siteId, postId.asAnyRef, postRevNr.asAnyRef)
+    val values = List(siteId.asAnyRef, postId.asAnyRef, postRevNr.asAnyRef)
     runUpdateSingleRow(statement, values)
   }
 
@@ -692,13 +693,11 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       delete from audit_log3
       delete from review_tasks3
       delete from settings3
-      delete from member_page_settings3
       delete from post_read_stats3
       delete from notifications3
       delete from emails_out3
       delete from upload_refs3
       delete from uploads3
-      delete from page_members3
       delete from page_users3
       delete from tag_notf_levels3
       delete from post_tags3

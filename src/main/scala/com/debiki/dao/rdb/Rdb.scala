@@ -536,7 +536,7 @@ class Rdb(val readOnlyDataSource: jxs.DataSource, val readWriteDataSource: jxs.D
 
 
   private def _bind(
-        values: List[AnyRef], pstmt: js.PreparedStatement, firstBindPos: Int = 1) {
+        values: List[Any], pstmt: js.PreparedStatement, firstBindPos: Int = 1) {
     var bindPos = firstBindPos
     for (v <- values) {
       v match {

@@ -49,7 +49,7 @@ trait UsernamesSiteDaoMixin extends SiteTransaction {
         site_id, username, in_use_from, in_use_to, user_id, first_mention_at)
       values (?, ?, ?, ?, ?, ?)
       """
-    val values = List(siteId, usage.username, usage.inUseFrom.asTimestamp,
+    val values = List(siteId.asAnyRef, usage.username, usage.inUseFrom.asTimestamp,
         usage.inUseTo.orNullTimestamp, usage.userId.asAnyRef, usage.firstMentionAt.orNullTimestamp)
     runUpdateSingleRow(statement, values)
   }
@@ -64,21 +64,21 @@ trait UsernamesSiteDaoMixin extends SiteTransaction {
         and user_id = ?
       """
     val values = List(usage.inUseTo.orNullTimestamp, usage.firstMentionAt.orNullTimestamp,
-      siteId, usage.username, usage.inUseFrom.asTimestamp, usage.userId.asAnyRef)
+      siteId.asAnyRef, usage.username, usage.inUseFrom.asTimestamp, usage.userId.asAnyRef)
     runUpdateExactlyOneRow(statement, values)
   }
 
 
   def loadUsersOldUsernames(userId: UserId): Seq[UsernameUsage] = {
     val query = s"select * from usernames3 where site_id = ? and user_id = ? $orderBy"
-    val values = List(siteId, userId.asAnyRef)
+    val values = List(siteId.asAnyRef, userId.asAnyRef)
     runQueryFindMany(query, values, readUsernameUsage)
   }
 
 
   def loadUsernameUsages(username: String): Seq[UsernameUsage] = {
     val query = s"select * from usernames3 where site_id = ? and username = ? $orderBy"
-    val values = List(siteId, username.asAnyRef)
+    val values = List(siteId.asAnyRef, username.asAnyRef)
     runQueryFindMany(query, values, readUsernameUsage)
   }
 

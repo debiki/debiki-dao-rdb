@@ -300,7 +300,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     val sql = """
       select * from sites3 where ID = ?
       """
-    db.query(sql, List(siteId), rs => {
+    db.query(sql, List(siteId.asAnyRef), rs => {
       rs.next()
       dieUnless(rs.isLast, "DwE59FKQ2")
       ResourceUse(
@@ -371,7 +371,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   private def nextPageIdImpl(implicit connecton: js.Connection): PageId = {
     val sql = """{? = call INC_NEXT_PAGE_ID(?) }"""
     var nextPageIdInt =
-      db.call(sql, List(siteId), js.Types.INTEGER, result => {
+      db.call(sql, List(siteId.asAnyRef), js.Types.INTEGER, result => {
         val nextId = result.getInt(1)
         nextId
       })
@@ -408,8 +408,8 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       return Map.empty
 
     val values: List[AnyRef] =
-      if (all) List(anySiteId.getOrElse(siteId))
-      else anySiteId.getOrElse(siteId) :: pageIds.toList
+      if (all) List(anySiteId.getOrElse(siteId).asAnyRef)
+      else anySiteId.getOrElse(siteId).asAnyRef :: pageIds.toList
     var sql = s"""
         select g.PAGE_ID, ${_PageMetaSelectListItems}
         from pages3 g
@@ -507,7 +507,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       newMeta.htmlHeadTitle.orIfEmpty(NullVarchar),
       newMeta.htmlHeadDescription.orIfEmpty(NullVarchar),
       newMeta.numChildPages.asAnyRef,
-      siteId,
+      siteId.asAnyRef,
       newMeta.pageId)
     val sql = s"""
       update pages3 set
@@ -639,14 +639,14 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
 
     // Ought to move this id generation stuff to the caller instead, i.e. CreateSiteDao.
     val id =
-      if (isTestSiteOkayToDelete) Site.TestIdPrefix + nextRandomString().take(5)
-      else "?"
+      if (isTestSiteOkayToDelete) Site.GenerateTestSiteMagicId
+      else NoSiteId
     val newSiteNoId = Site(id, status, name = name, createdAt = createdAt,
       creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
       embeddingSiteUrl = embeddingSiteUrl, hosts = Nil)
 
     val newSite =
-      try { insertSite(newSiteNoId, quotaLimitMegabytes, pricePlan) }
+      try insertSite(newSiteNoId, quotaLimitMegabytes, pricePlan)
       catch {
         case ex: js.SQLException =>
           if (!isUniqueConstrViolation(ex)) throw ex
@@ -674,7 +674,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       values (
         ?, $UnknownUserId, ?, '$UnknownUserName', '-', '$UnknownUserGuestCookie')
       """
-    runUpdate(statement, List(siteId, date))
+    runUpdate(statement, List(siteId.asAnyRef, date))
   }
 
 
@@ -693,7 +693,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       where ID = ?"""
     val values =
       List(changedSite.status.toInt.asAnyRef, changedSite.name,
-        changedSite.embeddingSiteUrl.orNullVarchar, siteId)
+        changedSite.embeddingSiteUrl.orNullVarchar, siteId.asAnyRef)
 
     try runUpdate(sql, values)
     catch {
@@ -706,11 +706,11 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
 
   def countWebsites(createdFromIp: String, creatorEmailAddress: String, testSites: Boolean)
         : Int = {
-    val maybeNot = if (testSites) "" else "not"
+    val smallerOrGreaterThan = if (testSites) "<=" else ">"
     val query = s"""
         select count(*) WEBSITE_COUNT from sites3
         where (CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?)
-          and id $maybeNot like '${Site.TestIdPrefix}%'
+          and id $smallerOrGreaterThan $MaxTestSiteId
         """
     runQueryFindExactlyOne(query, List(createdFromIp, creatorEmailAddress), rs => {
       rs.getInt("WEBSITE_COUNT")
@@ -719,9 +719,9 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
 
 
   def countWebsitesTotal(testSites: Boolean): Int = {
-    val maybeNot = if (testSites) "" else "not"
+    val smallerOrGreaterThan = if (testSites) "<=" else ">"
     val query =
-      s"select count(*) site_count from sites3 where id $maybeNot like '${Site.TestIdPrefix}%'"
+      s"select count(*) site_count from sites3 where id $smallerOrGreaterThan $MaxTestSiteId"
     runQueryFindExactlyOne(query, Nil, rs => {
       rs.getInt("site_count")
     })
@@ -730,18 +730,24 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
 
   private def insertSite(siteNoId: Site, quotaLimitMegabytes: Option[Int], pricePlan: PricePlan)
         : Site = {
-    val newId =
-      if (siteNoId.id != "?") siteNoId.id
-      else {
-        db.nextSeqNo("DW1_TENANTS_ID")(theOneAndOnlyConnection).toString
-      }
+    val newId = siteNoId.id match {
+      case NoSiteId =>
+        db.nextSeqNo("DW1_TENANTS_ID")(theOneAndOnlyConnection).toInt
+      case Site.GenerateTestSiteMagicId =>
+        // Let's start on -11 and continue counting downwards. (Test site ids are negative.)
+        runQueryFindExactlyOne("select least(-10, min(id)) - 1 next_test_site_id from sites3",
+          Nil, _.getInt("next_test_site_id"))
+      case _ =>
+        siteNoId.id
+    }
+
     val site = siteNoId.copy(id = newId)
     runUpdateSingleRow("""
         insert into sites3 (
           ID, status, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
           QUOTA_LIMIT_MBS, price_plan)
         values (?, ?, ?, ?, ?, ?, ?, ?)""",
-      List[AnyRef](site.id, site.status.toInt.asAnyRef, site.name,
+      List[AnyRef](site.id.asAnyRef, site.status.toInt.asAnyRef, site.name,
         site.embeddingSiteUrl.orNullVarchar, site.creatorIp,
         site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
     site
@@ -753,7 +759,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       update hosts3 set canonical = 'D'
       where site_id = ? and canonical = 'C'
       """
-    runUpdateExactlyOneRow(statement, List(siteId))
+    runUpdateExactlyOneRow(statement, List(siteId.asAnyRef))
   }
 
 
@@ -766,7 +772,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       update hosts3 set canonical = ?
       where site_id = ? and canonical in ('D', 'R')
       """
-    runUpdate(statement, List(letter, siteId))
+    runUpdate(statement, List(letter, siteId.asAnyRef))
   }
 
 
@@ -774,7 +780,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     val query = s"""
       select version from sites3 where id = ?
       """
-    runQuery(query, List(siteId), rs => {
+    runQuery(query, List(siteId.asAnyRef), rs => {
       if (!rs.next())
         die("DwE4KGY7")
 
@@ -788,7 +794,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       update sites3 set version = version + 1 where id = ?
       """
     transactionAllowOverQuota { implicit connection =>
-      db.update(sql, List(siteId))
+      db.update(sql, List(siteId.asAnyRef))
     }
   }
 
@@ -829,7 +835,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       if (includeStatuses.contains(PageStatus.Draft)) "true"
       else "g.PUBLISHED_AT is not null"
 
-    val values = siteId :: pageRangeValues
+    val values = siteId.asAnyRef :: pageRangeValues
     val sql = s"""
         select t.PARENT_FOLDER,
             t.PAGE_ID,
@@ -890,7 +896,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       case EmailType.InvitePassword => "InPw"
     }
 
-    val vals = List(siteId, email.id, emailTypeToString(email.tyype), email.sentTo,
+    val vals = List(siteId.asAnyRef, email.id, emailTypeToString(email.tyype), email.sentTo,
       email.toUserId.orNullInt,
       d2ts(email.createdAt), email.subject, email.bodyHtmlText)
 
@@ -915,7 +921,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       val vals = List(
         sentOn, email.providerEmailId.orNullVarchar,
         failureType, email.failureText.orNullVarchar, failureTime,
-        siteId, email.id)
+        siteId.asAnyRef, email.id)
 
       db.update("""
         update emails_out3
@@ -934,7 +940,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       from emails_out3
       where SITE_ID = ? and ID = ?
       """
-    val emailOpt = db.queryAtnms(query, List(siteId, emailId), rs => {
+    val emailOpt = db.queryAtnms(query, List(siteId.asAnyRef, emailId), rs => {
       var allEmails = List[Email]()
       while (rs.next) {
         def parseEmailType(typeString: String) = typeString match {
@@ -984,7 +990,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
 
   private def lookupPagePathsImpl(pageId: PageId, loadRedirects: Boolean): List[PagePath] = {
     val andOnlyCanonical = if (loadRedirects) "" else "and CANONICAL = 'C'"
-    val values = List(siteId, pageId)
+    val values = List(siteId.asAnyRef, pageId)
     val sql = s"""
       select PARENT_FOLDER, SHOW_ID, PAGE_SLUG,
         -- For debug assertions:
@@ -1030,11 +1036,11 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         where SITE_ID = ?
         """
 
-    var binds = List(pagePathIn.tenantId)
+    var binds = List[AnyRef](pagePathIn.siteId.asAnyRef)
     pagePathIn.pageId match {
       case Some(id) =>
         query += s" and PAGE_ID = ? order by $CanonicalFirst"
-        binds ::= id
+        binds ::= id.asAnyRef
       case None =>
         // SHOW_ID = 'F' means that the page page id must not be part
         // of the page url. ((So you cannot look up [a page that has its id
@@ -1092,7 +1098,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         if (!rs.next)
           return None
         var correctPath = PagePath(
-            tenantId = pagePathIn.tenantId,
+            siteId = pagePathIn.siteId,
             folder = rs.getString("PARENT_FOLDER"),
             pageId = Some(rs.getString("PAGE_ID")),
             showId = rs.getString("SHOW_ID") == "T",
@@ -1143,7 +1149,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
          ?, ?, ?)"""
 
     val values = List[AnyRef](
-      siteId, pageMeta.pageId, pageMeta.version.asAnyRef,
+      siteId.asAnyRef, pageMeta.pageId, pageMeta.version.asAnyRef,
       pageMeta.pageRole.toInt.asAnyRef,
       pageMeta.categoryId.orNullInt,
       pageMeta.embeddingPageUrl.orNullVarchar,
@@ -1181,11 +1187,11 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
           SITE_ID, PARENT_FOLDER, PAGE_ID, SHOW_ID, PAGE_SLUG, CANONICAL)
         values (?, ?, ?, ?, ?, 'C')
         """,
-        List(pagePath.tenantId, pagePath.folder, pagePath.pageId.get,
+        List(pagePath.siteId.asAnyRef, pagePath.folder, pagePath.pageId.get,
           showPageId, e2d(pagePath.pageSlug)))(conn)
     }
     catch {
-      case ex: js.SQLException if (isUniqueConstrViolation(ex)) =>
+      case ex: js.SQLException if isUniqueConstrViolation(ex) =>
         val mess = ex.getMessage.toUpperCase
         if (mess.contains("DW1_PGPTHS_PATH_NOID_CNCL__U")) {
           // There's already a page path where we attempt to insert
@@ -1250,7 +1256,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         (implicit conn: js.Connection): PagePath = {
 
     // Verify new path is legal.
-    PagePath.checkPath(tenantId = siteId, pageId = Some(pageId),
+    PagePath.checkPath(siteId = siteId, pageId = Some(pageId),
       folder = newFolder getOrElse "/", pageSlug = newSlug getOrElse "")
 
     val currentPath: PagePath = lookupPagePathImpl(pageId) getOrElse (
@@ -1300,7 +1306,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     //    because then that page would no longer be reachable).
 
     def changeExistingPathsToRedirects(pageId: PageId) {
-      val vals = List(siteId, pageId)
+      val vals = List(siteId.asAnyRef, pageId)
       val stmt = """
         update page_paths3
         set CANONICAL = 'R'
@@ -1314,7 +1320,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
 
     def deleteAnyExistingRedirectFrom(newPath: PagePath) {
       val showPageId = newPath.showId ? "T" | "F"
-      var vals = List(siteId, newPath.folder, e2d(newPath.pageSlug), showPageId)
+      var vals = List(siteId.asAnyRef, newPath.folder, e2d(newPath.pageSlug), showPageId)
       var stmt = """
         delete from page_paths3
         where SITE_ID = ? and PARENT_FOLDER = ? and PAGE_SLUG = ?

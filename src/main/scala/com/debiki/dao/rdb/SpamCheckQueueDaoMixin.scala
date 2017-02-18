@@ -59,7 +59,7 @@ trait SpamCheckQueueDaoMixin extends SiteTransaction {
     // decrements the post revision nr.
     val actionAt = post.currentRevLastEditedAt.getOrElse(post.createdAt)
     val values = List(
-      actionAt, siteId, post.id.asAnyRef, post.currentRevisionNr.asAnyRef,
+      actionAt, siteId.asAnyRef, post.id.asAnyRef, post.currentRevisionNr.asAnyRef,
       byWho.id.asAnyRef, byWho.idCookie, byWho.browserFingerprint.asAnyRef,
       spamRelReqStuff.userAgent.orNullVarchar, spamRelReqStuff.referer.orNullVarchar,
       byWho.ip, spamRelReqStuff.uri)
