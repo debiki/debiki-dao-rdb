@@ -201,3 +201,11 @@ insert into page_users3 (site_id, page_id, user_id, joined_by_id)
   select site_id, page_id, user_id, added_by_id
   from page_members3;
 
+
+-- I've never inited the total-replies count.
+update pages3 set num_replies_total = (
+  select count(*) from posts3 p
+  where p.site_id = pages3.site_id
+        and p.page_id = pages3.page_id
+        and p.post_nr >= 2); -- skip title (nr 0) and orig post (nr 1)
+
