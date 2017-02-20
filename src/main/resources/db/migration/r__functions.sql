@@ -85,29 +85,6 @@ end;
 $$;
 
 
-CREATE or replace FUNCTION string_id_to_int(string_id character varying) RETURNS character varying
-    LANGUAGE plpgsql IMMUTABLE STRICT
-    AS $_$
-DECLARE
-    result  int;
-BEGIN
-    SELECT 
-      case
-        when string_id ~ '^[0-9]+$' then string_id
-        else case string_id
-          when '0t' then '65501'
-          when '0b' then '65502'
-          when '0c' then '65503'
-          -- I used `7` in test & dev though, but shorter ids = better, I hope 5 will do:
-          else '' || substring('' || hex_to_int(substring(md5(string_id) from 1 for 7)) from 1 for 6)
-        end
-      end
-      INTO result;
-    RETURN result;
-END;
-$_$;
-
-
 CREATE or replace FUNCTION update_upload_ref_count(the_base_url character varying, the_hash_path character varying) RETURNS void
     LANGUAGE plpgsql
     AS $$

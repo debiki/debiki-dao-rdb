@@ -189,6 +189,13 @@ object Rdb {
     else Some(value)
   }
 
+  def getOptBool(rs: js.ResultSet, column: String): Option[Boolean] = {
+    // rs.getInt() returns 0 instead of null.
+    var value = rs.getBoolean(column)
+    if (rs.wasNull) None
+    else Some(value)
+  }
+
   /** Converts java.sql.Timestamp to java.util.Date, all in UTC. (If you send a
     * ju.Date to the database, it throws away the fractional seconds value,
     * when saving and loading.)

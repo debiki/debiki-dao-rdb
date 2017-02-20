@@ -3,7 +3,6 @@
 
 drop table member_page_settings3;
 drop table page_members3;
-drop function inc_next_page_id(site_id character varying);
 
 -- Drop all foreign keys
 alter table audit_log3 drop constraint dw2_auditlog__r__pages;
@@ -156,91 +155,179 @@ alter table audit_log3 add constraint auditlog_r_pages foreign key (site_id, pag
 alter table audit_log3 add constraint auditlog_r_posts foreign key (site_id, post_id) references posts3(site_id, unique_post_id) deferrable;
 alter table audit_log3 add constraint auditlog_doer_r_people foreign key (site_id, doer_id) references users3(site_id, user_id) deferrable;
 alter table audit_log3 add constraint auditlog_targetuser_r_people foreign key (site_id, target_user_id) references users3(site_id, user_id) deferrable;
-alter table blocks3 add constraint blocks_blockedby_r_people foreign key (site_id, blocked_by_id) references users3(site_id, user_id);
+alter table blocks3 add constraint blocks_blockedby_r_people foreign key (site_id, blocked_by_id) references users3(site_id, user_id) deferrable;
 alter table categories3 add constraint cats_defaultcat_r_cats foreign key (site_id, default_category_id) references categories3(site_id, id) on update cascade on delete cascade deferrable;
-alter table categories3 add constraint cats_r_cats foreign key (site_id, parent_id) references categories3(site_id, id);
+alter table categories3 add constraint cats_r_cats foreign key (site_id, parent_id) references categories3(site_id, id) deferrable;
 alter table categories3 add constraint cats_page_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable;
-alter table category_notf_levels3 add constraint catnotflvl_r_people foreign key (site_id, user_id) references users3(site_id, user_id);
-alter table emails_out3 add constraint emlot_r_people foreign key (site_id, to_user_id) references users3(site_id, user_id);
-alter table hosts3 add constraint hosts_r_sites foreign key (site_id) references sites3(id);
-alter table identities3 add constraint ids_user_users foreign key (site_id, user_id) references users3(site_id, user_id);
-alter table identities3 add constraint ids_useridorig_r_people foreign key (site_id, user_id_orig) references users3(site_id, user_id);
-alter table invites3 add constraint invites_inviter_r_people foreign key (site_id, created_by_id) references users3(site_id, user_id);
-alter table invites3 add constraint invites_user_r_people foreign key (site_id, user_id) references users3(site_id, user_id);
-alter table notifications3 add constraint ntfs_r_emails foreign key (site_id, email_id) references emails_out3(site_id, id);
-alter table notifications3 add constraint ntfs_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id);
-alter table notifications3 add constraint ntfs_r_postacs foreign key (site_id, unique_post_id, action_type, by_user_id, action_sub_id) references post_actions3(site_id, unique_post_id, type, created_by_id, sub_id);
-alter table notifications3 add constraint ntfs_r_sites foreign key (site_id) references sites3(id);
-alter table notifications3 add constraint ntfs_byuser_r_people foreign key (site_id, by_user_id) references users3(site_id, user_id);
-alter table notifications3 add constraint ntfs_post_r_posts foreign key (site_id, unique_post_id) references posts3(site_id, unique_post_id);
-alter table notifications3 add constraint ntfs_touser_r_people foreign key (site_id, to_user_id) references users3(site_id, user_id);
-alter table page_html3 add constraint pagehtml_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id);
+alter table category_notf_levels3 add constraint catnotflvl_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
+alter table emails_out3 add constraint emlot_r_people foreign key (site_id, to_user_id) references users3(site_id, user_id) deferrable;
+alter table hosts3 add constraint hosts_r_sites foreign key (site_id) references sites3(id) deferrable;
+alter table identities3 add constraint ids_user_users foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
+alter table identities3 add constraint ids_useridorig_r_people foreign key (site_id, user_id_orig) references users3(site_id, user_id) deferrable;
+alter table invites3 add constraint invites_inviter_r_people foreign key (site_id, created_by_id) references users3(site_id, user_id) deferrable;
+alter table invites3 add constraint invites_user_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
+alter table notifications3 add constraint ntfs_r_emails foreign key (site_id, email_id) references emails_out3(site_id, id) deferrable;
+alter table notifications3 add constraint ntfs_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable;
+alter table notifications3 add constraint ntfs_r_postacs foreign key (site_id, unique_post_id, action_type, by_user_id, action_sub_id) references post_actions3(site_id, unique_post_id, type, created_by_id, sub_id) deferrable;
+alter table notifications3 add constraint ntfs_r_sites foreign key (site_id) references sites3(id) deferrable;
+alter table notifications3 add constraint ntfs_byuser_r_people foreign key (site_id, by_user_id) references users3(site_id, user_id) deferrable;
+alter table notifications3 add constraint ntfs_post_r_posts foreign key (site_id, unique_post_id) references posts3(site_id, unique_post_id) deferrable;
+alter table notifications3 add constraint ntfs_touser_r_people foreign key (site_id, to_user_id) references users3(site_id, user_id) deferrable;
+alter table page_html3 add constraint pagehtml_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable;
 alter table page_paths3 add constraint pgpths_page_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable;
-alter table page_users3 add constraint pageusers_joinedby_r_people foreign key (site_id, joined_by_id) references users3(site_id, user_id);
-alter table page_users3 add constraint pageusers_kickedby_r_people foreign key (site_id, kicked_by_id) references users3(site_id, user_id);
-alter table page_users3 add constraint pageusers_page_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id);
-alter table page_users3 add constraint pageusers_user_r_people foreign key (site_id, user_id) references users3(site_id, user_id);
+alter table page_users3 add constraint pageusers_joinedby_r_people foreign key (site_id, joined_by_id) references users3(site_id, user_id) deferrable;
+alter table page_users3 add constraint pageusers_kickedby_r_people foreign key (site_id, kicked_by_id) references users3(site_id, user_id) deferrable;
+alter table page_users3 add constraint pageusers_page_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable;
+alter table page_users3 add constraint pageusers_user_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
 alter table pages3 add constraint pages_r_sites foreign key (site_id) references sites3(id) deferrable;
 alter table pages3 add constraint pages_category_r_categories foreign key (site_id, category_id) references categories3(site_id, id) deferrable;
 alter table pages3 add constraint pages_createdby_r_people foreign key (site_id, author_id) references users3(site_id, user_id) deferrable;
-alter table pages3 add constraint pages_frequentposter1_r_people foreign key (site_id, frequent_poster_1_id) references users3(site_id, user_id);
-alter table pages3 add constraint pages_frequentposter2_r_people foreign key (site_id, frequent_poster_2_id) references users3(site_id, user_id);
-alter table pages3 add constraint pages_frequentposter3_r_people foreign key (site_id, frequent_poster_3_id) references users3(site_id, user_id);
-alter table pages3 add constraint pages_frequentposter4_r_people foreign key (site_id, frequent_poster_4_id) references users3(site_id, user_id);
-alter table pages3 add constraint pages_lastreplyby_r_people foreign key (site_id, last_reply_by_id) references users3(site_id, user_id);
-alter table post_actions3 add constraint postacs_r_posts foreign key (site_id, unique_post_id) references posts3(site_id, unique_post_id);
+alter table pages3 add constraint pages_frequentposter1_r_people foreign key (site_id, frequent_poster_1_id) references users3(site_id, user_id) deferrable;
+alter table pages3 add constraint pages_frequentposter2_r_people foreign key (site_id, frequent_poster_2_id) references users3(site_id, user_id) deferrable;
+alter table pages3 add constraint pages_frequentposter3_r_people foreign key (site_id, frequent_poster_3_id) references users3(site_id, user_id) deferrable;
+alter table pages3 add constraint pages_frequentposter4_r_people foreign key (site_id, frequent_poster_4_id) references users3(site_id, user_id) deferrable;
+alter table pages3 add constraint pages_lastreplyby_r_people foreign key (site_id, last_reply_by_id) references users3(site_id, user_id) deferrable;
+alter table post_actions3 add constraint postacs_r_posts foreign key (site_id, unique_post_id) references posts3(site_id, unique_post_id) deferrable;
 alter table post_actions3 add constraint postacs_createdby_r_people foreign key (site_id, created_by_id) references users3(site_id, user_id) deferrable;
 alter table post_actions3 add constraint postacs_deletedby_r_people foreign key (site_id, deleted_by_id) references users3(site_id, user_id) deferrable;
 alter table post_read_stats3 add constraint pstsrd_r_posts foreign key (site_id, page_id, post_nr) references posts3(site_id, page_id, post_nr) deferrable;
 alter table post_read_stats3 add constraint pstsrd_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
 alter table post_revisions3 add constraint postrevs_approvedby_r_people foreign key (site_id, approved_by_id) references users3(site_id, user_id) deferrable;
 alter table post_revisions3 add constraint postrevs_composedby_r_people foreign key (site_id, composed_by_id) references users3(site_id, user_id) deferrable;
-alter table post_revisions3 add constraint postrevs_hiddenby_r_people foreign key (site_id, hidden_by_id) references users3(site_id, user_id);
-alter table post_revisions3 add constraint postrevs_post_r_posts foreign key (site_id, post_id) references posts3(site_id, unique_post_id);
-alter table post_revisions3 add constraint postrevs_prevnr_r__postrevs foreign key (site_id, post_id, previous_nr) references post_revisions3(site_id, post_id, revision_nr);
-alter table post_tags3 add constraint posttags_r_posts foreign key (site_id, post_id) references posts3(site_id, unique_post_id);
-alter table posts3 add constraint posts_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id);
+alter table post_revisions3 add constraint postrevs_hiddenby_r_people foreign key (site_id, hidden_by_id) references users3(site_id, user_id) deferrable;
+alter table post_revisions3 add constraint postrevs_post_r_posts foreign key (site_id, post_id) references posts3(site_id, unique_post_id) deferrable;
+alter table post_revisions3 add constraint postrevs_prevnr_r__postrevs foreign key (site_id, post_id, previous_nr) references post_revisions3(site_id, post_id, revision_nr) deferrable;
+alter table post_tags3 add constraint posttags_r_posts foreign key (site_id, post_id) references posts3(site_id, unique_post_id) deferrable;
+alter table posts3 add constraint posts_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable;
 alter table posts3 add constraint posts_approvedby_r_people foreign key (site_id, approved_by_id) references users3(site_id, user_id) deferrable;
 alter table posts3 add constraint posts_closedby_r_people foreign key (site_id, closed_by_id) references users3(site_id, user_id) deferrable;
 alter table posts3 add constraint posts_collapsedby_r_people foreign key (site_id, collapsed_by_id) references users3(site_id, user_id) deferrable;
 alter table posts3 add constraint posts_createdby_r_people foreign key (site_id, created_by_id) references users3(site_id, user_id) deferrable;
 alter table posts3 add constraint posts_deletedby_r_people foreign key (site_id, deleted_by_id) references users3(site_id, user_id) deferrable;
-alter table posts3 add constraint posts_hiddenby_r_people foreign key (site_id, hidden_by_id) references users3(site_id, user_id);
+alter table posts3 add constraint posts_hiddenby_r_people foreign key (site_id, hidden_by_id) references users3(site_id, user_id) deferrable;
 alter table posts3 add constraint posts_lastapprovededitby_r_people foreign key (site_id, last_approved_edit_by_id) references users3(site_id, user_id) deferrable;
 alter table posts3 add constraint posts_lasteditedby_r_people foreign key (site_id, curr_rev_by_id) references users3(site_id, user_id) deferrable;
-alter table posts3 add constraint posts_pinnedby_r_people foreign key (site_id, pinned_by_id) references users3(site_id, user_id);
-alter table review_tasks3 add constraint reviewtasks_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id);
-alter table review_tasks3 add constraint reviewtasks_r_posts foreign key (site_id, post_id) references posts3(site_id, unique_post_id);
-alter table review_tasks3 add constraint reviewtasks_causedby_r_people foreign key (site_id, created_by_id) references users3(site_id, user_id);
-alter table review_tasks3 add constraint reviewtasks_complby_r_people foreign key (site_id, completed_by_id) references users3(site_id, user_id);
-alter table review_tasks3 add constraint reviewtasks_user_r_people foreign key (site_id, user_id) references users3(site_id, user_id);
-alter table settings3 add constraint settings_cat_r_cats foreign key (site_id, category_id) references categories3(site_id, id);
-alter table settings3 add constraint settings_page_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id);
-alter table settings3 add constraint settings_site_r_sites foreign key (site_id) references sites3(id);
-alter table tag_notf_levels3 add constraint tagnotflvl_r_people foreign key (site_id, user_id) references users3(site_id, user_id);
-alter table upload_refs3 add constraint uploadrefs_r_people foreign key (site_id, added_by_id) references users3(site_id, user_id);
-alter table user_stats3 add constraint userstats_r_people foreign key (site_id, user_id) references users3(site_id, user_id);
-alter table user_visit_stats3 add constraint uservisitstats_r_people foreign key (site_id, user_id) references users3(site_id, user_id);
-alter table usernames3 add constraint usernames_r_people foreign key (site_id, user_id) references users3(site_id, user_id);
+alter table posts3 add constraint posts_pinnedby_r_people foreign key (site_id, pinned_by_id) references users3(site_id, user_id) deferrable;
+alter table review_tasks3 add constraint reviewtasks_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable;
+alter table review_tasks3 add constraint reviewtasks_r_posts foreign key (site_id, post_id) references posts3(site_id, unique_post_id) deferrable;
+alter table review_tasks3 add constraint reviewtasks_causedby_r_people foreign key (site_id, created_by_id) references users3(site_id, user_id) deferrable;
+alter table review_tasks3 add constraint reviewtasks_complby_r_people foreign key (site_id, completed_by_id) references users3(site_id, user_id) deferrable;
+alter table review_tasks3 add constraint reviewtasks_user_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
+alter table settings3 add constraint settings_cat_r_cats foreign key (site_id, category_id) references categories3(site_id, id) deferrable;
+alter table settings3 add constraint settings_page_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable;
+alter table settings3 add constraint settings_site_r_sites foreign key (site_id) references sites3(id) deferrable;
+alter table tag_notf_levels3 add constraint tagnotflvl_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
+alter table upload_refs3 add constraint uploadrefs_r_people foreign key (site_id, added_by_id) references users3(site_id, user_id) deferrable;
+alter table user_stats3 add constraint userstats_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
+alter table user_visit_stats3 add constraint uservisitstats_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
+alter table usernames3 add constraint usernames_r_people foreign key (site_id, user_id) references users3(site_id, user_id) deferrable;
 alter table users3 add constraint users_r_sites foreign key (site_id) references sites3(id) deferrable;
-alter table users3 add constraint users_approvedby_r_people foreign key (site_id, approved_by_id) references users3(site_id, user_id);
-alter table users3 add constraint users_suspendeby_r_people foreign key (site_id, suspended_by_id) references users3(site_id, user_id);
+alter table users3 add constraint users_approvedby_r_people foreign key (site_id, approved_by_id) references users3(site_id, user_id) deferrable;
+alter table users3 add constraint users_suspendeby_r_people foreign key (site_id, suspended_by_id) references users3(site_id, user_id) deferrable;
 
 
 -- Create permissions table
 ----------------------------------------------------
 
-create table perms_on_content3(
-  site_id varchar not null,
+create or replace function one_unless_null(anyValue int) returns integer
+language plpgsql immutable strict
+as $$
+begin
+  if anyValue is null then
+    return 0;
+  end if;
+  return 1;
+end;
+$$;
+
+
+create or replace function one_unless_null(anyBool boolean) returns integer
+language plpgsql immutable strict
+as $$
+begin
+  if anyBool is null then
+    return 0;
+  end if;
+  return 1;
+end;
+$$;
+
+
+create or replace function one_unless_null(anyVarchar varchar) returns integer
+language plpgsql immutable strict
+as $$
+begin
+  if anyVarchar is null then
+    return 0;
+  end if;
+  return 1;
+end;
+$$;
+
+
+create table perms_on_pages3(
+  site_id int not null,
+  perm_id int not null,
   for_people_id int not null,
+  on_whole_site boolean,
   on_category_id int,
   on_page_id varchar,
   on_post_id int,
   on_tag_id int,
-  on_whole_site boolean,
-  to_edit boolean,
-  to_create boolean,
-  to_reply boolean,
-  to_see boolean
+  to_edit_page boolean,
+  to_edit_comment boolean,
+  to_edit_wiki boolean,
+  to_delete_page boolean,
+  to_delete_comment boolean,
+  to_create_page boolean,
+  to_post_comment boolean,
+  to_see boolean,
+  constraint permsonpages_p primary key (site_id, perm_id),
+  constraint permsonpages_r_people foreign key (site_id, for_people_id)
+    references users3 (site_id, user_id),
+  constraint permsonpages_r_cats foreign key (site_id, on_category_id)
+    references categories3 (site_id, id),
+  constraint permsonpages_r_pages foreign key (site_id, on_page_id)
+    references pages3 (site_id, page_id),
+  constraint permsonpages_r_posts foreign key (site_id, on_post_id)
+    references posts3 (site_id, unique_post_id),
+  constraint permsonpages_c_on_one check (1 =
+    one_unless_null(on_whole_site) +
+    one_unless_null(on_category_id) +
+    one_unless_null(on_page_id) +
+    one_unless_null(on_post_id) +
+    one_unless_null(on_tag_id)),
+  constraint permsonpages_c_not_meaningless check (
+    to_edit_page is not null
+    or to_edit_comment is not null
+    or to_edit_wiki is not null
+    or to_delete_page is not null
+    or to_delete_comment is not null
+    or to_create_page is not null
+    or to_post_comment is not null
+    or to_see is not null)
 );
+
+-- Foreign key index:
+create index permsonpages_people_i on perms_on_pages3 (site_id, for_people_id);
+
+-- More foreign key indexes + avoids dupl permissions:
+create unique index permsonpages_on_site_u on perms_on_pages3 (
+  site_id, for_people_id)
+  where on_whole_site is not null;
+create unique index permsonpages_on_cat_u on perms_on_pages3 (
+  site_id, on_category_id, for_people_id)
+  where on_category_id is not null;
+create unique index permsonpages_on_page_u on perms_on_pages3 (
+  site_id, on_page_id, for_people_id)
+  where on_page_id is not null;
+create unique index permsonpages_on_post_u on perms_on_pages3 (
+  site_id, on_post_id, for_people_id)
+  where on_post_id is not null;
+
+-- later:  perms_on_people3, perms_on_cats3, perms_on_tags3 ?
+
+
+-- No longer needed
+drop function if exists string_id_to_int(varchar);
 

@@ -52,6 +52,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   with SettingsSiteDaoMixin
   with BlocksSiteDaoMixin
   with ReviewsSiteDaoMixin
+  with PermsOnPagesRdbMixin
   with AuditLogSiteDaoMixin {
 
 
@@ -93,6 +94,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
 
   // COULD move to new superclass?
   private var transactionEnded = false
+  var hasBeenRolledBack = false
 
   // COULD move to new superclass?
   def createTheOneAndOnlyConnection(readOnly: Boolean, mustBeSerializable: Boolean) {
@@ -124,6 +126,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     theOneAndOnlyConnection.rollback()
     db.closeConnection(theOneAndOnlyConnection)
     transactionEnded = true
+    hasBeenRolledBack = true
   }
 
 

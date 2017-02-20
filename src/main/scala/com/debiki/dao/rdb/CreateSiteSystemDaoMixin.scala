@@ -83,6 +83,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       delete from spam_check_queue3 where site_id = ?
       delete from audit_log3 where site_id = ?
       delete from review_tasks3 where site_id = ?
+      delete from perms_on_pages3 where site_id = ?
       delete from settings3 where site_id = ?
       delete from post_read_stats3 where site_id = ?
       delete from notifications3 where site_id = ?
