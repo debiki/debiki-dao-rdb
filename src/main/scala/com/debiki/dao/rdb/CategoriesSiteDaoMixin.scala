@@ -42,18 +42,14 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
     val query = """
       select * from categories3 where site_id = ?
       """
-    var result = Map[CategoryId, Category]()
-    runQueryPerhapsAtnms(query, List(siteId.asAnyRef), rs => {
-      while (rs.next()) {
-        val category = getCategory(rs)
-        result += category.id -> category
-      }
+    runQueryBuildMap(query, List(siteId.asAnyRef), rs => {
+      val category = getCategory(rs)
+      category.id -> category
     })
-    result
   }
 
 
-  def loadCategoryPathRootLast(categoryId: CategoryId): Seq[Category] = {
+  def loadCategoryPathRootLast(categoryId: CategoryId): immutable.Seq[Category] = {
     val categoriesById = loadCategoryMap()
     val ancestors = ArrayBuffer[Category]()
     var nextCategory = categoriesById.get(categoryId)
@@ -64,7 +60,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       ancestors += nextCategory.get
       nextCategory = nextCategory.get.parentId.flatMap(categoriesById.get)
     }
-    ancestors.toSeq
+    ancestors.to[immutable.Seq]
   }
 
 

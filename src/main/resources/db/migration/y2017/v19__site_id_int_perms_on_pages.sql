@@ -82,6 +82,7 @@ alter table users3 drop constraint dw1_users_suspendebyid__r__users;
 
 -- Delete all text ids (cannot be converted to int). There's just one: 'test_...'.
 delete from audit_log3 where site_id like 'test_%';
+delete from audit_log3 where target_site_id like 'test_%';
 delete from blocks3 where site_id like 'test_%';
 delete from categories3 where site_id like 'test_%';
 delete from category_notf_levels3 where site_id like 'test_%';
