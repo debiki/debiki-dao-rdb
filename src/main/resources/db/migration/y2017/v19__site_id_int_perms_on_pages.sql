@@ -275,14 +275,14 @@ create table perms_on_pages3(
   on_page_id varchar,
   on_post_id int,
   on_tag_id int,
-  to_edit_page boolean,
-  to_edit_comment boolean,
-  to_edit_wiki boolean,
-  to_delete_page boolean,
-  to_delete_comment boolean,
-  to_create_page boolean,
-  to_post_comment boolean,
-  to_see boolean,
+  may_edit_page boolean,
+  may_edit_comment boolean,
+  may_edit_wiki boolean,
+  may_delete_page boolean,
+  may_delete_comment boolean,
+  may_create_page boolean,
+  may_post_comment boolean,
+  may_see boolean,
   constraint permsonpages_p primary key (site_id, perm_id),
   constraint permsonpages_r_people foreign key (site_id, for_people_id)
     references users3 (site_id, user_id),
@@ -299,14 +299,14 @@ create table perms_on_pages3(
     one_unless_null(on_post_id) +
     one_unless_null(on_tag_id)),
   constraint permsonpages_c_not_meaningless check (
-    to_edit_page is not null
-    or to_edit_comment is not null
-    or to_edit_wiki is not null
-    or to_delete_page is not null
-    or to_delete_comment is not null
-    or to_create_page is not null
-    or to_post_comment is not null
-    or to_see is not null)
+    may_edit_page is not null
+    or may_edit_comment is not null
+    or may_edit_wiki is not null
+    or may_delete_page is not null
+    or may_delete_comment is not null
+    or may_create_page is not null
+    or may_post_comment is not null
+    or may_see is not null)
 );
 
 -- Foreign key index:
