@@ -283,6 +283,7 @@ create table perms_on_pages3(
   may_create_page boolean,
   may_post_comment boolean,
   may_see boolean,
+  may_see_private_flagged boolean,
   constraint permsonpages_p primary key (site_id, perm_id),
   constraint permsonpages_r_people foreign key (site_id, for_people_id)
     references users3 (site_id, user_id),
@@ -306,7 +307,8 @@ create table perms_on_pages3(
     or may_delete_comment is not null
     or may_create_page is not null
     or may_post_comment is not null
-    or may_see is not null)
+    or may_see is not null
+    or may_see_private_flagged is not null)
 );
 
 -- Foreign key index:

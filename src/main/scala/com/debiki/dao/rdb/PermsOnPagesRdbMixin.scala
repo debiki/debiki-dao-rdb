@@ -73,9 +73,11 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
 
 
   private def selectNextPerSiteId(): PermissionId = {
-    // Let's start on 11 so 1-10 will be available in case magic ids needed.
+    // Let's start on 1000 so 1-999 will be available to me if I need to insert "hardcoded"
+    // permissions for trust levels & staff groups, for each category, say 100 categories [B0GKWU52]
+    // (100 categories * 10 levels-and-staff-groups per category = 1000).
     val query = """
-      select coalesce(max(perm_id), 10) + 1 next_id from perms_on_pages3 where site_id = ?
+      select coalesce(max(perm_id), 1000) + 1 next_id from perms_on_pages3 where site_id = ?
       """
     runQueryFindExactlyOne(query, List(siteId.asAnyRef), _.getInt("next_id"))
   }
