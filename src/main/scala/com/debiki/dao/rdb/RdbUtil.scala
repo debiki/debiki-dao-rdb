@@ -125,6 +125,19 @@ object RdbUtil {
     invalidatedAt = getOptionalDate(rs, "invalidated_at"))
 
 
+  val GroupSelectListItems = o"""
+      user_id,
+      full_name,
+      username,
+      locked_trust_level,
+      email,
+      avatar_tiny_base_url,
+      avatar_tiny_hash_path,
+      avatar_small_base_url,
+      avatar_small_hash_path
+      """
+
+
   val UserSelectListItemsNoGuests =
     """u.USER_ID u_id,
       |u.full_name u_full_name,
@@ -200,9 +213,20 @@ object RdbUtil {
       lockedTrustLevel = getOptionalInt(rs, "u_locked_trust_level").flatMap(TrustLevel.fromInt),
       threatLevel = ThreatLevel.fromInt(rs.getInt("u_threat_level")).getOrDie("EsE0PW4V2"),
       lockedThreatLevel = lockedThreatLevel,
-      isOwner = rs.getString("u_is_owner") == "T",
-      isAdmin = rs.getString("u_is_admin") == "T",
+      isOwner = rs.getBoolean("u_is_owner"),
+      isAdmin = rs.getBoolean("u_is_admin"),
       isModerator = rs.getBoolean("u_is_moderator"))
+  }
+
+
+  def getGroup(rs: js.ResultSet): Group = {
+    Group(
+      id = rs.getInt("user_id"),
+      theUsername = rs.getString("username"),
+      name = rs.getString("full_name"),
+      tinyAvatar = getAnyUploadRef(rs, "avatar_tiny_base_url", "avatar_tiny_hash_path"),
+      smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path"),
+      grantsTrustLevel = getOptionalInt(rs, "locked_trust_level").flatMap(TrustLevel.fromInt))
   }
 
 
@@ -274,8 +298,8 @@ object RdbUtil {
       lockedTrustLevel = getOptionalInt(rs, "locked_trust_level").flatMap(TrustLevel.fromInt),
       threatLevel = ThreatLevel.fromInt(rs.getInt("threat_level")).getOrDie("EsE22IU60C"),
       lockedThreatLevel = getOptionalInt(rs, "locked_threat_level").flatMap(ThreatLevel.fromInt),
-      isOwner = rs.getString("is_owner") == "T",
-      isAdmin = rs.getString("is_admin") == "T",
+      isOwner = rs.getBoolean("is_owner"),
+      isAdmin = rs.getBoolean("is_admin"),
       isModerator = rs.getBoolean("is_moderator"))
   }
 

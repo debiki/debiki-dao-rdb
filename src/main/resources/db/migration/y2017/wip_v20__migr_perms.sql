@@ -21,9 +21,29 @@ alter table users3 alter threat_level drop not null;
 -- Use the permission system instead.
 alter table users3 drop column is_editor;
 
+-- Convert users3 is_admin and is_owner 'T' to true:
+-- First, drop 'T' constraints.
+alter table users3 drop constraint dw1_users_isowner__c_b;
+alter table users3 drop constraint dw1_users_superadm__c;
+-- Then converst.
+alter table users3 alter column is_admin type boolean using (
+  case is_admin
+    when 'T' then true
+    else null
+  end);
+alter table users3 alter column is_owner type boolean using (
+  case is_owner
+    when 'T' then true
+    else null
+  end);
 
--- TODO do this automatically for new sites
+-- Cannot be both moderator and admin.
+alter table users3 add constraint people_c_not_both_admin_mod check (
+  not is_admin or not is_moderator);
 
+
+
+-- TODO do this automatically for new sites:
 
 -- Create groups for all trust levels, and staff, mods and admins.
 insert into users3 (site_id, user_id, full_name, username, created_at)
@@ -124,23 +144,25 @@ insert into users3 (site_id, user_id, full_name, username, created_at)
   from sites3 s;
 
 
-insert into users3 (site_id, user_id, full_name, username, created_at)
+insert into users3 (site_id, user_id, full_name, username, created_at, is_moderator)
   select
     s.id as site_id,
     18 as user_id,
     'Moderators' full_name,
     'moderators' as username,
-    now_utc() as created_at
+    now_utc() as created_at,
+    true as is_moderator
   from sites3 s;
 
 
-insert into users3 (site_id, user_id, full_name, username, created_at)
+insert into users3 (site_id, user_id, full_name, username, created_at, is_admin)
   select
     s.id as site_id,
     19 as user_id,
     'Admins' full_name,
     'admins' as username,
-    now_utc() as created_at
+    now_utc() as created_at,
+    true as is_admin
   from sites3 s;
 
 
@@ -165,7 +187,7 @@ insert into perms_on_pages3(
     (10 * cats.id + 0) as perm_id,  -- 10 x + 0 = for everyone
     10 as for_people_id,  -- everyone
     cats.id as on_category_id,
-    not cats.only_staff_may_create_topics as may_create_page,
+    not cats.only_staff_may_create_topics and not cats.unlisted as may_create_page,
     true as may_post_comment,
     true as may_see
   from categories3 cats
@@ -207,6 +229,7 @@ insert into perms_on_pages3(
     cats.parent_id is not null;
 
 
-alter table categories3 drop column staff_only;
-alter table categories3 drop column only_staff_may_create_topics;
+-- Later:
+-- alter table categories3 drop column staff_only;
+-- alter table categories3 drop column only_staff_may_create_topics;
 

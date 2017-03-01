@@ -34,9 +34,10 @@ import RdbUtil._
 trait UserSiteDaoMixin extends SiteTransaction {
   self: RdbSiteTransaction =>
 
-  // COULD convert these 'T' columns to booleans.
-  val IsOwnerOrStaff = o"""(is_owner is not null and is_owner = 'T' or
-       is_admin is not null and is_admin = 'T' or is_moderator)"""
+  val IsOwnerOrStaff = o"""(
+     is_owner is not null and is_owner or
+     is_admin is not null and is_admin or
+     is_moderator is not null and is_moderator)"""
 
 
   def insertInvite(invite: Invite) {
@@ -497,22 +498,26 @@ trait UserSiteDaoMixin extends SiteTransaction {
   def loadUsers(): immutable.Seq[User] = {
     val query = i"""
       select $UserSelectListItemsWithGuests
-      from
-        users3 u
+      from users3 u
       left join guest_prefs3 e
         on u.EMAIL = e.EMAIL and u.SITE_ID = e.SITE_ID
       where
         u.SITE_ID = ?
       """
-    val values = List(siteId.asAnyRef)
-    val result = ArrayBuffer[User]()
-    db.queryAtnms(query, values, rs => {
-      while (rs.next) {
-        val user = _User(rs)
-        result.append(user)
-      }
-    })
-    result.to[Vector]
+    runQueryFindMany(query, List(siteId.asAnyRef), _User)
+  }
+
+
+  def loadGroupsAsSeq(): immutable.Seq[Group] = {
+    // The null checks below: groups have no trust level, but all members do. [8KPG2W5]
+    val query = i"""
+      select $GroupSelectListItems
+      from users3
+      where site_id = ?
+        and username is not null
+        and trust_level is null
+      """
+    runQueryFindMany(query, List(siteId.asAnyRef), getGroup)
   }
 
 
@@ -528,7 +533,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   def loadOwner(): Option[MemberInclDetails] = {
-    loadCompleteUserImpl("is_owner", "T")
+    loadCompleteUserImpl("is_owner", true.asAnyRef)
   }
 
 
@@ -568,15 +573,9 @@ trait UserSiteDaoMixin extends SiteTransaction {
         $anyOrderBy
       """
 
-    val values = List(siteId.asAnyRef)
-    val result = ArrayBuffer[MemberInclDetails]()
-    db.queryAtnms(query, values, rs => {
-      while (rs.next) {
-        val user = getCompleteUser(rs)
-        result.append(user)
-      }
+    runQueryFindMany(query, List(siteId.asAnyRef), rs => {
+      getCompleteUser(rs)
     })
-    result.to[Vector]
   }
 
 
@@ -645,8 +644,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
       user.lockedTrustLevel.map(_.toInt).orNullInt,
       user.threatLevel.toInt.asAnyRef,
       user.lockedThreatLevel.map(_.toInt).orNullInt,
-      tOrNull(user.isOwner),
-      tOrNull(user.isAdmin),
+      user.isOwner.asAnyRef,
+      user.isAdmin.asAnyRef,
       user.isModerator.asAnyRef,
       siteId.asAnyRef,
       user.id.asAnyRef)
