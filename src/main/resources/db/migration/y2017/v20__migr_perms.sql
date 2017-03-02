@@ -43,8 +43,6 @@ alter table users3 add constraint people_c_not_both_admin_mod check (
 
 
 
--- TODO do this automatically for new sites:
-
 -- Create groups for all trust levels, and staff, mods and admins.
 insert into users3 (site_id, user_id, full_name, username, created_at)
   select
@@ -170,9 +168,6 @@ insert into users3 (site_id, user_id, full_name, username, created_at, is_admin)
 
 -- Insert default permissions for Everyone and Staff, on all categories.
 
--- TODO do this automatically when creating new cats !
-
-
 -- Permissions for everyone to see, post topics and comments: (only on not-staff-only categories)
 insert into perms_on_pages3(
   site_id,
@@ -227,9 +222,4 @@ insert into perms_on_pages3(
   where
     -- Exclude root categories.
     cats.parent_id is not null;
-
-
--- Later:
--- alter table categories3 drop column staff_only;
--- alter table categories3 drop column only_staff_may_create_topics;
 
