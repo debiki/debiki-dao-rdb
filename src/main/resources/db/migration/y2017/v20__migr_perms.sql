@@ -43,42 +43,49 @@ alter table users3 add constraint people_c_not_both_admin_mod check (
 
 
 
+-- This trigger might still use site-id = varchar, not integer, so need disable,
+-- when deleting the site if its empty, + also when adding default groups.
+-- It's enabled later, below.
+alter table users3 disable trigger users3_sum_quota;
+
+
 -- Delete site 1, if it's empty. Will create in Scala code instead, lazily.
+-- If there's no user/group except for System, then it's empty. Users/groups have id >= 10.
 
 delete from page_users3
 where site_id = 1 -- FirstSiteId
   and not exists (
     select * from users3
     where site_id = 1
-      and user_id >= 10 limit 1); -- if no default groups or any users yet created
+      and user_id >= 10 limit 1);
 
 delete from user_stats3
 where site_id = 1 -- FirstSiteId
   and not exists (
     select * from users3
     where site_id = 1
-      and user_id >= 10 limit 1); -- if no default groups or any users yet created
+      and user_id >= 10 limit 1);
 
 delete from usernames3
 where site_id = 1 -- FirstSiteId
   and not exists (
     select * from users3
     where site_id = 1
-      and user_id >= 10 limit 1); -- if no default groups or any users yet created
+      and user_id >= 10 limit 1);
 
 delete from users3
 where site_id = 1 -- FirstSiteId
   and not exists (
     select * from users3
     where site_id = 1
-      and user_id >= 10 limit 1); -- if no default groups or any users yet created
+      and user_id >= 10 limit 1);
 
 delete from sites3
 where id = 1 -- FirstSiteId
   and not exists (
     select * from users3
     where site_id = 1
-      and user_id >= 10 limit 1); -- see comment above
+      and user_id >= 10 limit 1);
 
 
 -- Create groups for all trust levels, and staff, mods and admins. For existing sites.
@@ -203,6 +210,9 @@ insert into users3 (site_id, user_id, full_name, username, created_at, is_admin)
   from sites3 s;
 
 
+-- Enable again. Now the num-uses-quota count in sites3 might be wrong, doesn't matter much,
+-- will fix in some later migration, or a make-db-consistent background job.
+alter table users3 enable trigger users3_sum_quota;
 
 
 -- Insert default permissions for Everyone and Staff, on all categories.
