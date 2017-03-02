@@ -1,4 +1,8 @@
 CLEAN_UP // remove guest_prefs3.version column, use the aduit_log3 table instead
+-- Later:
+-- alter table categories3 drop column staff_only;
+-- alter table categories3 drop column only_staff_may_create_topics;
+
 
 create table page_views_by_strangers3 (
   site_id varchar not null,

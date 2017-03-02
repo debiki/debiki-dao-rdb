@@ -73,6 +73,10 @@ object Rdb {
     def orNullBoolean: AnyRef = opt.map(_.asAnyRef).getOrElse(NullBoolean)
   }
 
+  implicit class PimpBooleanWithNull(boolean: Boolean) {
+    def asTrueOrNull: AnyRef = if (boolean) boolean.asAnyRef else NullBoolean
+  }
+
   implicit class PimpOptionWithNullDate(opt: Option[ju.Date]) {
     def orNullTimestamp: AnyRef = opt.map(d2ts).getOrElse(NullTimestamp)
   }

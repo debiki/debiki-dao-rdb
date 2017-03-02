@@ -43,7 +43,46 @@ alter table users3 add constraint people_c_not_both_admin_mod check (
 
 
 
--- Create groups for all trust levels, and staff, mods and admins.
+-- Delete site 1, if it's empty. Will create in Scala code instead, lazily.
+
+delete from page_users3
+where site_id = 1 -- FirstSiteId
+  and not exists (
+    select * from users3
+    where site_id = 1
+      and user_id >= 10 limit 1); -- if no default groups or any users yet created
+
+delete from user_stats3
+where site_id = 1 -- FirstSiteId
+  and not exists (
+    select * from users3
+    where site_id = 1
+      and user_id >= 10 limit 1); -- if no default groups or any users yet created
+
+delete from usernames3
+where site_id = 1 -- FirstSiteId
+  and not exists (
+    select * from users3
+    where site_id = 1
+      and user_id >= 10 limit 1); -- if no default groups or any users yet created
+
+delete from users3
+where site_id = 1 -- FirstSiteId
+  and not exists (
+    select * from users3
+    where site_id = 1
+      and user_id >= 10 limit 1); -- if no default groups or any users yet created
+
+delete from sites3
+where id = 1 -- FirstSiteId
+  and not exists (
+    select * from users3
+    where site_id = 1
+      and user_id >= 10 limit 1); -- see comment above
+
+
+-- Create groups for all trust levels, and staff, mods and admins. For existing sites.
+
 insert into users3 (site_id, user_id, full_name, username, created_at)
   select
     s.id as site_id,

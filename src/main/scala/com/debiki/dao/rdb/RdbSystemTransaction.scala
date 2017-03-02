@@ -91,6 +91,18 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
   }
 
 
+  // COULD move to new superclass? Dupl code [8FKW20Q]
+  def runQueryFindExactlyOne[R](query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => R): R = {
+    runQuery(query, values, rs => {
+      dieIf(!rs.next(), "EsE5PLKW2")
+      val result = singleRowHandler(rs)
+      dieIf(rs.next(), "DwE4GYKZZ02")
+      result
+    })
+  }
+
+
   // COULD move to new superclass?
   def runUpdate(statement: String, values: List[AnyRef] = Nil): Int = {
     db.update(statement, values)(theOneAndOnlyConnection)
@@ -716,23 +728,11 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       delete from user_visit_stats3
       delete from user_stats3
       delete from usernames3
-      delete from users3 where not (user_id in ($SystemUserId, $UnknownUserId) and site_id = '$FirstSiteId')
+      delete from users3
       delete from hosts3
-      delete from sites3 where id <> '$FirstSiteId'
-      update sites3 set next_page_id = 1
-      insert into user_stats3 (site_id, user_id, last_seen_at, first_seen_at, topics_new_since) select site_id, user_id, created_at, created_at, created_at from users3
+      delete from sites3
       alter sequence DW1_TENANTS_ID restart
       """.trim.split("\n") foreach { runUpdate(_) }
-
-    runUpdate(s"""
-          update sites3 set
-            quota_limit_mbs = null, num_guests = 0, num_identities = 0, num_roles = 0,
-            num_role_settings = 0, num_pages = 0, num_posts = 0, num_post_text_bytes = 0,
-            num_posts_read = 0, num_actions = 0, num_notfs = 0, num_emails_sent = 0,
-            num_audit_rows = 0, num_uploads = 0, num_upload_bytes = 0,
-            num_post_revisions = 0, num_post_rev_bytes = 0
-          where id = '$FirstSiteId'
-          """)
 
     runUpdate("set constraints all immediate")
   }

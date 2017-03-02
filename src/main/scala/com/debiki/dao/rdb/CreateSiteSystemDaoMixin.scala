@@ -21,10 +21,104 @@ import com.debiki.core._
 import com.debiki.core.Prelude._
 import _root_.java.{sql => js}
 import Rdb._
+import com.debiki.core.DbDao.{SiteAlreadyExistsException, TooManySitesCreatedByYouException, TooManySitesCreatedInTotalException}
 
 
-trait CreateSiteSystemDaoMixin extends SystemTransaction {
+trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemSiteRdbMixin
   self: RdbSystemTransaction =>
+
+
+  private val LocalhostAddress = "127.0.0.1"
+
+
+  def createSite(id: Option[SiteId], name: String, status: SiteStatus,
+    embeddingSiteUrl: Option[String], creatorIp: String, creatorEmailAddress: String,
+    quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
+    isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan, createdAt: When): Site = {
+
+    // Unless apparently testing from localhost, don't allow someone to create
+    // very many sites.
+    if (creatorIp != LocalhostAddress) {
+      val websiteCount = countWebsites(
+        createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
+        testSites = isTestSiteOkayToDelete)
+      if (websiteCount >= maxSitesPerIp)
+        throw TooManySitesCreatedByYouException(creatorIp)
+
+      val numSitesTotal = countWebsitesTotal(isTestSiteOkayToDelete)
+      if (numSitesTotal >= maxSitesTotal)
+        throw TooManySitesCreatedInTotalException
+    }
+
+    // Ought to move this id generation stuff to the caller instead, i.e. CreateSiteDao.  Hmm?
+    val theId = id getOrElse {
+      if (isTestSiteOkayToDelete) Site.GenerateTestSiteMagicId
+      else NoSiteId
+    }
+    val newSiteNoId = Site(theId, status, name = name, createdAt = createdAt,
+      creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
+      embeddingSiteUrl = embeddingSiteUrl, hosts = Nil)
+
+    val newSite =
+      try insertSite(newSiteNoId, quotaLimitMegabytes, pricePlan)
+      catch {
+        case ex: js.SQLException =>
+          if (!isUniqueConstrViolation(ex)) throw ex
+          throw SiteAlreadyExistsException(name)
+      }
+
+    newSite
+  }
+
+
+  def countWebsites(createdFromIp: String, creatorEmailAddress: String, testSites: Boolean)
+        : Int = {
+    val smallerOrGreaterThan = if (testSites) "<=" else ">"
+    val query = s"""
+        select count(*) WEBSITE_COUNT from sites3
+        where (CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?)
+          and id $smallerOrGreaterThan $MaxTestSiteId
+        """
+    runQueryFindExactlyOne(query, List(createdFromIp, creatorEmailAddress), rs => {
+      rs.getInt("WEBSITE_COUNT")
+    })
+  }
+
+
+  def countWebsitesTotal(testSites: Boolean): Int = {
+    val smallerOrGreaterThan = if (testSites) "<=" else ">"
+    val query =
+      s"select count(*) site_count from sites3 where id $smallerOrGreaterThan $MaxTestSiteId"
+    runQueryFindExactlyOne(query, Nil, rs => {
+      rs.getInt("site_count")
+    })
+  }
+
+
+  private def insertSite(siteNoId: Site, quotaLimitMegabytes: Option[Int], pricePlan: PricePlan)
+        : Site = {
+    val newId = siteNoId.id match {
+      case NoSiteId =>
+        db.nextSeqNo("DW1_TENANTS_ID")(theOneAndOnlyConnection).toInt
+      case Site.GenerateTestSiteMagicId =>
+        // Let's start on -11 and continue counting downwards. (Test site ids are negative.)
+        runQueryFindExactlyOne("select least(-10, min(id)) - 1 next_test_site_id from sites3",
+          Nil, _.getInt("next_test_site_id"))
+      case _ =>
+        siteNoId.id
+    }
+
+    val site = siteNoId.copy(id = newId)
+    runUpdateSingleRow("""
+        insert into sites3 (
+          ID, status, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
+          QUOTA_LIMIT_MBS, price_plan)
+        values (?, ?, ?, ?, ?, ?, ?, ?)""",
+      List[AnyRef](site.id.asAnyRef, site.status.toInt.asAnyRef, site.name,
+        site.embeddingSiteUrl.orNullVarchar, site.creatorIp,
+        site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
+    site
+  }
 
 
   def deleteAnyHostname(hostname: String): Boolean = {
@@ -73,7 +167,6 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
 
   def deleteSiteById(siteId: SiteId): Boolean = {
     require(siteId <= MaxTestSiteId, "Can delete test sites only [EdE6FK02]")
-    require(siteId != FirstSiteId, "Cannot delete site 1 [EdE5RCTW3]")
 
     runUpdate("set constraints all deferred")
 
@@ -117,6 +210,8 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {
       runUpdate(statement, List(siteId.asAnyRef))
     }
 
+    // Now all tables are empty, but there's still an entry for the site itself in sites3.
+    // If we're able to delete it, then the site is really gone (otherwise, it never existed).
     val isSiteGone = runUpdateSingleRow("delete from sites3 where id = ?", List(siteId.asAnyRef))
 
     runUpdate("set constraints all immediate")

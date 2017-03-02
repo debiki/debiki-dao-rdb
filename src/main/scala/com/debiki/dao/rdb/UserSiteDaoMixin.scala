@@ -131,6 +131,17 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def insertGroup(group: Group) {
+    val sql = """
+      insert into users3(site_id, user_id, username, full_name, created_at)
+      values (?, ?, ?, ?, ?)
+      """
+    val values = List(siteId.asAnyRef, group.id.asAnyRef, group.theUsername, group.name,
+      now.asTimestamp)
+    runUpdateExactlyOneRow(sql, values)
+  }
+
+
   def nextMemberId: UserId = {
     val query = s"""
       select max(user_id) max_id from users3
@@ -179,7 +190,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
           user.passwordHash.orNullVarchar,
           user.isApproved.orNullBoolean, user.approvedAt.orNullTimestamp,
           user.approvedById.orNullInt,
-          user.country.trimOrNullVarchar, tOrNull(user.isOwner), tOrNull(user.isAdmin),
+          user.country.trimOrNullVarchar, user.isOwner.asTrueOrNull, user.isAdmin.asTrueOrNull,
           user.isModerator.asAnyRef,
           user.trustLevel.toInt.asAnyRef, user.lockedTrustLevel.map(_.toInt).orNullInt,
           user.threatLevel.toInt.asAnyRef, user.lockedThreatLevel.map(_.toInt).orNullInt))
@@ -644,9 +655,9 @@ trait UserSiteDaoMixin extends SiteTransaction {
       user.lockedTrustLevel.map(_.toInt).orNullInt,
       user.threatLevel.toInt.asAnyRef,
       user.lockedThreatLevel.map(_.toInt).orNullInt,
-      user.isOwner.asAnyRef,
-      user.isAdmin.asAnyRef,
-      user.isModerator.asAnyRef,
+      user.isOwner.asTrueOrNull,
+      user.isAdmin.asTrueOrNull,
+      user.isModerator.asTrueOrNull,
       siteId.asAnyRef,
       user.id.asAnyRef)
 

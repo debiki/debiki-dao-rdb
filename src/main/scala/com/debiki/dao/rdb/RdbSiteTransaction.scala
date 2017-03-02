@@ -56,8 +56,6 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   with AuditLogSiteDaoMixin {
 
 
-  val LocalhostAddress = "127.0.0.1"
-
   def db: Rdb = daoFactory.db
 
   /** Lets us call SystemTransaction functions, in the same transaction.
@@ -175,6 +173,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
+  // COULD move to new superclass? Dupl code [8FKW20Q]
   def runQueryFindExactlyOne[R](query: String, values: List[AnyRef],
         singleRowHandler: js.ResultSet => R): R = {
     runQuery(query, values, rs => {
@@ -621,45 +620,6 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
-  def createSite(name: String, status: SiteStatus, hostname: String,
-        embeddingSiteUrl: Option[String], creatorIp: String, creatorEmailAddress: String,
-        quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
-        isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan, createdAt: When): Site = {
-
-    // Unless apparently testing from localhost, don't allow someone to create
-    // very many sites.
-    if (creatorIp != LocalhostAddress) {
-      val websiteCount = countWebsites(
-        createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
-        testSites = isTestSiteOkayToDelete)
-      if (websiteCount >= maxSitesPerIp)
-        throw TooManySitesCreatedByYouException(creatorIp)
-
-      val numSitesTotal = countWebsitesTotal(isTestSiteOkayToDelete)
-      if (numSitesTotal >= maxSitesTotal)
-        throw TooManySitesCreatedInTotalException
-    }
-
-    // Ought to move this id generation stuff to the caller instead, i.e. CreateSiteDao.
-    val id =
-      if (isTestSiteOkayToDelete) Site.GenerateTestSiteMagicId
-      else NoSiteId
-    val newSiteNoId = Site(id, status, name = name, createdAt = createdAt,
-      creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
-      embeddingSiteUrl = embeddingSiteUrl, hosts = Nil)
-
-    val newSite =
-      try insertSite(newSiteNoId, quotaLimitMegabytes, pricePlan)
-      catch {
-        case ex: js.SQLException =>
-          if (!isUniqueConstrViolation(ex)) throw ex
-          throw SiteAlreadyExistsException(name)
-      }
-
-    newSite
-  }
-
-
   def listHostnames(): Seq[SiteHost] = {
     asSystem.loadSite(siteId).map(_.hosts).getOrElse(Nil)
   }
@@ -670,14 +630,14 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
-  def createUnknownUser(date: ju.Date) {
+  def createUnknownUser() {
     val statement = s"""
       insert into users3(
         site_id, user_id, created_at, full_name, email, guest_cookie)
       values (
         ?, $UnknownUserId, ?, '$UnknownUserName', '-', '$UnknownUserGuestCookie')
       """
-    runUpdate(statement, List(siteId.asAnyRef, date))
+    runUpdate(statement, List(siteId.asAnyRef, now.toJavaDate))
   }
 
 
@@ -704,30 +664,6 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         if (!isUniqueConstrViolation(ex)) throw ex
         throw new SiteAlreadyExistsException(changedSite.name)
     }
-  }
-
-
-  def countWebsites(createdFromIp: String, creatorEmailAddress: String, testSites: Boolean)
-        : Int = {
-    val smallerOrGreaterThan = if (testSites) "<=" else ">"
-    val query = s"""
-        select count(*) WEBSITE_COUNT from sites3
-        where (CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?)
-          and id $smallerOrGreaterThan $MaxTestSiteId
-        """
-    runQueryFindExactlyOne(query, List(createdFromIp, creatorEmailAddress), rs => {
-      rs.getInt("WEBSITE_COUNT")
-    })
-  }
-
-
-  def countWebsitesTotal(testSites: Boolean): Int = {
-    val smallerOrGreaterThan = if (testSites) "<=" else ">"
-    val query =
-      s"select count(*) site_count from sites3 where id $smallerOrGreaterThan $MaxTestSiteId"
-    runQueryFindExactlyOne(query, Nil, rs => {
-      rs.getInt("site_count")
-    })
   }
 
 

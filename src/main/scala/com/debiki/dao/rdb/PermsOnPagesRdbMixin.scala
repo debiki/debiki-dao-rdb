@@ -21,6 +21,7 @@ import com.debiki.core._
 import scala.collection.immutable
 import java.{ sql => js }
 import Rdb._
+import RdbUtil.makeInListFor
 
 
 
@@ -51,10 +52,10 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
       """
 
     val id =
-      if (permsOnPages.id != NoPermissionId)
+      if (permsOnPages.id >= PermissionAlreadyExistsMinId)
         permsOnPages.id
       else
-        selectNextPerSiteId()
+        selectNextPerSitePermissionId()
 
     val poc = permsOnPages.copy(id = id)
 
@@ -72,7 +73,7 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
   }
 
 
-  private def selectNextPerSiteId(): PermissionId = {
+  private def selectNextPerSitePermissionId(): PermissionId = {
     // Let's start on 1000 so 1-999 will be available to me if I need to insert "hardcoded"
     // permissions for trust levels & staff groups, for each category, say 100 categories [B0GKWU52]
     // (100 categories * 10 levels-and-staff-groups per category = 1000).
@@ -104,6 +105,17 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
       pop.maySee.orNullBoolean,
       siteId.asAnyRef, pop.id.asAnyRef)
     runUpdateExactlyOneRow(statement, values)
+  }
+
+
+  def deletePermsOnPages(ids: Iterable[PermissionId]) {
+    if (ids.isEmpty) return
+    val statement = s"""
+      delete from perms_on_pages3
+      where site_id = ? and perm_id in (${ makeInListFor(ids) })
+      """
+    val values = siteId.asAnyRef :: ids.map(_.asAnyRef).toList
+    runUpdate(statement, values)
   }
 
 
