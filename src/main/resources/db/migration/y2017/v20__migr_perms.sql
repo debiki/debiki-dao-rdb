@@ -43,10 +43,14 @@ alter table users3 add constraint people_c_not_both_admin_mod check (
 
 
 
--- This trigger might still use site-id = varchar, not integer, so need disable,
--- when deleting the site if its empty, + also when adding default groups.
--- It's enabled later, below.
-alter table users3 disable trigger users3_sum_quota;
+-- This trigger might 1) not exist, or 2) exist and still use site-id = varchar, not integer,
+-- and if so, we need to get rid of it. Otherwise there'll be errors below,
+-- when deleting site-1 if its empty, + also when adding default groups.
+-- It's recreated later, in the r__triggers.sql script.
+-- The num-uses-quota count in sites3 might be a tiny bit incorrect after this migration
+-- — but doesn't matter much. Will fix in some later migration, or a make-db-consistent
+-- background job.
+drop trigger if exists users3_sum_quota on users3;
 
 
 -- Delete site 1, if it's empty. Will create in Scala code instead, lazily.
@@ -208,11 +212,6 @@ insert into users3 (site_id, user_id, full_name, username, created_at, is_admin)
     now_utc() as created_at,
     true as is_admin
   from sites3 s;
-
-
--- Enable again. Now the num-uses-quota count in sites3 might be wrong, doesn't matter much,
--- will fix in some later migration, or a make-db-consistent background job.
-alter table users3 enable trigger users3_sum_quota;
 
 
 -- Insert default permissions for Everyone and Staff, on all categories.
