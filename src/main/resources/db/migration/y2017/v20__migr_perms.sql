@@ -42,7 +42,6 @@ alter table users3 add constraint people_c_not_both_admin_mod check (
   not is_admin or not is_moderator);
 
 
-
 -- This trigger might 1) not exist, or 2) exist and still use site-id = varchar, not integer,
 -- and if so, we need to get rid of it. Otherwise there'll be errors below,
 -- when deleting site-1 if its empty, + also when adding default groups.
@@ -51,6 +50,10 @@ alter table users3 add constraint people_c_not_both_admin_mod check (
 -- — but doesn't matter much. Will fix in some later migration, or a make-db-consistent
 -- background job.
 drop trigger if exists users3_sum_quota on users3;
+
+
+-- All System users should be admins.
+update users3 set is_admin = true where user_id = 1;  -- 1 = the system user
 
 
 -- Delete site 1, if it's empty. Will create in Scala code instead, lazily.
