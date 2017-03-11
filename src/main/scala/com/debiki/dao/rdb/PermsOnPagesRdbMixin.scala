@@ -55,7 +55,7 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
       if (permsOnPages.id >= PermissionAlreadyExistsMinId)
         permsOnPages.id
       else
-        selectNextPerSitePermissionId()
+        selectNextPerSitePermissionId() // [9P1U6E5]
 
     val poc = permsOnPages.copy(id = id)
 
