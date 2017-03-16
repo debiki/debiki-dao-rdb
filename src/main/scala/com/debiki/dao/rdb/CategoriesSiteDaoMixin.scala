@@ -197,13 +197,11 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       insert into categories3 (
         site_id, id, page_id, parent_id, default_category_id,
         name, slug, position,
-        description, new_topic_types,
-        unlisted, staff_only, only_staff_may_create_topics,
+        description, new_topic_types, unlisted,
         created_at, updated_at, deleted_at)
       values (
         ?, ?, ?, ?, ?,
         ?, ?, ?,
-        ?, ?,
         ?, ?, ?,
         ?, ?, ?)"""
     val values = List[AnyRef](
@@ -211,8 +209,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       category.defaultCategoryId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
-      category.unlisted.asAnyRef, category.staffOnly.asAnyRef,
-      category.onlyStaffMayCreateTopics.asAnyRef,
+      category.unlisted.asAnyRef,
       category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
       category.deletedAt.orNullTimestamp)
     runUpdateSingleRow(statement, values)
@@ -226,7 +223,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         page_id = ?, parent_id = ?, default_category_id = ?,
         name = ?, slug = ?, position = ?,
         description = ?, new_topic_types = ?,
-        unlisted = ?, staff_only = ?, only_staff_may_create_topics = ?,
+        unlisted = ?,
         created_at = ?, updated_at = ?,
         deleted_at = ?
       where site_id = ? and id = ?"""
@@ -234,7 +231,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       category.sectionPageId, category.parentId.orNullInt, category.defaultCategoryId.orNullInt,
       category.name, category.slug, category.position.asAnyRef,
       category.description.orNullVarchar, topicTypesToVarchar(category.newTopicTypes),
-      category.unlisted.asAnyRef, category.staffOnly.asAnyRef, category.onlyStaffMayCreateTopics.asAnyRef,
+      category.unlisted.asAnyRef,
       category.createdAt.asTimestamp, category.updatedAt.asTimestamp,
       category.deletedAt.orNullTimestamp,
       siteId.asAnyRef, category.id.asAnyRef)
@@ -269,8 +266,6 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       description = Option(rs.getString("description")),
       newTopicTypes = getNewTopicTypes(rs),
       unlisted = rs.getBoolean("unlisted"),
-      staffOnly = rs.getBoolean("staff_only"),
-      onlyStaffMayCreateTopics = rs.getBoolean("only_staff_may_create_topics"),
       createdAt = getDate(rs, "created_at"),
       updatedAt = getDate(rs, "updated_at"),
       lockedAt = getOptionalDate(rs, "locked_at"),
