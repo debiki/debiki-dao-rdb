@@ -43,12 +43,14 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
         may_edit_page,
         may_edit_comment,
         may_edit_wiki,
+        may_edit_own,
         may_delete_page,
         may_delete_comment,
         may_create_page,
         may_post_comment,
-        may_see)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        may_see,
+        may_see_own)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
 
     val id =
@@ -64,9 +66,10 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
       poc.onWholeSite.orNullBoolean, poc.onCategoryId.orNullInt, poc.onPageId.orNullVarchar,
       poc.onPostId.orNullInt, poc.onTagId.orNullInt,
       poc.mayEditPage.orNullBoolean, poc.mayEditComment.orNullBoolean, poc.mayEditWiki.orNullBoolean,
+      poc.mayEditOwn.orNullBoolean,
       poc.mayDeletePage.orNullBoolean, poc.mayDeleteComment.orNullBoolean,
       poc.mayCreatePage.orNullBoolean, poc.mayPostComment.orNullBoolean,
-      poc.maySee.orNullBoolean)
+      poc.maySee.orNullBoolean, poc.maySeeOwn.orNullBoolean)
     runUpdateExactlyOneRow(statement, values)
 
     poc
@@ -90,19 +93,22 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
         may_edit_page = ?,
         may_edit_comment = ?,
         may_edit_wiki = ?,
+        may_edit_own = ?,
         may_delete_page = ?,
         may_delete_comment = ?,
         may_create_page = ?,
         may_post_comment = ?,
-        may_see = ?
+        may_see = ?,
+        may_see_own = ?
       where site_id = ? and perm_id = ?
       """
     val pop = permsOnPages
     val values = List(
       pop.mayEditPage.orNullBoolean, pop.mayEditComment.orNullBoolean, pop.mayEditWiki.orNullBoolean,
+      pop.mayEditOwn.orNullBoolean,
       pop.mayDeletePage.orNullBoolean, pop.mayDeleteComment.orNullBoolean,
       pop.mayCreatePage.orNullBoolean, pop.mayPostComment.orNullBoolean,
-      pop.maySee.orNullBoolean,
+      pop.maySee.orNullBoolean, pop.maySeeOwn.orNullBoolean,
       siteId.asAnyRef, pop.id.asAnyRef)
     runUpdateExactlyOneRow(statement, values)
   }
@@ -139,11 +145,13 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
       mayEditPage = getOptBool(rs, "may_edit_page"),
       mayEditComment = getOptBool(rs, "may_edit_comment"),
       mayEditWiki = getOptBool(rs, "may_edit_wiki"),
+      mayEditOwn = getOptBool(rs, "may_edit_own"),
       mayDeletePage = getOptBool(rs, "may_delete_page"),
       mayDeleteComment = getOptBool(rs, "may_delete_comment"),
       mayCreatePage = getOptBool(rs, "may_create_page"),
       mayPostComment = getOptBool(rs, "may_post_comment"),
-      maySee = getOptBool(rs, "may_see"))
+      maySee = getOptBool(rs, "may_see"),
+      maySeeOwn = getOptBool(rs, "may_see_own"))
   }
 
 }

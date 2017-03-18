@@ -278,11 +278,13 @@ create table perms_on_pages3(
   may_edit_page boolean,
   may_edit_comment boolean,
   may_edit_wiki boolean,
+  may_edit_own boolean,
   may_delete_page boolean,
   may_delete_comment boolean,
   may_create_page boolean,
   may_post_comment boolean,
   may_see boolean,
+  may_see_own boolean,
   may_see_private_flagged boolean,
   constraint permsonpages_p primary key (site_id, perm_id),
   constraint permsonpages_r_people foreign key (site_id, for_people_id)
@@ -303,11 +305,13 @@ create table perms_on_pages3(
     may_edit_page is not null
     or may_edit_comment is not null
     or may_edit_wiki is not null
+    or may_edit_own is not null
     or may_delete_page is not null
     or may_delete_comment is not null
     or may_create_page is not null
     or may_post_comment is not null
     or may_see is not null
+    or may_see_own is not null
     or may_see_private_flagged is not null)
 );
 
