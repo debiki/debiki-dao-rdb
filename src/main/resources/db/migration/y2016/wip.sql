@@ -13,6 +13,15 @@ Triggers to add on page_users3:
     member_page_settings3_sum_quota AFTER INSERT OR DELETE OR UPDATE ON member_page_settings3 FOR EACH ROW EXECUTE PROCEDURE member_page_settings3_sum_quota()
 
 
+-- ?? Allow trust level 0 = strangers.
+-- alter table users3 drop constraint users_lockedtrustlevel_c_betw;
+-- alter table users3 drop constraint users_trustlevel_c_betw;
+--
+-- alter table users3 add constraint people_lockedtrustlevel_c_betw check (
+--   locked_trust_level >= 0 and locked_trust_level <= 6);
+-- alter table users3 add constraint people_trustlevel_c_betw check (
+--   trust_level >= 0 and trust_level <= 6);
+
 
 ----
 

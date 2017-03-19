@@ -3,15 +3,6 @@ alter table users3 drop constraint users_member__c_nn;
 alter table users3 add constraint people_member_c_nn check (
   user_id < 0 or created_at is not null and username is not null);
 
--- Allow trust level 0 = strangers.
--- alter table users3 drop constraint users_lockedtrustlevel_c_betw;
--- alter table users3 drop constraint users_trustlevel_c_betw;
---
--- alter table users3 add constraint people_lockedtrustlevel_c_betw check (
---   locked_trust_level >= 0 and locked_trust_level <= 6);
--- alter table users3 add constraint people_trustlevel_c_betw check (
---   trust_level >= 0 and trust_level <= 6);
-
 -- Groups don't have any auto-adjusting trust level.
 alter table users3 alter trust_level drop default;
 alter table users3 alter trust_level drop not null;
@@ -225,21 +216,25 @@ insert into perms_on_pages3(
   perm_id,
   for_people_id,
   on_category_id,
+  may_edit_own,
   may_create_page,
   may_post_comment,
-  may_see)
+  may_see,
+  may_see_own)
   select
     cats.site_id,
     (10 * cats.id + 0) as perm_id,  -- 10 x + 0 = for everyone
     10 as for_people_id,  -- everyone
     cats.id as on_category_id,
+    true as may_edit_own,
     not cats.only_staff_may_create_topics and not cats.unlisted as may_create_page,
     true as may_post_comment,
-    true as may_see
+    true as may_see,
+    true as may_see_own
   from categories3 cats
   where cats.staff_only = false
     -- Exclude root categories.
-    and  cats.parent_id is not null;
+    and cats.parent_id is not null;
 
 
 -- Permissions for staff to do everything:
@@ -251,11 +246,13 @@ insert into perms_on_pages3(
   may_edit_page,
   may_edit_comment,
   may_edit_wiki,
+  may_edit_own,
   may_delete_page,
   may_delete_comment,
   may_create_page,
   may_post_comment,
-  may_see)
+  may_see,
+  may_see_own)
   select
     cats.site_id,
     (10 * cats.id + 7) as perm_id,  -- 10 x + 7 = for staff
@@ -264,11 +261,13 @@ insert into perms_on_pages3(
     true as may_edit_page,
     true as may_edit_comment,
     true as may_edit_wiki,
+    true as may_edit_own,
     true as may_delete_page,
     true as may_delete_comment,
     true as may_create_page,
     true as may_post_comment,
-    true as may_see
+    true as may_see,
+    true as may_see_own
   from categories3 cats
   where
     -- Exclude root categories.
