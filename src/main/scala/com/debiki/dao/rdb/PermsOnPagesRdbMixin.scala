@@ -90,6 +90,7 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
   def updatePermsOnPages(permsOnPages: PermsOnPages) {
     val statement = s"""
       update perms_on_pages3 set
+        for_people_id = ?,
         may_edit_page = ?,
         may_edit_comment = ?,
         may_edit_wiki = ?,
@@ -104,6 +105,7 @@ trait PermsOnPagesRdbMixin extends SiteTransaction {
       """
     val pop = permsOnPages
     val values = List(
+      pop.forPeopleId.asAnyRef,
       pop.mayEditPage.orNullBoolean, pop.mayEditComment.orNullBoolean, pop.mayEditWiki.orNullBoolean,
       pop.mayEditOwn.orNullBoolean,
       pop.mayDeletePage.orNullBoolean, pop.mayDeleteComment.orNullBoolean,
