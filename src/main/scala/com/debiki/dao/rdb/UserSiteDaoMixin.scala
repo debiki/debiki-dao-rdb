@@ -491,6 +491,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   def loadMembersWithPrefix(usernamePrefix: String): immutable.Seq[Member] = {
+    // COULD do lowercase match?
     untestedIf(usernamePrefix.nonEmpty, "EsE5FK02", "searching for members by prefix")
     val withPrefixAnd = usernamePrefix.isEmpty ? "" | "username like ? and"
     val query = i"""
@@ -535,7 +536,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   def loadMemberInclDetailsByUsername(username: String): Option[MemberInclDetails] = {
-    loadCompleteUserImpl("username", username)
+    loadCompleteUserImpl("lower(username)", username.toLowerCase)
   }
 
 

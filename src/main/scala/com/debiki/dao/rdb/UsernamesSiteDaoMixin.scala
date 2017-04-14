@@ -46,10 +46,10 @@ trait UsernamesSiteDaoMixin extends SiteTransaction {
   def insertUsernameUsage(usage: UsernameUsage) {
     val statement = s"""
       insert into usernames3 (
-        site_id, username, in_use_from, in_use_to, user_id, first_mention_at)
+        site_id, username_lowercase, in_use_from, in_use_to, user_id, first_mention_at)
       values (?, ?, ?, ?, ?, ?)
       """
-    val values = List(siteId.asAnyRef, usage.username, usage.inUseFrom.asTimestamp,
+    val values = List(siteId.asAnyRef, usage.usernameLowercase, usage.inUseFrom.asTimestamp,
         usage.inUseTo.orNullTimestamp, usage.userId.asAnyRef, usage.firstMentionAt.orNullTimestamp)
     runUpdateSingleRow(statement, values)
   }
@@ -59,12 +59,12 @@ trait UsernamesSiteDaoMixin extends SiteTransaction {
     val statement = s"""
       update usernames3 set in_use_to = ?, first_mention_at = ?
       where site_id = ?
-        and username = ?
+        and username_lowercase = ?
         and in_use_from = ?
         and user_id = ?
       """
     val values = List(usage.inUseTo.orNullTimestamp, usage.firstMentionAt.orNullTimestamp,
-      siteId.asAnyRef, usage.username, usage.inUseFrom.asTimestamp, usage.userId.asAnyRef)
+      siteId.asAnyRef, usage.usernameLowercase, usage.inUseFrom.asTimestamp, usage.userId.asAnyRef)
     runUpdateExactlyOneRow(statement, values)
   }
 
@@ -77,15 +77,15 @@ trait UsernamesSiteDaoMixin extends SiteTransaction {
 
 
   def loadUsernameUsages(username: String): Seq[UsernameUsage] = {
-    val query = s"select * from usernames3 where site_id = ? and username = ? $orderBy"
-    val values = List(siteId.asAnyRef, username.asAnyRef)
+    val query = s"select * from usernames3 where site_id = ? and username_lowercase = ? $orderBy"
+    val values = List(siteId.asAnyRef, username.toLowerCase.asAnyRef)
     runQueryFindMany(query, values, readUsernameUsage)
   }
 
 
   private def readUsernameUsage(rs: java.sql.ResultSet): UsernameUsage = {
     UsernameUsage(
-      username = rs.getString("username"),
+      usernameLowercase = rs.getString("username_lowercase"),
       inUseFrom = getWhen(rs, "in_use_from"),
       inUseTo = getOptWhen(rs, "in_use_to"),
       userId = rs.getInt("user_id"),
