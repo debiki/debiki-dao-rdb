@@ -34,6 +34,22 @@ trait PagesSiteDaoMixin extends SiteTransaction {
   self: RdbSiteTransaction =>
 
 
+  def loadOpenChatsPinnedGlobally(): immutable.Seq[PageMeta] = {
+    val sql = s"""
+      select g.page_id, ${_PageMetaSelectListItems}
+      from pages3 g
+      where g.site_id = ?
+        and g.page_role = ${PageRole.OpenChat.toInt}
+        and g.pin_order is not null
+        and g.pin_where = ${PinPageWhere.Globally.toInt}
+      order by g.pin_order desc
+      """
+    runQueryFindMany(sql, List(siteId.asAnyRef), rs => {
+      _PageMeta(rs)
+    })
+  }
+
+
   def markPagesWithUserAvatarAsStale(userId: UserId) {
     // Currently a user's avatar is shown in posts written by him/her.
     val statement = s"""
