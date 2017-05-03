@@ -263,6 +263,32 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
+
+  def loadApprovedOrigPostAndRepliesByPage(pageIds: Iterable[PageId]): Map[PageId, immutable.Seq[Post]] = {
+    if (pageIds.isEmpty)
+      return Map.empty
+
+    val query = s"""
+      select * from posts3 p
+        where p.site_id = ?
+          and p.page_id in (${makeInListFor(pageIds)})
+          and p.post_nr <> ${PageParts.TitleNr}
+          and p.approved_at is not null
+          and p.closed_status = 0
+          and p.hidden_at is null
+          and p.deleted_status = 0
+          and p.parent_nr = ${PageParts.BodyNr}
+      """
+    val values = siteId.asAnyRef :: pageIds.toList
+
+    runQueryBuildMultiMap(query, values, rs => {
+      val post = readPost(rs)
+      (post.pageId, post)
+    })
+  }
+
+
+
   def loadPostsToReview(): immutable.Seq[Post] = {
     val flaggedPosts = loadPostsToReviewImpl("""
       deleted_status = 0 and

@@ -115,6 +115,14 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         }
         // bumped_at is never null (it defaults to publ date or creation date).
         (s"order by g.bumped_at desc", offsetTestAnd)
+      case PageOrderOffset.ByCreatedAt(anyDate) =>
+        val offsetTestAnd = anyDate match {
+          case None => ""
+          case Some(date) =>
+            values :+= d2ts(date)
+            "g.created_at <= ? and"
+        }
+        (s"order by g.created_at desc", offsetTestAnd)
       case PageOrderOffset.ByPinOrderLoadOnlyPinned =>
         (s"order by g.pin_order", "g.pin_where is not null and")
       case PageOrderOffset.ByLikesAndBumpTime(anyLikesAndDate) =>
