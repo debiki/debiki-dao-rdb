@@ -320,11 +320,14 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
     val baseQuery = """
       select
-        SITE_ID, notf_id, NOTF_TYPE, CREATED_AT,
-        UNIQUE_POST_ID, PAGE_ID, ACTION_TYPE, ACTION_SUB_ID,
-        BY_USER_ID, TO_USER_ID,
-        EMAIL_ID, EMAIL_STATUS, SEEN_AT
-      from notifications3
+        n.site_id, n.notf_id, n.notf_type, n.created_at,
+        n.unique_post_id, n.page_id, n.action_type, n.action_sub_id,
+        n.by_user_id, n.to_user_id,
+        n.email_id, n.email_status, n.seen_at
+      from notifications3 n inner join users3 u
+        on n.site_id = u.site_id
+       and n.to_user_id = u.user_id
+       and u.email_verified_at is not null
       where """
 
     val (whereOrderBy, values) = (userIdOpt, emailIdOpt) match {
@@ -332,23 +335,23 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         val orderHow =
           if (unseenFirst) {
             // Sync with index dw1_ntfs_seen_createdat__i, created just for this query.
-            o"""case when seen_at is null then created_at + INTERVAL '100 years'
-              else created_at end desc"""
+            o"""case when n.seen_at is null then n.created_at + interval '100 years'
+              else n.created_at end desc"""
           }
           else
-            "created_at desc"
-        val whereOrderBy = s"site_id = ? and to_user_id = ? order by $orderHow"
+            "n.created_at desc"
+        val whereOrderBy = s"n.site_id = ? and n.to_user_id = ? order by $orderHow"
         val vals = List(tenantIdOpt.get.asAnyRef, uid.asAnyRef)
         (whereOrderBy, vals)
       case (None, Some(emailId)) =>
-        val whereOrderBy = "SITE_ID = ? and EMAIL_ID = ?"
+        val whereOrderBy = "n.site_id = ? and n.email_id = ?"
         val vals = List(tenantIdOpt.get.asAnyRef, emailId)
         (whereOrderBy, vals)
       case (None, None) =>
         // Load notfs for which emails perhaps are to be sent, for all tenants.
         val whereOrderBy =
-          o"""EMAIL_STATUS = ${NotfEmailStatus.Undecided.toInt}
-             and CREATED_AT <= ? order by CREATED_AT asc"""
+          o"""n.email_status = ${NotfEmailStatus.Undecided.toInt}
+             and n.created_at <= ? order by n.created_at asc"""
         val someMinsAgo = new ju.Date(now.millis - delayMinsOpt.get.toLong * 60 * 1000)
         val vals = someMinsAgo::Nil
         (whereOrderBy, vals)

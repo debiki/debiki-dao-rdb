@@ -65,6 +65,12 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         allow_signup,
         allow_local_signup,
         allow_guest_login,
+        require_verified_email,
+        may_compose_before_signup,
+        may_login_before_email_verified,
+        double_type_email_address,
+        double_type_password,
+        beg_for_email_address,
         forum_main_view,
         forum_topics_sort_buttons,
         forum_category_links,
@@ -93,8 +99,8 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         google_analytics_id,
         experimental,
         html_tag_css_classes)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId.asAnyRef,
@@ -106,6 +112,12 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.allowSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowLocalSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowGuestLogin.getOrElse(None).orNullBoolean,
+      editedSettings2.requireVerifiedEmail.getOrElse(None).orNullBoolean,
+      editedSettings2.mayComposeBeforeSignup.getOrElse(None).orNullBoolean,
+      editedSettings2.mayPostBeforeEmailVerified.getOrElse(None).orNullBoolean,
+      editedSettings2.doubleTypeEmailAddress.getOrElse(None).orNullBoolean,
+      editedSettings2.doubleTypePassword.getOrElse(None).orNullBoolean,
+      editedSettings2.begForEmailAddress.getOrElse(None).orNullBoolean,
       editedSettings2.forumMainView.getOrElse(None).orNullVarchar,
       editedSettings2.forumTopicsSortButtons.getOrElse(None).orNullVarchar,
       editedSettings2.forumCategoryLinks.getOrElse(None).orNullVarchar,
@@ -161,6 +173,12 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("allow_signup", s.allowSignup.map(_.orNullBoolean))
     maybeSet("allow_local_signup", s.allowLocalSignup.map(_.orNullBoolean))
     maybeSet("allow_guest_login", s.allowGuestLogin.map(_.orNullBoolean))
+    maybeSet("require_verified_email", s.requireVerifiedEmail.map(_.orNullBoolean))
+    maybeSet("may_compose_before_signup", s.mayComposeBeforeSignup.map(_.orNullBoolean))
+    maybeSet("may_login_before_email_verified", s.mayPostBeforeEmailVerified.map(_.orNullBoolean))
+    maybeSet("double_type_email_address", s.doubleTypeEmailAddress.map(_.orNullBoolean))
+    maybeSet("double_type_password", s.doubleTypePassword.map(_.orNullBoolean))
+    maybeSet("beg_for_email_address", s.begForEmailAddress.map(_.orNullBoolean))
     maybeSet("forum_main_view", s.forumMainView.map(_.orNullVarchar))
     maybeSet("forum_topics_sort_buttons", s.forumTopicsSortButtons.map(_.orNullVarchar))
     maybeSet("forum_category_links", s.forumCategoryLinks.map(_.orNullVarchar))
@@ -214,7 +232,13 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       inviteOnly = getOptBoolean(rs, "invite_only"),
       allowSignup = getOptBoolean(rs, "allow_signup"),
       allowLocalSignup = getOptBoolean(rs, "allow_local_signup"),
-      allowGuestLogin = getOptionalBoolean(rs, "allow_guest_login"),
+      allowGuestLogin = getOptBoolean(rs, "allow_guest_login"),  //
+      requireVerifiedEmail = getOptBoolean(rs, "require_verified_email"),
+      mayComposeBeforeSignup = getOptBoolean(rs, "may_compose_before_signup"),
+      mayPostBeforeEmailVerified = getOptBoolean(rs, "may_login_before_email_verified"),
+      doubleTypeEmailAddress = getOptBoolean(rs, "double_type_email_address"),
+      doubleTypePassword = getOptBoolean(rs, "double_type_password"),
+      begForEmailAddress = getOptBoolean(rs, "beg_for_email_address"),
       forumMainView = getOptString(rs, "forum_main_view"),
       forumTopicsSortButtons = getOptString(rs, "forum_topics_sort_buttons"),
       forumCategoryLinks = getOptString(rs, "forum_category_links"),
