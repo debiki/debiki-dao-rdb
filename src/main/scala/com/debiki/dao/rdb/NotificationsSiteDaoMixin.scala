@@ -109,10 +109,30 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   def loadNotificationsForRole(roleId: RoleId, limit: Int, unseenFirst: Boolean,
         upToWhen: Option[ju.Date]): Seq[Notification] = {
     val notfsBySiteId = asSystem.loadNotfsImpl(   // COULD specify consumers
-        limit = limit, unseenFirst = unseenFirst, Some(siteId), userIdOpt = Some(roleId),
-        upToWhen = upToWhen)
+        limit = limit, unseenFirst = unseenFirst, onlyIfEmailAddrVerified = false,
+        Some(siteId), userIdOpt = Some(roleId), upToWhen = upToWhen)
     // All loaded notifications are to `roleId` only.
     notfsBySiteId(siteId)
+  }
+
+
+  def loadMentionsOfPeopleInPost(postId: PostId): Seq[Notification] = {
+    TESTS_MISSING
+    val query = s"""
+      select
+        site_id, notf_id, notf_type, created_at,
+        unique_post_id, page_id, action_type, action_sub_id,
+        by_user_id, to_user_id,
+        email_id, email_status, seen_at
+      from notifications3
+      where site_id = ?
+        and unique_post_id = ?
+        and notf_type = ${NotificationType.Mention.toInt}
+      """
+    val values = List(siteId.asAnyRef, postId.asAnyRef)
+    runQueryFindMany(query, values, rs => {
+      RdbUtil.getNotification(rs)
+    })
   }
 
 

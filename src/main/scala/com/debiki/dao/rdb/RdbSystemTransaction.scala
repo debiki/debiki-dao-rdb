@@ -26,7 +26,6 @@ import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
 import Rdb._
 import RdbUtil._
-import PostsSiteDaoMixin.fromActionTypeInt
 
 
 
@@ -291,7 +290,8 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
   def loadNotificationsToMailOut(delayInMinutes: Int, numToLoad: Int)
         : Map[SiteId, Seq[Notification]] =
-    loadNotfsImpl(numToLoad, unseenFirst = false, None, delayMinsOpt = Some(delayInMinutes))
+    loadNotfsImpl(numToLoad, unseenFirst = false, onlyIfEmailAddrVerified = true,
+        None, delayMinsOpt = Some(delayInMinutes))
 
 
   /**
@@ -300,7 +300,8 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
    * tenantIdOpt + userIdOpt --> loads that user's notfs
    * tenantIdOpt + emailIdOpt --> loads a single email and notf
    */
-  def loadNotfsImpl(limit: Int, unseenFirst: Boolean, tenantIdOpt: Option[SiteId] = None,
+  def loadNotfsImpl(limit: Int, unseenFirst: Boolean, onlyIfEmailAddrVerified: Boolean,
+        tenantIdOpt: Option[SiteId] = None,
         delayMinsOpt: Option[Int] = None, userIdOpt: Option[UserId] = None,
         emailIdOpt: Option[String] = None, upToWhen: Option[ju.Date] = None)
         : Map[SiteId, Seq[Notification]] = {
@@ -318,7 +319,11 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
     unimplementedIf(upToWhen.isDefined, "Loading notfs <= upToWhen [EsE7GYKF2]")
 
-    val baseQuery = """
+    val andEmailAddrHasBeenVerified =
+      if (onlyIfEmailAddrVerified) "and u.email_verified_at is not null"
+      else ""
+
+    val baseQuery = s"""
       select
         n.site_id, n.notf_id, n.notf_type, n.created_at,
         n.unique_post_id, n.page_id, n.action_type, n.action_sub_id,
@@ -327,7 +332,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       from notifications3 n inner join users3 u
         on n.site_id = u.site_id
        and n.to_user_id = u.user_id
-       and u.email_verified_at is not null
+       $andEmailAddrHasBeenVerified
       where """
 
     val (whereOrderBy, values) = (userIdOpt, emailIdOpt) match {
@@ -365,43 +370,9 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
     runQuery(query, values, rs => {
       while (rs.next) {
-        val siteId = rs.getInt("SITE_ID")
-        val notfId = rs.getInt("notf_id")
-        val notfTypeInt = rs.getInt("NOTF_TYPE")
-        val createdAt = getDate(rs, "CREATED_AT")
-        val uniquePostId = rs.getInt("UNIQUE_POST_ID")
-        val pageId = rs.getString("PAGE_ID")
-        val actionType = getOptionalInt(rs, "ACTION_TYPE").map(fromActionTypeInt)
-        val actionSubId = getOptionalInt(rs, "ACTION_SUB_ID")
-        val byUserId = rs.getInt("BY_USER_ID")
-        val toUserId = rs.getInt("TO_USER_ID")
-        val emailId = Option(rs.getString("EMAIL_ID"))
-        val emailStatusInt = rs.getInt("email_status")
-        val emailStatus = NotfEmailStatus.fromInt(emailStatusInt).getOrDie(
-          "EsE7UKW2", s"Bad notf email status: $emailStatusInt")
-        val seenAt = getOptionalDate(rs, "SEEN_AT")
-
-        val notfType = NotificationType.fromInt(notfTypeInt).getOrDie(
-          "EsE6GMUK2", s"Bad notf type: $notfTypeInt")
-
-        val notification = notfType match {
-          case NotificationType.DirectReply | NotificationType.Mention | NotificationType.Message |
-               NotificationType.NewPost | NotificationType.PostTagged =>
-            Notification.NewPost(
-              siteId = siteId,
-              id = notfId,
-              notfType = notfType,
-              createdAt = createdAt,
-              uniquePostId = uniquePostId,
-              byUserId = byUserId,
-              toUserId = toUserId,
-              emailId = emailId,
-              emailStatus = emailStatus,
-              seenAt = seenAt)
-        }
-
-        val notfsForTenant: Vector[Notification] = notfsByTenant(siteId)
-        notfsByTenant = notfsByTenant + (siteId -> (notfsForTenant :+ notification))
+        val notf = getNotification(rs)
+        val notfsForTenant: Vector[Notification] = notfsByTenant(notf.siteId)
+        notfsByTenant = notfsByTenant + (notf.siteId -> (notfsForTenant :+ notf))
       }
     })
 

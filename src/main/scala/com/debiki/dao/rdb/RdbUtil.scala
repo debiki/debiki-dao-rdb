@@ -24,6 +24,7 @@ import com.debiki.core.User.isGuestId
 import java.{sql => js, util => ju}
 import scala.collection.immutable
 import Rdb._
+import com.debiki.dao.rdb.PostsSiteDaoMixin.fromActionTypeInt
 
 
 object RdbUtil {
@@ -301,6 +302,44 @@ object RdbUtil {
       isOwner = rs.getBoolean("is_owner"),
       isAdmin = rs.getBoolean("is_admin"),
       isModerator = rs.getBoolean("is_moderator"))
+  }
+
+
+  def getNotification(rs: js.ResultSet): Notification = {
+    val siteId = rs.getInt("site_id")
+    val notfId = rs.getInt("notf_id")
+    val notfTypeInt = rs.getInt("notf_type")
+    val createdAt = getDate(rs, "created_at")
+    val uniquePostId = rs.getInt("unique_post_id")
+    val pageId = rs.getString("page_id")
+    val actionType = getOptionalInt(rs, "action_type").map(fromActionTypeInt)
+    val actionSubId = getOptionalInt(rs, "action_sub_id")
+    val byUserId = rs.getInt("by_user_id")
+    val toUserId = rs.getInt("to_user_id")
+    val emailId = Option(rs.getString("email_id"))
+    val emailStatusInt = rs.getInt("email_status")
+    val emailStatus = NotfEmailStatus.fromInt(emailStatusInt).getOrDie(
+      "EsE7UKW2", s"Bad notf email status: $emailStatusInt")
+    val seenAt = getOptionalDate(rs, "seen_at")
+
+    val notfType = NotificationType.fromInt(notfTypeInt).getOrDie(
+      "EsE6GMUK2", s"Bad notf type: $notfTypeInt")
+
+    notfType match {
+      case NotificationType.DirectReply | NotificationType.Mention | NotificationType.Message |
+           NotificationType.NewPost | NotificationType.PostTagged =>
+        Notification.NewPost(
+          siteId = siteId,
+          id = notfId,
+          notfType = notfType,
+          createdAt = createdAt,
+          uniquePostId = uniquePostId,
+          byUserId = byUserId,
+          toUserId = toUserId,
+          emailId = emailId,
+          emailStatus = emailStatus,
+          seenAt = seenAt)
+    }
   }
 
 
