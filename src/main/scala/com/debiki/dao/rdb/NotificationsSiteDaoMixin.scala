@@ -150,6 +150,22 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     })
   }
 
+
+  def countNotificationsPerUser(): Map[UserId, Int] = {
+    val query = s"""
+      select to_user_id, count(*) num
+      from notifications3
+      where site_id = ?
+      group by to_user_id
+      """
+    runQueryBuildMap(query, List(siteId.asAnyRef), rs => {
+      val userId = rs.getInt("to_user_id")
+      val num = rs.getInt("num")
+      userId -> num
+    }).withDefaultValue(0)
+  }
+
+
   def updateNotificationSkipEmail(notifications: Seq[Notification]) {
     transactionAllowOverQuota { implicit connection =>
       updateNotificationConnectToEmail(notifications, email = None)
