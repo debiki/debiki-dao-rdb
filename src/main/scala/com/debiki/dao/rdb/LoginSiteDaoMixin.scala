@@ -37,12 +37,13 @@ trait LoginSiteDaoMixin extends SiteTransaction {
   self: RdbSiteTransaction =>
 
 
-  override def tryLoginAsMember(loginAttempt: MemberLoginAttempt): MemberLoginGrant = {
+  override def tryLoginAsMember(loginAttempt: MemberLoginAttempt, requireVerifiedEmail: Boolean)
+        : MemberLoginGrant = {
     val loginGrant = loginAttempt match {
-      case x: PasswordLoginAttempt => loginWithPassword(x)
+      case x: PasswordLoginAttempt => loginWithPassword(x, requireVerifiedEmail)
       case x: EmailLoginAttempt => loginWithEmailId(x)
-      case x: OpenIdLoginAttempt => loginOpenId(x)
-      case x: OpenAuthLoginAttempt => loginOpenAuth(x)
+      case x: OpenIdLoginAttempt => loginOpenId(x)      // SHOULD check requireVerifiedEmail
+      case x: OpenAuthLoginAttempt => loginOpenAuth(x)  // SHOULD check requireVerifiedEmail
     }
     loginGrant
   }
@@ -108,12 +109,13 @@ trait LoginSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private def loginWithPassword(loginAttempt: PasswordLoginAttempt): MemberLoginGrant = {
+  private def loginWithPassword(loginAttempt: PasswordLoginAttempt, requireVerifiedEmail: Boolean)
+        : MemberLoginGrant = {
     val anyUser = loadMemberByEmailOrUsername(loginAttempt.email)
     val user = anyUser getOrElse {
       throw NoMemberWithThatEmailException
     }
-    if (user.emailVerifiedAt.isEmpty) {
+    if (user.emailVerifiedAt.isEmpty && requireVerifiedEmail) {
       throw DbDao.EmailNotVerifiedException
     }
     val correctHash = user.passwordHash getOrElse {
