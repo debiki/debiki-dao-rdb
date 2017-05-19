@@ -22,6 +22,7 @@ import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
 import scala.collection.immutable
 import Rdb._
+import scala.collection.mutable.ArrayBuffer
 
 
 /** Loads and saves members of direct message conversations.
@@ -183,6 +184,33 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
       progress.lowPostNrsReadAsBitsetBytes.orNullByteaIfEmpty)
 
     runUpdateExactlyOneRow(statement, values)
+  }
+
+
+  def loadPageVisitTrusts(pageId: PageId): Map[UserId, VisitTrust] = {
+    val query = s"""
+      select
+        pu.user_id,
+        pu.first_visited_at_mins,
+        case
+          when u.suspended_at is not null then ${TrustLevel.StrangerDummyLevel}
+          when u.is_admin then ${TrustLevel.AdminDummyLevel}
+          when u.is_moderator then ${TrustLevel.ModeratorDummyLevel}
+          else coalesce(u.locked_trust_level, u.trust_level)
+        end trust_level
+      from page_users3 pu left join users3 u
+        on pu.site_id = u.site_id and pu.user_id = u.user_id
+      where
+        pu.site_id = ? and
+        pu.page_id = ?
+      order by pu.first_visited_at_mins asc
+      """
+    runQueryBuildMap(query, List(siteId.asAnyRef, pageId), rs => {
+      val userId = rs.getInt("user_id")
+      val minute = rs.getInt("first_visited_at_mins")
+      val trustLevelInt = rs.getInt("trust_level")
+      userId -> VisitTrust(visitMinute = minute, trustLevelInt)
+    })
   }
 
 }

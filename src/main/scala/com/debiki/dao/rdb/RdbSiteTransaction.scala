@@ -219,7 +219,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         results.append(result)
       }
     })
-    results.to[immutable.Seq]
+    results.toVector
   }
 
 

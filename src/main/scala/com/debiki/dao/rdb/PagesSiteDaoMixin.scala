@@ -149,5 +149,62 @@ trait PagesSiteDaoMixin extends SiteTransaction {
     true
   }
 
+
+  def loadPagePopularityScore(pageId: PageId): Option[PagePopularityScores] = {
+    val sql = s"""
+      select * from page_popularity_scores3
+      where site_id = ?
+        and page_id = ?
+      """
+    runQueryFindOneOrNone(sql, List(siteId.asAnyRef, pageId), rs => {
+      PagePopularityScores(
+        pageId = rs.getString("page_id"),
+        updatedAt = getWhen(rs, "updated_at"),
+        algorithmVersion = rs.getInt("algorithm"),
+        dayScore = rs.getFloat("day_score"),
+        weekScore = rs.getFloat("week_score"),
+        monthScore = rs.getFloat("month_score"),
+        quarterScore = rs.getFloat("quarter_score"),
+        yearScore = rs.getFloat("year_score"),
+        allScore = rs.getFloat("all_score"))
+    })
+  }
+
+
+  def upsertPagePopularityScore(scores: PagePopularityScores) {
+    val statement = s"""
+      insert into page_popularity_scores3 (
+        site_id,
+        page_id,
+        popular_since,
+        updated_at,
+        algorithm,
+        day_score,
+        week_score,
+        month_score,
+        quarter_score,
+        year_score,
+        all_score)
+      values (?, ?, now_utc(), now_utc(), ?, ?, ?, ?, ?, ?, ?)
+      on conflict (site_id, page_id) do update set
+        updated_at = excluded.updated_at,
+        algorithm = excluded.algorithm,
+        day_score = excluded.day_score,
+        week_score = excluded.week_score,
+        month_score = excluded.month_score,
+        quarter_score = excluded.quarter_score,
+        year_score = excluded.year_score,
+        all_score = excluded.all_score
+      """
+
+    val values = List(
+      siteId.asAnyRef, scores.pageId, scores.algorithmVersion.asAnyRef,
+      scores.dayScore.asAnyRef, scores.weekScore.asAnyRef,
+      scores.monthScore.asAnyRef, scores.quarterScore.asAnyRef,
+      scores.yearScore.asAnyRef, scores.allScore.asAnyRef)
+
+    runUpdateSingleRow(statement, values)
+  }
+
 }
 

@@ -25,6 +25,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 import Rdb._
 import RdbUtil._
+import com.debiki.core.PageOrderOffset.ByScoreAndBumpTime
 
 
 /** Loads and saves categories, and lists all pages in a category or all categories.
@@ -94,6 +95,82 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
   def loadPagesInCategories(categoryIds: Seq[CategoryId], pageQuery: PageQuery, limit: Int)
         : Seq[PagePathAndMeta] = {
+    pageQuery.orderOffset match {
+      case _: ByScoreAndBumpTime =>
+        loadPagesInCategoriesByScore(categoryIds, pageQuery, limit)
+      case other =>
+        loadPagesInCategoriesNoScore(categoryIds, pageQuery, limit)
+    }
+  }
+
+
+  private def loadPagesInCategoriesByScore(categoryIds: Seq[CategoryId], pageQuery: PageQuery,
+        limit: Int) : Seq[PagePathAndMeta] = {
+    // Some dupl code. (8KREQY0)
+
+    val scoreOrder = pageQuery.orderOffset.asInstanceOf[ByScoreAndBumpTime]
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef)
+    values ++= categoryIds.map(_.asAnyRef)
+
+    val andNotDeleted =
+      (pageQuery.pageFilter == PageFilter.ShowDeleted) ? "" | " and g.deleted_at is null"
+
+    // (Don't do s"${period}_score" — then cannot search and find all usages of the column.)
+    val periodScore = scoreOrder.period match {
+      case TopTopicsPeriod.Day => "day_score"
+      case TopTopicsPeriod.Week => "week_score"
+      case TopTopicsPeriod.Month => "month_score"
+      case TopTopicsPeriod.Quarter => "quarter_score"
+      case TopTopicsPeriod.Year => "year_score"
+      case TopTopicsPeriod.All => "all_score"
+    }
+
+    val offsetTestAnd =
+      scoreOrder.offset  match {
+      case None => ""
+      case Some(maxScore) =>
+        values += maxScore.asAnyRef
+        s"(pps.$periodScore <= ?) and"
+    }
+
+    val pageFilterAnd = makePageFilterTestsAnd(pageQuery.pageFilter)
+
+    val sql = s"""
+        select
+          t.parent_folder,
+          t.page_id,
+          t.show_id,
+          t.page_slug,
+          ${_PageMetaSelectListItems}
+        from page_popularity_scores3 pps
+          inner join pages3 g
+          on pps.site_id = g.site_id and
+             pps.page_id = g.page_id
+          inner join page_paths3 t
+          on g.site_id = t.site_id and
+             g.page_id = t.page_id and
+             t.canonical = 'C'
+        where
+          pps.site_id = ? and
+          g.category_id in (${ makeInListFor(categoryIds) }) and   -- BUG cannot have g. and t. in 'where' part? only pps. ?
+          $offsetTestAnd
+          $pageFilterAnd
+          g.page_role <> ${PageRole.Forum.toInt}
+          $andNotDeleted
+        order by pps.$periodScore desc, g.bumped_at desc
+        limit $limit"""
+
+    runQueryFindMany(sql, values.toList, rs => {
+      val pagePath = _PagePath(rs, siteId)
+      val pageMeta = _PageMeta(rs, pagePath.pageId.get)
+      PagePathAndMeta(pagePath, pageMeta)
+    })
+  }
+
+
+  private def loadPagesInCategoriesNoScore(categoryIds: Seq[CategoryId], pageQuery: PageQuery,
+        limit: Int) : Seq[PagePathAndMeta] = {
+    // Some dupl code. (8KREQY0)
 
     require(limit >= 1, "DwE5KGW2")
     if (categoryIds.isEmpty)
@@ -142,18 +219,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
     values :+= siteId.asAnyRef
 
-    val pageFilterAnd = pageQuery.pageFilter match {
-      case PageFilter.ShowWaiting =>
-        import PageRole._
-        s"""
-          g.page_role in (
-            ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
-            ${Critique.toInt}, ${UsabilityTesting.toInt}) and  -- [plugin]
-          g.closed_at is null and
-          """
-      case _ =>
-        ""
-    }
+    val pageFilterAnd = makePageFilterTestsAnd(pageQuery.pageFilter)
 
     values = values ++ categoryIds.map(_.asAnyRef)
 
@@ -185,6 +251,20 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
       val pageMeta = _PageMeta(rs, pagePath.pageId.get)
       PagePathAndMeta(pagePath, pageMeta)
     })
+  }
+
+
+  private def makePageFilterTestsAnd(pageFilter: PageFilter): String = pageFilter match {
+    case PageFilter.ShowWaiting =>
+      import PageRole._
+      s"""
+          g.page_role in (
+            ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
+            ${Critique.toInt}, ${UsabilityTesting.toInt}) and  -- [plugin]
+          g.closed_at is null and
+          """
+    case _ =>
+      ""
   }
 
 

@@ -4,10 +4,77 @@ CLEAN_UP // remove guest_prefs3.version column, use the aduit_log3 table instead
 -- alter table categories3 drop column only_staff_may_create_topics;
 
 
+
+not needed?:
+
+create table topic_popularity_timeline(
+  site_id int not null,
+  topic_id varchar not null,
+  upserted_at timestamp not null,
+  num_posts int not null,
+  num_views_by_strangers int not null,
+  num_views_by_members int not null,
+  num_views_by_trusted int not null,
+  num_views_by_core int not null,
+  num_likes_total int not null,
+  num_likes_by_trusted int not null,
+  num_likes_by_core int not null,
+  num_disagrees_total int not null,
+  num_disagrees_by_trusted int not null,
+  num_disagrees_by_core int not null,
+  num_unwanted_total int not null,
+  num_unwanted_by_trusted int not null,
+  num_unwanted_by_core int not null,
+  num_op_likes_total int not null,
+  num_op_likes_by_trusted int not null,
+  num_op_likes_by_core int not null,
+  num_op_disagrees_total int not null,
+  num_op_disagrees_by_trusted int not null,
+  num_op_disagrees_by_core int not null,
+  num_op_unwanted_total int not null,
+  num_op_unwanted_by_trusted int not null,
+  num_op_unwanted_by_core int not null,
+  topmost_like_score_total float not null,
+  topmost_like_score_by_trusted float not null,
+  topmost_like_score_by_core float not null,
+  topmost_disagree_score_total float not null,
+  topmost_disagree_score_by_trusted float not null,
+  topmost_disagree_score_by_core float not null,
+  topmost_unwanted_score_total float not null,
+  topmost_unwanted_score_by_trusted float not null,
+  topmost_unwanted_score_by_core float not null);
+
+instead?:
+
+create table old_page_visits(
+  site_id int not null,
+  page_id varchar not null,
+  when_ms bigint,
+  num_views_by_strangers int not null,
+  num_views_by_members int not null,
+  num_views_by_trusted int not null,
+  num_views_by_core int not null);
+
+create table page_visits(
+  site_id int not null,
+  page_id varchar not null,
+  num_views_by_strangers int not null,
+  num_views_by_members int not null,
+  num_views_by_trusted int not null,
+  num_views_by_core int not null,
+  viewed_by_member_ids bytea not null,
+  viewed_by_ips bytea not null);
+
+
+-- abs = roughly  popularity-at-end-of-period - popularity-at-start
+-- =  like-votes-weigthed / num-views / num-posts, but with priority given to
+
+
+
 create table page_views_by_strangers3 (
   site_id varchar not null,
   page_id varchar not null,
-  ip varchar not null);
+  ip varchar not null);    -- NO too much storage space
 
 Triggers to add on page_users3:
     member_page_settings3_sum_quota AFTER INSERT OR DELETE OR UPDATE ON member_page_settings3 FOR EACH ROW EXECUTE PROCEDURE member_page_settings3_sum_quota()

@@ -654,22 +654,40 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadActionsOnPage(pageId: PageId): immutable.Seq[PostAction] = {
+    loadActionsOnPageImpl(pageId, userId = None)
+  }
+
+
   def loadActionsByUserOnPage(userId: UserId, pageId: PageId): immutable.Seq[PostAction] = {
-    val query = """
+    loadActionsOnPageImpl(pageId, userId = Some(userId))
+  }
+
+
+  private def loadActionsOnPageImpl(pageId: PageId, userId: Option[UserId])
+        : immutable.Seq[PostAction] = {
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef, pageId)
+    val andCreatedBy = userId match {
+      case None => ""
+      case Some(id) =>
+        values.append(id.asAnyRef)
+        "and created_by_id = ?"
+    }
+    val query = s"""
       select unique_post_id, post_nr, type, created_at, created_by_id
       from post_actions3
-      where site_id = ? and page_id = ? and created_by_id = ?
+      where site_id = ? and page_id = ? $andCreatedBy
       """
-    val values = List[AnyRef](siteId.asAnyRef, pageId, userId.asAnyRef)
     var results = Vector[PostAction]()
-    runQuery(query, values, rs => {
+    runQueryFindMany(query, values.toList, rs => {
       while (rs.next()) {
+        val theUserId = rs.getInt("created_by_id")
         val postAction = PostAction(
           uniqueId = rs.getInt("unique_post_id"),
           pageId = pageId,
           postNr = rs.getInt("post_nr"),
-          doneAt = getDate(rs, "created_at"),
-          doerId = userId,
+          doneAt = getWhen(rs, "created_at"),
+          doerId = theUserId,
           actionType = fromActionTypeInt(rs.getInt("type")))
         results :+= postAction
       }
@@ -692,7 +710,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
           uniqueId = rs.getInt("unique_post_id"),
           pageId = pageId,
           postNr = postNr,
-          doneAt = getDate(rs, "created_at"),
+          doneAt = getWhen(rs, "created_at"),
           doerId = rs.getInt("created_by_id"),
           actionType = fromActionTypeInt(rs.getInt("type")))
         results :+= postAction
@@ -731,7 +749,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
           uniqueId = rs.getInt("unique_post_id"),
           pageId = rs.getString("page_id"),
           postNr = rs.getInt("post_nr"),
-          flaggedAt = getDate(rs, "created_at"),
+          doneAt = getWhen(rs, "created_at"),
           flaggerId = rs.getInt("created_by_id"),
           flagType = fromActionTypeIntToFlagType(rs.getInt("type")))
         dieIf(!postAction.actionType.isInstanceOf[PostFlagType], "DwE2dpg4")
