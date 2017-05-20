@@ -192,6 +192,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
       delete from post_actions3 where site_id = ?
       delete from post_revisions3 where site_id = ?
       delete from posts3 where site_id = ?
+      delete from page_popularity_scores3 where site_id =?
       delete from page_paths3 where site_id = ?
       delete from page_html3 where site_id = ?
       delete from pages3 where site_id = ?
