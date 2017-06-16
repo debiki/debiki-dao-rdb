@@ -132,6 +132,8 @@ object RdbUtil {
       username,
       locked_trust_level,
       email,
+      summary_email_interval_mins,
+      summary_email_if_active,
       avatar_tiny_base_url,
       avatar_tiny_hash_path,
       avatar_small_base_url,
@@ -227,6 +229,8 @@ object RdbUtil {
       name = rs.getString("full_name"),
       tinyAvatar = getAnyUploadRef(rs, "avatar_tiny_base_url", "avatar_tiny_hash_path"),
       smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path"),
+      summaryEmailIntervalMins = getOptInt(rs, "summary_email_interval_mins"),
+      summaryEmailIfActive = getOptBool(rs, "summary_email_if_active"),
       grantsTrustLevel = getOptionalInt(rs, "locked_trust_level").flatMap(TrustLevel.fromInt))
   }
 
@@ -306,6 +310,39 @@ object RdbUtil {
       isOwner = rs.getBoolean("is_owner"),
       isAdmin = rs.getBoolean("is_admin"),
       isModerator = rs.getBoolean("is_moderator"))
+  }
+
+
+  def getUserStats(rs: js.ResultSet): UserStats = {
+    UserStats(
+      userId = rs.getInt("user_id"),
+      lastSeenAt = getWhen(rs, "last_seen_at"),
+      lastPostedAt = getOptWhen(rs, "last_posted_at"),
+      lastEmailedAt = getOptWhen(rs, "last_emailed_at"),
+      lastSummaryEmailAt = getOptWhen(rs, "last_summary_email_at"),
+      nextSummaryEmailAt = getOptWhen(rs, "next_summary_email_at"),
+      emailBounceSum = rs.getFloat("email_bounce_sum"),
+      firstSeenAtOr0 = getWhen(rs, "first_seen_at"),
+      firstNewTopicAt = getOptWhen(rs, "first_new_topic_at"),
+      firstDiscourseReplyAt = getOptWhen(rs, "first_discourse_reply_at"),
+      firstChatMessageAt = getOptWhen(rs, "first_chat_message_at"),
+      topicsNewSince = getWhen(rs, "topics_new_since"),
+      notfsNewSinceId = rs.getInt("notfs_new_since_id"),
+      numDaysVisited = rs.getInt("num_days_visited"),
+      numSecondsReading = rs.getInt("num_seconds_reading"),
+      numDiscourseRepliesRead = rs.getInt("num_discourse_replies_read"),
+      numDiscourseRepliesPosted = rs.getInt("num_discourse_replies_posted"),
+      numDiscourseTopicsEntered = rs.getInt("num_discourse_topics_entered"),
+      numDiscourseTopicsRepliedIn = rs.getInt("num_discourse_topics_replied_in"),
+      numDiscourseTopicsCreated = rs.getInt("num_discourse_topics_created"),
+      numChatMessagesRead = rs.getInt("num_chat_messages_read"),
+      numChatMessagesPosted = rs.getInt("num_chat_messages_posted"),
+      numChatTopicsEntered = rs.getInt("num_chat_topics_entered"),
+      numChatTopicsRepliedIn = rs.getInt("num_chat_topics_replied_in"),
+      numChatTopicsCreated = rs.getInt("num_chat_topics_created"),
+      numLikesGiven = rs.getInt("num_likes_given"),
+      numLikesReceived = rs.getInt("num_likes_received"),
+      numSolutionsProvided = rs.getInt("num_solutions_provided"))
   }
 
 

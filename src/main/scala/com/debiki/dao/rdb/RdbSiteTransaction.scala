@@ -236,6 +236,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
+  // Dupl code [9UFK2Q7]
   def runQueryBuildMultiMap[K, V](query: String, values: List[AnyRef],
         singleRowHandler: js.ResultSet => (K, V)): immutable.Map[K, immutable.Seq[V]] = {
     var valuesByKey = immutable.HashMap[K, immutable.Seq[V]]()
@@ -826,16 +827,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     require(email.providerEmailId isEmpty)
     require(email.sentOn isEmpty)
 
-    def emailTypeToString(tyype: EmailType) = tyype match {
-      case EmailType.Notification => "Notf"
-      case EmailType.CreateAccount => "CrAc"
-      case EmailType.ResetPassword => "RsPw"
-      case EmailType.Invite => "Invt"
-      case EmailType.InviteAccepted => "InAc"
-      case EmailType.InvitePassword => "InPw"
-    }
-
-    val vals = List(siteId.asAnyRef, email.id, emailTypeToString(email.tyype), email.sentTo,
+    val vals = List(siteId.asAnyRef, email.id, email.tyype.toInt.asAnyRef, email.sentTo,
       email.toUserId.orNullInt,
       d2ts(email.createdAt), email.subject, email.bodyHtmlText)
 
@@ -882,21 +874,12 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     val emailOpt = db.queryAtnms(query, List(siteId.asAnyRef, emailId), rs => {
       var allEmails = List[Email]()
       while (rs.next) {
-        def parseEmailType(typeString: String) = typeString match {
-          case "Notf" => EmailType.Notification
-          case "CrAc" => EmailType.CreateAccount
-          case "RsPw" => EmailType.ResetPassword
-          case "Invt" => EmailType.Invite
-          case "InAc" => EmailType.InviteAccepted
-          case "InPw" => EmailType.InvitePassword
-          case _ => throwBadDatabaseData(
-            "DwE840FSIE", s"Bad email type: $typeString, email id: $emailId")
-            EmailType.Notification
-        }
         val toUserId = getOptionalIntNoneNot0(rs, "TO_USER_ID")
+        val typeInt = rs.getInt("TYPE")
         val email = Email(
            id = emailId,
-           tyype = parseEmailType(rs.getString("TYPE")),
+           tyype = EmailType.fromInt(typeInt) getOrElse throwBadDatabaseData(
+               "EdE840FSIE", s"Bad email type: $typeInt, email id: $siteId:$emailId"),
            sentTo = rs.getString("SENT_TO"),
            toUserId = toUserId,
            sentOn = getOptionalDate(rs, "SENT_ON"),

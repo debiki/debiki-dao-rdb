@@ -106,6 +106,9 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
   private def loadPagesInCategoriesByScore(categoryIds: Seq[CategoryId], pageQuery: PageQuery,
         limit: Int) : Seq[PagePathAndMeta] = {
+    if (categoryIds.isEmpty || limit <= 0)
+      return Nil
+
     // Some dupl code. (8KREQY0)
 
     val scoreOrder = pageQuery.orderOffset.asInstanceOf[ByScoreAndBumpTime]
@@ -275,7 +278,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
     runQuery(query, List(siteId.asAnyRef), rs => {
       rs.next()
       val maxId = rs.getInt("max_id") // null becomes 0, fine
-      maxId + 1
+      maxId + 1  // Hack. Other code knows starts at 1. [8UWKQXN45]
     })
   }
 

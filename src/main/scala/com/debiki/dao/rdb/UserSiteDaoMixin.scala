@@ -395,7 +395,9 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
       val userInDb: Member = _User(rs) match {
         case m: Member => m
-        case g: Guest => die("EsE5YK8U2")
+        case _: Guest => die("EdE5YK8U2")
+        case _: Group => die("EdE2WBP40")
+        case UnknownUser => die("EdE2FKG04")
       }
 
       val id = rs.getInt("i_id").toString
@@ -558,6 +560,20 @@ trait UserSiteDaoMixin extends SiteTransaction {
       where site_id = ? and $field = ?
       """
     runQueryFindOneOrNone(sql, List(siteId.asAnyRef, value), rs => {
+      getCompleteUser(rs)
+    })
+  }
+
+
+  def loadMembersInclDetailsById(userIds: Iterable[UserId]): immutable.Seq[MemberInclDetails] = {
+    if (userIds.isEmpty) return Nil
+    val query = s"""
+      select $CompleteUserSelectListItemsWithUserId
+      from users3
+      where site_id = ? and user_id in (${makeInListFor(userIds)})
+      """
+    val values = siteId.asAnyRef :: userIds.toList.map(_.asAnyRef)
+    runQueryFindMany(query, values, rs => {
       getCompleteUser(rs)
     })
   }

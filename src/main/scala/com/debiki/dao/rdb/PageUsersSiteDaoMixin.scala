@@ -89,6 +89,12 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
 
 
   def loadReadProgress(userId: UserId, pageId: PageId): Option[ReadingProgress] = {
+    loadReadProgressAndIfHasSummaryEmailed(userId, pageId = pageId)._1
+  }
+
+
+  def loadReadProgressAndIfHasSummaryEmailed(userId: UserId, pageId: PageId)
+        : (Option[ReadingProgress], Boolean) = {
     val query = """
       select
         num_seconds_reading,
@@ -98,18 +104,21 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
         last_read_at_mins,
         last_read_post_nr,
         recently_read_nrs,
-        low_post_nrs_read
+        low_post_nrs_read,
+        incl_in_summary_email_at_mins
       from page_users3
       where site_id = ?
         and page_id = ?
         and user_id = ?
       """
-    runQueryFindOneOrNone(query, List(siteId.asAnyRef, pageId, userId.asAnyRef), rs => {
+    val result = runQueryFindOneOrNone(query, List(siteId.asAnyRef, pageId, userId.asAnyRef), rs => {
+      val hasSummaryEmailed = rs.getInt("incl_in_summary_email_at_mins") > 0
       val firstVisitedAt = getWhenMinutes(rs, "first_visited_at_mins")
       if (rs.wasNull) {
         // There's a row for this user, although hen hasn't visited the page — apparently
         // someone else has made hen a page member, e.g. added hen to a chat channel.
-        return None
+        // Or there's a row because hen got an activity-summary-email that mentions this page.
+        return (None, hasSummaryEmailed)
       }
 
       // This is the very last post nr read.
@@ -128,15 +137,16 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
         Option(rs.getBytes("low_post_nrs_read")) getOrElse Array.empty
       val lowPostNrsRead = ReadingProgress.parseLowPostNrsReadBitsetBytes(lowPostNrsReadBytes)
 
-      ReadingProgress(
+      (Some(ReadingProgress(
         firstVisitedAt = firstVisitedAt,
         lastVisitedAt = getWhenMinutes(rs, "last_visited_at_mins"),
         lastViewedPostNr = rs.getInt("last_viewed_post_nr"),
         lastReadAt = getOptWhenMinutes(rs, "last_read_at_mins"),
         lastPostNrsReadRecentFirst = lastPostNrsRead,
         lowPostNrsRead = lowPostNrsRead,
-        secondsReading = rs.getInt("num_seconds_reading"))
+        secondsReading = rs.getInt("num_seconds_reading"))), hasSummaryEmailed)
     })
+    result getOrElse (None, false)
   }
 
 
@@ -182,6 +192,30 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
       progress.lastPostNrsReadRecentFirst.headOption.orNullInt,
       NullBytea, // for now
       progress.lowPostNrsReadAsBitsetBytes.orNullByteaIfEmpty)
+
+    runUpdateExactlyOneRow(statement, values)
+  }
+
+
+  def rememberHasIncludedInSummaryEmail(userId: UserId, pageId: PageId, now: When) {
+    val statement = """
+      insert into page_users3 (
+        site_id,
+        page_id,
+        user_id,
+        incl_in_summary_email_at_mins)
+      values (
+        ?, ?, ?, ?)
+      on conflict (site_id, page_id, user_id) do update set
+        incl_in_summary_email_at_mins = greatest(
+            page_users3.incl_in_summary_email_at_mins, excluded.incl_in_summary_email_at_mins)
+      """
+
+    val values = List(
+      siteId.asAnyRef,
+      pageId,
+      userId.asAnyRef,
+      now.unixMinutes.asAnyRef)
 
     runUpdateExactlyOneRow(statement, values)
   }

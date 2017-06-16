@@ -102,6 +102,23 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
   }
 
 
+  // Dupl code [9UFK2Q7]
+  def runQueryBuildMultiMap[K, V](query: String, values: List[AnyRef],
+    singleRowHandler: js.ResultSet => (K, V)): immutable.Map[K, immutable.Seq[V]] = {
+    var valuesByKey = immutable.HashMap[K, immutable.Seq[V]]()
+    runQuery(query, values, rs => {
+      while (rs.next) {
+        val (key: K, value: V) = singleRowHandler(rs)
+        var values = valuesByKey.getOrElse(key, Vector.empty)
+        values :+= value
+        valuesByKey += key -> values
+      }
+    })
+    valuesByKey
+  }
+
+
+
   // COULD move to new superclass?
   def runUpdate(statement: String, values: List[AnyRef] = Nil): Int = {
     db.update(statement, values)(theOneAndOnlyConnection)
@@ -284,6 +301,28 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         canonicalHost = SiteHost(
           hostname = rs.getString("CANONICAL_HOST"),
           role = SiteHost.RoleCanonical)))
+    })
+  }
+
+
+  def loadStatsForUsersToMaybeEmailSummariesTo(now: When, limit: Int)
+        : Map[SiteId, immutable.Seq[UserStats]] = {
+    COULD_OPTIMIZE // if there are many sites, might load just one summary email, per site, for
+    // 99999 sites —> won't get any batch processing efficiency. Instead, if many sites,
+    // iterate over each site, and load time-to-send emails, once per site basis instead?
+    // Would then need to change the index userstats_nextsummary_i so it includes the site id.
+    val query = s"""
+      select * from user_stats3
+      where user_id >= $LowestHumanMemberId
+        and next_summary_email_at is null or next_summary_email_at <= ?
+      order by site_id, next_summary_email_at
+      limit $limit
+      """
+    val results = ArrayBuffer[UserStats]()
+    runQueryBuildMultiMap(query, List(now.asTimestamp), rs => {
+      val siteId = rs.getInt("site_id")
+      val stats: UserStats = getUserStats(rs)
+      siteId -> stats
     })
   }
 

@@ -127,35 +127,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
       select * from user_stats3
       where site_id = ? and user_id = ?
       """
-    runQueryFindOneOrNone(query, List(siteId.asAnyRef, userId.asAnyRef), rs => {
-      UserStats(
-        userId = userId,
-        lastSeenAt = getWhen(rs, "last_seen_at"),
-        lastPostedAt = getOptWhen(rs, "last_posted_at"),
-        lastEmailedAt = getOptWhen(rs, "last_emailed_at"),
-        emailBounceSum = rs.getFloat("email_bounce_sum"),
-        firstSeenAtOr0 = getWhen(rs, "first_seen_at"),
-        firstNewTopicAt = getOptWhen(rs, "first_new_topic_at"),
-        firstDiscourseReplyAt = getOptWhen(rs, "first_discourse_reply_at"),
-        firstChatMessageAt = getOptWhen(rs, "first_chat_message_at"),
-        topicsNewSince = getWhen(rs, "topics_new_since"),
-        notfsNewSinceId = rs.getInt("notfs_new_since_id"),
-        numDaysVisited = rs.getInt("num_days_visited"),
-        numSecondsReading = rs.getInt("num_seconds_reading"),
-        numDiscourseRepliesRead = rs.getInt("num_discourse_replies_read"),
-        numDiscourseRepliesPosted = rs.getInt("num_discourse_replies_posted"),
-        numDiscourseTopicsEntered = rs.getInt("num_discourse_topics_entered"),
-        numDiscourseTopicsRepliedIn = rs.getInt("num_discourse_topics_replied_in"),
-        numDiscourseTopicsCreated = rs.getInt("num_discourse_topics_created"),
-        numChatMessagesRead = rs.getInt("num_chat_messages_read"),
-        numChatMessagesPosted = rs.getInt("num_chat_messages_posted"),
-        numChatTopicsEntered = rs.getInt("num_chat_topics_entered"),
-        numChatTopicsRepliedIn = rs.getInt("num_chat_topics_replied_in"),
-        numChatTopicsCreated = rs.getInt("num_chat_topics_created"),
-        numLikesGiven = rs.getInt("num_likes_given"),
-        numLikesReceived = rs.getInt("num_likes_received"),
-        numSolutionsProvided = rs.getInt("num_solutions_provided"))
-    })
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, userId.asAnyRef), getUserStats)
   }
 
 
@@ -168,6 +140,8 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
         last_seen_at,
         last_posted_at,
         last_emailed_at,
+        last_summary_email_at,
+        next_summary_email_at,
         email_bounce_sum,
         first_seen_at,
         first_new_topic_at,
@@ -190,7 +164,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
         num_likes_given,
         num_likes_received,
         num_solutions_provided)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict (site_id, user_id) do update set
         last_seen_at =
             greatest(user_stats3.last_seen_at, excluded.last_seen_at),
@@ -198,6 +172,10 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
             greatest(user_stats3.last_posted_at, excluded.last_posted_at),
         last_emailed_at =
             greatest(user_stats3.last_emailed_at, excluded.last_emailed_at),
+        last_summary_email_at =
+            greatest(user_stats3.last_summary_email_at, excluded.last_summary_email_at),
+        next_summary_email_at =
+            least(user_stats3.next_summary_email_at, excluded.next_summary_email_at),
         email_bounce_sum =
             excluded.email_bounce_sum,
         first_seen_at =
@@ -235,6 +213,8 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
       userStats.lastSeenAt.asTimestamp,
       userStats.lastPostedAt.orNullTimestamp,
       userStats.lastEmailedAt.orNullTimestamp,
+      userStats.lastSummaryEmailAt.orNullTimestamp,
+      userStats.nextSummaryEmailAt.orNullTimestamp,
       userStats.emailBounceSum.asAnyRef,
       userStats.firstSeenAtNot0.asTimestamp,
       userStats.firstNewTopicAt.orNullTimestamp,
@@ -261,6 +241,25 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
     runUpdateExactlyOneRow(statement, values)
   }
 
+
+  def bumpNextSummaryEmailDate(memberId: UserId, nextEmailAt: Option[When]) {
+    val statement = s"""
+      update user_stats3 set next_summary_email_at = ?
+      where site_id = ? and user_id = ?
+      """
+    val values = List(nextEmailAt.orNullTimestamp, siteId.asAnyRef, memberId.asAnyRef)
+    runUpdateExactlyOneRow(statement, values)
+  }
+
+
+  def bumpNextAndLastSummaryEmailDate(memberId: UserId, lastAt: When, nextAt: Option[When]) {
+    val statement = s"""
+      update user_stats3 set last_summary_email_at = ?, next_summary_email_at = ?
+      where site_id = ? and user_id = ?
+      """
+    val values = List(lastAt.asTimestamp, nextAt.orNullTimestamp, siteId.asAnyRef, memberId.asAnyRef)
+    runUpdateExactlyOneRow(statement, values)
+  }
 
 
   def loadUserVisitStats(memberId: UserId): immutable.Seq[UserVisitStats] = {
