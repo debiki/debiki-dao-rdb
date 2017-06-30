@@ -175,7 +175,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
         last_summary_email_at =
             greatest(user_stats3.last_summary_email_at, excluded.last_summary_email_at),
         next_summary_email_at =
-            least(user_stats3.next_summary_email_at, excluded.next_summary_email_at),
+            excluded.next_summary_email_at, -- not least(...), because then cannot bump date
         email_bounce_sum =
             excluded.email_bounce_sum,
         first_seen_at =

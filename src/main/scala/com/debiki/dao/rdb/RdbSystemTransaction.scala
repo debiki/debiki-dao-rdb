@@ -314,11 +314,12 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
     val query = s"""
       select * from user_stats3
       where user_id >= $LowestHumanMemberId
-        and next_summary_email_at is null or next_summary_email_at <= ?
+        and (
+          next_summary_email_at is null or
+          next_summary_email_at <= ?)
       order by site_id, next_summary_email_at
       limit $limit
       """
-    val results = ArrayBuffer[UserStats]()
     runQueryBuildMultiMap(query, List(now.asTimestamp), rs => {
       val siteId = rs.getInt("site_id")
       val stats: UserStats = getUserStats(rs)
