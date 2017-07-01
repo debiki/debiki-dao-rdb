@@ -257,17 +257,27 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private def makePageFilterTestsAnd(pageFilter: PageFilter): String = pageFilter match {
-    case PageFilter.ShowWaiting =>
-      import PageRole._
-      s"""
-          g.page_role in (
-            ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
-            ${Critique.toInt}, ${UsabilityTesting.toInt}) and  -- [plugin]
-          g.closed_at is null and
-          """
-    case _ =>
-      ""
+  private def makePageFilterTestsAnd(pageFilter: PageFilter): String = {
+    import PageRole._
+    pageFilter match {
+      case PageFilter.ForActivitySummaryEmail =>
+        s"""
+            g.author_id <> $SystemUserId and  -- don't incl auto created pages (by system) in summary
+            g.page_role in (
+              ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
+              ${MindMap.toInt}, ${Discussion.toInt},
+              ${Critique.toInt}, ${UsabilityTesting.toInt}) and  -- [plugin]
+            """
+      case PageFilter.ShowWaiting =>
+        s"""
+            g.page_role in (
+              ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
+              ${Critique.toInt}, ${UsabilityTesting.toInt}) and  -- [plugin]
+            g.closed_at is null and
+            """
+      case _ =>
+        ""
+    }
   }
 
 
