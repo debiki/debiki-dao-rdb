@@ -309,15 +309,19 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         : Map[SiteId, immutable.Seq[UserStats]] = {
     COULD_OPTIMIZE // if there are many sites, might load just one summary email, per site, for
     // 99999 sites —> won't get any batch processing efficiency. Instead, if many sites,
-    // iterate over each site, and load time-to-send emails, once per site basis instead?
-    // Would then need to change the index userstats_nextsummary_i so it includes the site id.
+    // first load say 10 people, from all & any sites, ordered by next-summary-at.
+    // Then, for the sites found, load 50 more summaries to send, per site.
+    // Result: Both correct order (the most "urgenat" ones first), & batch processing benefits.
+
+    // The next-date is set to long-into-the-future, for users that don't want summaries  [5KRDUQ0]
+    // or have no email address.
     val query = s"""
       select * from user_stats3
       where user_id >= $LowestHumanMemberId
         and (
           next_summary_email_at is null or
           next_summary_email_at <= ?)
-      order by site_id, next_summary_email_at
+      order by next_summary_email_at
       limit $limit
       """
     runQueryBuildMultiMap(query, List(now.asTimestamp), rs => {
