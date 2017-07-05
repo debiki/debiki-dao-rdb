@@ -173,10 +173,7 @@ object RdbUtil {
 
 
   def readMember(rs: js.ResultSet): Member =
-    _User(rs) match {
-      case m: Member => m
-      case g: Guest => die("EsE5KFU0")
-    }
+    _User(rs).toMemberOrThrow
 
 
   def _User(rs: js.ResultSet): User = {
@@ -188,31 +185,46 @@ object RdbUtil {
         _toEmailNotfs(rs.getString("u_email_notfs"))
     }
     val lockedThreatLevel = getOptionalInt(rs, "u_locked_threat_level").flatMap(ThreatLevel.fromInt)
+    def theUsername = rs.getString("u_username")
+    val name = Option(rs.getString("u_full_name"))
+    def tinyAvatar = getAnyUploadRef(rs, "avatar_tiny_base_url", "avatar_tiny_hash_path")
+    def smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path")
+    val anyTrustLevel = TrustLevel.fromInt(rs.getInt("u_trust_level"))
       // Use dn2e not n2e. ((So works if joined w/ DW1_IDS_SIMPLE, which
       // uses '-' instead of null to indicate absence of email address etc.
       // See usage of this function in RdbSystemTransaction.loadUsers(). ))
     if (isGuestId(userId))
       Guest(
         id = userId,
-        guestName = dn2e(rs.getString("u_full_name")),
+        guestName = dn2e(name.orNull),
         guestCookie = Option(rs.getString("u_guest_cookie")),
         email = dn2e(rs.getString("u_email")),
         emailNotfPrefs = emailNotfPrefs,
         country = dn2e(rs.getString("u_country")).trimNoneIfEmpty,
         lockedThreatLevel = lockedThreatLevel)
+    else if (anyTrustLevel.isEmpty)  // Right now, groups have no trust level. [1WBK5JZ0]
+      Group(
+        id = userId,
+        theUsername = theUsername,
+        name = name getOrElse "Unnamed group [EdE21QKS0]",
+        tinyAvatar = tinyAvatar,
+        smallAvatar = smallAvatar,
+        summaryEmailIntervalMins = None,
+        summaryEmailIfActive = None,
+        grantsTrustLevel = None)
     else Member(
       id = userId,
-      fullName = Option(rs.getString("u_full_name")),
-      theUsername = rs.getString("u_username"),
+      fullName = name,
+      theUsername = theUsername,
       email = dn2e(rs.getString("u_email")),
       emailNotfPrefs = emailNotfPrefs,
       emailVerifiedAt = getOptionalDate(rs, "u_email_verified_at"),
       passwordHash = Option(rs.getString("u_password_hash")),
-      tinyAvatar = getAnyUploadRef(rs, "avatar_tiny_base_url", "avatar_tiny_hash_path"),
-      smallAvatar = getAnyUploadRef(rs, "avatar_small_base_url", "avatar_small_hash_path"),
+      tinyAvatar = tinyAvatar,
+      smallAvatar = tinyAvatar,
       isApproved = getOptionalBoolean(rs, "u_is_approved"),
       suspendedTill = getOptionalDate(rs, "u_suspended_till"),
-      trustLevel = TrustLevel.fromInt(rs.getInt("u_trust_level")).getOrDie("EsE7YK24"),
+      trustLevel = anyTrustLevel.getOrDie("EsE7YK24"),
       lockedTrustLevel = getOptionalInt(rs, "u_locked_trust_level").flatMap(TrustLevel.fromInt),
       threatLevel = ThreatLevel.fromInt(rs.getInt("u_threat_level")).getOrDie("EsE0PW4V2"),
       lockedThreatLevel = lockedThreatLevel,
@@ -275,9 +287,20 @@ object RdbUtil {
     s"user_id, $CompleteUserSelectListItemsNoUserId"
 
 
-  def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): MemberInclDetails = {
+  def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): MemberOrGroupInclDetails = {
     val theUserId = userId getOrElse rs.getInt("user_id")
     dieIf(User.isGuestId(theUserId), "DwE6P4K3")
+
+    // Right now, groups never have any trust level, but single persons always do. [1WBK5JZ0]
+    TrustLevel.fromInt(rs.getInt("trust_level")) match {
+      case Some(trustLevel) => getMemberInclDetails(rs, theUserId, trustLevel)
+      case None => getGroup(rs)
+    }
+  }
+
+
+  private def getMemberInclDetails(rs: js.ResultSet, theUserId: UserId,
+        trustLevel: TrustLevel): MemberInclDetails = {
     MemberInclDetails(
       id = theUserId,
       fullName = Option(rs.getString("full_name")),
@@ -303,7 +326,7 @@ object RdbUtil {
       suspendedTill = getOptionalDate(rs, "suspended_till"),
       suspendedById = getOptionalIntNoneNot0(rs, "suspended_by_id"),
       suspendedReason = Option(rs.getString("suspended_reason")),
-      trustLevel = TrustLevel.fromInt(rs.getInt("trust_level")).getOrDie("EsE5GJKW4"),
+      trustLevel = trustLevel,
       lockedTrustLevel = getOptionalInt(rs, "locked_trust_level").flatMap(TrustLevel.fromInt),
       threatLevel = ThreatLevel.fromInt(rs.getInt("threat_level")).getOrDie("EsE22IU60C"),
       lockedThreatLevel = getOptionalInt(rs, "locked_threat_level").flatMap(ThreatLevel.fromInt),

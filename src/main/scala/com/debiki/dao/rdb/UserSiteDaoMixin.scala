@@ -393,13 +393,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       // COULD break out construction of Identity to reusable
       // functions.
 
-      val userInDb: Member = _User(rs) match {
-        case m: Member => m
-        case _: Guest => die("EdE5YK8U2")
-        case _: Group => die("EdE2WBP40")
-        case UnknownUser => die("EdE2FKG04")
-      }
-
+      val userInDb: Member = _User(rs).toMemberOrThrow
       val id = rs.getInt("i_id").toString
       val email = Option(rs.getString("i_email"))
       val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
@@ -455,7 +449,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   def loadMemberByEmailOrUsernameImpl(emailOrUsername: String)
         (implicit connection: js.Connection): Option[Member] = {
     val sql = s"""
-      select ${UserSelectListItemsNoGuests}
+      select $UserSelectListItemsNoGuests
       from users3 u
       where u.SITE_ID = ?
         and u.USER_ID >= $LowestNonGuestId
@@ -463,9 +457,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       """
     val values = List(siteId.asAnyRef, emailOrUsername, emailOrUsername)
     runQueryFindOneOrNone(sql, values, rs => {
-      val user = _User(rs)
-      dieIf(user.isGuest, "EsE7YKP4")
-      user.asInstanceOf[Member]
+      _User(rs).toMemberOrThrow
     })
   }
 
@@ -537,23 +529,27 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadMemberInclDetailsByUsername(username: String): Option[MemberInclDetails] = {
-    loadCompleteUserImpl("lower(username)", username.toLowerCase)
+  def loadMemberOrGroupInclDetailsByUsername(username: String): Option[MemberOrGroupInclDetails] = {
+    loadMemberOrGroupInclDetailsImpl("lower(username)", username.toLowerCase)
   }
 
 
-  def loadMemberInclDetails(userId: UserId): Option[MemberInclDetails] = {
+  def loadMemberOrGroupInclDetails(userId: UserId): Option[MemberOrGroupInclDetails] = {
     require(User.isRoleId(userId), "DwE5FKE2")
-    loadCompleteUserImpl("user_id", userId.asAnyRef)
+    loadMemberOrGroupInclDetailsImpl("user_id", userId.asAnyRef)
   }
 
 
   def loadOwner(): Option[MemberInclDetails] = {
-    loadCompleteUserImpl("is_owner", true.asAnyRef)
+    loadMemberOrGroupInclDetailsImpl("is_owner", true.asAnyRef) map {
+      case member: MemberInclDetails => member
+      case group: Group => die("EdE2QYTK05", s"Owner ${group.id}@$siteId is a group")
+    }
   }
 
 
-  def loadCompleteUserImpl(field: String, value: AnyRef): Option[MemberInclDetails] = {
+  private def loadMemberOrGroupInclDetailsImpl(field: String, value: AnyRef)
+        : Option[MemberOrGroupInclDetails] = {
     val sql = s"""
       select $CompleteUserSelectListItemsWithUserId
       from users3
@@ -565,7 +561,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadMembersInclDetailsById(userIds: Iterable[UserId]): immutable.Seq[MemberInclDetails] = {
+  def loadMembersAndGroupsInclDetailsById(userIds: Iterable[UserId])
+        : immutable.Seq[MemberOrGroupInclDetails] = {
     if (userIds.isEmpty) return Nil
     val query = s"""
       select $CompleteUserSelectListItemsWithUserId
@@ -598,13 +595,17 @@ trait UserSiteDaoMixin extends SiteTransaction {
       from users3 u
       where
         u.site_id = ? and
-        u.user_id >= ${User.LowestAuthenticatedUserId}
+        u.user_id >= ${User.LowestAuthenticatedUserId} and
+        u.trust_level is not null   -- currently always null for groups [1WBK5JZ0]
         $andIsApprovedEqWhatever
         $anyOrderBy
       """
 
     runQueryFindMany(query, List(siteId.asAnyRef), rs => {
-      getCompleteUser(rs)
+      getCompleteUser(rs) match {
+        case m: MemberInclDetails => m
+        case g: Group => throw GotAGroupException(g.id)
+      }
     })
   }
 
