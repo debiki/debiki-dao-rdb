@@ -17,6 +17,7 @@
 
 package com.debiki.dao.rdb
 
+import com.debiki.core.Prelude._
 import collection.immutable
 import collection.mutable.ArrayBuffer
 import com.debiki.core._
@@ -243,12 +244,30 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
 
 
   def bumpNextSummaryEmailDate(memberId: UserId, nextEmailAt: Option[When]) {
+    bumpNextSummaryEmailDateImpl(Some(memberId), nextEmailAt)
+  }
+
+  def reconsiderSendingSummaryEmailsToEveryone() {
+    bumpNextSummaryEmailDateImpl(None, None)
+  }
+
+  private def bumpNextSummaryEmailDateImpl(memberId: Option[UserId], nextEmailAt: Option[When]) {
+    val values = ArrayBuffer[AnyRef](nextEmailAt.orNullTimestamp, siteId.asAnyRef)
+    val andUserId = memberId match {
+      case None =>
+        COULD_OPTIMIZE // update only if current date is in the future [8YQKSD10]
+        ""
+      case Some(id) =>
+        values.append(id.asAnyRef)
+        " and user_id = ?"
+    }
     val statement = s"""
       update user_stats3 set next_summary_email_at = ?
-      where site_id = ? and user_id = ?
+      where site_id = ? $andUserId
       """
-    val values = List(nextEmailAt.orNullTimestamp, siteId.asAnyRef, memberId.asAnyRef)
-    runUpdateExactlyOneRow(statement, values)
+    val numRowsUpdated = runUpdate(statement, values.toList)
+    dieIf(memberId.isDefined && numRowsUpdated != 1, "EdE7FKQS1",
+      s"$numRowsUpdated rows changed, user ${memberId.get}@$siteId")
   }
 
 

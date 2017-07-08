@@ -142,6 +142,36 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def updateGroup(group: Group) {
+    val statement = """
+      update users3 set
+        updated_at = now_utc(),
+        full_name = ?,
+        username = ?,
+        summary_email_interval_mins = ?,
+        summary_email_if_active = ?
+      where site_id = ?
+        and user_id = ?
+      """
+
+    val values = List(
+      group.anyName.orNullVarchar,
+      group.theUsername,
+      // group.emailForEveryNewPost.asAnyRef,
+      group.summaryEmailIntervalMins.orNullInt,
+      group.summaryEmailIfActive.orNullBoolean,
+      siteId.asAnyRef,
+      group.id.asAnyRef)
+
+    try runUpdateSingleRow(statement, values)
+    catch {
+      case ex: js.SQLException if isUniqueConstrViolation(ex) && uniqueConstrViolatedIs(
+        "dw1_users_site_usernamelower__u", ex) =>
+        throw DuplicateUsernameException(group.theUsername)
+    }
+  }
+
+
   def nextMemberId: UserId = {
     val query = s"""
       select max(user_id) max_id from users3
