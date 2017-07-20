@@ -142,7 +142,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
         last_posted_at,
         last_emailed_at,
         last_summary_email_at,
-        next_summary_email_at,
+        next_summary_maybe_at,
         email_bounce_sum,
         first_seen_at,
         first_new_topic_at,
@@ -175,8 +175,8 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
             greatest(user_stats3.last_emailed_at, excluded.last_emailed_at),
         last_summary_email_at =
             greatest(user_stats3.last_summary_email_at, excluded.last_summary_email_at),
-        next_summary_email_at =
-            excluded.next_summary_email_at, -- not least(...), because then cannot bump date
+        next_summary_maybe_at =
+            excluded.next_summary_maybe_at, -- not least(...), because then cannot bump date
         email_bounce_sum =
             excluded.email_bounce_sum,
         first_seen_at =
@@ -262,7 +262,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
         " and user_id = ?"
     }
     val statement = s"""
-      update user_stats3 set next_summary_email_at = ?
+      update user_stats3 set next_summary_maybe_at = ?
       where site_id = ? $andUserId
       """
     val numRowsUpdated = runUpdate(statement, values.toList)
@@ -273,7 +273,7 @@ trait PostsReadStatsSiteDaoMixin extends SiteTransaction { // RENAME to ReadStat
 
   def bumpNextAndLastSummaryEmailDate(memberId: UserId, lastAt: When, nextAt: Option[When]) {
     val statement = s"""
-      update user_stats3 set last_summary_email_at = ?, next_summary_email_at = ?
+      update user_stats3 set last_summary_email_at = ?, next_summary_maybe_at = ?
       where site_id = ? and user_id = ?
       """
     val values = List(lastAt.asTimestamp, nextAt.orNullTimestamp, siteId.asAnyRef, memberId.asAnyRef)

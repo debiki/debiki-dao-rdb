@@ -319,9 +319,9 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       select * from user_stats3
       where user_id >= $LowestHumanMemberId
         and (
-          next_summary_email_at is null or
-          next_summary_email_at <= ?)
-      order by next_summary_email_at
+          next_summary_maybe_at is null or
+          next_summary_maybe_at <= ?)
+      order by next_summary_maybe_at
       limit $limit
       """
     runQueryBuildMultiMap(query, List(now.asTimestamp), rs => {

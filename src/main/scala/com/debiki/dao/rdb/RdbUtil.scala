@@ -343,7 +343,7 @@ object RdbUtil {
       lastPostedAt = getOptWhen(rs, "last_posted_at"),
       lastEmailedAt = getOptWhen(rs, "last_emailed_at"),
       lastSummaryEmailAt = getOptWhen(rs, "last_summary_email_at"),
-      nextSummaryEmailAt = getOptWhen(rs, "next_summary_email_at"),
+      nextSummaryEmailAt = getOptWhen(rs, "next_summary_maybe_at"),
       emailBounceSum = rs.getFloat("email_bounce_sum"),
       firstSeenAtOr0 = getWhen(rs, "first_seen_at"),
       firstNewTopicAt = getOptWhen(rs, "first_new_topic_at"),
