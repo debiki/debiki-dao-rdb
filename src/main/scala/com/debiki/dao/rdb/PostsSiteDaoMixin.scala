@@ -654,6 +654,20 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadVoterIds(postId: PostId, voteType: PostVoteType): Seq[UserId] = {
+    TESTS_MISSING
+    val query = """
+      select created_by_id
+      from post_actions3
+      where site_id = ? and unique_post_id = ? and type = ?
+      """
+    val values = List[AnyRef](siteId.asAnyRef, postId.asAnyRef, voteType.toInt.asAnyRef)
+    runQueryFindMany(query, values, rs => {
+      rs.getInt("created_by_id")
+    })
+  }
+
+
   def loadActionsOnPage(pageId: PageId): immutable.Seq[PostAction] = {
     loadActionsOnPageImpl(pageId, userId = None)
   }
@@ -894,6 +908,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
 
 object PostsSiteDaoMixin {
 
+  // dupl numbers [2PKWQUT0]
   private val VoteValueLike = 41
   private val VoteValueWrong = 42
   private val VoteValueBury = 43
