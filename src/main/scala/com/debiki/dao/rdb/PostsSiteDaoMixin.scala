@@ -692,21 +692,16 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       from post_actions3
       where site_id = ? and page_id = ? $andCreatedBy
       """
-    var results = Vector[PostAction]()
     runQueryFindMany(query, values.toList, rs => {
-      while (rs.next()) {
-        val theUserId = rs.getInt("created_by_id")
-        val postAction = PostAction(
-          uniqueId = rs.getInt("unique_post_id"),
-          pageId = pageId,
-          postNr = rs.getInt("post_nr"),
-          doneAt = getWhen(rs, "created_at"),
-          doerId = theUserId,
-          actionType = fromActionTypeInt(rs.getInt("type")))
-        results :+= postAction
-      }
+      val theUserId = rs.getInt("created_by_id")
+      PostAction(
+        uniqueId = rs.getInt("unique_post_id"),
+        pageId = pageId,
+        postNr = rs.getInt("post_nr"),
+        doneAt = getWhen(rs, "created_at"),
+        doerId = theUserId,
+        actionType = fromActionTypeInt(rs.getInt("type")))
     })
-    results
   }
 
 
@@ -717,20 +712,15 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       where site_id = ? and page_id = ? and post_nr = ?
       """
     val values = List[AnyRef](siteId.asAnyRef, pageId, postNr.asAnyRef)
-    var results = Vector[PostAction]()
-    runQuery(query, values, rs => {
-      while (rs.next()) {
-        val postAction = PostAction(
-          uniqueId = rs.getInt("unique_post_id"),
-          pageId = pageId,
-          postNr = postNr,
-          doneAt = getWhen(rs, "created_at"),
-          doerId = rs.getInt("created_by_id"),
-          actionType = fromActionTypeInt(rs.getInt("type")))
-        results :+= postAction
-      }
+    runQueryFindMany(query, values, rs => {
+      PostAction(
+        uniqueId = rs.getInt("unique_post_id"),
+        pageId = pageId,
+        postNr = postNr,
+        doneAt = getWhen(rs, "created_at"),
+        doerId = rs.getInt("created_by_id"),
+        actionType = fromActionTypeInt(rs.getInt("type")))
     })
-    results
   }
 
 
@@ -757,18 +747,16 @@ trait PostsSiteDaoMixin extends SiteTransaction {
     }
     queryBuilder.append(")")
     var results = Vector[PostFlag]()
-    runQuery(queryBuilder.toString, values.toList, rs => {
-      while (rs.next()) {
-        val postAction = PostFlag(
-          uniqueId = rs.getInt("unique_post_id"),
-          pageId = rs.getString("page_id"),
-          postNr = rs.getInt("post_nr"),
-          doneAt = getWhen(rs, "created_at"),
-          flaggerId = rs.getInt("created_by_id"),
-          flagType = fromActionTypeIntToFlagType(rs.getInt("type")))
-        dieIf(!postAction.actionType.isInstanceOf[PostFlagType], "DwE2dpg4")
-        results :+= postAction
-      }
+    runQueryFindMany(queryBuilder.toString, values.toList, rs => {
+      val postAction = PostFlag(
+        uniqueId = rs.getInt("unique_post_id"),
+        pageId = rs.getString("page_id"),
+        postNr = rs.getInt("post_nr"),
+        doneAt = getWhen(rs, "created_at"),
+        flaggerId = rs.getInt("created_by_id"),
+        flagType = fromActionTypeIntToFlagType(rs.getInt("type")))
+      dieIf(!postAction.actionType.isInstanceOf[PostFlagType], "DwE2dpg4")
+      postAction
     })
     results
   }
