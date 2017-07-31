@@ -859,6 +859,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   def loadUserIdsWatchingPage(pageId: PageId): Seq[UserId] = {
+    TESTS_MISSING // tested via e2e tests but not via app server tests
     val result = ArrayBuffer[UserId]()
 
     // Load people watching pageId only.
@@ -872,7 +873,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       """
     runQuery(sql, List(siteId.asAnyRef, pageId), rs => {
       while (rs.next()) {
-        result += rs.getInt("ROLE_ID")
+        result += rs.getInt("user_id")
       }
     })
 
