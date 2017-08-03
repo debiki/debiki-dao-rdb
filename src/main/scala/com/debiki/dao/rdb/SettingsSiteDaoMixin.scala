@@ -98,9 +98,10 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         content_license,
         google_analytics_id,
         experimental,
+        allowEmbeddingFrom,
         html_tag_css_classes)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId.asAnyRef,
@@ -145,6 +146,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.contentLicense.getOrElse(None).map(_.toInt).orNullInt,
       editedSettings2.googleUniversalAnalyticsTrackingId.getOrElse(None).orNullVarchar,
       editedSettings2.showExperimental.getOrElse(None).orNullBoolean,
+      editedSettings2.allowEmbeddingFrom.getOrElse(None).orNullVarchar,
       editedSettings2.htmlTagCssClasses.getOrElse(None).orNullVarchar)
 
     runUpdate(statement, values)
@@ -206,6 +208,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("content_license", s.contentLicense.map(_.map(_.toInt).orNullInt))
     maybeSet("google_analytics_id", s.googleUniversalAnalyticsTrackingId.map(_.orNullVarchar))
     maybeSet("experimental", s.showExperimental.map(_.orNullBoolean))
+    maybeSet("allow_embedding_from", s.allowEmbeddingFrom.map(_.orNullVarchar))
     maybeSet("html_tag_css_classes", s.htmlTagCssClasses.map(_.orNullVarchar))
     maybeSet("num_flags_to_hide_post", s.numFlagsToHidePost.map(_.orNullInt))
     maybeSet("cooldown_minutes_after_flagged_hidden",
@@ -266,6 +269,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       contentLicense = ContentLicense.fromInt(rs.getInt("content_license")), // 0 -> None, ok
       googleUniversalAnalyticsTrackingId = Option(rs.getString("google_analytics_id")),
       showExperimental = getOptionalBoolean(rs, "experimental"),
+      allowEmbeddingFrom = Option(rs.getString("allow_embedding_from")),
       htmlTagCssClasses = Option(rs.getString("html_tag_css_classes")),
       numFlagsToHidePost = getOptInt(rs, "num_flags_to_hide_post"),
       cooldownMinutesAfterFlaggedHidden = getOptInt(rs, "cooldown_minutes_after_flagged_hidden"),
