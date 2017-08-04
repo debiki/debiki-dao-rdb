@@ -831,7 +831,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   // COULD move to PageUsersSiteDaoMixin.
-  def loadUsersPageSettings(userId: UserId, pageId: PageId): Option[UsersPageSettings] = {
+  def loadUserPageSettings(userId: UserId, pageId: PageId): Option[UserPageSettings] = {
     val query = i"""
       select notf_level
       from page_users3
@@ -840,13 +840,13 @@ trait UserSiteDaoMixin extends SiteTransaction {
     val values = List(siteId.asAnyRef, userId.asAnyRef, pageId)
     runQueryFindOneOrNone(query, values, rs => {
       val notfLevel = NotfLevel.fromInt(rs.getInt("notf_level")).getOrElse(NotfLevel.Normal)
-      UsersPageSettings(notfLevel)
+      UserPageSettings(notfLevel)
     })
   }
 
 
   // COULD move to PageUsersSiteDaoMixin.
-  def saveUsersPageSettings(userId: UserId, pageId: PageId, settings: UsersPageSettings)  {
+  def saveUserPageSettings(userId: UserId, pageId: PageId, settings: UserPageSettings)  {
     val sql = """
       insert into page_users3(site_id, user_id, page_id, notf_level)
       values (?, ?, ?, ?)
