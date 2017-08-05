@@ -621,8 +621,18 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
-  def listHostnames(): Seq[SiteHost] = {
-    asSystem.loadSite(siteId).map(_.hosts).getOrElse(Nil)
+  def loadHostsInclDetails(): Seq[SiteHostInclDetails] = {
+    val query = """
+      select host, canonical, ctime
+      from hosts3
+      where site_id = ?
+      """
+    runQueryFindMany(query, List(siteId.asAnyRef), rs => {
+      SiteHostInclDetails(
+        rs.getString("host"),
+        _toTenantHostRole(rs.getString("canonical")),
+        getWhen(rs, "ctime"))
+    })
   }
 
 
