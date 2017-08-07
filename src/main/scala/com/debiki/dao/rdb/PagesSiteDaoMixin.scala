@@ -206,5 +206,40 @@ trait PagesSiteDaoMixin extends SiteTransaction {
     runUpdateSingleRow(statement, values)
   }
 
+
+  def insertAltPageId(altPageId: AltPageId, realPageId: PageId) {
+    val statement = s"""
+      insert into alt_page_ids3 (site_id, alt_page_id, real_page_id)
+      values (?, ?, ?)
+      """
+    runUpdateExactlyOneRow(statement, List(siteId.asAnyRef, altPageId, realPageId.asAnyRef))
+  }
+
+
+  def listAltPageIds(realPageId: PageId): Set[AltPageId] = {
+    val sql = s"""
+      select alt_page_id
+      from alt_page_ids3
+      where site_id = ?
+        and real_page_id = ?
+      """
+    runQueryFindManyAsSet(sql, List(siteId.asAnyRef, realPageId.asAnyRef), rs => {
+      rs.getString("alt_page_id")
+    })
+  }
+
+
+  def loadRealPageId(altPageId: AltPageId): Option[PageId] = {
+    val sql = s"""
+      select real_page_id
+      from alt_page_ids3
+      where site_id = ?
+        and alt_page_id = ?
+      """
+    runQueryFindOneOrNone(sql, List(siteId.asAnyRef, altPageId), rs => {
+      rs.getString("real_page_id")
+    })
+  }
+
 }
 

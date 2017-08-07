@@ -738,6 +738,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       delete from page_popularity_scores3
       delete from page_paths3
       delete from page_html3
+      delete from alt_page_ids3
       delete from pages3
       delete from categories3
       delete from blocks3
