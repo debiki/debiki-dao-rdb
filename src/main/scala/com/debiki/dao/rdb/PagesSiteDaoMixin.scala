@@ -208,11 +208,23 @@ trait PagesSiteDaoMixin extends SiteTransaction {
 
 
   def insertAltPageId(altPageId: AltPageId, realPageId: PageId) {
+    insertAltPageIdImpl(altPageId, realPageId = realPageId, ignoreDuplKeyError = false)
+  }
+
+
+  def insertAltPageIdIfFree(altPageId: AltPageId, realPageId: PageId) {
+    insertAltPageIdImpl(altPageId, realPageId = realPageId, ignoreDuplKeyError = true)
+  }
+
+
+  def insertAltPageIdImpl(altPageId: AltPageId, realPageId: PageId, ignoreDuplKeyError: Boolean) {
+    val onConflictMaybeNothing = ignoreDuplKeyError ? "on conflict do nothing" | ""
     val statement = s"""
       insert into alt_page_ids3 (site_id, alt_page_id, real_page_id)
       values (?, ?, ?)
+      $onConflictMaybeNothing
       """
-    runUpdateExactlyOneRow(statement, List(siteId.asAnyRef, altPageId, realPageId.asAnyRef))
+    runUpdateSingleRow(statement, List(siteId.asAnyRef, altPageId, realPageId.asAnyRef))
   }
 
 
