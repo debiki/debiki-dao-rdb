@@ -652,7 +652,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
-  def updateSite(changedSite: Site) {
+  def updateSite(changedSite: Site) {  // xx rm?
     val currentSite = loadSite().getOrDie("EsE7YKW2", s"Site $siteId not found")
     require(changedSite.id == this.siteId,
       "Cannot change site id [DwE32KB80]")
@@ -663,11 +663,10 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
 
     val sql = """
       update sites3
-      set status = ?, NAME = ?, EMBEDDING_SITE_URL = ?
+      set status = ?, NAME = ?
       where ID = ?"""
     val values =
-      List(changedSite.status.toInt.asAnyRef, changedSite.name,
-        changedSite.embeddingSiteUrl.orNullVarchar, siteId.asAnyRef)
+      List(changedSite.status.toInt.asAnyRef, changedSite.name, siteId.asAnyRef)
 
     try runUpdate(sql, values)
     catch {
@@ -694,12 +693,11 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     val site = siteNoId.copy(id = newId)
     runUpdateSingleRow("""
         insert into sites3 (
-          ID, status, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
+          ID, status, NAME, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
           QUOTA_LIMIT_MBS, price_plan)
-        values (?, ?, ?, ?, ?, ?, ?, ?)""",
+        values (?, ?, ?, ?, ?, ?, ?)""",
       List[AnyRef](site.id.asAnyRef, site.status.toInt.asAnyRef, site.name,
-        site.embeddingSiteUrl.orNullVarchar, site.creatorIp,
-        site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
+        site.creatorIp, site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
     site
   }
 

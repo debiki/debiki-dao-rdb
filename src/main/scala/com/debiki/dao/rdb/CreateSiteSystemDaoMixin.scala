@@ -32,7 +32,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
 
 
   def createSite(id: Option[SiteId], name: String, status: SiteStatus,
-    embeddingSiteUrl: Option[String], creatorIp: String, creatorEmailAddress: String,
+    creatorIp: String, creatorEmailAddress: String,
     quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
     isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan, createdAt: When): Site = {
 
@@ -57,7 +57,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
     }
     val newSiteNoId = Site(theId, status, name = name, createdAt = createdAt,
       creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
-      embeddingSiteUrl = embeddingSiteUrl, hosts = Nil)
+      hosts = Nil)
 
     val newSite =
       try insertSite(newSiteNoId, quotaLimitMegabytes, pricePlan)
@@ -111,12 +111,11 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
     val site = siteNoId.copy(id = newId)
     runUpdateSingleRow("""
         insert into sites3 (
-          ID, status, NAME, EMBEDDING_SITE_URL, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
+          ID, status, NAME, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
           QUOTA_LIMIT_MBS, price_plan)
-        values (?, ?, ?, ?, ?, ?, ?, ?)""",
+        values (?, ?, ?, ?, ?, ?, ?)""",
       List[AnyRef](site.id.asAnyRef, site.status.toInt.asAnyRef, site.name,
-        site.embeddingSiteUrl.orNullVarchar, site.creatorIp,
-        site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
+        site.creatorIp, site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
     site
   }
 

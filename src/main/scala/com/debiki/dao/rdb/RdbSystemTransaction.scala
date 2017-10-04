@@ -241,7 +241,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       })
 
     var sitesQuery = s"""
-      select id, status, name, ctime, embedding_site_url, creator_ip, creator_email_address
+      select id, status, name, ctime, creator_ip, creator_email_address
       from sites3
       """
     var sitesValues: List[AnyRef] = Nil
@@ -261,7 +261,6 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
           createdAt = getWhen(rs, "ctime"),
           creatorIp = rs.getString("CREATOR_IP"),
           creatorEmailAddress = rs.getString("CREATOR_EMAIL_ADDRESS"),
-          embeddingSiteUrl = Option(rs.getString("EMBEDDING_SITE_URL")),
           hosts = hosts)
       }
     })
