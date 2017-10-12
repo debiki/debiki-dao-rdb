@@ -136,7 +136,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
         s"(pps.$periodScore <= ?) and"
     }
 
-    val pageFilterAnd = makePageFilterTestsAnd(pageQuery.pageFilter)
+    val pageFilterAnd = makePageFilterTestsAnd(pageQuery)
 
     val sql = s"""
         select
@@ -222,7 +222,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
     values :+= siteId.asAnyRef
 
-    val pageFilterAnd = makePageFilterTestsAnd(pageQuery.pageFilter)
+    val pageFilterAnd = makePageFilterTestsAnd(pageQuery)
 
     values = values ++ categoryIds.map(_.asAnyRef)
 
@@ -257,9 +257,9 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
   }
 
 
-  private def makePageFilterTestsAnd(pageFilter: PageFilter): String = {
+  private def makePageFilterTestsAnd(pageQuery: PageQuery): String = {
     import PageRole._
-    pageFilter match {
+    pageQuery.pageFilter match {
       case PageFilter.ForActivitySummaryEmail =>
         s"""
             g.author_id <> $SystemUserId and  -- don't incl auto created pages (by system) in summary
@@ -276,7 +276,8 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
             g.closed_at is null and
             """
       case _ =>
-        ""
+        if (pageQuery.includeAboutCategoryPages) ""
+        else s" g.page_role <> ${AboutCategory.toInt} and "
     }
   }
 
