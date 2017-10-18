@@ -260,7 +260,6 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
           name = rs.getString("NAME"),
           createdAt = getWhen(rs, "ctime"),
           creatorIp = rs.getString("CREATOR_IP"),
-          creatorEmailAddress = rs.getString("CREATOR_EMAIL_ADDRESS"),
           hosts = hosts)
       }
     })

@@ -22,6 +22,7 @@ import com.debiki.core.Prelude._
 import _root_.java.{sql => js}
 import Rdb._
 import com.debiki.core.DbDao.{SiteAlreadyExistsException, TooManySitesCreatedByYouException, TooManySitesCreatedInTotalException}
+import scala.collection.mutable.ArrayBuffer
 
 
 trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemSiteRdbMixin
@@ -31,8 +32,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
   private val LocalhostAddress = "127.0.0.1"
 
 
-  def createSite(id: Option[SiteId], name: String, status: SiteStatus,
-    creatorIp: String, creatorEmailAddress: String,
+  def createSite(id: Option[SiteId], name: String, status: SiteStatus, creatorIp: String,
     quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
     isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan, createdAt: When): Site = {
 
@@ -40,7 +40,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
     // very many sites.
     if (creatorIp != LocalhostAddress) {
       val websiteCount = countWebsites(
-        createdFromIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
+        createdFromIp = creatorIp, creatorEmailAddress = None,
         testSites = isTestSiteOkayToDelete)
       if (websiteCount >= maxSitesPerIp)
         throw TooManySitesCreatedByYouException(creatorIp)
@@ -56,8 +56,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
       else NoSiteId
     }
     val newSiteNoId = Site(theId, status, name = name, createdAt = createdAt,
-      creatorIp = creatorIp, creatorEmailAddress = creatorEmailAddress,
-      hosts = Nil)
+      creatorIp = creatorIp, hosts = Nil)
 
     val newSite =
       try insertSite(newSiteNoId, quotaLimitMegabytes, pricePlan)
@@ -71,15 +70,22 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
   }
 
 
-  def countWebsites(createdFromIp: String, creatorEmailAddress: String, testSites: Boolean)
+  def countWebsites(createdFromIp: String, creatorEmailAddress: Option[String], testSites: Boolean)
         : Int = {
+    val values = ArrayBuffer[AnyRef](createdFromIp)
     val smallerOrGreaterThan = if (testSites) "<=" else ">"
+    val orEmailAddrIsSth = creatorEmailAddress match {
+      case None => ""
+      case Some(addr) =>
+        values.append(addr)
+        " or CREATOR_EMAIL_ADDRESS = ?"
+    }
     val query = s"""
         select count(*) WEBSITE_COUNT from sites3
-        where (CREATOR_IP = ? or CREATOR_EMAIL_ADDRESS = ?)
+        where (CREATOR_IP = ? $orEmailAddrIsSth)
           and id $smallerOrGreaterThan $MaxTestSiteId
         """
-    runQueryFindExactlyOne(query, List(createdFromIp, creatorEmailAddress), rs => {
+    runQueryFindExactlyOne(query, values.toList, rs => {
       rs.getInt("WEBSITE_COUNT")
     })
   }
@@ -111,11 +117,11 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
     val site = siteNoId.copy(id = newId)
     runUpdateSingleRow("""
         insert into sites3 (
-          ID, status, NAME, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
+          ID, status, NAME, CREATOR_IP,
           QUOTA_LIMIT_MBS, price_plan)
-        values (?, ?, ?, ?, ?, ?, ?)""",
+        values (?, ?, ?, ?, ?, ?)""",
       List[AnyRef](site.id.asAnyRef, site.status.toInt.asAnyRef, site.name,
-        site.creatorIp, site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
+        site.creatorIp, quotaLimitMegabytes.orNullInt, pricePlan))
     site
   }
 

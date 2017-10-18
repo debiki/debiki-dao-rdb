@@ -656,8 +656,6 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     val currentSite = loadSite().getOrDie("EsE7YKW2", s"Site $siteId not found")
     require(changedSite.id == this.siteId,
       "Cannot change site id [DwE32KB80]")
-    require(changedSite.creatorEmailAddress == currentSite.creatorEmailAddress,
-      "Cannot change site creator email address [DwE32KB80]")
     require(changedSite.creatorIp == currentSite.creatorIp,
       "Cannot change site creator IP [DwE3BK777]")
 
@@ -674,31 +672,6 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         if (!isUniqueConstrViolation(ex)) throw ex
         throw new SiteAlreadyExistsException(changedSite.name)
     }
-  }
-
-
-  private def insertSite(siteNoId: Site, quotaLimitMegabytes: Option[Int], pricePlan: PricePlan)
-        : Site = {
-    val newId = siteNoId.id match {
-      case NoSiteId =>
-        db.nextSeqNo("DW1_TENANTS_ID")(theOneAndOnlyConnection).toInt
-      case Site.GenerateTestSiteMagicId =>
-        // Let's start on -11 and continue counting downwards. (Test site ids are negative.)
-        runQueryFindExactlyOne("select least(-10, min(id)) - 1 next_test_site_id from sites3",
-          Nil, _.getInt("next_test_site_id"))
-      case _ =>
-        siteNoId.id
-    }
-
-    val site = siteNoId.copy(id = newId)
-    runUpdateSingleRow("""
-        insert into sites3 (
-          ID, status, NAME, CREATOR_IP, CREATOR_EMAIL_ADDRESS,
-          QUOTA_LIMIT_MBS, price_plan)
-        values (?, ?, ?, ?, ?, ?, ?)""",
-      List[AnyRef](site.id.asAnyRef, site.status.toInt.asAnyRef, site.name,
-        site.creatorIp, site.creatorEmailAddress, quotaLimitMegabytes.orNullInt, pricePlan))
-    site
   }
 
 
