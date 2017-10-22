@@ -128,7 +128,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
 
   def deleteAnyHostname(hostname: String): Boolean = {
     // For now, safety check. Remove if needed.
-    require(hostname.startsWith(SiteHost.E2eTestPrefix), "EdE5GPQ0V")
+    require(SiteHost.isE2eTestHostname(hostname), "EdE5GPQ0V")
     val sql = """
       delete from hosts3 where host = ?
       """
@@ -162,7 +162,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
 
 
   def deleteSiteByName(name: String): Option[Site] = {
-    require(name startsWith SiteHost.E2eTestPrefix, "Can delete test sites only [EdE4PF0Y4]")
+    require(SiteHost.isE2eTestHostname(name), "Can delete test sites only [EdE4PF0Y4]")
     val site = loadSites().find(_.name == name) getOrElse {
       return None
     }
