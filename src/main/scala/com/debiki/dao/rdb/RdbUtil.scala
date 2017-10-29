@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2011-2013 Kaj Magnus Lindberg (born 1979)
+ * Copyright (C) 2011-2013, 2017 Kaj Magnus Lindberg
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -74,7 +74,7 @@ object RdbUtil {
     sb.toString
   }
 
-  def descOrAsc(orderBy: OrderBy) = orderBy match {
+  def descOrAsc(orderBy: OrderBy): String = orderBy match {
     case OrderBy.MostRecentFirst => "desc"
     case OrderBy.OldestFirst => "asc"
   }
@@ -131,7 +131,7 @@ object RdbUtil {
       full_name,
       username,
       locked_trust_level,
-      email,
+      primary_email_addr,
       summary_email_interval_mins,
       summary_email_if_active,
       avatar_tiny_base_url,
@@ -141,7 +141,7 @@ object RdbUtil {
       """
 
 
-  val UserSelectListItemsNoGuests =
+  val UserSelectListItemsNoGuests: String =
     """u.USER_ID u_id,
       |u.full_name u_full_name,
       |u.USERNAME u_username,
@@ -153,7 +153,7 @@ object RdbUtil {
       |u.locked_trust_level u_locked_trust_level,
       |u.threat_level u_threat_level,
       |u.locked_threat_level u_locked_threat_level,
-      |u.EMAIL u_email,
+      |u.primary_email_addr u_primary_email_addr,
       |u.EMAIL_NOTFS u_email_notfs,
       |u.EMAIL_VERIFIED_AT u_email_verified_at,
       |u.PASSWORD_HASH u_password_hash,
@@ -168,8 +168,11 @@ object RdbUtil {
       |u.IS_MODERATOR u_is_moderator""".stripMargin
 
 
-  val UserSelectListItemsWithGuests =
-    s"$UserSelectListItemsNoGuests, u.GUEST_COOKIE u_guest_cookie, e.EMAIL_NOTFS g_email_notfs"
+  val UserSelectListItemsWithGuests: String =
+    s"""$UserSelectListItemsNoGuests,
+     |u.guest_email_addr u_guest_email_addr,
+     |u.guest_cookie u_guest_cookie,
+     |e.email_notfs g_email_notfs""".stripMargin
 
 
   def readMember(rs: js.ResultSet): Member =
@@ -198,7 +201,7 @@ object RdbUtil {
         id = userId,
         guestName = dn2e(name.orNull),
         guestCookie = Option(rs.getString("u_guest_cookie")),
-        email = dn2e(rs.getString("u_email")),
+        email = dn2e(rs.getString("u_guest_email_addr")),
         emailNotfPrefs = emailNotfPrefs,
         country = dn2e(rs.getString("u_country")).trimNoneIfEmpty,
         lockedThreatLevel = lockedThreatLevel)
@@ -216,7 +219,7 @@ object RdbUtil {
       id = userId,
       fullName = name,
       theUsername = theUsername,
-      email = dn2e(rs.getString("u_email")),
+      email = dn2e(rs.getString("u_primary_email_addr")),
       emailNotfPrefs = emailNotfPrefs,
       emailVerifiedAt = getOptionalDate(rs, "u_email_verified_at"),
       passwordHash = Option(rs.getString("u_password_hash")),
@@ -249,7 +252,7 @@ object RdbUtil {
 
   val CompleteUserSelectListItemsNoUserId = i"""
     |full_name,
-    |email,
+    |primary_email_addr,
     |about,
     |country,
     |website,
@@ -306,7 +309,7 @@ object RdbUtil {
       fullName = Option(rs.getString("full_name")),
       username = rs.getString("username"),
       createdAt = getDate(rs, "created_at"),
-      emailAddress = dn2e(rs.getString("email")),
+      primaryEmailAddress = dn2e(rs.getString("primary_email_addr")),
       emailNotfPrefs = _toEmailNotfs(rs.getString("email_notfs")),
       emailVerifiedAt = getOptionalDate(rs, "email_verified_at"),
       emailForEveryNewPost = rs.getBoolean("email_for_every_new_post"),
@@ -478,7 +481,7 @@ object RdbUtil {
       |"""
 
 
-  def _PageMeta(resultSet: js.ResultSet, pageId: String = null) = {
+  def _PageMeta(resultSet: js.ResultSet, pageId: String = null): PageMeta = {
     // We always write to bumped_at so order by queries work, but if in fact the page
     // hasn't been modified since it was created or published, it has not been bumped.
     var bumpedAt: Option[ju.Date] = Some(getDate(resultSet, "BUMPED_AT"))
@@ -541,7 +544,7 @@ object RdbUtil {
   }
 
 
-  def _toTenantHostRole(roleStr: String) = roleStr match {
+  def _toTenantHostRole(roleStr: String): SiteHost.Role = roleStr match {
     case "C" => SiteHost.RoleCanonical
     case "R" => SiteHost.RoleRedirect
     case "L" => SiteHost.RoleLink

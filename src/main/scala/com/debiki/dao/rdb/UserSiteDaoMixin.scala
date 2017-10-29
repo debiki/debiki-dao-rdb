@@ -203,7 +203,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       runUpdate("""
         insert into users3(
             SITE_ID, USER_ID, full_name, USERNAME, CREATED_AT,
-            EMAIL, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
+            primary_email_addr, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
             COUNTRY, IS_OWNER, IS_ADMIN, IS_MODERATOR,
             trust_level, locked_trust_level, threat_level, locked_threat_level)
@@ -215,7 +215,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             ?, ?, ?, ?)
         """,
         List[AnyRef](siteId.asAnyRef, user.id.asAnyRef, user.fullName.orNullVarchar,
-          user.username, user.createdAt, user.emailAddress.trimNullVarcharIfBlank,
+          user.username, user.createdAt, user.primaryEmailAddress.trimNullVarcharIfBlank,
           _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
           user.passwordHash.orNullVarchar,
           user.isApproved.orNullBoolean, user.approvedAt.orNullTimestamp,
@@ -230,7 +230,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         if (!isUniqueConstrViolation(ex))
           throw ex
 
-        if (uniqueConstrViolatedIs("DW1_USERS_SITE_EMAIL__U", ex))
+        if (uniqueConstrViolatedIs("users_site_primaryemail_u", ex))
           throw DbDao.DuplicateUserEmail
 
         if (uniqueConstrViolatedIs("DW1_USERS_SITE_USERNAMELOWER__U", ex))
@@ -483,7 +483,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       from users3 u
       where u.SITE_ID = ?
         and u.USER_ID >= $LowestNonGuestId
-        and (u.EMAIL = ? or lower(u.USERNAME) = lower(?))
+        and (u.primary_email_addr = ? or lower(u.USERNAME) = lower(?))
       """
     val values = List(siteId.asAnyRef, emailOrUsername, emailOrUsername)
     runQueryFindOneOrNone(sql, values, rs => {
@@ -538,7 +538,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       select $UserSelectListItemsWithGuests
       from users3 u
       left join guest_prefs3 e
-        on u.EMAIL = e.EMAIL and u.SITE_ID = e.SITE_ID
+        on u.guest_email_addr = e.EMAIL and u.SITE_ID = e.SITE_ID
       where
         u.SITE_ID = ?
       """
@@ -646,7 +646,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         updated_at = now_utc(),
         full_name = ?,
         username = ?,
-        email = ?,
+        primary_email_addr = ?,
         email_verified_at = ?,
         email_for_every_new_post = ?,
         email_notfs = ?,
@@ -682,7 +682,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     val values = List(
       user.fullName.orNullVarchar,
       user.username,
-      user.emailAddress.trimNullVarcharIfBlank,
+      user.primaryEmailAddress.trimNullVarcharIfBlank,
       user.emailVerifiedAt.orNullTimestamp,
       user.emailForEveryNewPost.asAnyRef,
       _toFlag(user.emailNotfPrefs),
@@ -738,7 +738,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     try runUpdateSingleRow(statement, values)
     catch {
       case ex: js.SQLException =>
-        if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw1_user_guest__u", ex))
+        if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("users_site_guest_u", ex))
           throw DbDao.DuplicateGuest
         else
           throw ex

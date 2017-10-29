@@ -168,7 +168,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       val q = s"""
          select u.SITE_ID, $UserSelectListItemsWithGuests
          from users3 u
-         left join guest_prefs3 e on u.site_id = e.site_id and u.email = e.email
+         left join guest_prefs3 e on u.site_id = e.site_id and u.guest_email_addr = e.email
          where u.SITE_ID = ?
          and u.USER_ID in (""" + inList +")"
       (q, siteId.asAnyRef :: idsAu.map(_.asAnyRef))
