@@ -254,7 +254,7 @@ object Rdb {
     // On the 2nd line, the values of the key violated are included, but they
     // might be user provided so throw them away.
     val firstLine = sqlException.getMessage.takeWhile(_ != '\n')
-    firstLine.contains(s""""${constraintName.toLowerCase}"""")
+    firstLine.toLowerCase.contains(s""""${constraintName.toLowerCase}"""")
   }
 }
 
