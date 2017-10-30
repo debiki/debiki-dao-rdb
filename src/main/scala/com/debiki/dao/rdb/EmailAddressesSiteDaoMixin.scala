@@ -63,6 +63,22 @@ trait EmailAddressesSiteDaoMixin extends SiteTransaction {
     runUpdateExactlyOneRow(statement, values)
   }
 
+
+  def loadUserEmailAddresses(userId: UserId): Seq[UserEmailAddress] = {
+    val query = s"""
+      select email_address, added_at, verified_at, removed_at
+      from user_emails3
+       where site_id = ? and user_id = ?
+      """
+    runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef), rs => {
+      UserEmailAddress(
+        userId,
+        rs.getString("email_address"),
+        getWhen(rs, "added_at"),
+        getOptWhen(rs, "verified_at"),
+        getOptWhen(rs, "removed_at"))
+    })
+  }
 }
 
 
