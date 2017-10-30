@@ -32,8 +32,8 @@ create table user_emails3 (
   can_login_via boolean,
   send_notfs boolean, */
   constraint useremails_p primary key (site_id, user_id, email_address),
-  constraint useremails_email_u unique (site_id, email_address),  -- for now at least
-  constraint useremails_r_users foreign key (site_id, user_id) references users3(site_id, user_id),
+  constraint useremails_email_u unique (site_id, email_address) deferrable,  -- for now at least
+  constraint useremails_r_users foreign key (site_id, user_id) references users3(site_id, user_id) deferrable,
   constraint useremails_c_addedat_le_verifiedat check (added_at <= verified_at),
   constraint useremails_c_addedat_le_removedat check (added_at <= removed_at),
   constraint useremails_c_email_ok check (email_seems_ok(email_address))
@@ -68,7 +68,7 @@ insert into user_emails3 (site_id, user_id, email_address, added_at)
 -- Add a users3 –> user_emails3 foreign key.
 alter table users3 add constraint users_primaryemail_r_useremails
   foreign key (site_id, user_id, primary_email_addr)
-  references user_emails3 (site_id, user_id, email_address);
+  references user_emails3 (site_id, user_id, email_address) deferrable;
 
 
 
