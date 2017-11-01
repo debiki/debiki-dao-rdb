@@ -64,6 +64,18 @@ trait EmailAddressesSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def deleteUserEmailAddress(userId: UserId, emailAddress: String) {
+    val statement = s"""
+      delete from user_emails3
+      where site_id = ?
+        and user_id = ?
+        and email_address = ?
+      """
+    val values = List(siteId.asAnyRef, userId.asAnyRef, emailAddress)
+    runUpdateExactlyOneRow(statement, values)
+  }
+
+
   def loadUserEmailAddresses(userId: UserId): Seq[UserEmailAddress] = {
     val query = s"""
       select email_address, added_at, verified_at, removed_at
