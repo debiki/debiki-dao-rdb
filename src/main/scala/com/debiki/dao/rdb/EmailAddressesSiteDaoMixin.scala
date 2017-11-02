@@ -53,12 +53,12 @@ trait EmailAddressesSiteDaoMixin extends SiteTransaction {
 
   def updateUserEmailAddress(addrInfo: UserEmailAddress) {
     val statement = s"""
-      update user_emails3 set verified_at = ?, removed_at = ?
+      update user_emails3 set verified_at = ?
       where site_id = ?
         and user_id = ?
         and email_address = ?
       """
-    val values = List(addrInfo.verifiedAt.orNullTimestamp, addrInfo.removedAt.orNullTimestamp,
+    val values = List(addrInfo.verifiedAt.orNullTimestamp,
       siteId.asAnyRef, addrInfo.userId.asAnyRef, addrInfo.emailAddress)
     runUpdateExactlyOneRow(statement, values)
   }
@@ -78,7 +78,7 @@ trait EmailAddressesSiteDaoMixin extends SiteTransaction {
 
   def loadUserEmailAddresses(userId: UserId): Seq[UserEmailAddress] = {
     val query = s"""
-      select email_address, added_at, verified_at, removed_at
+      select email_address, added_at, verified_at
       from user_emails3
        where site_id = ? and user_id = ?
       """
@@ -87,8 +87,7 @@ trait EmailAddressesSiteDaoMixin extends SiteTransaction {
         userId,
         rs.getString("email_address"),
         getWhen(rs, "added_at"),
-        getOptWhen(rs, "verified_at"),
-        getOptWhen(rs, "removed_at"))
+        getOptWhen(rs, "verified_at"))
     })
   }
 }

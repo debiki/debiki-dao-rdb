@@ -24,7 +24,6 @@ create table user_emails3 (
   email_address varchar not null,
   added_at timestamp not null,
   verified_at timestamp,
-  removed_at timestamp,
   /* Later?:
   is_primary boolean not null, — no, keep in users3 instead? so can enforce that there is one.
   is_public boolean,
@@ -32,12 +31,16 @@ create table user_emails3 (
   can_login_via boolean,
   send_notfs boolean, */
   constraint useremails_p primary key (site_id, user_id, email_address),
-  constraint useremails_email_u unique (site_id, email_address) deferrable,  -- for now at least
   constraint useremails_r_users foreign key (site_id, user_id) references users3(site_id, user_id) deferrable,
   constraint useremails_c_addedat_le_verifiedat check (added_at <= verified_at),
-  constraint useremails_c_addedat_le_removedat check (added_at <= removed_at),
   constraint useremails_c_email_ok check (email_seems_ok(email_address))
 );
+
+-- Only require verified emails to be unique, so no one can specify another persons email
+-- and in that way prevent that other person from signing up with that email.
+create unique index useremails_email_verified_u on user_emails3 (site_id, email_address)  -- for now at least
+  where verified_at is not null;
+
 
 -- Add dedicated email addresses column, for guests.
 alter table users3 add column guest_email_addr varchar;
@@ -79,32 +82,3 @@ drop index dw1_users_site_email__u; -- had a user_id >= -1 constraint, no longer
 create unique index users_site_primaryemail_u on users3 (site_id, primary_email_addr);
 
 
-/*
--- Don't require a '-' email for guests. Add unique index on null instead.
-alter table users3 drop constraint users_guest__c_nn;
-alter table users3 add constraint users_guest__c_nn
-    check (user_id > 0 or created_at is not null and full_name is not null and guest_cookie is not null);
-
--- Replace: unique (site_id, full_name, email, guest_cookie) where user_id < -1
----with two indexes, one if email is null, another if it isn't.
-alter table users3 drop constraint dw1_user_guest__u;
-create unique index users3_guest_no_email_u on users3 (site_id, full_name, guest_cookie)
-  where user_id < -1 and email is null;
-create unique index users3_guest_w_email_u on users3 (site_id, full_name, email, guest_cookie)
-  where user_id < -1 and email is not null;
-
-
-update users3 set email = null where not email_seems_ok(email);
-
-alter table users3 add constraint users_email_c_ok check (email_seems_ok(email));
-
-insert into user_emails3 (site_id, user_id, email_address, added_at)
-  select site_id, user_id, email, created_at from users3
-  where email is not null
-    and user_id >= 2; -- 2 = lowesthumanmemberid
-
-
-
-alter table users3 add constraint users3_primemail_r_useremails
-  foreign key (site_id, user_id, email) references user_emails3 (site_id, user_id, email_address);
-*/
