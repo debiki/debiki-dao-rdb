@@ -32,7 +32,9 @@ create table user_emails3 (
   send_notfs boolean, */
   constraint useremails_p primary key (site_id, user_id, email_address),
   constraint useremails_r_users foreign key (site_id, user_id) references users3(site_id, user_id) deferrable,
-  constraint useremails_c_addedat_le_verifiedat check (added_at <= verified_at),
+  -- Cannot add this constraint right now, because OpenAuth emails are verified maybe 100 ms
+  -- before user created. Could fix that, update timestamps in db, then add constraint? Later...
+  -- constraint useremails_c_addedat_le_verifiedat check (added_at <= verified_at),
   constraint useremails_c_email_ok check (email_seems_ok(email_address))
 );
 
@@ -64,8 +66,8 @@ update users3 set primary_email_addr = null where not email_seems_ok(primary_ema
 alter table users3 add constraint users_email_c_ok check (email_seems_ok(primary_email_addr));
 
 -- Insert members' emails in email table.
-insert into user_emails3 (site_id, user_id, email_address, added_at)
-  select site_id, user_id, primary_email_addr, created_at from users3
+insert into user_emails3 (site_id, user_id, email_address, added_at, verified_at)
+  select site_id, user_id, primary_email_addr, created_at, email_verified_at from users3
   where primary_email_addr is not null;
 
 -- Add a users3 –> user_emails3 foreign key.
