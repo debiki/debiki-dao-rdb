@@ -36,7 +36,11 @@ object LoginSiteDaoMixin {
 trait LoginSiteDaoMixin extends SiteTransaction {
   self: RdbSiteTransaction =>
 
+  REFACTOR // most stuff here should be in ed-server instead (not here in ed-dao-rdb),
+  // so becomes reusable regardless of database type.
 
+  COULD; REFACTOR // ? remove this match-case, call the correct funcions directly instead.
+  // Can maybe remove the MemberLoginAttempt base class completely?
   override def tryLoginAsMember(loginAttempt: MemberLoginAttempt, requireVerifiedEmail: Boolean)
         : MemberLoginGrant = {
     val loginGrant = loginAttempt match {
@@ -226,7 +230,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
         (connection: js.Connection): MemberLoginGrant = {
     val (identityInDb: Option[Identity], userInDb: Option[Member]) =
       _loadIdtyDetailsAndUser(
-        forOpenAuthProfile = loginAttempt.profileProviderAndKey)(connection)
+        forOpenAuthProfile = loginAttempt.profileProviderAndKey)
 
     val user = userInDb match {
       case Some(u) => u
@@ -250,6 +254,48 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
     MemberLoginGrant(Some(identity), user, isNewIdentity = identityInDb.isEmpty,
       isNewMember = userInDb.isEmpty)
+  }
+
+
+  def tryLoginAsExternalUser(externalUser: ExternalSsoUser): Option[MemberLoginGrant] = {
+    val (anyIdentityInDb: Option[Identity], anyMemberInDb: Option[Member]) =
+      _loadIdtyDetailsAndUser(forExternalId = Some(externalUser.externalId))
+
+    // We lookup by external id & identity, so if user found, must have found an sso identity too.
+    dieIf(anyIdentityInDb.isEmpty && anyMemberInDb.isDefined, "EdE4JKSW20")
+
+    // This cannot happen, because a user is created in the same transaction as the external identity.
+    dieIf(anyIdentityInDb.isDefined && anyMemberInDb.isEmpty, "EdE5JNYSQ2")
+
+    if (anyIdentityInDb.isEmpty || anyMemberInDb.isEmpty)
+      return None
+
+    dieIf(!anyIdentityInDb.get.isInstanceOf[SingleSignOnIdentity], "EdE3PKTRW20")
+
+    val identityInDb = anyIdentityInDb.get.asInstanceOf[SingleSignOnIdentity]
+    val memberInDb = anyMemberInDb.get
+
+    if (externalUser != identityInDb.externalUser) {
+      SHOULD /* update identity & user in db, sth like:   [65JRKA2]
+      (but complicated! Maybe causes unique key conflicts.)
+      val memberInclDetailsOld = loadTheMemberInclDetails(memberInDb.id)
+      val memberInclDetailsUpdated = memberInclDetailsOld.copy(
+        fullName = externalUser.fullName,
+        // username = externalUser.username, — skip for now, because might cause unique key errors
+                                            // Also, should update the username_usages3 table
+        // emailAddress =  ... — skip this too. Wait until after many-email-addrs branch merged
+                                    // and update user_emails3 table. Might cause unique key errors :-(
+        // avatarUrl = filed not yet created
+        about = externalUser.aboutUser,
+        isModerator = externalUser.isModerator,
+        isAdmin = externalUser.isAdmin,
+      )
+      updateIdentity(...)
+      updateMemberInclDetails(memberInclDetailsUpdated)
+      */
+    }
+
+    Some(MemberLoginGrant(Some(identityInDb), memberInDb, isNewIdentity = false, isNewMember = false))
   }
 
 }

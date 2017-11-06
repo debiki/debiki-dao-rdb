@@ -247,6 +247,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
         insertOpenIdIdentity(siteId, x)
       case x: OpenAuthIdentity =>
         insertOpenAuthIdentity(siteId, x)
+      case x: SingleSignOnIdentity =>
+        insertSingleSignOnIdentity(siteId, x)
       case x =>
         die("DwE8UYM0", s"Unknown identity type: ${classNameOf(x)}")
     }
@@ -301,7 +303,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             ?, ?, ?, ?, ?,
             ?, ?, ?)"""
     val ds = identity.openAuthDetails
-    val method = "OAuth" // should probably remove this column
+    val method = "OAuth"
     val values = List[AnyRef](
       identity.id.toInt.asAnyRef, otherSiteId.asAnyRef, identity.userId.asAnyRef,
       identity.userId.asAnyRef,
@@ -329,6 +331,31 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  private def insertSingleSignOnIdentity(otherSiteId: SiteId, identity: SingleSignOnIdentity) {
+    UNTESTED
+    // sso_ext_id, sso_is_email_verified, sso_is_admin, sso_is_moderator, sso_skip_welcome
+    val sql = """
+      insert into identities3(
+          id, site_id, user_id, user_id_orig,
+          ext_id, ext_is_admin, ext_is_moderator,
+          username, full_name, email,
+          avatar_url, about_user,
+          auth_method)
+      values (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+    val xu = identity.externalUser
+    val userId = identity.userId.asAnyRef
+    val authMethod = "SSO"
+    val values = List[AnyRef](
+      identity.id.toInt.asAnyRef, otherSiteId.asAnyRef, userId, userId,
+      xu.externalId, xu.isAdmin.asAnyRef, xu.isModerator.asAnyRef,
+      xu.username, xu.name.orNullVarchar, xu.email,
+      xu.avatarUrl.orNullVarchar, xu.aboutUser.orNullVarchar,
+      authMethod)
+    runUpdateExactlyOneRow(sql, values)
+  }
+
+
   def loadIdtyDetailsAndUser(userId: UserId): Option[(Identity, User)] = {
     db.withConnection(implicit connection => {
       _loadIdtyDetailsAndUser(forUserId = Some(userId)) match {
@@ -346,18 +373,24 @@ trait UserSiteDaoMixin extends SiteTransaction {
   // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
   private[rdb] def _loadIdtyDetailsAndUser(
         forUserId: Option[UserId] = None,
+        forExternalId: Option[ExternalId] = None,
         forOpenIdDetails: OpenIdDetails = null,
-        forOpenAuthProfile: OpenAuthProviderIdKey = null)(implicit connection: js.Connection)
+        forOpenAuthProfile: OpenAuthProviderIdKey = null)
         : (Option[Identity], Option[Member]) = {
     val anyOpenIdDetails = Option(forOpenIdDetails)
     val anyOpenAuthKey = Option(forOpenAuthProfile)
-
+    val anyExternalId = forExternalId
     val anyUserId = forUserId
 
     var sqlSelectFrom = """
         select
             """+ UserSelectListItemsNoGuests +""",
             i.ID i_id,
+            i.ext_id,
+            i.ext_is_admin,
+            i.ext_is_moderator,
+            i.username i_username,
+            i.about_user i_about_user,
             i.OID_CLAIMED_ID,
             i.OID_OP_LOCAL_ID,
             i.OID_REALM,
@@ -377,13 +410,17 @@ trait UserSiteDaoMixin extends SiteTransaction {
             and i.USER_ID = u.USER_ID
         """
 
-    val (whereClause, bindVals) = (anyUserId, anyOpenIdDetails, anyOpenAuthKey) match {
+    val (whereClause, bindVals) = (anyUserId, anyExternalId, anyOpenIdDetails, anyOpenAuthKey) match {
 
-      case (Some(userId: UserId), None, None) =>
+      case (Some(userId: UserId), None, None, None) =>
         ("""where i.SITE_ID = ? and i.USER_ID = ?""",
            List(siteId.asAnyRef, userId.asAnyRef))
 
-      case (None, Some(openIdDetails: OpenIdDetails), None) =>
+      case (None, Some(externlId: ExternalId), None, None) =>
+        ("""where i.site_id = ? and i.ext_id = ?""",
+          List(siteId.asAnyRef, externlId.asAnyRef))
+
+      case (None, None, Some(openIdDetails: OpenIdDetails), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
         // address instead. (With Google OpenID, the email address can be
         // trusted — this is not the case, however, in general.
@@ -404,7 +441,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             and """+ claimedIdOrEmailCheck +"""
           """, List(siteId.asAnyRef, idOrEmail))
 
-      case (None, None, Some(openAuthKey: OpenAuthProviderIdKey)) =>
+      case (None, None, None, Some(openAuthKey: OpenAuthProviderIdKey)) =>
         val whereClause =
           """where i.SITE_ID = ?
                and i.SECURESOCIAL_PROVIDER_ID = ?
@@ -415,7 +452,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       case _ => assErr("DwE98239k2a2", "None, or more than one, lookup method specified")
     }
 
-    db.query(sqlSelectFrom + whereClause, bindVals, rs => {
+    runQuery(sqlSelectFrom + whereClause, bindVals, rs => {
       if (!rs.next)
         return None -> None
 
@@ -426,11 +463,26 @@ trait UserSiteDaoMixin extends SiteTransaction {
       val userInDb: Member = _User(rs).toMemberOrThrow
       val id = rs.getInt("i_id").toString
       val email = Option(rs.getString("i_email"))
+      val externalId = Option(rs.getString("ext_id"))
       val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
       val anyOpenAuthProviderId = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
 
       val identityInDb = {
-        if (anyClaimedOpenId.nonEmpty) {
+        if (externalId.nonEmpty) {
+          SingleSignOnIdentity(
+            id = id,
+            userId = userInDb.id,
+            ExternalSsoUser(
+              externalId = externalId getOrDie "EdE1QFDKS0",
+              username = rs.getString("i_username"),
+              name = Option(rs.getString("i_full_name")),
+              email = email getOrDie "EdE4JKBR2Z",
+              avatarUrl = Option(rs.getString("i_avatar_url")),
+              aboutUser = Option(rs.getString("i_about_user")),
+              isAdmin = rs.getBoolean("ext_is_admin"),
+              isModerator = rs.getBoolean("ext_is_moderator")))
+        }
+        else if (anyClaimedOpenId.nonEmpty) {
           IdentityOpenId(
             id = id,
             userId = userInDb.id,
