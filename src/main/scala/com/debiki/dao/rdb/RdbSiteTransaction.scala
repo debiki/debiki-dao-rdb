@@ -500,6 +500,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       newMeta.answeredAt.orNullTimestamp,
       newMeta.answerPostUniqueId.orNullInt,
       newMeta.plannedAt.orNullTimestamp,
+      newMeta.startedAt.orNullTimestamp,
       newMeta.doneAt.orNullTimestamp,
       newMeta.closedAt.orNullTimestamp,
       newMeta.lockedAt.orNullTimestamp,
@@ -545,6 +546,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         answered_at = ?,
         ANSWER_POST_ID = ?,
         PLANNED_AT = ?,
+        started_at = ?,
         DONE_AT = ?,
         CLOSED_AT = ?,
         LOCKED_AT = ?,
@@ -1036,6 +1038,8 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     require(pageMeta.numOrigPostRepliesVisible == 0, "DwE5PWZ1")
     require(pageMeta.answeredAt.isEmpty, "DwE2KFY9")
     require(pageMeta.answerPostUniqueId.isEmpty, "DwE5FKEW0")
+    // plannedAt is defined for to-do pages: they're an Idea, in planned status.
+    require(pageMeta.startedAt.isEmpty, "EdE5RAQW0")
     require(pageMeta.doneAt.isEmpty, "DwE4KPW2")
     require(pageMeta.closedAt.isEmpty, "DwE8UKW2")
     require(pageMeta.lockedAt.isEmpty, "DwE3KWY2")
