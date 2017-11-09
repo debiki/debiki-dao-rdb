@@ -492,6 +492,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       newMeta.numUnwanteds.asAnyRef,
       newMeta.numRepliesVisible.asAnyRef,
       newMeta.numRepliesTotal.asAnyRef,
+      newMeta.numPostsTotal.asAnyRef,
       newMeta.numOrigPostLikeVotes.asAnyRef,
       newMeta.numOrigPostWrongVotes.asAnyRef,
       newMeta.numOrigPostBuryVotes.asAnyRef,
@@ -538,6 +539,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         NUM_UNWANTED_VOTES = ?,
         NUM_REPLIES_VISIBLE = ?,
         NUM_REPLIES_TOTAL = ?,
+        num_posts_total = ?,
         NUM_OP_LIKE_VOTES = ?,
         NUM_OP_WRONG_VOTES = ?,
         NUM_OP_BURY_VOTES = ?,
@@ -1049,11 +1051,11 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       insert into pages3 (
          SITE_ID, PAGE_ID, version, PAGE_ROLE, category_id, EMBEDDING_PAGE_URL,
          CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, hidden_at, AUTHOR_ID,
-         PLANNED_AT, PIN_ORDER, PIN_WHERE)
+         PLANNED_AT, num_posts_total, PIN_ORDER, PIN_WHERE)
       values (
          ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?,
-         ?, ?, ?)"""
+         ?, ?, ?, ?)"""
 
     val values = List[AnyRef](
       siteId.asAnyRef, pageMeta.pageId, pageMeta.version.asAnyRef,
@@ -1067,6 +1069,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       pageMeta.hiddenAt.orNullTimestamp,
       pageMeta.authorId.asAnyRef,
       pageMeta.plannedAt.orNullTimestamp,
+      pageMeta.numPostsTotal.asAnyRef,
       pageMeta.pinOrder.orNullInt,
       pageMeta.pinWhere.map(_.toInt).orNullInt)
 
