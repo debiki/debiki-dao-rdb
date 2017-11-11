@@ -26,6 +26,7 @@ import scala.collection.mutable.ArrayBuffer
 import DbDao._
 import Rdb._
 import RdbUtil._
+import java.sql.ResultSet
 
 
 /** A relational database Data Access Object, for a specific website.
@@ -848,38 +849,64 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
     }
   }
 
+  val EmailSelectListItems: String = o"""
+      id, TYPE, SENT_TO, TO_USER_ID, SENT_ON, CREATED_AT, SUBJECT,
+        BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
+      """
 
   def loadEmailById(emailId: String): Option[Email] = {
-    val query = """
-      select TYPE, SENT_TO, TO_USER_ID, SENT_ON, CREATED_AT, SUBJECT,
-        BODY_HTML, PROVIDER_EMAIL_ID, FAILURE_TEXT
+    val query = s"""
+      select $EmailSelectListItems
       from emails_out3
       where SITE_ID = ? and ID = ?
       """
-    val emailOpt = db.queryAtnms(query, List(siteId.asAnyRef, emailId), rs => {
-      var allEmails = List[Email]()
-      while (rs.next) {
-        val toUserId = getOptionalIntNoneNot0(rs, "TO_USER_ID")
-        val typeInt = rs.getInt("TYPE")
-        val email = Email(
-           id = emailId,
-           tyype = EmailType.fromInt(typeInt) getOrElse throwBadDatabaseData(
-               "EdE840FSIE", s"Bad email type: $typeInt, email id: $siteId:$emailId"),
-           sentTo = rs.getString("SENT_TO"),
-           toUserId = toUserId,
-           sentOn = getOptionalDate(rs, "SENT_ON"),
-           createdAt = getDate(rs, "CREATED_AT"),
-           subject = rs.getString("SUBJECT"),
-           bodyHtmlText = rs.getString("BODY_HTML"),
-           providerEmailId = Option(rs.getString("PROVIDER_EMAIL_ID")),
-           failureText = Option(rs.getString("FAILURE_TEXT")))
-        allEmails = email::allEmails
-      }
-      assert(allEmails.length <= 1) // loaded by PK
-      allEmails.headOption
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, emailId), rs => {
+      getEmail(rs)
     })
+  }
 
-    emailOpt
+
+  def loadEmailsSentTo(userIds: Set[UserId], after: When, emailType: EmailType)
+        : Map[UserId, Seq[Email]] = {
+    if (userIds.isEmpty)
+      return Map.empty
+
+    val query = s"""
+      select $EmailSelectListItems
+      from emails_out3
+      where site_id = ?
+        and sent_on > ?
+        and type = ?
+        and to_user_id in (${makeInListFor(userIds)})
+      """
+    val values =
+      siteId.asAnyRef :: after.toJavaDate :: emailType.toInt.asAnyRef ::
+        userIds.map(_.asAnyRef).toList
+
+    runQueryBuildMultiMap(query, values, rs => {
+      val email = getEmail(rs)
+      val toUserId = email.toUserId.getOrDie("EdE4JKR27")
+      toUserId -> email
+    })
+  }
+
+
+  private def getEmail(rs: ResultSet): Email = {
+    val emailId = rs.getString("id")
+    val emailTypeInt = rs.getInt("type")
+    val emailType = EmailType.fromInt(emailTypeInt) getOrElse throwBadDatabaseData(
+      "EdE840FSIE", s"Bad email type: $emailTypeInt, email id: $siteId:$emailId")
+    Email(
+      id = emailId,
+      tyype = emailType,
+      sentTo = rs.getString("sent_to"),
+      toUserId = getOptInt(rs, "to_user_id"),
+      sentOn = getOptionalDate(rs, "sent_on"),
+      createdAt = getDate(rs, "created_at"),
+      subject = rs.getString("subject"),
+      bodyHtmlText = rs.getString("body_html"),
+      providerEmailId = Option(rs.getString("provider_email_id")),
+      failureText = Option(rs.getString("failure_text")))
   }
 
 
