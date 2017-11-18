@@ -182,10 +182,11 @@ object Rdb {
   def getOptInt(rs: js.ResultSet, column: String): Option[Int] =
     getResultSetIntOption(rs, column: String)
 
+  @deprecated("Use 'getOptInt' instead", "now")
   def getOptionalInt(rs: js.ResultSet, column: String): Option[Int] =
     getResultSetIntOption(rs, column: String)
 
-  @deprecated("Use 'getIntOption' instead", "now")
+  @deprecated("Use 'getOptInt' instead", "now")
   def getResultSetIntOption(rs: js.ResultSet, column: String): Option[Int] = {
     // rs.getInt() returns 0 instead of null.
     var value = rs.getInt(column)

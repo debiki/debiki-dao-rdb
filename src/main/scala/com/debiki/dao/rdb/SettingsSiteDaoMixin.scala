@@ -71,6 +71,10 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         double_type_email_address,
         double_type_password,
         beg_for_email_address,
+        sso_enabled,
+        sso_secret,
+        sso_login_url,
+        sso_logout_url,
         forum_main_view,
         forum_topics_sort_buttons,
         forum_category_links,
@@ -98,10 +102,11 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         content_license,
         google_analytics_id,
         experimental,
+        embedded_only_hide_site,
         allow_embedding_from,
         html_tag_css_classes)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId.asAnyRef,
@@ -119,6 +124,10 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.doubleTypeEmailAddress.getOrElse(None).orNullBoolean,
       editedSettings2.doubleTypePassword.getOrElse(None).orNullBoolean,
       editedSettings2.begForEmailAddress.getOrElse(None).orNullBoolean,
+      editedSettings2.singleSignOnEnabled.getOrElse(None).orNullBoolean,
+      editedSettings2.singleSignOnSecret.getOrElse(None).orNullVarchar,
+      editedSettings2.singleSignOnLoginUrl.getOrElse(None).orNullVarchar,
+      editedSettings2.singleSignOnLogoutUrl.getOrElse(None).orNullVarchar,
       editedSettings2.forumMainView.getOrElse(None).orNullVarchar,
       editedSettings2.forumTopicsSortButtons.getOrElse(None).orNullVarchar,
       editedSettings2.forumCategoryLinks.getOrElse(None).orNullVarchar,
@@ -146,6 +155,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.contentLicense.getOrElse(None).map(_.toInt).orNullInt,
       editedSettings2.googleUniversalAnalyticsTrackingId.getOrElse(None).orNullVarchar,
       editedSettings2.showExperimental.getOrElse(None).orNullBoolean,
+      editedSettings2.embeddedOnlyHideSite.getOrElse(None).orNullBoolean,
       editedSettings2.allowEmbeddingFrom.getOrElse(None).orNullVarchar,
       editedSettings2.htmlTagCssClasses.getOrElse(None).orNullVarchar)
 
@@ -181,6 +191,10 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("double_type_email_address", s.doubleTypeEmailAddress.map(_.orNullBoolean))
     maybeSet("double_type_password", s.doubleTypePassword.map(_.orNullBoolean))
     maybeSet("beg_for_email_address", s.begForEmailAddress.map(_.orNullBoolean))
+    maybeSet("sso_enabled", s.singleSignOnEnabled.map(_.orNullBoolean))
+    maybeSet("sso_secret", s.singleSignOnSecret.map(_.orNullVarchar))
+    maybeSet("sso_login_url", s.singleSignOnLoginUrl.map(_.orNullVarchar))
+    maybeSet("sso_logout_url", s.singleSignOnLogoutUrl.map(_.orNullVarchar))
     maybeSet("forum_main_view", s.forumMainView.map(_.orNullVarchar))
     maybeSet("forum_topics_sort_buttons", s.forumTopicsSortButtons.map(_.orNullVarchar))
     maybeSet("forum_category_links", s.forumCategoryLinks.map(_.orNullVarchar))
@@ -208,6 +222,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("content_license", s.contentLicense.map(_.map(_.toInt).orNullInt))
     maybeSet("google_analytics_id", s.googleUniversalAnalyticsTrackingId.map(_.orNullVarchar))
     maybeSet("experimental", s.showExperimental.map(_.orNullBoolean))
+    maybeSet("embedded_only_hide_site", s.embeddedOnlyHideSite.map(_.orNullBoolean))
     maybeSet("allow_embedding_from", s.allowEmbeddingFrom.map(_.orNullVarchar))
     maybeSet("html_tag_css_classes", s.htmlTagCssClasses.map(_.orNullVarchar))
     maybeSet("num_flags_to_hide_post", s.numFlagsToHidePost.map(_.orNullInt))
@@ -230,36 +245,40 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
 
   private def readSettingsFromResultSet(rs: ResultSet): EditedSettings = {
     EditedSettings(
-      userMustBeAuthenticated = getOptionalBoolean(rs, "user_must_be_auth"),
-      userMustBeApproved = getOptionalBoolean(rs, "user_must_be_approved"),
-      inviteOnly = getOptBoolean(rs, "invite_only"),
-      allowSignup = getOptBoolean(rs, "allow_signup"),
-      allowLocalSignup = getOptBoolean(rs, "allow_local_signup"),
-      allowGuestLogin = getOptBoolean(rs, "allow_guest_login"),  //
-      requireVerifiedEmail = getOptBoolean(rs, "require_verified_email"),
-      mayComposeBeforeSignup = getOptBoolean(rs, "may_compose_before_signup"),
-      mayPostBeforeEmailVerified = getOptBoolean(rs, "may_login_before_email_verified"),
-      doubleTypeEmailAddress = getOptBoolean(rs, "double_type_email_address"),
-      doubleTypePassword = getOptBoolean(rs, "double_type_password"),
-      begForEmailAddress = getOptBoolean(rs, "beg_for_email_address"),
+      userMustBeAuthenticated = getOptBool(rs, "user_must_be_auth"),
+      userMustBeApproved = getOptBool(rs, "user_must_be_approved"),
+      inviteOnly = getOptBool(rs, "invite_only"),
+      allowSignup = getOptBool(rs, "allow_signup"),
+      allowLocalSignup = getOptBool(rs, "allow_local_signup"),
+      allowGuestLogin = getOptBool(rs, "allow_guest_login"),  //
+      requireVerifiedEmail = getOptBool(rs, "require_verified_email"),
+      mayComposeBeforeSignup = getOptBool(rs, "may_compose_before_signup"),
+      mayPostBeforeEmailVerified = getOptBool(rs, "may_login_before_email_verified"),
+      doubleTypeEmailAddress = getOptBool(rs, "double_type_email_address"),
+      doubleTypePassword = getOptBool(rs, "double_type_password"),
+      begForEmailAddress = getOptBool(rs, "beg_for_email_address"),
+      singleSignOnEnabled = getOptBool(rs, "sso_enabled"),
+      singleSignOnSecret = getOptString(rs, "sso_secret"),
+      singleSignOnLoginUrl = getOptString(rs, "sso_login_url"),
+      singleSignOnLogoutUrl = getOptString(rs, "sso_logout_url"),
       forumMainView = getOptString(rs, "forum_main_view"),
       forumTopicsSortButtons = getOptString(rs, "forum_topics_sort_buttons"),
       forumCategoryLinks = getOptString(rs, "forum_category_links"),
       forumTopicsLayout = getOptInt(rs, "forum_topics_layout").flatMap(TopicListLayout.fromInt),
       forumCategoriesLayout = getOptInt(rs, "forum_categories_layout").flatMap(CategoriesLayout.fromInt),
-      showCategories = getOptBoolean(rs, "show_categories"),
-      showTopicFilterButton = getOptBoolean(rs, "show_topic_filter"),
-      showTopicTypes = getOptBoolean(rs, "show_topic_types"),
-      selectTopicType = getOptBoolean(rs, "select_topic_type"),
-      numFirstPostsToReview = getOptionalInt(rs, "num_first_posts_to_review"),
-      numFirstPostsToApprove = getOptionalInt(rs, "num_first_posts_to_approve"),
-      numFirstPostsToAllow = getOptionalInt(rs, "num_first_posts_to_allow"),
+      showCategories = getOptBool(rs, "show_categories"),
+      showTopicFilterButton = getOptBool(rs, "show_topic_filter"),
+      showTopicTypes = getOptBool(rs, "show_topic_types"),
+      selectTopicType = getOptBool(rs, "select_topic_type"),
+      numFirstPostsToReview = getOptInt(rs, "num_first_posts_to_review"),
+      numFirstPostsToApprove = getOptInt(rs, "num_first_posts_to_approve"),
+      numFirstPostsToAllow = getOptInt(rs, "num_first_posts_to_allow"),
       headStylesHtml = Option(rs.getString("head_styles_html")),
       headScriptsHtml = Option(rs.getString("head_scripts_html")),
       endOfBodyHtml = Option(rs.getString("end_of_body_html")),
       headerHtml = Option(rs.getString("header_html")),
       footerHtml = Option(rs.getString("footer_html")),
-      horizontalComments = getOptionalBoolean(rs, "horizontal_comments"),
+      horizontalComments = getOptBool(rs, "horizontal_comments"),
       socialLinksHtml = Option(rs.getString("social_links_html")),
       logoUrlOrHtml = Option(rs.getString("logo_url_or_html")),
       orgDomain = Option(rs.getString("org_domain")),
@@ -268,14 +287,15 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       contribAgreement = ContribAgreement.fromInt(rs.getInt("contrib_agreement")), // 0 -> None, ok
       contentLicense = ContentLicense.fromInt(rs.getInt("content_license")), // 0 -> None, ok
       googleUniversalAnalyticsTrackingId = Option(rs.getString("google_analytics_id")),
-      showExperimental = getOptionalBoolean(rs, "experimental"),
+      showExperimental = getOptBool(rs, "experimental"),
+      embeddedOnlyHideSite = getOptBool(rs, "embedded_only_hide_site"),
       allowEmbeddingFrom = Option(rs.getString("allow_embedding_from")),
       htmlTagCssClasses = Option(rs.getString("html_tag_css_classes")),
       numFlagsToHidePost = getOptInt(rs, "num_flags_to_hide_post"),
       cooldownMinutesAfterFlaggedHidden = getOptInt(rs, "cooldown_minutes_after_flagged_hidden"),
       numFlagsToBlockNewUser = getOptInt(rs, "num_flags_to_block_new_user"),
       numFlaggersToBlockNewUser = getOptInt(rs, "num_flaggers_to_block_new_user"),
-      notifyModsIfUserBlocked = getOptionalBoolean(rs, "notify_mods_if_user_blocked"),
+      notifyModsIfUserBlocked = getOptBool(rs, "notify_mods_if_user_blocked"),
       regularMemberFlagWeight = getOptFloat(rs, "regular_member_flag_weight"),
       coreMemberFlagWeight = getOptFloat(rs, "core_member_flag_weight"))
   }
