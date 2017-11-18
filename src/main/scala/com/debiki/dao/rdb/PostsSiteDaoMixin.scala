@@ -724,7 +724,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadFlagsFor(pagePostNrs: immutable.Seq[PagePostNr]): immutable.Seq[PostFlag] = {
+  def loadFlagsFor(pagePostNrs: Iterable[PagePostNr]): immutable.Seq[PostFlag] = {
     if (pagePostNrs.isEmpty)
       return Nil
 
@@ -745,9 +745,8 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       queryBuilder.append("(page_id = ? and post_nr = ?)")
       values.append(pagePostNr.pageId, pagePostNr.postNr.asAnyRef)
     }
-    queryBuilder.append(")")
-    var results = Vector[PostFlag]()
-    runQueryFindMany(queryBuilder.toString, values.toList, rs => {
+    val query = queryBuilder.append(")").toString
+    runQueryFindMany(query, values.toList, rs => {
       val postAction = PostFlag(
         uniqueId = rs.getInt("unique_post_id"),
         pageId = rs.getString("page_id"),
@@ -758,7 +757,6 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       dieIf(!postAction.actionType.isInstanceOf[PostFlagType], "DwE2dpg4")
       postAction
     })
-    results
   }
 
 
