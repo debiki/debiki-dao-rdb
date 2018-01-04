@@ -111,7 +111,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
   private def loginWithPassword(loginAttempt: PasswordLoginAttempt, requireVerifiedEmail: Boolean)
         : MemberLoginGrant = {
-    val anyUser = loadMemberByEmailOrUsername(loginAttempt.emailOrUsername)
+    val anyUser = loadMemberByPrimaryEmailOrUsername(loginAttempt.emailOrUsername)
     val user = anyUser getOrElse {
       throw NoMemberWithThatEmailException
     }

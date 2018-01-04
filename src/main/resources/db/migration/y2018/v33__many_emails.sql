@@ -34,7 +34,7 @@ create table user_emails3 (
   constraint useremails_r_users foreign key (site_id, user_id) references users3(site_id, user_id) deferrable,
   -- Cannot add this constraint right now, because OpenAuth emails are verified maybe 100 ms
   -- before user created. Could fix that, update timestamps in db, then add constraint? Later...
-  -- constraint useremails_c_addedat_le_verifiedat check (added_at <= verified_at),
+  -- constraint useremails_c_addedat_le_verifiedat check (added_at <= verified_at), [5GKRWZI]
   constraint useremails_c_email_ok check (email_seems_ok(email_address))
 );
 

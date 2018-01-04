@@ -471,12 +471,12 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadMemberByEmailOrUsername(emailOrUsername: String): Option[Member] = {
-    loadMemberByEmailOrUsernameImpl(emailOrUsername)(theOneAndOnlyConnection)
+  def loadMemberByPrimaryEmailOrUsername(emailOrUsername: String): Option[Member] = {
+    loadMemberByPrimaryEmailOrUsernameImpl(emailOrUsername)(theOneAndOnlyConnection)
   }
 
 
-  def loadMemberByEmailOrUsernameImpl(emailOrUsername: String)
+  def loadMemberByPrimaryEmailOrUsernameImpl(emailOrUsername: String)
         (implicit connection: js.Connection): Option[Member] = {
     val sql = s"""
       select $UserSelectListItemsNoGuests
