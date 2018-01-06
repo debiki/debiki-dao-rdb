@@ -58,11 +58,11 @@ trait LoginSiteDaoMixin extends SiteTransaction {
           select u.USER_ID, g.EMAIL_NOTFS from users3 u
             left join guest_prefs3 g
                    on u.site_id = g.site_id
-                  and u.EMAIL = g.EMAIL
+                  and u.guest_email_addr = g.EMAIL
                   and g.VERSION = 'C'
           where u.SITE_ID = ?
             and u.full_name = ?
-            and u.EMAIL = ?
+            and u.guest_email_addr = ?
             and u.GUEST_COOKIE = ?
           """,
           List(siteId.asAnyRef, e2d(loginAttempt.name), e2d(loginAttempt.email), loginAttempt.guestCookie),
@@ -83,7 +83,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
           isNewGuest = true
           runUpdate(i"""
             insert into users3(
-              site_id, user_id, created_at, full_name, email, guest_cookie)
+              site_id, user_id, created_at, full_name, guest_email_addr, guest_cookie)
             select
               ?, least(min(user_id) - 1, $MaxCustomGuestId), now_utc(), ?, ?, ?
             from
@@ -111,11 +111,14 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
   private def loginWithPassword(loginAttempt: PasswordLoginAttempt, requireVerifiedEmail: Boolean)
         : MemberLoginGrant = {
-    val anyUser = loadMemberByEmailOrUsername(loginAttempt.email)
+    val anyUser = loadMemberByPrimaryEmailOrUsername(loginAttempt.emailOrUsername)
     val user = anyUser getOrElse {
       throw NoMemberWithThatEmailException
     }
-    if (user.emailVerifiedAt.isEmpty && requireVerifiedEmail) {
+    // Don't let anyone login by specifying an email address that hasn't been verified — we
+    // wouldn't know if two different people typed the same email address, maybe to hack
+    // the other person's account, or a typo. [2PSK5W0R]
+    if (user.emailVerifiedAt.isEmpty && (requireVerifiedEmail || loginAttempt.isByEmail)) {
       throw DbDao.EmailNotVerifiedException
     }
     val correctHash = user.passwordHash getOrElse {

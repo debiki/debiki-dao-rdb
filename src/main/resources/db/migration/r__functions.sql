@@ -80,7 +80,8 @@ CREATE or replace FUNCTION now_utc() RETURNS timestamp without time zone
     LANGUAGE plpgsql
     AS $$
 begin
-  return now() at time zone 'utc';
+  -- Truncate to millis, so can be represented as a Java date.
+  return date_trunc('milliseconds', now() at time zone 'utc');
 end;
 $$;
 
