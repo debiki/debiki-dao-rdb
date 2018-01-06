@@ -50,7 +50,7 @@ alter table users3 add column guest_email_addr varchar;
 -- Move guests' email addresses to new column.
 alter table users3 drop constraint users_guest__c_nn;
 update users3 set guest_email_addr = email, email = null where user_id < 0;
-alter table users3 add constraint users_guest_c_nn check (
+alter table users3 add constraint users_c_guest_nn check (
   user_id > 0 or (
         email is null
     and created_at is not null
@@ -61,9 +61,10 @@ alter table users3 add constraint users_guest_c_nn check (
 
 alter table users3 rename column email to primary_email_addr;
 
--- Require ok emails everywhere.
+-- Require lowercase and ok emails everywhere.
+update users3 set primary_email_addr = lower(primary_email_addr);
 update users3 set primary_email_addr = null where not email_seems_ok(primary_email_addr);
-alter table users3 add constraint users_email_c_ok check (email_seems_ok(primary_email_addr));
+alter table users3 add constraint users_c_email_ok check (email_seems_ok(primary_email_addr));
 
 -- Insert members' emails in email table.
 insert into user_emails3 (site_id, user_id, email_address, added_at, verified_at)
