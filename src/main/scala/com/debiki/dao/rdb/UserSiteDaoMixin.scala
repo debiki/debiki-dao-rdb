@@ -209,7 +209,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             trust_level, locked_trust_level, threat_level, locked_threat_level)
         values (
             ?, ?, ?, ?, ?,
-            ?, ?, ?, false, ?,
+            ?, ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?)
@@ -217,6 +217,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         List[AnyRef](siteId.asAnyRef, user.id.asAnyRef, user.fullName.orNullVarchar,
           user.username, user.createdAt, user.primaryEmailAddress.trimNullVarcharIfBlank,
           _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
+          user.emailForEveryNewPost.asTrueOrNull,
           user.passwordHash.orNullVarchar,
           user.isApproved.orNullBoolean, user.approvedAt.orNullTimestamp,
           user.approvedById.orNullInt,
