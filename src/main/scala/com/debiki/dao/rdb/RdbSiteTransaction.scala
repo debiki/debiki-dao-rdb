@@ -1079,11 +1079,11 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       insert into pages3 (
          SITE_ID, PAGE_ID, version, PAGE_ROLE, category_id, EMBEDDING_PAGE_URL,
          CREATED_AT, UPDATED_AT, PUBLISHED_AT, BUMPED_AT, hidden_at, AUTHOR_ID,
-         PLANNED_AT, num_posts_total, PIN_ORDER, PIN_WHERE)
+         PLANNED_AT, num_posts_total, layout, PIN_ORDER, PIN_WHERE)
       values (
          ?, ?, ?, ?, ?, ?,
          ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?)"""
+         ?, ?, ?, ?, ?)"""
 
     val values = List[AnyRef](
       siteId.asAnyRef, pageMeta.pageId, pageMeta.version.asAnyRef,
@@ -1098,6 +1098,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       pageMeta.authorId.asAnyRef,
       pageMeta.plannedAt.orNullTimestamp,
       pageMeta.numPostsTotal.asAnyRef,
+      pageMeta.layout.toInt.asAnyRef,
       pageMeta.pinOrder.orNullInt,
       pageMeta.pinWhere.map(_.toInt).orNullInt)
 
