@@ -523,7 +523,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       select $UserSelectListItemsNoGuests
       from users3 u
       where $withPrefixAnd u.site_id = ?
-        and u.user_id >= ${User.LowestTalkToMemberId}
+        and u.user_id >= $LowestTalkToMemberId
         and u.trust_level is not null
       """
     var values = List(siteId.asAnyRef)

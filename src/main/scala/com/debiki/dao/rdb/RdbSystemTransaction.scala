@@ -315,7 +315,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
     // or have no email address.
     val query = s"""
       select * from user_stats3
-      where user_id >= $LowestHumanMemberId
+      where user_id >= $LowestTalkToMemberId
         and (
           next_summary_maybe_at is null or
           next_summary_maybe_at <= ?)
