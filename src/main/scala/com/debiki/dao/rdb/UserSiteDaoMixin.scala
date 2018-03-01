@@ -395,7 +395,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         //   like Google or Yahoo), then it’s guaranteed to be a globally
         //   unique string.")
         val (claimedIdOrEmailCheck, idOrEmail) = {
-          // SECURITY why can I trust the OpenID provider to specify
+          // SECURITY why can I trust the OpenID provider to specify  <——
           // the correct endpoint? What if Mallory's provider replies
           // with Googles endpoint? I guess the Relying Party impl doesn't
           // allow this but anyway, I'd like to know for sure.
