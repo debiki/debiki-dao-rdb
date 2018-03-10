@@ -96,13 +96,14 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         org_short_name,
         contrib_agreement,
         content_license,
+        language_code,
         google_analytics_id,
         show_sub_communities,
         experimental,
         allow_embedding_from,
         html_tag_css_classes)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId.asAnyRef,
@@ -145,6 +146,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.orgShortName.getOrElse(None).orNullVarchar,
       editedSettings2.contribAgreement.getOrElse(None).map(_.toInt).orNullInt,
       editedSettings2.contentLicense.getOrElse(None).map(_.toInt).orNullInt,
+      editedSettings2.languageCode.getOrElse(None).orNullVarchar,
       editedSettings2.googleUniversalAnalyticsTrackingId.getOrElse(None).orNullVarchar,
       editedSettings2.showSubCommunities.getOrElse(None).orNullBoolean,
       editedSettings2.showExperimental.getOrElse(None).orNullBoolean,
@@ -208,6 +210,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("org_short_name", s.orgShortName.map(_.orNullVarchar))
     maybeSet("contrib_agreement", s.contribAgreement.map(_.map(_.toInt).orNullInt))
     maybeSet("content_license", s.contentLicense.map(_.map(_.toInt).orNullInt))
+    maybeSet("language_code", s.languageCode.map(_.orNullVarchar))
     maybeSet("google_analytics_id", s.googleUniversalAnalyticsTrackingId.map(_.orNullVarchar))
     maybeSet("show_sub_communities", s.showSubCommunities.map(_.orNullBoolean))
     maybeSet("experimental", s.showExperimental.map(_.orNullBoolean))
@@ -270,6 +273,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       orgShortName = Option(rs.getString("org_short_name")),
       contribAgreement = ContribAgreement.fromInt(rs.getInt("contrib_agreement")), // 0 -> None, ok
       contentLicense = ContentLicense.fromInt(rs.getInt("content_license")), // 0 -> None, ok
+      languageCode = Option(rs.getString("language_code")),
       googleUniversalAnalyticsTrackingId = Option(rs.getString("google_analytics_id")),
       showSubCommunities = getOptBoolean(rs, "show_sub_communities"),
       showExperimental = getOptBoolean(rs, "experimental"),
