@@ -121,7 +121,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
       """
     val rowFound = runUpdateSingleRow(updateStatement, List(
       version.siteVersion.asAnyRef, version.pageVersion.asAnyRef,
-      version.appVersion, version.dataHash, html, siteId.asAnyRef, pageId,
+      version.appVersion, version.reactStoreJsonHash, html, siteId.asAnyRef, pageId,
       version.siteVersion.asAnyRef, version.pageVersion.asAnyRef))
 
     if (!rowFound) {
@@ -136,7 +136,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
         runUpdateSingleRow(insertStatement, List(
           siteId.asAnyRef, pageId,
           version.siteVersion.asAnyRef, version.pageVersion.asAnyRef, version.appVersion,
-          version.dataHash, html))
+          version.reactStoreJsonHash, html))
       }
       catch {
         case exception: js.SQLException if isUniqueConstrViolation(exception) =>

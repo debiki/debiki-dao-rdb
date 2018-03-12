@@ -637,7 +637,7 @@ object RdbUtil {
     siteVersion = rs.getInt("site_version"),
     pageVersion = rs.getInt("page_version"),
     appVersion = rs.getString("app_version"),
-    dataHash = rs.getString("data_hash"))
+    reactStoreJsonHash = rs.getString("data_hash"))
 
 
   // COULD do this:
