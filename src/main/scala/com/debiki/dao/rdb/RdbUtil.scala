@@ -163,9 +163,12 @@ object RdbUtil {
       |u.avatar_tiny_hash_path,
       |u.avatar_small_base_url,
       |u.avatar_small_hash_path,
-      |u.IS_OWNER u_is_owner,
-      |u.IS_ADMIN u_is_admin,
-      |u.IS_MODERATOR u_is_moderator""".stripMargin
+      |u.is_owner u_is_owner,
+      |u.is_admin u_is_admin,
+      |u.is_moderator u_is_moderator,
+      |u.deactivated_at is not null u_is_deactivated,
+      |u.deleted_at is not null u_is_deleted
+      |""".stripMargin
 
 
   val UserSelectListItemsWithGuests: String =
@@ -233,7 +236,9 @@ object RdbUtil {
       lockedThreatLevel = lockedThreatLevel,
       isOwner = rs.getBoolean("u_is_owner"),
       isAdmin = rs.getBoolean("u_is_admin"),
-      isModerator = rs.getBoolean("u_is_moderator"))
+      isModerator = rs.getBoolean("u_is_moderator"),
+      isDeactivated = rs.getBoolean("u_is_deactivated"),
+      isDeleted = rs.getBoolean("u_is_deleted"))
   }
 
 
@@ -262,6 +267,8 @@ object RdbUtil {
     |is_owner,
     |is_admin,
     |is_moderator,
+    |deactivated_at,
+    |deleted_at,
     |username,
     |email_verified_at,
     |created_at,
@@ -335,7 +342,9 @@ object RdbUtil {
       lockedThreatLevel = getOptionalInt(rs, "locked_threat_level").flatMap(ThreatLevel.fromInt),
       isOwner = rs.getBoolean("is_owner"),
       isAdmin = rs.getBoolean("is_admin"),
-      isModerator = rs.getBoolean("is_moderator"))
+      isModerator = rs.getBoolean("is_moderator"),
+      deactivatedAt = getOptWhen(rs, "deactivated_at"),
+      deletedAt = getOptWhen(rs, "deleted_at"))
   }
 
 

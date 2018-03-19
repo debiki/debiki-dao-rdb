@@ -913,6 +913,17 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
+  def forgetEmailSentToAddress(userId: UserId, replaceWithAddr: String) {
+    TESTS_MISSING
+    val statement = """
+      update emails_out3 set sent_to = ?
+      where to_user_id = ? and site_id = ?
+      """
+    val values = List[AnyRef](replaceWithAddr, userId.asAnyRef, siteId.asAnyRef)
+    runUpdate(statement, values)
+  }
+
+
   def loadPagePath(pageId: PageId): Option[PagePath] =
     lookupPagePathImpl(pageId)
 

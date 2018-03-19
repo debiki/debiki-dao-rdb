@@ -55,6 +55,23 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
   }
 
 
+  override def removeDeletedMemberFromAllPages(userId: UserId) {
+    TESTS_MISSING
+    val statement = s"""
+      update page_users3 set
+        kicked_by_id = $SystemUserId,
+        notf_level = null,
+        notf_reason = null
+      where
+        kicked_by_id is null and
+        site_id = ? and
+        user_id = ?
+      """
+    val values = List[AnyRef](siteId.asAnyRef, userId.asAnyRef)
+    runUpdate(statement, values)
+  }
+
+
   override def loadMessageMembers(pageId: PageId): Set[UserId] = {
     val query = """
       select user_id from page_users3

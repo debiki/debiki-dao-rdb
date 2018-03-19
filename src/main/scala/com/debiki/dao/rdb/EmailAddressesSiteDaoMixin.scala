@@ -76,6 +76,18 @@ trait EmailAddressesSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def deleteAllUsersEmailAddresses(userId: UserId) {
+    TESTS_MISSING
+    val statement = s"""
+      delete from user_emails3
+      where site_id = ?
+        and user_id = ?
+      """
+    val values = List(siteId.asAnyRef, userId.asAnyRef)
+    runUpdate(statement, values)
+  }
+
+
   def loadUserEmailAddresses(userId: UserId): Seq[UserEmailAddress] = {
     val query = s"""
       select email_address, added_at, verified_at

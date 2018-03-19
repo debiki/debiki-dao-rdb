@@ -87,6 +87,19 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def forgetInviteEmailSentToAddress(userId: UserId, replaceWithAddr: String) {
+    TESTS_MISSING
+    val statement = """
+      update invites3 set email_address = ?
+      where
+        site_id = ? and
+        user_id = ?
+      """
+    val values = List(replaceWithAddr, siteId.asAnyRef, userId.asAnyRef)
+    runUpdate(statement, values)
+  }
+
+
   def loadInvite(secretKey: String): Option[Invite] = {
     val query = s"""
       select $InviteSelectListItems
@@ -206,13 +219,15 @@ trait UserSiteDaoMixin extends SiteTransaction {
             primary_email_addr, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
             COUNTRY, IS_OWNER, IS_ADMIN, IS_MODERATOR,
-            trust_level, locked_trust_level, threat_level, locked_threat_level)
+            trust_level, locked_trust_level, threat_level, locked_threat_level,
+            deactivated_at, deleted_at)
         values (
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?)
+            ?, ?, ?, ?,
+            ?, ?)
         """,
         List[AnyRef](siteId.asAnyRef, user.id.asAnyRef, user.fullName.orNullVarchar,
           user.username, user.createdAt, user.primaryEmailAddress.trimNullVarcharIfBlank,
@@ -224,7 +239,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
           user.country.trimOrNullVarchar, user.isOwner.asTrueOrNull, user.isAdmin.asTrueOrNull,
           user.isModerator.asAnyRef,
           user.trustLevel.toInt.asAnyRef, user.lockedTrustLevel.map(_.toInt).orNullInt,
-          user.threatLevel.toInt.asAnyRef, user.lockedThreatLevel.map(_.toInt).orNullInt))
+          user.threatLevel.toInt.asAnyRef, user.lockedThreatLevel.map(_.toInt).orNullInt,
+          user.deactivatedAt.orNullTimestamp, user.deletedAt.orNullTimestamp))
     }
     catch {
       case ex: js.SQLException =>
@@ -239,6 +255,15 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
         throw ex
     }
+  }
+
+
+  def deleteAllUsersIdentities(userId: UserId) {
+    TESTS_MISSING
+    val statement =
+      "delete from identities3 where user_id = ? and site_id = ?"
+    val values = List[AnyRef](userId.asAnyRef, siteId.asAnyRef)
+    runUpdate(statement, values)
   }
 
 
@@ -676,7 +701,9 @@ trait UserSiteDaoMixin extends SiteTransaction {
         locked_threat_level = ?,
         is_owner = ?,
         is_admin = ?,
-        is_moderator = ?
+        is_moderator = ?,
+        deactivated_at = ?,
+        deleted_at = ?
       where site_id = ? and user_id = ?
       """
 
@@ -713,6 +740,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
       user.isOwner.asTrueOrNull,
       user.isAdmin.asTrueOrNull,
       user.isModerator.asTrueOrNull,
+      user.deactivatedAt.orNullTimestamp,
+      user.deletedAt.orNullTimestamp,
       siteId.asAnyRef,
       user.id.asAnyRef)
 
