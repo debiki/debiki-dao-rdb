@@ -219,6 +219,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             primary_email_addr, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
             COUNTRY, IS_OWNER, IS_ADMIN, IS_MODERATOR,
+            about, see_activity_min_trust_level,
             trust_level, locked_trust_level, threat_level, locked_threat_level,
             deactivated_at, deleted_at)
         values (
@@ -226,6 +227,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             ?, ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?,
+            ?, ?,
             ?, ?, ?, ?,
             ?, ?)
         """,
@@ -238,6 +240,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
           user.approvedById.orNullInt,
           user.country.trimOrNullVarchar, user.isOwner.asTrueOrNull, user.isAdmin.asTrueOrNull,
           user.isModerator.asAnyRef,
+          user.about.orNullVarchar, user.seeActivityMinTrustLevel.map(_.toInt).orNullInt,
           user.trustLevel.toInt.asAnyRef, user.lockedTrustLevel.map(_.toInt).orNullInt,
           user.threatLevel.toInt.asAnyRef, user.lockedThreatLevel.map(_.toInt).orNullInt,
           user.deactivatedAt.orNullTimestamp, user.deletedAt.orNullTimestamp))
@@ -682,6 +685,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         country = ?,
         website = ?,
         about = ?,
+        see_activity_min_trust_level = ?,
         avatar_tiny_base_url = ?,
         avatar_tiny_hash_path = ?,
         avatar_small_base_url = ?,
@@ -720,6 +724,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       user.country.trimOrNullVarchar,
       user.website.trimOrNullVarchar,
       user.about.trimOrNullVarchar,
+      user.seeActivityMinTrustLevel.map(_.toInt).orNullInt,
       user.tinyAvatar.map(_.baseUrl).orNullVarchar,
       user.tinyAvatar.map(_.hashPath).orNullVarchar,
       user.smallAvatar.map(_.baseUrl).orNullVarchar,
