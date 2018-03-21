@@ -25,6 +25,7 @@ import java.{sql => js, util => ju}
 import scala.collection.mutable
 import Rdb._
 import RdbUtil._
+import scala.collection.mutable.ArrayBuffer
 
 
 /** Inserts, updates, loads audit log entries.
@@ -141,17 +142,30 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadAuditLogEntriesRecentFirst(userId: UserId, tyype: AuditLogEntryType, limit: Int)
+  def loadAuditLogEntriesRecentFirst(userId: UserId, tyype: Option[AuditLogEntryType], limit: Int)
         : immutable.Seq[AuditLogEntry] = {
-    dieIf(tyype == AuditLogEntryType.NewPage, "EdE4WK023X", "Probably wants NewReply too")
-    dieIf(tyype == AuditLogEntryType.NewReply, "EdE3ZCM238", "Probably wants NewPage too")
+    tyype foreach { t =>
+      dieIf(t == AuditLogEntryType.NewPage, "EdE4WK023X", "Probably wants NewReply too")
+      dieIf(t == AuditLogEntryType.NewReply, "EdE3ZCM238", "Probably wants NewPage too")
+    }
+
+    val values = ArrayBuffer(siteId.asAnyRef, userId.asAnyRef)
+
+    val andDidWhatEqType = tyype match {
+      case None => ""
+      case Some(t) =>
+        values.append(t)
+        "and did_what = ?"
+    }
+
     val query = s"""
       select * from audit_log3
       where site_id = ? and doer_id = ?
-      and did_what = ?
+      $andDidWhatEqType
       order by done_at desc limit $limit
       """
-    runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef, tyype.toInt.asAnyRef), rs => {
+
+    runQueryFindMany(query, values.toList, rs => {
       getAuditLogEntry(rs)
     })
   }
