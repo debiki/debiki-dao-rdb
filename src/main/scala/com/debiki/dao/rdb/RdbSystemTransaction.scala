@@ -683,6 +683,49 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
   }
 
 
+  def deletePersonalDataFromOldAuditLogEntries() {
+    TESTS_MISSING
+
+    // Forget the last octet fairly soon, so won't be possible to identify a
+    // unique individial or household via the ip address. But so the ip can still
+    // be used to block spammers etc who sign up from the roughly same ip
+    // (maybe a single spammer, with a varying IP on the same class C subnet).
+
+    // Remember region and city. That's useful for security purposes: if a member suddenly
+    // logs in from far away, then one can ask "From which city do you
+    // usually log in?" and if hen doesn't know — account probably hacked.
+    // (Gmail asks this sometimes when I haven't enabled 2FA and login from another country)
+
+    PRIVACY; COULD // make x months below configurable
+    val deleteABitStatement = s"""
+      update audit_log3 set
+        ip = ip & inet '255.255.255.0',
+        -- ip_randhash_2 =
+        -- browser_id_cookie = hash(browser_id_cookie),
+        -- browser_fingerprint = 0,
+        forgotten = 1
+      where
+        forgotten = 0 and
+        done_at < ?
+      """
+    runUpdate(deleteABitStatement, List(now.minusMonths(5).asTimestamp))
+
+    PRIVACY; COULD // make x years below configurable
+    // Now no need to remember region and city any longer. (But remember which country.)
+    val deleteMoreStatement = s"""
+      update audit_log3 set
+        ip = ip & inet '255.255.0.0',
+        region = null,
+        city = null,
+        forgotten = 2
+      where
+        forgotten = 1 and
+        done_at < ?
+      """
+    runUpdate(deleteMoreStatement, List(now.minusYears(5).asTimestamp))
+  }
+
+
   /** Finds all evolution scripts below src/main/resources/db/migration and applies them.
     */
   def applyEvolutions() {

@@ -18,3 +18,12 @@ alter table users3 add column see_activity_min_trust_level int;
 alter table users3 add constraint users_c_deact_bef_delete check (
   deactivated_at is null or deleted_at is null or deactivated_at <= deleted_at);
 
+
+alter table audit_log3 add column forgotten smallint not null default 0;
+create index auditlog_forgotten_ix on audit_log3 (forgotten, done_at desc);
+
+-- Was just 0...200.
+alter table audit_log3 drop constraint dw2_auditlog_didwhat__c_in;
+alter table audit_log3 add constraint auditlog_c_didwhat_in check (did_what between 1 and 9999);
+
+

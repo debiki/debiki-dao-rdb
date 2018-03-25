@@ -154,7 +154,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
     val andDidWhatEqType = tyype match {
       case None => ""
       case Some(t) =>
-        values.append(t)
+        values.append(t.toInt.asAnyRef)
         "and did_what = ?"
     }
 
