@@ -274,6 +274,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
           and p.page_id in (${makeInListFor(pageIds)})
           and p.post_nr <> ${PageParts.TitleNr}
           and p.approved_at is not null
+          and p.type <> ${PostType.BottomComment.toInt}  -- [2GYKFS4]
           and p.closed_status = 0
           and p.hidden_at is null
           and p.deleted_status = 0
