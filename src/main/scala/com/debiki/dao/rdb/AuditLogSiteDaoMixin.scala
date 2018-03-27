@@ -142,8 +142,8 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadAuditLogEntriesRecentFirst(userId: UserId, tyype: Option[AuditLogEntryType], limit: Int)
-        : immutable.Seq[AuditLogEntry] = {
+  def loadAuditLogEntriesRecentFirst(userId: UserId, tyype: Option[AuditLogEntryType], limit: Int,
+        inclForgotten: Boolean): immutable.Seq[AuditLogEntry] = {
     tyype foreach { t =>
       dieIf(t == AuditLogEntryType.NewPage, "EdE4WK023X", "Probably wants NewReply too")
       dieIf(t == AuditLogEntryType.NewReply, "EdE3ZCM238", "Probably wants NewPage too")
@@ -158,10 +158,14 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
         "and did_what = ?"
     }
 
+    // Non-anonymized entries have forgotten = 0 (instead of 1, 2)
+    val andSkipForgotten = inclForgotten ? "" | "and forgotten = 0"
+
     val query = s"""
       select * from audit_log3
       where site_id = ? and doer_id = ?
       $andDidWhatEqType
+      $andSkipForgotten
       order by done_at desc limit $limit
       """
 
