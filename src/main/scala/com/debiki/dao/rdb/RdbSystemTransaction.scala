@@ -744,6 +744,12 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
     // Warning: Don't clean() in production, could wipe out all data.
     flyway.setCleanOnValidationError(daoFactory.isTest)
     flyway.setCleanDisabled(!daoFactory.isTest)
+    // Group all pending migrations together in the same transaction, so if
+    // upgrading from version 3 to version 8, migrations 4,5,6,7,8 will either succeed
+    // or fail all of them. This means that if there's any error, we'll be back at
+    // version 3 again — rather than some other unknown version for which we don't
+    // immediately know which *software* version to use.
+    flyway.setGroup(true)
     // Make this DAO accessible to the Scala code in the Flyway migration.
     _root_.db.migration.MigrationHelper.systemDbDao = this
     _root_.db.migration.MigrationHelper.scalaBasedMigrations = daoFactory.migrations

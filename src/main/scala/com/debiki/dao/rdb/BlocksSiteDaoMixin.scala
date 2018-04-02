@@ -19,7 +19,8 @@ package com.debiki.dao.rdb
 
 import com.debiki.core._
 import com.debiki.core.Prelude._
-import com.google.common.net.InetAddresses
+import com.google.{common => guava}
+import guava.net.InetAddresses
 import java.{sql => js, util => ju}
 import java.net.InetAddress
 import scala.collection.{mutable, immutable}

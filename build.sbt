@@ -11,5 +11,5 @@ scalaVersion := "2.12.3"
 //   jdbc-112010-090769.html
 
 libraryDependencies ++= Seq(
-  "org.flywaydb" % "flyway-core" % "4.0.3")
+  "org.flywaydb" % "flyway-core" % "5.0.7")
 
