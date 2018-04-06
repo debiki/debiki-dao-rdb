@@ -32,7 +32,8 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
   private val LocalhostAddress = "127.0.0.1"
 
 
-  def createSite(id: Option[SiteId], name: String, status: SiteStatus, creatorIp: String,
+  def createSite(id: Option[SiteId], pubId: PublSiteId,
+    name: String, status: SiteStatus, creatorIp: String,
     quotaLimitMegabytes: Option[Int], maxSitesPerIp: Int, maxSitesTotal: Int,
     isTestSiteOkayToDelete: Boolean, pricePlan: PricePlan, createdAt: When): Site = {
 
@@ -55,7 +56,8 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
       if (isTestSiteOkayToDelete) Site.GenerateTestSiteMagicId
       else NoSiteId
     }
-    val newSiteNoId = Site(theId, status, name = name, createdAt = createdAt,
+
+    val newSiteNoId = Site(theId, pubId = pubId, status, name = name, createdAt = createdAt,
       creatorIp = creatorIp, hosts = Nil)
 
     val newSite =
@@ -117,10 +119,10 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
     val site = siteNoId.copy(id = newId)
     runUpdateSingleRow("""
         insert into sites3 (
-          ID, status, NAME, CREATOR_IP,
+          ID, publ_id, status, NAME, CREATOR_IP,
           QUOTA_LIMIT_MBS, price_plan)
-        values (?, ?, ?, ?, ?, ?)""",
-      List[AnyRef](site.id.asAnyRef, site.status.toInt.asAnyRef, site.name,
+        values (?, ?, ?, ?, ?, ?, ?)""",
+      List[AnyRef](site.id.asAnyRef, site.pubId, site.status.toInt.asAnyRef, site.name,
         site.creatorIp, quotaLimitMegabytes.orNullInt, pricePlan))
     site
   }

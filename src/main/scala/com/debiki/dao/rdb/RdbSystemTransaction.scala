@@ -241,7 +241,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       })
 
     var sitesQuery = s"""
-      select id, status, name, ctime, creator_ip, creator_email_address
+      select id, publ_id, status, name, ctime, creator_ip, creator_email_address
       from sites3
       """
     var sitesValues: List[AnyRef] = Nil
@@ -256,6 +256,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         val hosts = hostsByTenantId(siteId)
         tenants ::= Site(
           id = siteId,
+          pubId = rs.getString("publ_id"),
           status = SiteStatus.fromInt(rs.getInt("status")).getOrDie("EsE2KUY67"),
           name = rs.getString("NAME"),
           createdAt = getWhen(rs, "ctime"),
