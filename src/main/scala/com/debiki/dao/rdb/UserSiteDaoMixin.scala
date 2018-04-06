@@ -56,7 +56,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       case ex: js.SQLException =>
         // Invited-email + inviter-id is unique. [5GPJ4A0]
         if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw2_invites_email__u", ex))
-          throw DbDao.DuplicateUserEmail
+          throw DbDao.DuplicateUserEmail(invite.emailAddress)
 
         throw ex
     }
@@ -251,10 +251,10 @@ trait UserSiteDaoMixin extends SiteTransaction {
           throw ex
 
         if (uniqueConstrViolatedIs("users_site_primaryemail_u", ex))
-          throw DbDao.DuplicateUserEmail
+          throw DbDao.DuplicateUserEmail(user.primaryEmailAddress)
 
         if (uniqueConstrViolatedIs("DW1_USERS_SITE_USERNAMELOWER__U", ex))
-          throw DbDao.DuplicateUsername
+          throw DbDao.DuplicateUsername(user.username)
 
         throw ex
     }
@@ -544,8 +544,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   def loadMembersWithPrefix(usernamePrefix: String): immutable.Seq[Member] = {
-    // COULD do lowercase match?
-    untestedIf(usernamePrefix.nonEmpty, "EsE5FK02", "searching for members by prefix")
+    // Would it be better UX to do lowercase match?
     val withPrefixAnd = usernamePrefix.isEmpty ? "" | "username like ? and"
     val query = i"""
       select $UserSelectListItemsNoGuests
@@ -556,7 +555,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       """
     var values = List(siteId.asAnyRef)
     if (withPrefixAnd.nonEmpty) {
-      values ::= usernamePrefix
+      values ::= usernamePrefix + '%'
     }
     runQueryFindMany(query, values, readMember)
   }
