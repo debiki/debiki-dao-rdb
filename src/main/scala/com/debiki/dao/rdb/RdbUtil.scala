@@ -227,7 +227,7 @@ object RdbUtil {
       emailVerifiedAt = getOptionalDate(rs, "u_email_verified_at"),
       passwordHash = Option(rs.getString("u_password_hash")),
       tinyAvatar = tinyAvatar,
-      smallAvatar = tinyAvatar,
+      smallAvatar = smallAvatar,
       isApproved = getOptionalBoolean(rs, "u_is_approved"),
       suspendedTill = getOptionalDate(rs, "u_suspended_till"),
       trustLevel = anyTrustLevel.getOrDie("EsE7YK24"),
