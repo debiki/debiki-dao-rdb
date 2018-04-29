@@ -313,7 +313,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
     // Result: Both correct order (the most "urgenat" ones first), & batch processing benefits.
 
     // The next-date is set to long-into-the-future, for users that don't want summaries  [5KRDUQ0]
-    // or have no email address.
+    // or have no email address.  (Don't send summaries to guests.)
     val query = s"""
       select * from user_stats3
       where user_id >= $LowestTalkToMemberId
@@ -333,7 +333,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
   def loadNotificationsToMailOut(delayInMinutes: Int, numToLoad: Int)
         : Map[SiteId, Seq[Notification]] =
-    loadNotfsImpl(numToLoad, unseenFirst = false, onlyIfEmailAddrVerified = true,
+    loadNotfsImpl(numToLoad, unseenFirst = false, onlyIfEmailVerifiedOrGuest = true,
         None, delayMinsOpt = Some(delayInMinutes))
 
 
@@ -343,7 +343,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
    * tenantIdOpt + userIdOpt --> loads that user's notfs
    * tenantIdOpt + emailIdOpt --> loads a single email and notf
    */
-  def loadNotfsImpl(limit: Int, unseenFirst: Boolean, onlyIfEmailAddrVerified: Boolean,
+  def loadNotfsImpl(limit: Int, unseenFirst: Boolean, onlyIfEmailVerifiedOrGuest: Boolean,
         tenantIdOpt: Option[SiteId] = None,
         delayMinsOpt: Option[Int] = None, userIdOpt: Option[UserId] = None,
         emailIdOpt: Option[String] = None, upToWhen: Option[ju.Date] = None)
@@ -362,9 +362,11 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
     unimplementedIf(upToWhen.isDefined, "Loading notfs <= upToWhen [EsE7GYKF2]")
 
-    val andEmailAddrHasBeenVerified =
-      if (onlyIfEmailAddrVerified) "and u.email_verified_at is not null"
-      else ""
+    val andEmailVerifiedOrGuest =
+      if (onlyIfEmailVerifiedOrGuest)
+        "and (u.email_verified_at is not null or guest_email_addr is not null)"
+      else
+        ""
 
     val baseQuery = s"""
       select
@@ -375,7 +377,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       from notifications3 n inner join users3 u
         on n.site_id = u.site_id
        and n.to_user_id = u.user_id
-       $andEmailAddrHasBeenVerified
+       $andEmailVerifiedOrGuest
       where """
 
     val (whereOrderBy, values) = (userIdOpt, emailIdOpt) match {
