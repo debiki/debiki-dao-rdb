@@ -262,7 +262,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
     pageQuery.pageFilter match {
       case PageFilter.ForActivitySummaryEmail =>
         s"""
-            g.author_id <> $SystemUserId and  -- don't incl auto created pages (by system) in summary
+            g.author_id <> $SystemUserId and  -- excl auto created pages (by system) in summary [EXCLSYS]
             g.page_role in (
               ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
               ${MindMap.toInt}, ${Discussion.toInt},
