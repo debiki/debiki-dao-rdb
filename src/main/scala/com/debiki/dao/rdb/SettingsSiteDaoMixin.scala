@@ -65,7 +65,13 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         allow_signup,
         allow_local_signup,
         allow_guest_login,
+        enable_google_login,
+        enable_facebook_login,
+        enable_twitter_login,
+        enable_github_login,
         require_verified_email,
+        email_domain_blacklist,
+        email_domain_whitelist,
         may_compose_before_signup,
         may_login_before_email_verified,
         double_type_email_address,
@@ -80,9 +86,12 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         show_topic_filter,
         show_topic_types,
         select_topic_type,
+        show_author_how,
+        watchbar_starts_open,
         num_first_posts_to_review,
         num_first_posts_to_approve,
         num_first_posts_to_allow,
+        favicon_url,
         head_styles_html,
         head_scripts_html,
         end_of_body_html,
@@ -98,12 +107,14 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         content_license,
         language_code,
         google_analytics_id,
+        enable_chat,
+        enable_direct_messages,
         show_sub_communities,
         experimental,
         allow_embedding_from,
         html_tag_css_classes)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List(
       siteId.asAnyRef,
@@ -115,7 +126,13 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.allowSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowLocalSignup.getOrElse(None).orNullBoolean,
       editedSettings2.allowGuestLogin.getOrElse(None).orNullBoolean,
+      editedSettings2.enableGoogleLogin.getOrElse(None).orNullBoolean,
+      editedSettings2.enableFacebookLogin.getOrElse(None).orNullBoolean,
+      editedSettings2.enableTwitterLogin.getOrElse(None).orNullBoolean,
+      editedSettings2.enableGitHubLogin.getOrElse(None).orNullBoolean,
       editedSettings2.requireVerifiedEmail.getOrElse(None).orNullBoolean,
+      editedSettings2.emailDomainBlacklist.getOrElse(None).orNullVarchar,
+      editedSettings2.emailDomainWhitelist.getOrElse(None).orNullVarchar,
       editedSettings2.mayComposeBeforeSignup.getOrElse(None).orNullBoolean,
       editedSettings2.mayPostBeforeEmailVerified.getOrElse(None).orNullBoolean,
       editedSettings2.doubleTypeEmailAddress.getOrElse(None).orNullBoolean,
@@ -130,9 +147,12 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.showTopicFilterButton.getOrElse(None).orNullBoolean,
       editedSettings2.showTopicTypes.getOrElse(None).orNullBoolean,
       editedSettings2.selectTopicType.getOrElse(None).orNullBoolean,
+      editedSettings2.showAuthorHow.getOrElse(None).map(_.toInt).orNullInt,
+      editedSettings2.watchbarStartsOpen.getOrElse(None).orNullBoolean,
       editedSettings2.numFirstPostsToReview.getOrElse(None).orNullInt,
       editedSettings2.numFirstPostsToApprove.getOrElse(None).orNullInt,
       editedSettings2.numFirstPostsToAllow.getOrElse(None).orNullInt,
+      editedSettings2.faviconUrl.getOrElse(None).orNullVarchar,
       editedSettings2.headStylesHtml.getOrElse(None).orNullVarchar,
       editedSettings2.headScriptsHtml.getOrElse(None).orNullVarchar,
       editedSettings2.endOfBodyHtml.getOrElse(None).orNullVarchar,
@@ -148,6 +168,8 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.contentLicense.getOrElse(None).map(_.toInt).orNullInt,
       editedSettings2.languageCode.getOrElse(None).orNullVarchar,
       editedSettings2.googleUniversalAnalyticsTrackingId.getOrElse(None).orNullVarchar,
+      editedSettings2.enableChat.getOrElse(None).orNullBoolean,
+      editedSettings2.enableDirectMessages.getOrElse(None).orNullBoolean,
       editedSettings2.showSubCommunities.getOrElse(None).orNullBoolean,
       editedSettings2.showExperimental.getOrElse(None).orNullBoolean,
       editedSettings2.allowEmbeddingFrom.getOrElse(None).orNullVarchar,
@@ -179,7 +201,13 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("allow_signup", s.allowSignup.map(_.orNullBoolean))
     maybeSet("allow_local_signup", s.allowLocalSignup.map(_.orNullBoolean))
     maybeSet("allow_guest_login", s.allowGuestLogin.map(_.orNullBoolean))
+    maybeSet("enable_google_login", s.enableGoogleLogin.map(_.orNullBoolean))
+    maybeSet("enable_facebook_login", s.enableFacebookLogin.map(_.orNullBoolean))
+    maybeSet("enable_twitter_login", s.enableTwitterLogin.map(_.orNullBoolean))
+    maybeSet("enable_github_login", s.enableGitHubLogin.map(_.orNullBoolean))
     maybeSet("require_verified_email", s.requireVerifiedEmail.map(_.orNullBoolean))
+    maybeSet("email_domain_blacklist", s.emailDomainBlacklist.map(_.orNullVarchar))
+    maybeSet("email_domain_whitelist", s.emailDomainWhitelist.map(_.orNullVarchar))
     maybeSet("may_compose_before_signup", s.mayComposeBeforeSignup.map(_.orNullBoolean))
     maybeSet("may_login_before_email_verified", s.mayPostBeforeEmailVerified.map(_.orNullBoolean))
     maybeSet("double_type_email_address", s.doubleTypeEmailAddress.map(_.orNullBoolean))
@@ -194,9 +222,12 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("show_topic_filter", s.showTopicFilterButton.map(_.orNullBoolean))
     maybeSet("show_topic_types", s.showTopicTypes.map(_.orNullBoolean))
     maybeSet("select_topic_type", s.selectTopicType.map(_.orNullBoolean))
+    maybeSet("show_author_how", s.showAuthorHow.map(_.map(_.toInt).orNullInt))
+    maybeSet("watchbar_starts_open", s.watchbarStartsOpen.map(_.orNullBoolean))
     maybeSet("num_first_posts_to_review", s.numFirstPostsToReview.map(_.orNullInt))
     maybeSet("num_first_posts_to_approve", s.numFirstPostsToApprove.map(_.orNullInt))
     maybeSet("num_first_posts_to_allow", s.numFirstPostsToAllow.map(_.orNullInt))
+    maybeSet("favicon_url", s.faviconUrl.map(_.orNullVarchar))
     maybeSet("head_styles_html", s.headStylesHtml.map(_.orNullVarchar))
     maybeSet("head_scripts_html", s.headScriptsHtml.map(_.orNullVarchar))
     maybeSet("end_of_body_html", s.endOfBodyHtml.map(_.orNullVarchar))
@@ -212,6 +243,8 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("content_license", s.contentLicense.map(_.map(_.toInt).orNullInt))
     maybeSet("language_code", s.languageCode.map(_.orNullVarchar))
     maybeSet("google_analytics_id", s.googleUniversalAnalyticsTrackingId.map(_.orNullVarchar))
+    maybeSet("enable_chat", s.enableChat.map(_.orNullBoolean))
+    maybeSet("enable_direct_messages", s.enableDirectMessages.map(_.orNullBoolean))
     maybeSet("show_sub_communities", s.showSubCommunities.map(_.orNullBoolean))
     maybeSet("experimental", s.showExperimental.map(_.orNullBoolean))
     maybeSet("allow_embedding_from", s.allowEmbeddingFrom.map(_.orNullVarchar))
@@ -241,8 +274,14 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       inviteOnly = getOptBoolean(rs, "invite_only"),
       allowSignup = getOptBoolean(rs, "allow_signup"),
       allowLocalSignup = getOptBoolean(rs, "allow_local_signup"),
-      allowGuestLogin = getOptBoolean(rs, "allow_guest_login"),  //
+      allowGuestLogin = getOptBoolean(rs, "allow_guest_login"),
+      enableGoogleLogin = getOptBoolean(rs, "enable_google_login"),
+      enableFacebookLogin = getOptBoolean(rs, "enable_facebook_login"),
+      enableTwitterLogin = getOptBoolean(rs, "enable_twitter_login"),
+      enableGitHubLogin = getOptBoolean(rs, "enable_github_login"),
       requireVerifiedEmail = getOptBoolean(rs, "require_verified_email"),
+      emailDomainBlacklist = getOptString(rs, "email_domain_blacklist"),
+      emailDomainWhitelist = getOptString(rs, "email_domain_whitelist"),
       mayComposeBeforeSignup = getOptBoolean(rs, "may_compose_before_signup"),
       mayPostBeforeEmailVerified = getOptBoolean(rs, "may_login_before_email_verified"),
       doubleTypeEmailAddress = getOptBoolean(rs, "double_type_email_address"),
@@ -257,9 +296,12 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       showTopicFilterButton = getOptBoolean(rs, "show_topic_filter"),
       showTopicTypes = getOptBoolean(rs, "show_topic_types"),
       selectTopicType = getOptBoolean(rs, "select_topic_type"),
+      showAuthorHow = getOptInt(rs, "show_author_how").flatMap(ShowAuthorHow.fromInt),
+      watchbarStartsOpen = getOptBool(rs, "watchbar_starts_open"),
       numFirstPostsToReview = getOptionalInt(rs, "num_first_posts_to_review"),
       numFirstPostsToApprove = getOptionalInt(rs, "num_first_posts_to_approve"),
       numFirstPostsToAllow = getOptionalInt(rs, "num_first_posts_to_allow"),
+      faviconUrl = Option(rs.getString("favicon_url")),
       headStylesHtml = Option(rs.getString("head_styles_html")),
       headScriptsHtml = Option(rs.getString("head_scripts_html")),
       endOfBodyHtml = Option(rs.getString("end_of_body_html")),
@@ -275,6 +317,8 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       contentLicense = ContentLicense.fromInt(rs.getInt("content_license")), // 0 -> None, ok
       languageCode = Option(rs.getString("language_code")),
       googleUniversalAnalyticsTrackingId = Option(rs.getString("google_analytics_id")),
+      enableChat = getOptBool(rs, "enable_chat"),
+      enableDirectMessages = getOptBool(rs, "enable_direct_messages"),
       showSubCommunities = getOptBoolean(rs, "show_sub_communities"),
       showExperimental = getOptBoolean(rs, "experimental"),
       allowEmbeddingFrom = Option(rs.getString("allow_embedding_from")),
