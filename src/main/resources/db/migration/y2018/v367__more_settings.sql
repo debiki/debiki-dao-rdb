@@ -13,8 +13,10 @@ alter table settings3 add column enable_direct_messages boolean;
 alter table settings3 add constraint settings_c_emailblacklist_len check (
   length(email_domain_blacklist) between 1 and 10000);
 
+-- Some companies add all their customers' domains to the whitelist, e.g. 300 customers
+-- and 300 x 50 = 15 000 (50 chars = domain + optional comment). Allow 40 000 maybe?
 alter table settings3 add constraint settings_c_emailwhitelist_len check (
-  length(email_domain_whitelist) between 1 and 10000);
+  length(email_domain_whitelist) between 1 and 40000);
 
 alter table settings3 add constraint settings_c_faviconurl_len check (
   length(favicon_url) between 1 and 200);
