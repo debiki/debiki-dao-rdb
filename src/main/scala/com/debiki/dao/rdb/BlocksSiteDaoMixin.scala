@@ -82,8 +82,15 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def loadBlocks(ip: String, browserIdCookie: String): immutable.Seq[Block] = {
-    val query = """
+  override def loadBlocks(ip: String, browserIdCookie: Option[String]): immutable.Seq[Block] = {
+    val values = ArrayBuffer(siteId.asAnyRef, ip)
+    val orCookieTest = browserIdCookie match {
+      case None => ""
+      case Some(browserId) =>
+        values.append(browserId)
+        "or browser_id_cookie = ?"
+    }
+    val query = s"""
       select
         threat_level,
         blocked_at,
@@ -93,15 +100,11 @@ trait BlocksSiteDaoMixin extends SiteTransaction {
         browser_id_cookie
       from blocks3
       where
-        site_id = ? and (ip = ?::inet or browser_id_cookie = ?)
+        site_id = ? and (ip = ?::inet $orCookieTest)
       """
-    var result = ArrayBuffer[Block]()
-    runQuery(query, List(siteId.asAnyRef, ip, browserIdCookie), rs => {
-      while (rs.next()) {
-        result += getBlock(rs)
-      }
+    runQueryFindMany(query, values.toList, rs => {
+      getBlock(rs)
     })
-    result.toVector
   }
 
 

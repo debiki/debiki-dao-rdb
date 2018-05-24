@@ -117,7 +117,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       NullVarchar,
       entry.emailAddress.orNullVarchar,
       entry.browserIdData.ip,
-      entry.browserIdData.idCookie,
+      entry.browserIdData.idCookie.orNullVarchar,
       entry.browserIdData.fingerprint.asAnyRef,
       NullVarchar,
       NullVarchar,
@@ -188,22 +188,32 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadCreatePostAuditLogEntriesBy(browserIdData: BrowserIdData, limit: Int, orderBy: OrderBy)
+  def loadCreatePostAuditLogEntriesBy(browserIdData: BrowserIdData, limit: Int, orderBy: OrderBy)  // used where?
         : Seq[AuditLogEntry] = {
     dieIf(orderBy != OrderBy.MostRecentFirst, "EdE5PKB20", "Unimpl")
-    val query = s"""(
+
+    val values = ArrayBuffer(siteId.asAnyRef, browserIdData.ip, siteId.asAnyRef)
+
+    val ipQuery = s"""(
       select * from audit_log3
       where site_id = ? and ip = ?::inet
       and did_what in (${AuditLogEntryType.NewPage.toInt}, ${AuditLogEntryType.NewReply.toInt})
-      order by done_at desc limit $limit)
-      union (
-      select * from audit_log3
-      where site_id = ? and browser_id_cookie = ?
-      and did_what in (${AuditLogEntryType.NewPage.toInt}, ${AuditLogEntryType.NewReply.toInt})
-      order by done_at desc limit $limit)
-      """
-    val values = List(siteId.asAnyRef, browserIdData.ip, siteId.asAnyRef, browserIdData.idCookie)
-    val entries = runQueryFindMany(query, values, rs => {
+      order by done_at desc limit $limit)"""
+
+    val cookieQuery = browserIdData.idCookie match {
+      case None => ""
+      case Some(idCookie) =>
+        values.append(idCookie)
+        s"""
+          union (
+            select * from audit_log3
+            where site_id = ? and browser_id_cookie = ?
+            and did_what in (${AuditLogEntryType.NewPage.toInt}, ${AuditLogEntryType.NewReply.toInt})
+            order by done_at desc limit $limit)"""
+    }
+
+    val query = ipQuery + cookieQuery
+    val entries = runQueryFindMany(query, values.toList, rs => {
       getAuditLogEntry(rs)
     })
     entries.sortBy(-_.doneAt.getTime)
@@ -239,7 +249,7 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
   private def getBrowserIdData(rs: js.ResultSet) =
     BrowserIdData(
       ip = rs.getString("ip"),
-      idCookie = rs.getString("browser_id_cookie"),
+      idCookie = Option(rs.getString("browser_id_cookie")),
       fingerprint = rs.getInt("browser_fingerprint"))
 
 }
