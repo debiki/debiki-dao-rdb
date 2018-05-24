@@ -60,7 +60,7 @@ trait SpamCheckQueueDaoMixin extends SiteTransaction {
     val actionAt = post.currentRevLastEditedAt.getOrElse(post.createdAt)
     val values = List(
       actionAt, siteId.asAnyRef, post.id.asAnyRef, post.currentRevisionNr.asAnyRef,
-      byWho.id.asAnyRef, byWho.idCookie, byWho.browserFingerprint.asAnyRef,
+      byWho.id.asAnyRef, byWho.idCookie.orNullVarchar, byWho.browserFingerprint.asAnyRef,
       spamRelReqStuff.userAgent.orNullVarchar, spamRelReqStuff.referer.orNullVarchar,
       byWho.ip, spamRelReqStuff.uri)
 
