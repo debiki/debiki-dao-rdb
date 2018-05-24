@@ -635,14 +635,15 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         val postId = rs.getInt("post_id")
         val postRevNr = rs.getInt("post_rev_nr")
         val userId = rs.getInt("user_id")
-        val userIdCookie = rs.getString("user_id_cookie")
-        val fingerprint = rs.getInt("browser_fingerprint")
+        val browserIdCookie = Option(rs.getString("browser_id_cookie"))
+        val browserFingerprint = rs.getInt("browser_fingerprint")
         val userAgent = getOptionalStringNotEmpty(rs, "req_user_agent")
         val referer = getOptionalStringNotEmpty(rs, "req_referer")
         val ip = rs.getString("req_ip")
         val uri = rs.getString("req_uri")
 
-        val browserIdData = BrowserIdData(ip, idCookie = userIdCookie, fingerprint = fingerprint)
+        val browserIdData = BrowserIdData(
+          ip, idCookie = browserIdCookie, fingerprint = browserFingerprint)
 
         spamCheckTasks :+= SpamCheckTask(siteId, postId = postId, postRevNr = postRevNr,
           who = Who(userId, browserIdData),
