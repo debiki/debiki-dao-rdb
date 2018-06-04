@@ -55,7 +55,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
         completed_at_rev_nr = ?,
         completed_by_id = ?,
         invalidated_at = ?,
-        resolution = ?,
+        decided_at = ?,
+        decision = ?,
         user_id = ?,
         page_id = ?,
         post_id = ?,
@@ -72,7 +73,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       reviewTask.completedAtRevNr.orNullInt,
       reviewTask.completedById.orNullInt,
       reviewTask.invalidatedAt.orNullTimestamp,
-      reviewTask.resolution.map(_.toInt).orNullInt,
+      reviewTask.decidedAt.orNullTimestamp,
+      reviewTask.decision.map(_.toInt).orNullInt,
       reviewTask.maybeBadUserId.asAnyRef,
       reviewTask.pageId.orNullVarchar,
       reviewTask.postId.orNullInt,
@@ -97,12 +99,13 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
         completed_at_rev_nr,
         completed_by_id,
         invalidated_at,
-        resolution,
+        decided_at,
+        decision,
         user_id,
         page_id,
         post_id,
         post_nr)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       """
     val values = List[AnyRef](
       siteId.asAnyRef,
@@ -116,7 +119,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       reviewTask.completedAtRevNr.orNullInt,
       reviewTask.completedById.orNullInt,
       reviewTask.invalidatedAt.orNullTimestamp,
-      reviewTask.resolution.map(_.toInt).orNullInt,
+      reviewTask.decidedAt.orNullTimestamp,
+      reviewTask.decision.map(_.toInt).orNullInt,
       reviewTask.maybeBadUserId.asAnyRef,
       reviewTask.pageId.orNullVarchar,
       reviewTask.postId.orNullInt,
@@ -132,10 +136,14 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def loadPendingPostReviewTask(postId: PostId, taskCreatedById: UserId)
+  override def loadUndecidedPostReviewTask(postId: PostId, taskCreatedById: UserId)
         : Option[ReviewTask] = {
-    loadReviewTaskImpl(
-      s"completed_at is null and invalidated_at is null and created_by_id = ? and post_id = ?",
+    loadReviewTaskImpl(o"""
+        completed_at is null and
+        decided_at is null and
+        invalidated_at is null and
+        created_by_id = ? and
+        post_id = ?""",
       Seq(taskCreatedById.asAnyRef, postId.asAnyRef))
   }
 
@@ -200,9 +208,9 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
     val query = i"""
       select
         (select count(1) from review_tasks3
-          where site_id = ? and reasons & $urgentBits != 0 and resolution is null) num_urgent,
+          where site_id = ? and reasons & $urgentBits != 0 and decision is null) num_urgent,
         (select count(1) from review_tasks3
-          where site_id = ? and reasons & $urgentBits = 0 and resolution is null) num_other
+          where site_id = ? and reasons & $urgentBits = 0 and decision is null) num_other
       """
     runQueryFindExactlyOne(query, List(siteId.asAnyRef, siteId.asAnyRef), rs => {
       ReviewTaskCounts(rs.getInt("num_urgent"), rs.getInt("num_other"))
@@ -216,17 +224,18 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       reasons = ReviewReason.fromLong(rs.getLong("reasons")),
       createdById = rs.getInt("created_by_id"),
       createdAt = getDate(rs, "created_at"),
-      createdAtRevNr = getOptionalInt(rs, "created_at_rev_nr"),
+      createdAtRevNr = getOptInt(rs, "created_at_rev_nr"),
       moreReasonsAt = getOptionalDate(rs, "more_reasons_at"),
       completedAt = getOptionalDate(rs, "completed_at"),
-      completedAtRevNr = getOptionalInt(rs, "completed_at_rev_nr"),
-      completedById = getOptionalInt(rs, "completed_by_id"),
+      completedAtRevNr = getOptInt(rs, "completed_at_rev_nr"),
+      completedById = getOptInt(rs, "completed_by_id"),
       invalidatedAt = getOptionalDate(rs, "invalidated_at"),
-      resolution = getOptionalInt(rs, "resolution").map(new ReviewTaskResolution(_)),
-      maybeBadUserId = getOptionalInt(rs, "user_id").getOrElse(UnknownUserId),
+      decidedAt = getOptionalDate(rs, "decided_at"),
+      decision = getOptInt(rs, "decision").flatMap(ReviewDecision.fromInt),
+      maybeBadUserId = getOptInt(rs, "user_id").getOrElse(UnknownUserId),
       pageId = Option(rs.getString("page_id")),
-      postId = getOptionalInt(rs, "post_id"),
-      postNr = getOptionalInt(rs, "post_nr"))
+      postId = getOptInt(rs, "post_id"),
+      postNr = getOptInt(rs, "post_nr"))
   }
 
 }

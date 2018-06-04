@@ -730,6 +730,22 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
   }
 
 
+  def loadReviewTaskIdsToExecute(): Map[SiteId, immutable.Seq[ReviewTaskId]] = {
+    val query = """
+      select site_id, id from review_tasks3
+      where
+        decided_at < ? and
+        completed_at is null and
+        invalidated_at is null"""
+    val someSecondsAgo = now.minusSeconds(ReviewDecision.UndoTimoutSeconds).toJavaDate
+    runQueryBuildMultiMap(query, List(someSecondsAgo), rs => {
+      val siteId = rs.getInt("site_id")
+      val taskId = rs.getInt("id")
+      siteId -> taskId
+    })
+  }
+
+
   /** Finds all evolution scripts below src/main/resources/db/migration and applies them.
     */
   def applyEvolutions() {

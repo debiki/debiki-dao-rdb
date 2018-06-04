@@ -247,10 +247,15 @@ trait AuditLogSiteDaoMixin extends SiteTransaction {
       isLoading = true)
 
 
-  private def getBrowserIdData(rs: js.ResultSet) =
-    BrowserIdData(
+  private def getBrowserIdData(rs: js.ResultSet) = {
+    val idData = BrowserIdData(
       ip = rs.getString("ip"),
       idCookie = Option(rs.getString("browser_id_cookie")),
       fingerprint = rs.getInt("browser_fingerprint"))
+    // Nod needed but saves a bit memory:
+    if (idData == BrowserIdData.System) BrowserIdData.System
+    else if (idData == BrowserIdData.Forgotten) BrowserIdData.Forgotten
+    else idData
+  }
 
 }
