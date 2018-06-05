@@ -648,7 +648,16 @@ object RdbUtil {
     siteVersion = rs.getInt("site_version"),
     pageVersion = rs.getInt("page_version"),
     appVersion = rs.getString("app_version"),
-    reactStoreJsonHash = rs.getString("data_hash"))
+    renderParams = PageRenderParams(
+      widthLayout = WidthLayout.fromInt(rs.getInt("width_layout")),
+      isEmbedded = rs.getBoolean("is_embedded"),
+      origin = rs.getString("origin"),
+      anyCdnOrigin = getOptString(rs, "cdn_origin"),
+      // Requests with custom page root or page query, aren't cached. [5V7ZTL2]
+      anyPageRoot = None,
+      anyPageQuery = None),
+    reactStoreJsonHash = rs.getString("react_store_json_hash"),
+    reactStoreJson = rs.getString("react_store_json"))
 
 
   // COULD do this:

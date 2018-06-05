@@ -71,82 +71,80 @@ trait PagesSiteDaoMixin extends SiteTransaction {
         where site_id = ?
           and page_id = (
             select page_id from categories3
-            where site_id = ? and id = ?)
-      """
-    runUpdateSingleRow(statement, List(siteId.asAnyRef, siteId.asAnyRef, categoryId.asAnyRef))
+            where site_id = ? and id = ?)"""
+    runUpdate(statement, List(siteId.asAnyRef, siteId.asAnyRef, categoryId.asAnyRef))
   }
 
 
-  override def loadCachedPageContentHtml(pageId: PageId): Option[(String, CachedPageVersion)] = {
+  override def loadCachedPageContentHtml(pageId: PageId, renderParams: PageRenderParams)
+        : Option[(String, CachedPageVersion)] = {
     val query = s"""
-      select site_version, page_version, app_version, data_hash, html
+      select
+        width_layout,
+        is_embedded,
+        origin,
+        cdn_origin,
+        site_version,
+        page_version,
+        app_version,
+        react_store_json_hash,
+        react_store_json,
+        cached_html
       from page_html3
-      where site_id = ? and page_id = ?
+      where site_id = ?
+        and page_id = ?
+        and width_layout = ?
+        and is_embedded = ?
+        and origin = ?
+        and cdn_origin = ?
       """
-    runQuery(query, List(siteId.asAnyRef, pageId.asAnyRef), rs => {
-      if (!rs.next())
-        return None
-
-      val html = rs.getString("html")
-      val version = getCachedPageVersion(rs)
+    val values = List(siteId.asAnyRef, pageId.asAnyRef, renderParams.widthLayout.toInt.asAnyRef,
+      renderParams.isEmbedded.asAnyRef, renderParams.origin, renderParams.anyCdnOrigin.getOrElse(""))
+    runQueryFindOneOrNone(query, values, rs => {
+      val cachedHtml = rs.getString("cached_html")
+      val cachedVersion = getCachedPageVersion(rs)
       dieIf(rs.next(), "DwE5KGF2")
-
-      Some(html, version)
+      (cachedHtml, cachedVersion)
     })
   }
 
 
-  override def saveCachedPageContentHtmlPerhapsBreakTransaction(
-        pageId: PageId, version: CachedPageVersion, html: String): Boolean = {
-    // 1) BUG Race condition: If the page was just deleted, something else might just
-    // have removed the cached version. And here we might reinsert an old version again.
-    // Rather harmless though — other parts of the system will ignore the page if it
-    // doesn't exist. But this might waste a tiny bit disk space.
-    // 2) Do an upsert. In 9.4 there's built in support for this, but for now:
-    val updateStatement = s"""
-      update page_html3
-        set site_version = ?,
-            page_version = ?,
-            app_version = ?,
-            data_hash = ?,
-            updated_at = now_utc(),
-            html = ?
-        where site_id = ?
-          and page_id = ?
-          -- Don't overwrite a newer version with an older version. But do overwrite
-          -- if the version is the same, because we might be rerendering because
-          -- the app version (i.e. the html generation code) has been changed.
-          and site_version <= ?
-          and page_version <= ?
+  override def upsertCachedPageContentHtml(pageId: PageId, version: CachedPageVersion, html: String) {
+    // Not impossible that we'll overwrite a new version with an older,
+    // but unlikely. And harmless anyway. Don't worry about it.
+    val insertStatement = s"""
+      insert into page_html3 (
+        site_id,
+        page_id,
+        width_layout,
+        is_embedded,
+        origin,
+        cdn_origin,
+        site_version,
+        page_version,
+        app_version,
+        react_store_json_hash,
+        updated_at,
+        react_store_json,
+        cached_html)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now_utc(), ?::jsonb, ?)
+      on conflict (site_id, page_id, width_layout, is_embedded, origin, cdn_origin) do update set
+        site_version = excluded.site_version,
+        page_version = excluded.page_version,
+        app_version = excluded.app_version,
+        react_store_json_hash = excluded.react_store_json_hash,
+        updated_at = now_utc(),
+        react_store_json = excluded.react_store_json,
+        cached_html = excluded.cached_html
       """
-    val rowFound = runUpdateSingleRow(updateStatement, List(
-      version.siteVersion.asAnyRef, version.pageVersion.asAnyRef,
-      version.appVersion, version.reactStoreJsonHash, html, siteId.asAnyRef, pageId,
-      version.siteVersion.asAnyRef, version.pageVersion.asAnyRef))
 
-    if (!rowFound) {
-      val insertStatement = s"""
-        insert into page_html3 (
-          site_id, page_id,
-          site_version, page_version, app_version,
-          data_hash, updated_at, html)
-        values (?, ?, ?, ?, ?, ?, now_utc(), ?)
-        """
-      try {
-        runUpdateSingleRow(insertStatement, List(
-          siteId.asAnyRef, pageId,
-          version.siteVersion.asAnyRef, version.pageVersion.asAnyRef, version.appVersion,
-          version.reactStoreJsonHash, html))
-      }
-      catch {
-        case exception: js.SQLException if isUniqueConstrViolation(exception) =>
-          // Ok, something else generated and cached the page at the same time.
-          // However now the transaction is broken.
-          return false
-      }
-    }
-
-    true
+    val params = version.renderParams
+    runUpdateSingleRow(insertStatement, List(
+      siteId.asAnyRef, pageId,
+      params.widthLayout.toInt.asAnyRef, params.isEmbedded.asAnyRef,
+      params.origin, params.anyCdnOrigin.getOrElse(""),
+      version.siteVersion.asAnyRef, version.pageVersion.asAnyRef, version.appVersion,
+      version.reactStoreJsonHash, version.reactStoreJson, html))
   }
 
 
