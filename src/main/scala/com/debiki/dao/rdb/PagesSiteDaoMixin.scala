@@ -71,16 +71,25 @@ trait PagesSiteDaoMixin extends SiteTransaction {
         where site_id = ?
           and page_id = (
             select page_id from categories3
-            where site_id = ? and id = ?)
-      """
-    runUpdateSingleRow(statement, List(siteId.asAnyRef, siteId.asAnyRef, categoryId.asAnyRef))
+            where site_id = ? and id = ?)"""
+    runUpdate(statement, List(siteId.asAnyRef, siteId.asAnyRef, categoryId.asAnyRef))
   }
 
 
   override def loadCachedPageContentHtml(pageId: PageId, renderParams: PageRenderParams)
         : Option[(String, CachedPageVersion)] = {
     val query = s"""
-      select site_version, page_version, app_version, data_hash, html
+      select
+        width_layout,
+        is_embedded,
+        origin,
+        cdn_origin,
+        site_version,
+        page_version,
+        app_version,
+        react_store_json_hash,
+        react_store_json,
+        cached_html
       from page_html3
       where site_id = ?
         and page_id = ?
@@ -89,13 +98,13 @@ trait PagesSiteDaoMixin extends SiteTransaction {
         and origin = ?
         and cdn_origin = ?
       """
-    val values = List(siteId.asAnyRef, pageId.asAnyRef, renderParams.widthLayout.asAnyRef,
+    val values = List(siteId.asAnyRef, pageId.asAnyRef, renderParams.widthLayout.toInt.asAnyRef,
       renderParams.isEmbedded.asAnyRef, renderParams.origin, renderParams.anyCdnOrigin.getOrElse(""))
     runQueryFindOneOrNone(query, values, rs => {
-      val html = rs.getString("cached_html")
-      val version = getCachedPageVersion(rs)
+      val cachedHtml = rs.getString("cached_html")
+      val cachedVersion = getCachedPageVersion(rs)
       dieIf(rs.next(), "DwE5KGF2")
-      (html, version)
+      (cachedHtml, cachedVersion)
     })
   }
 
@@ -114,26 +123,28 @@ trait PagesSiteDaoMixin extends SiteTransaction {
         site_version,
         page_version,
         app_version,
-        data_hash,
+        react_store_json_hash,
         updated_at,
+        react_store_json,
         cached_html)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now_utc(), ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now_utc(), ?::jsonb, ?)
       on conflict (site_id, page_id, width_layout, is_embedded, origin, cdn_origin) do update set
         site_version = excluded.site_version,
         page_version = excluded.page_version,
         app_version = excluded.app_version,
-        data_hash = excluded.data_hash,
-        updated_at = excluded.updated_at,
+        react_store_json_hash = excluded.react_store_json_hash,
+        updated_at = now_utc(),
+        react_store_json = excluded.react_store_json,
         cached_html = excluded.cached_html
       """
 
     val params = version.renderParams
     runUpdateSingleRow(insertStatement, List(
       siteId.asAnyRef, pageId,
-      params.widthLayout.asAnyRef, params.isEmbedded.asAnyRef,
+      params.widthLayout.toInt.asAnyRef, params.isEmbedded.asAnyRef,
       params.origin, params.anyCdnOrigin.getOrElse(""),
       version.siteVersion.asAnyRef, version.pageVersion.asAnyRef, version.appVersion,
-      version.reactStoreJsonHash, html))
+      version.reactStoreJsonHash, version.reactStoreJson, html))
   }
 
 

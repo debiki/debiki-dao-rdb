@@ -656,7 +656,8 @@ object RdbUtil {
       // Requests with custom page root or page query, aren't cached. [5V7ZTL2]
       anyPageRoot = None,
       anyPageQuery = None),
-    reactStoreJsonHash = rs.getString("data_hash"))
+    reactStoreJsonHash = rs.getString("react_store_json_hash"),
+    reactStoreJson = rs.getString("react_store_json"))
 
 
   // COULD do this:

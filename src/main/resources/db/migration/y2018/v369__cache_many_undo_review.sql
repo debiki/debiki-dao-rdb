@@ -21,21 +21,23 @@ create index reviewtasks_decicions_to_do_i on review_tasks3 (decided_at)
 
 
 drop table page_html3;
-create table public.page_html3 (
-    site_id integer not null,
-    page_id character varying not null,
-    width_layout smallint not null,
-    is_embedded bool not null,
-    origin varchar not null,
-    cdn_origin varchar not null,
-    site_version integer not null,
-    page_version integer not null,
-    app_version character varying not null,
-    data_hash character varying not null,
-    updated_at timestamp not null,
-    cached_html text not null,
-    constraint pagehtml_p primary key (site_id, page_id, width_layout, is_embedded, origin, cdn_origin),
-    constraint pagehtml_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable
+create table page_html3 (
+  site_id integer not null,
+  page_id character varying not null,
+  width_layout smallint not null,  -- later: remove? use react_store_json instead
+  --forum_layout smallint not null, -- no, use react_store_json instead
+  --posts_layout smallint not null,
+  is_embedded bool not null,  -- remove? use react_store_json instead
+  origin varchar not null, -- remove? use react_store_json instead
+  cdn_origin varchar not null, -- remove? use react_store_json instead
+  site_version integer not null, -- remove? use react_store_json instead
+  page_version integer not null, -- remove? use react_store_json instead
+  app_version character varying not null, -- remove? use react_store_json instead
+  react_store_json_hash character varying not null,
+  updated_at timestamp not null,
+  react_store_json jsonb not null,
+  cached_html text not null,
+  constraint pagehtml_p primary key (site_id, page_id, width_layout, is_embedded, origin, cdn_origin),
+  constraint pagehtml_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable
 );
-
 

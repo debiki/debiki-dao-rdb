@@ -434,7 +434,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
           h.site_version,
           h.page_version,
           h.app_version,
-          h.data_hash
+          h.react_store_json_hash
       from pages3 p left join page_html3 h
           on p.site_id = h.site_id and p.page_id = h.page_id
       where p.site_id = ?
@@ -459,12 +459,12 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
   override def loadPageIdsToRerender(limit: Int): Seq[PageIdToRerender] = {
     // In the distant future, will need to optimize the queries here,
     // e.g. add a pages-to-rerender queue table. Or just indexes somehow.
-    val results = ArrayBuffer[PageIdToRerender]()
 
     // First find pages for which there is on cached content html.
     // But not very new pages (more recent than a few minutes) because they'll
     // most likely be rendered by a GET request handling thread any time soon, when
     // they're asked for, for the first time. See debiki.dao.RenderedPageHtmlDao [5KWC58].
+    val pagesNotCached = mutable.Set[PageIdToRerender]()
     val neverRenderedQuery = s"""
       select p.site_id, p.page_id, p.version current_version, h.page_version cached_version
       from pages3 p left join page_html3 h
@@ -476,7 +476,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       """
     runQuery(neverRenderedQuery, Nil, rs => {
       while (rs.next()) {
-        results.append(getPageIdToRerender(rs))
+        pagesNotCached += getPageIdToRerender(rs)
       }
     })
 
@@ -487,7 +487,8 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
     // get done. — Only rerender a page with different site_version or app_version
     // if someone actually views it. This is done by RenderedPageHtmlDao sending
     // a message to the RenderContentService, if the page gets accessed. [4KGJW2]
-    if (results.length < limit) {
+    val pagesStale = mutable.Set[PageIdToRerender]()
+    if (pagesNotCached.size < limit) {
       val outOfDateQuery = s"""
         select p.site_id, p.page_id, p.version current_version, h.page_version cached_version
         from pages3 p inner join page_html3 h
@@ -496,12 +497,12 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         """
       runQuery(outOfDateQuery, Nil, rs => {
         while (rs.next()) {
-          results.append(getPageIdToRerender(rs))
+          pagesStale += getPageIdToRerender(rs)
         }
       })
     }
 
-    results
+    pagesNotCached.toVector ++ pagesStale.toVector
   }
 
 
