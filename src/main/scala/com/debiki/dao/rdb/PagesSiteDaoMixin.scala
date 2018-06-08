@@ -76,7 +76,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def loadCachedPageContentHtml(pageId: PageId, renderParams: PageRenderParams)
+  override def loadCachedPageContentHtml(pageId: PageId, params: PageRenderParams)
         : Option[(String, CachedPageVersion)] = {
     val query = s"""
       select
@@ -98,8 +98,8 @@ trait PagesSiteDaoMixin extends SiteTransaction {
         and origin = ?
         and cdn_origin = ?
       """
-    val values = List(siteId.asAnyRef, pageId.asAnyRef, renderParams.widthLayout.toInt.asAnyRef,
-      renderParams.isEmbedded.asAnyRef, renderParams.origin, renderParams.anyCdnOrigin.getOrElse(""))
+    val values = List(siteId.asAnyRef, pageId.asAnyRef, params.widthLayout.toInt.asAnyRef,
+      params.isEmbedded.asAnyRef, params.remoteOriginOrEmpty, params.cdnOriginOrEmpty)
     runQueryFindOneOrNone(query, values, rs => {
       val cachedHtml = rs.getString("cached_html")
       val cachedVersion = getCachedPageVersion(rs)
@@ -109,7 +109,8 @@ trait PagesSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def upsertCachedPageContentHtml(pageId: PageId, version: CachedPageVersion, html: String) {
+  override def upsertCachedPageContentHtml(pageId: PageId, version: CachedPageVersion,
+        reactStorejsonString: String, html: String) {
     // Not impossible that we'll overwrite a new version with an older,
     // but unlikely. And harmless anyway. Don't worry about it.
     val insertStatement = s"""
@@ -142,9 +143,9 @@ trait PagesSiteDaoMixin extends SiteTransaction {
     runUpdateSingleRow(insertStatement, List(
       siteId.asAnyRef, pageId,
       params.widthLayout.toInt.asAnyRef, params.isEmbedded.asAnyRef,
-      params.origin, params.anyCdnOrigin.getOrElse(""),
+      params.remoteOriginOrEmpty, params.cdnOriginOrEmpty,
       version.siteVersion.asAnyRef, version.pageVersion.asAnyRef, version.appVersion,
-      version.reactStoreJsonHash, version.reactStoreJson, html))
+      version.reactStoreJsonHash, reactStorejsonString, html))
   }
 
 

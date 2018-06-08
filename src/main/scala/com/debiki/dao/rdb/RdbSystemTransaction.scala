@@ -102,6 +102,22 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
   }
 
 
+  // COULD move to new superclass? Dupl code [8FKW20Q]
+  def runQueryFindOneOrNone[R](query: String, values: List[AnyRef],
+        singleRowHandler: js.ResultSet => R, debugCode: String = null): Option[R] = {
+    runQuery(query, values, rs => {
+      if (!rs.next()) {
+        None
+      }
+      else {
+        val result = singleRowHandler(rs)
+        dieIf(rs.next(), "TyE6GMY9" + (if (debugCode eq null) "" else '-' + debugCode))
+        Some(result)
+      }
+    })
+  }
+
+
   // Dupl code [9UFK2Q7]
   def runQueryBuildMultiMap[K, V](query: String, values: List[AnyRef],
     singleRowHandler: js.ResultSet => (K, V)): immutable.Map[K, immutable.Seq[V]] = {
@@ -425,33 +441,41 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
   }
 
 
-  override def loadCachedPageVersion(sitePageId: SitePageId)
+  override def loadCachedPageVersion(sitePageId: SitePageId, renderParams: PageRenderParams)
         : Option[(CachedPageVersion, SitePageVersion)] = {
-    val query = s"""
+    val query = """
       select
           (select version from sites3 where id = ?) current_site_version,
           p.version current_page_version,
           h.site_version,
           h.page_version,
           h.app_version,
+          h.is_embedded,
+          h.width_layout,
+          h.origin,
+          h.cdn_origin,
           h.react_store_json_hash
       from pages3 p left join page_html3 h
           on p.site_id = h.site_id and p.page_id = h.page_id
       where p.site_id = ?
         and p.page_id = ?
+        and h.is_embedded = ?
+        and h.width_layout = ?
+        and h.origin = ?
+        and h.cdn_origin = ?
       """
-    runQuery(query, List(sitePageId.siteId.asAnyRef, sitePageId.siteId.asAnyRef,
-        sitePageId.pageId.asAnyRef), rs => {
-      if (!rs.next())
-        return None
 
+    val values = List(sitePageId.siteId.asAnyRef, sitePageId.siteId.asAnyRef,
+        sitePageId.pageId.asAnyRef, renderParams.isEmbedded.asAnyRef,
+        renderParams.widthLayout.toInt.asAnyRef, renderParams.remoteOriginOrEmpty,
+        renderParams.cdnOriginOrEmpty)
+
+    runQueryFindOneOrNone(query, values, rs => {
       val currentSitePageVersion = SitePageVersion(
         rs.getInt("current_site_version"),
         rs.getInt("current_page_version"))
       val cachedPageVersion = getCachedPageVersion(rs)
-      dieIf(rs.next(), "DwE6LJK3")
-
-      Some(cachedPageVersion, currentSitePageVersion)
+      (cachedPageVersion, currentSitePageVersion)
     })
   }
 
@@ -480,7 +504,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       }
     })
 
-    // Then pages for which there is cached content html, but it's stale.
+    // Then pages for which there is cached content html, but it's stale.  [RERENDERQ]
     // Skip pages that should be rerendered because of changed site settings
     // (i.e. site_version differs) or different app_version, because otherwise
     // we'd likely constantly be rerendering exactly all pages and we'd never
@@ -493,9 +517,19 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         select p.site_id, p.page_id, p.version current_version, h.page_version cached_version
         from pages3 p inner join page_html3 h
             on p.site_id = h.site_id and p.page_id = h.page_id and p.version > h.page_version
+        -- Don't rerender embedded comments pages. It's a bit tricky to lookup their origin,
+        -- which needs to be included [EMBCMTSORIG]. And it's ok if it takes a second extra to
+        -- load an embedded comments page because it gets rendered on demand: the user will
+        -- start with looking at the blog post/article, won't care about the commenets until later.
+        -- Do need to match the cdn origin though.
+        where p.page_role <> ${PageRole.EmbeddedComments.toInt}
+          and h.is_embedded = false
+          and width_layout in (${WidthLayout.Tiny.toInt}, ${WidthLayout.Medium.toInt})
+          and h.origin = ''
+          and h.cdn_origin = ?
         limit $limit
         """
-      runQuery(outOfDateQuery, Nil, rs => {
+      runQuery(outOfDateQuery, List(daoFactory.cdnOrigin.getOrElse("")), rs => {
         while (rs.next()) {
           pagesStale += getPageIdToRerender(rs)
         }
