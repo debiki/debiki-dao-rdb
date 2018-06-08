@@ -187,6 +187,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
+  // COULD move to new superclass? Dupl code [8FKW20Q]
   def runQueryFindOneOrNone[R](query: String, values: List[AnyRef],
         singleRowHandler: js.ResultSet => R, debugCode: String = null): Option[R] = {
     runQuery(query, values, rs => {
