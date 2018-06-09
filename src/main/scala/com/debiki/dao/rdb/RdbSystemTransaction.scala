@@ -443,13 +443,17 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
 
   override def loadCachedPageVersion(sitePageId: SitePageId, renderParams: PageRenderParams)
         : Option[(CachedPageVersion, SitePageVersion)] = {
-    val query = s"""
+    val query = """
       select
           (select version from sites3 where id = ?) current_site_version,
           p.version current_page_version,
           h.site_version,
           h.page_version,
           h.app_version,
+          h.is_embedded,
+          h.width_layout,
+          h.origin,
+          h.cdn_origin,
           h.react_store_json_hash
       from pages3 p left join page_html3 h
           on p.site_id = h.site_id and p.page_id = h.page_id
