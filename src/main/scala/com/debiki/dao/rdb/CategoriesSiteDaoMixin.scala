@@ -116,7 +116,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
     values ++= categoryIds.map(_.asAnyRef)
 
     val andNotDeleted =
-      (pageQuery.pageFilter == PageFilter.ShowDeleted) ? "" | " and g.deleted_at is null"
+      pageQuery.pageFilter.includeDeleted ? "" | " and g.deleted_at is null"
 
     // (Don't do s"${period}_score" — then cannot search and find all usages of the column.)
     val periodScore = scoreOrder.period match {
@@ -227,7 +227,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
     values = values ++ categoryIds.map(_.asAnyRef)
 
     val andNotDeleted =
-      (pageQuery.pageFilter == PageFilter.ShowDeleted) ? "" | " and g.deleted_at is null"
+      pageQuery.pageFilter.includeDeleted ? "" | " and g.deleted_at is null"
 
     val sql = s"""
         select
@@ -259,8 +259,8 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
 
   private def makePageFilterTestsAnd(pageQuery: PageQuery): String = {
     import PageRole._
-    pageQuery.pageFilter match {
-      case PageFilter.ForActivitySummaryEmail =>
+    pageQuery.pageFilter.filterType match {
+      case PageFilterType.ForActivitySummaryEmail =>
         s"""
             g.author_id <> $SystemUserId and  -- excl auto created pages (by system) in summary [EXCLSYS]
             g.page_role in (
@@ -268,7 +268,7 @@ trait CategoriesSiteDaoMixin extends SiteTransaction {
               ${MindMap.toInt}, ${Discussion.toInt},
               ${Critique.toInt}, ${UsabilityTesting.toInt}) and  -- [plugin]
             """
-      case PageFilter.ShowWaiting =>
+      case PageFilterType.WaitingTopics =>
         s"""
             g.page_role in (
               ${Question.toInt}, ${Problem.toInt}, ${Idea.toInt}, ${ToDo.toInt},
