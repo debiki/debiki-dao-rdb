@@ -634,36 +634,78 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadMembersInclDetails(
-        onlyApproved: Boolean = false,
-        onlyPendingApproval: Boolean = false): immutable.Seq[MemberInclDetails] = {
-    require(!onlyApproved || !onlyPendingApproval)
+  def loadMembersInclDetailsAndStats(peopleQuery: PeopleQuery)
+        : immutable.Seq[(MemberInclDetails, Option[UserStats])] = {
+    val order = peopleQuery.orderOffset
+    val filter = peopleQuery.peopleFilter
 
-    val andIsApprovedEqWhatever =
-      if (onlyPendingApproval) s"and (is_approved is null and not $IsOwnerOrStaff)"
-      else if (onlyApproved) s"and (is_approved = true or $IsOwnerOrStaff)"
+    TESTS_MISSING // so many possible combinations
+
+    val andEmailVerified =
+      if (filter.onlyWithVerifiedEmail) s"and (email_verified_at is not null or $IsOwnerOrStaff)"
       else ""
 
-    val anyOrderBy =
-      if (onlyPendingApproval) "order by created_at desc, user_id desc"
+    val andIsApprovedOrWaiting =
+      if (filter.onlyPendingApproval) s"and (is_approved is null and not $IsOwnerOrStaff)"
+      else if (filter.onlyApproved) s"and (is_approved = true or $IsOwnerOrStaff)"
       else ""
+
+    val andIsStaff =
+      if (filter.onlyStaff) s"and $IsOwnerOrStaff"
+      else ""
+
+    // Do include staff, maybe a moderator got banned?
+    val andIsSuspended =
+      if (filter.onlySuspended) s"and (suspended_at is not null)"
+      else ""
+
+    /*val andIsSilenced =
+      if (filter.onlySilenced) s"and (silenced_at is not null)"
+      else "" */
+
+    val andIsThreat =
+      if (filter.onlyThreats) s"""
+        and ((
+          locked_threat_level is not null
+          and locked_threat_level >= ${ThreatLevel.MildThreat.toInt}
+        ) or (
+          locked_threat_level is null and
+          threat_level is not null and
+          threat_level >= ${ThreatLevel.MildThreat.toInt}
+        ))"""
+      else ""
+
+    val orderBy =
+      if (order == PeopleOrderOffset.BySignedUpAtDesc) "order by created_at desc, user_id desc"
+      else "order by username, full_name, user_id"
 
     val query = s"""
-      select $CompleteUserSelectListItemsWithUserId
-      from users3 u
+      select u.user_id, $CompleteUserSelectListItemsNoUserId, $UserStatsSelectListItems
+      from users3 u left join user_stats3 s
+          on u.site_id = s.site_id and u.user_id = s.user_id
       where
         u.site_id = ? and
         u.user_id >= ${User.LowestAuthenticatedUserId} and
         u.trust_level is not null   -- currently always null for groups [1WBK5JZ0]
-        $andIsApprovedEqWhatever
-        $anyOrderBy
+        $andEmailVerified
+        $andIsApprovedOrWaiting
+        $andIsStaff
+        $andIsSuspended
+        $andIsThreat
+        $orderBy
       """
 
     runQueryFindMany(query, List(siteId.asAnyRef), rs => {
-      getCompleteUser(rs) match {
+      // Don't remember if maybe there are old users, with no stats data created yet?
+      val anyLastSeen = getOptWhen(rs, "last_seen_at")
+      val anyStats = if (anyLastSeen.isEmpty) None else Some(getUserStats(rs))
+
+      val user = getCompleteUser(rs) match {
         case m: MemberInclDetails => m
         case g: Group => throw GotAGroupException(g.id)
       }
+
+      (user, anyStats)
     })
   }
 

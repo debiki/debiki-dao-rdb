@@ -349,6 +349,35 @@ object RdbUtil {
       deletedAt = getOptWhen(rs, "deleted_at"))
   }
 
+  val UserStatsSelectListItems: String = i"""
+    |last_seen_at,
+    |last_posted_at,
+    |last_emailed_at,
+    |last_summary_email_at,
+    |next_summary_maybe_at,
+    |email_bounce_sum,
+    |first_seen_at,
+    |first_new_topic_at,
+    |first_discourse_reply_at,
+    |first_chat_message_at,
+    |topics_new_since,
+    |notfs_new_since_id,
+    |num_days_visited,
+    |num_seconds_reading,
+    |num_discourse_replies_read,
+    |num_discourse_replies_posted,
+    |num_discourse_topics_entered,
+    |num_discourse_topics_replied_in,
+    |num_discourse_topics_created,
+    |num_chat_messages_read,
+    |num_chat_messages_posted,
+    |num_chat_topics_entered,
+    |num_chat_topics_replied_in,
+    |num_chat_topics_created,
+    |num_likes_given,
+    |num_likes_received,
+    |num_solutions_provided"""
+
 
   def getUserStats(rs: js.ResultSet): UserStats = {
     UserStats(
