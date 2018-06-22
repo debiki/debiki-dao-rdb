@@ -103,7 +103,6 @@ trait PagesSiteDaoMixin extends SiteTransaction {
     runQueryFindOneOrNone(query, values, rs => {
       val cachedHtml = rs.getString("cached_html")
       val cachedVersion = getCachedPageVersion(rs)
-      dieIf(rs.next(), "DwE5KGF2")
       (cachedHtml, cachedVersion)
     })
   }

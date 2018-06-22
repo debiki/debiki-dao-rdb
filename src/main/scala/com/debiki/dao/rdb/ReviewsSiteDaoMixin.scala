@@ -52,8 +52,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
         created_at_rev_nr = ?,
         more_reasons_at = ?,
         completed_at = ?,
-        completed_at_rev_nr = ?,
-        completed_by_id = ?,
+        decided_at_rev_nr = ?,
+        decided_by_id = ?,
         invalidated_at = ?,
         decided_at = ?,
         decision = ?,
@@ -70,8 +70,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       reviewTask.createdAtRevNr.orNullInt,
       reviewTask.moreReasonsAt.orNullTimestamp,
       reviewTask.completedAt.orNullTimestamp,
-      reviewTask.completedAtRevNr.orNullInt,
-      reviewTask.completedById.orNullInt,
+      reviewTask.decidedAtRevNr.orNullInt,
+      reviewTask.decidedById.orNullInt,
       reviewTask.invalidatedAt.orNullTimestamp,
       reviewTask.decidedAt.orNullTimestamp,
       reviewTask.decision.map(_.toInt).orNullInt,
@@ -96,8 +96,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
         created_at_rev_nr,
         more_reasons_at,
         completed_at,
-        completed_at_rev_nr,
-        completed_by_id,
+        decided_at_rev_nr,
+        decided_by_id,
         invalidated_at,
         decided_at,
         decision,
@@ -116,8 +116,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       reviewTask.createdAtRevNr.orNullInt,
       reviewTask.moreReasonsAt.orNullTimestamp,
       reviewTask.completedAt.orNullTimestamp,
-      reviewTask.completedAtRevNr.orNullInt,
-      reviewTask.completedById.orNullInt,
+      reviewTask.decidedAtRevNr.orNullInt,
+      reviewTask.decidedById.orNullInt,
       reviewTask.invalidatedAt.orNullTimestamp,
       reviewTask.decidedAt.orNullTimestamp,
       reviewTask.decision.map(_.toInt).orNullInt,
@@ -208,9 +208,19 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
     val query = i"""
       select
         (select count(1) from review_tasks3
-          where site_id = ? and reasons & $urgentBits != 0 and decision is null) num_urgent,
+          where site_id = ?
+            and decision is null
+            and completed_at is null
+            and invalidated_at is null
+            and reasons & $urgentBits != 0
+        ) num_urgent,
         (select count(1) from review_tasks3
-          where site_id = ? and reasons & $urgentBits = 0 and decision is null) num_other
+          where site_id = ?
+            and decision is null
+            and completed_at is null
+            and invalidated_at is null
+            and reasons & $urgentBits = 0
+        ) num_other
       """
     runQueryFindExactlyOne(query, List(siteId.asAnyRef, siteId.asAnyRef), rs => {
       ReviewTaskCounts(rs.getInt("num_urgent"), rs.getInt("num_other"))
@@ -227,8 +237,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
       createdAtRevNr = getOptInt(rs, "created_at_rev_nr"),
       moreReasonsAt = getOptionalDate(rs, "more_reasons_at"),
       completedAt = getOptionalDate(rs, "completed_at"),
-      completedAtRevNr = getOptInt(rs, "completed_at_rev_nr"),
-      completedById = getOptInt(rs, "completed_by_id"),
+      decidedAtRevNr = getOptInt(rs, "decided_at_rev_nr"),
+      decidedById = getOptInt(rs, "decided_by_id"),
       invalidatedAt = getOptionalDate(rs, "invalidated_at"),
       decidedAt = getOptionalDate(rs, "decided_at"),
       decision = getOptInt(rs, "decision").flatMap(ReviewDecision.fromInt),

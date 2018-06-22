@@ -519,12 +519,13 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
             on p.site_id = h.site_id and p.page_id = h.page_id and p.version > h.page_version
         -- Don't rerender embedded comments pages. It's a bit tricky to lookup their origin,
         -- which needs to be included [EMBCMTSORIG]. And it's ok if it takes a second extra to
-        -- load an embedded comments page because it gets rendered on demand: the user will
-        -- start with looking at the blog post/article, won't care about the commenets until later.
+        -- load an embedded comments page because it gets rendered on demand: the user will start
+        -- with looking at the blog post/article, won't care about the comments until later, right.
         -- Do need to match the cdn origin though.
         where p.page_role <> ${PageRole.EmbeddedComments.toInt}
           and h.is_embedded = false
           and width_layout in (${WidthLayout.Tiny.toInt}, ${WidthLayout.Medium.toInt})
+          -- Remote origin only used, for embedded pages. [REMOTEORIGIN]
           and h.origin = ''
           and h.cdn_origin = ?
         limit $limit
@@ -771,7 +772,8 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       where
         decided_at < ? and
         completed_at is null and
-        invalidated_at is null"""
+        invalidated_at is null
+      order by decided_at asc"""
     val someSecondsAgo = now.minusSeconds(ReviewDecision.UndoTimoutSeconds).toJavaDate
     runQueryBuildMultiMap(query, List(someSecondsAgo), rs => {
       val siteId = rs.getInt("site_id")
