@@ -1062,8 +1062,8 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       // We've found a page path that's been inactivated and therefore should
       // redirect to the currently active path to the page. Find that other
       // path (the canonical path), by page id.
-      runErrIf3(correctPath.pageId.isEmpty,
-        "DwE31Rg5", s"Page id not found when looking up $pagePathIn")
+      dieIf(correctPath.pageId.isEmpty,
+          "TyE31RG5", s"s$siteId: Page id not found when looking up $pagePathIn")
       return _findCorrectPagePath(correctPath)
     }
 
@@ -1227,8 +1227,8 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
       moveRenamePageImpl(newPath)
 
       val resultingPath = lookupPagePathImpl(pageId)
-      runErrIf3(resultingPath != Some(newPath),
-        "DwE31ZB0", s"Resulting path: $resultingPath, and intended path: " +
+      dieIf(resultingPath isNot newPath,
+        "TyE31ZB0", s"s$siteId: Resulting path: $resultingPath, and intended path: " +
           s"$newPath, are different")
     }
 
@@ -1286,7 +1286,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
         vals = vals ::: List(pageId)
       }
       val numRowsDeleted = db.update(stmt, vals)
-      assErrIf(1 < numRowsDeleted && newPath.showId, "DwE09Ij7")
+      dieIf(1 < numRowsDeleted && newPath.showId, "TyE09IJ7")
     }
 
     changeExistingPathsToRedirects(pageId)

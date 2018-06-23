@@ -422,7 +422,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
         val vals = someMinsAgo::Nil
         (whereOrderBy, vals)
       case _ =>
-        assErr("DwE093RI3")
+        die("DwE093RI3")
     }
 
     val query = baseQuery + whereOrderBy +" limit "+ limit

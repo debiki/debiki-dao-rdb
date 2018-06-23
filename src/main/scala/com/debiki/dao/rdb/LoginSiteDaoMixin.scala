@@ -142,7 +142,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
     val user = loadMember(email.toUserId.get) match {
       case Some(user) => user
       case None =>
-        runErr("DwE2XKw5", o"""User `${email.toUserId}"' not found
+        die("TyEZ2XKW5", o"""s$siteId: User `${email.toUserId}"' not found
            when logging in with email id `$emailId'.""")
     }
     if (user.email != email.sentTo)
@@ -204,7 +204,7 @@ trait LoginSiteDaoMixin extends SiteTransaction {
         case Some(old: IdentityOpenId) =>
           val nev = IdentityOpenId(id = old.id, userId = user.id, loginAttempt.openIdDetails)
           if (nev != old) {
-            assErrIf(nev.openIdDetails.oidClaimedId != old.openIdDetails.oidClaimedId, "DwE73YQ2")
+            dieIf(nev.openIdDetails.oidClaimedId != old.openIdDetails.oidClaimedId, "DwE73YQ2")
             _updateIdentity(nev)
           }
           nev

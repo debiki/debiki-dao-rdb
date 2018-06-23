@@ -363,8 +363,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
       _loadIdtyDetailsAndUser(forUserId = Some(userId)) match {
         case (None, None) => None
         case (Some(idty), Some(user)) => Some(idty, user)
-        case (None, user) => assErr("DwE257IV2")
-        case (idty, None) => assErr("DwE6BZl42")
+        case (None, user) => die("TyE257IV2")
+        case (idty, None) => die("TyE6BZl42")
       }
     })
   }
@@ -441,7 +441,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
         val values = List(siteId.asAnyRef, openAuthKey.providerId, openAuthKey.providerKey)
         (whereClause, values)
 
-      case _ => assErr("DwE98239k2a2", "None, or more than one, lookup method specified")
+      case _ => die("TyE98239k2a2", "None, or more than one, lookup method specified")
     }
 
     db.query(sqlSelectFrom + whereClause, bindVals, rs => {
@@ -488,11 +488,11 @@ trait UserSiteDaoMixin extends SiteTransaction {
               avatarUrl = Option(rs.getString("i_avatar_url"))))
         }
         else {
-          assErr("DwE77GJ2", s"Unknown identity in identities3, site: $siteId, id: $id")
+          die("TyE77GJ2", s"s$siteId: Unknown identity in identities3, id: $id")
         }
       }
 
-      assErrIf(rs.next, "DwE53IK24", "More that one matching identity, when"+
+      dieIf(rs.next, "TyE53IK24", s"s$siteId: More that one matching identity, when" +
          " looking up: "+ (anyUserId, anyOpenIdDetails, anyOpenAuthKey))
 
       Some(identityInDb) -> Some(userInDb)
