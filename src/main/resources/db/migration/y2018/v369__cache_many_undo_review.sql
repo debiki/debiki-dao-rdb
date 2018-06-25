@@ -56,3 +56,7 @@ create table page_html3 (
   constraint pagehtml_r_pages foreign key (site_id, page_id) references pages3(site_id, page_id) deferrable
 );
 
+
+-- Incl country code too, not just language.
+update settings3 set language_code = 'sv_SE' where language_code = 'sv';
+update settings3 set language_code = 'en_US' where language_code = 'en';
