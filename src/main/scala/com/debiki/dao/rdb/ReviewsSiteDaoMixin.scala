@@ -204,6 +204,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
 
 
   override def loadReviewTaskCounts(isAdmin: Boolean): ReviewTaskCounts = {
+    SECURITY; SHOULD // filter away some pages for moderators, !isAdmin?
     val urgentBits = ReviewReason.PostFlagged.toInt // + ... later if more urgent tasks
     val query = i"""
       select
