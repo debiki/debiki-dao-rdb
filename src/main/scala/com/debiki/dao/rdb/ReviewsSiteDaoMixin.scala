@@ -205,6 +205,8 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
 
   override def loadReviewTaskCounts(isAdmin: Boolean): ReviewTaskCounts = {
     SECURITY; SHOULD // filter away some pages for moderators, !isAdmin?
+    UX; SHOULD // include deleted things only in the Other non-urgent count — currently  [5WKBQRS0]
+    // flagged & undecided things are incl in the Urget count, even if they've been deleted.
     val urgentBits = ReviewReason.PostFlagged.toInt // + ... later if more urgent tasks
     val query = i"""
       select
