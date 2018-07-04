@@ -113,7 +113,10 @@ trait LoginSiteDaoMixin extends SiteTransaction {
         : MemberLoginGrant = {
     val anyUser = loadMemberByPrimaryEmailOrUsername(loginAttempt.emailOrUsername)
     val user = anyUser getOrElse {
-      throw NoMemberWithThatEmailException
+      throw NoSuchEmailOrUsernameException
+    }
+    if (user.isDeleted) {
+      throw DbDao.UserDeletedException
     }
     // Don't let anyone login by specifying an email address that hasn't been verified — we
     // wouldn't know if two different people typed the same email address, maybe to hack
