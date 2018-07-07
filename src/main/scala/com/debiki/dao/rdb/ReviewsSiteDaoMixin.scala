@@ -204,9 +204,19 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
 
 
   override def loadReviewTaskCounts(isAdmin: Boolean): ReviewTaskCounts = {
-    SECURITY; SHOULD // filter away some pages for moderators, !isAdmin?
+    BUG; SHOULD // not urgent. Shouldn't count tasks one may not see (if !isAdmin).
+    // Tasks one may not see, are filtered away here: [5FSLW20] — but the counts loaded
+    // below can be wrong, unless is admin.
+    // To fix that, needs to actually load all tasks, and do access check, for each one?
+    // Maybe load only up to 9 tasks? instead of 99? so won't take long to check all of them.
+    // Also, can cache the result?
+    // Right now, though, almost always, moderators are allowed to see the same tasks,
+    // as admins. Only if people flags things in private messages or admin-only topics,
+    // admins may see, but moderators may not. So, can wait a bit with fixing this.
+
     UX; SHOULD // include deleted things only in the Other non-urgent count — currently  [5WKBQRS0]
     // flagged & undecided things are incl in the Urget count, even if they've been deleted.
+
     val urgentBits = ReviewReason.PostFlagged.toInt // + ... later if more urgent tasks
     val query = i"""
       select
