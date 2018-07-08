@@ -286,6 +286,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       mayPostBeforeEmailVerified = getOptBoolean(rs, "may_login_before_email_verified"),
       doubleTypeEmailAddress = getOptBoolean(rs, "double_type_email_address"),
       doubleTypePassword = getOptBoolean(rs, "double_type_password"),
+      minPasswordLength = None,
       begForEmailAddress = getOptBoolean(rs, "beg_for_email_address"),
       forumMainView = getOptString(rs, "forum_main_view"),
       forumTopicsSortButtons = getOptString(rs, "forum_topics_sort_buttons"),
