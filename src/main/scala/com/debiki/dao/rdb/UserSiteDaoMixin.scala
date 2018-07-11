@@ -358,60 +358,51 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadIdtyDetailsAndUser(userId: UserId): Option[(Identity, User)] = {
-    db.withConnection(implicit connection => {
-      _loadIdtyDetailsAndUser(forUserId = Some(userId)) match {
-        case (None, None) => None
-        case (Some(idty), Some(user)) => Some(idty, user)
-        case (None, user) => die("TyE257IV2")
-        case (idty, None) => die("TyE6BZl42")
-      }
+  def loadIdentities(userId: UserId): immutable.Seq[Identity] = {
+    val query = s"""
+        select $IdentitySelectListItems
+        from identities3 i
+        where i.site_id = ?
+          and i.user_id = ?
+        """
+    runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef), rs => {
+      val identity = readIdentity(rs)
+      dieIf(identity.userId != userId, "TyE2WKBGE5")
+      identity
     })
   }
 
 
-  /** Looks up detailed info on a single user. Only one forXxx param may be specified.
-    */
-  // COULD return Option(identity, user) instead of (Opt(id), Opt(user)).
-  private[rdb] def _loadIdtyDetailsAndUser(
-        forUserId: Option[UserId] = None,
-        forOpenIdDetails: OpenIdDetails = null,
-        forOpenAuthProfile: OpenAuthProviderIdKey = null)(implicit connection: js.Connection)
-        : (Option[Identity], Option[Member]) = {
-    val anyOpenIdDetails = Option(forOpenIdDetails)
-    val anyOpenAuthKey = Option(forOpenAuthProfile)
+  def loadOpenAuthIdentity(openAuthKey: OpenAuthProviderIdKey): Option[OpenAuthIdentity] = {
+    val query = s"""
+        select $IdentitySelectListItems
+        from identities3 i
+        where i.site_id = ?
+          and i.securesocial_provider_id = ?
+          and i.securesocial_user_id = ?"""
+    val values = List(siteId.asAnyRef, openAuthKey.providerId, openAuthKey.providerKey)
+    // There's a unique key.
+    runQueryFindOneOrNone(query, values, rs => {
+      val identity = readIdentity(rs)
+      dieIf(!identity.isInstanceOf[OpenAuthIdentity], "TyE5WKB2A1", "Bad class: " + classNameOf(identity))
+      val openAuthIdentity = identity.asInstanceOf[OpenAuthIdentity]
+      dieIf(openAuthIdentity.openAuthDetails.providerId != openAuthKey.providerId, "TyE2KWB01")
+      dieIf(openAuthIdentity.openAuthDetails.providerKey != openAuthKey.providerKey, "TyE2KWB02")
+      openAuthIdentity
+    })
+  }
 
-    val anyUserId = forUserId
 
-    var sqlSelectFrom = """
-        select
-            """+ UserSelectListItemsNoGuests +""",
-            i.ID i_id,
-            i.OID_CLAIMED_ID,
-            i.OID_OP_LOCAL_ID,
-            i.OID_REALM,
-            i.OID_ENDPOINT,
-            i.OID_VERSION,
-            i.SECURESOCIAL_USER_ID,
-            i.SECURESOCIAL_PROVIDER_ID,
-            i.AUTH_METHOD,
-            i.FIRST_NAME i_first_name,
-            i.LAST_NAME i_last_name,
-            i.FULL_NAME i_full_name,
-            i.EMAIL i_email,
-            i.COUNTRY i_country,
-            i.AVATAR_URL i_avatar_url
-          from identities3 i inner join users3 u
-            on i.SITE_ID = u.SITE_ID
-            and i.USER_ID = u.USER_ID
+  def loadOpenIdIdentity(openIdDetails: OpenIdDetails): Option[IdentityOpenId] = {
+    unimplemented("loadOpenIdIdentity", "TyE2WKBP40") /*
+    Maybe reuse later on, if loading OpenId identities:
+    val query = s"""
+        select $IdentitySelectListItems
+        from identities3 i
+        where i.site_id = ?
+          and ???
         """
-
-    val (whereClause, bindVals) = (anyUserId, anyOpenIdDetails, anyOpenAuthKey) match {
-
-      case (Some(userId: UserId), None, None) =>
-        ("""where i.SITE_ID = ? and i.USER_ID = ?""",
-           List(siteId.asAnyRef, userId.asAnyRef))
-
+    val values = ??? List(siteId.asAnyRef, ... )
       case (None, Some(openIdDetails: OpenIdDetails), None) =>
         // With Google OpenID, the identifier varies by realm. So use email
         // address instead. (With Google OpenID, the email address can be
@@ -432,71 +423,74 @@ trait UserSiteDaoMixin extends SiteTransaction {
         ("""where i.SITE_ID = ?
             and """+ claimedIdOrEmailCheck +"""
           """, List(siteId.asAnyRef, idOrEmail))
+    runQueryFindMany(query, values, rs => {
+      val identity = readIdentity(rs)
+    }) */
+  }
 
-      case (None, None, Some(openAuthKey: OpenAuthProviderIdKey)) =>
-        val whereClause =
-          """where i.SITE_ID = ?
-               and i.SECURESOCIAL_PROVIDER_ID = ?
-               and i.SECURESOCIAL_USER_ID = ?"""
-        val values = List(siteId.asAnyRef, openAuthKey.providerId, openAuthKey.providerKey)
-        (whereClause, values)
 
-      case _ => die("TyE98239k2a2", "None, or more than one, lookup method specified")
-    }
+  private val IdentitySelectListItems = i"""
+     |id identity_id,
+     |user_id,
+     |oid_claimed_id,
+     |oid_op_local_id,
+     |oid_realm,
+     |oid_endpoint,
+     |oid_version,
+     |securesocial_user_id,
+     |securesocial_provider_id,
+     |auth_method,
+     |first_name i_first_name,
+     |last_name i_last_name,
+     |full_name i_full_name,
+     |email i_email,
+     |country i_country,
+     |avatar_url i_avatar_url
+   """
 
-    db.query(sqlSelectFrom + whereClause, bindVals, rs => {
-      if (!rs.next)
-        return None -> None
 
-      // Warning: Some dupl code in _loadIdtysAndUsers:
-      // COULD break out construction of Identity to reusable
-      // functions.
+  def readIdentity(rs: js.ResultSet): Identity = {
+    val identityId = rs.getInt("identity_id").toString
+    val userId = rs.getInt("user_id")
 
-      val userInDb: Member = _User(rs).toMemberOrThrow
-      val id = rs.getInt("i_id").toString
-      val email = Option(rs.getString("i_email"))
-      val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
-      val anyOpenAuthProviderId = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
+    val email = Option(rs.getString("i_email"))
+    val anyClaimedOpenId = Option(rs.getString("OID_CLAIMED_ID"))
+    val anyOpenAuthProviderId = Option(rs.getString("SECURESOCIAL_PROVIDER_ID"))
 
-      val identityInDb = {
-        if (anyClaimedOpenId.nonEmpty) {
-          IdentityOpenId(
-            id = id,
-            userId = userInDb.id,
-            // COULD use d2e here, or n2e if I store Null instead of '-'.
-            OpenIdDetails(
-              oidEndpoint = rs.getString("OID_ENDPOINT"),
-              oidVersion = rs.getString("OID_VERSION"),
-              oidRealm = rs.getString("OID_REALM"),
-              oidClaimedId = anyClaimedOpenId.get,
-              oidOpLocalId = rs.getString("OID_OP_LOCAL_ID"),
-              firstName = rs.getString("i_first_name"),
-              email = email,
-              country = rs.getString("i_country")))
-        }
-        else if (anyOpenAuthProviderId.nonEmpty) {
-          OpenAuthIdentity(
-            id = id,
-            userId = userInDb.id,
-            openAuthDetails = OpenAuthDetails(
-              providerId = anyOpenAuthProviderId.get,
-              providerKey = rs.getString("SECURESOCIAL_USER_ID"),
-              firstName = Option(rs.getString("i_first_name")),
-              lastName = Option(rs.getString("i_last_name")),
-              fullName = Option(rs.getString("i_full_name")),
-              email = email,
-              avatarUrl = Option(rs.getString("i_avatar_url"))))
-        }
-        else {
-          die("TyE77GJ2", s"s$siteId: Unknown identity in identities3, id: $id")
-        }
+    val identityInDb = {
+      if (anyClaimedOpenId.nonEmpty) {
+        IdentityOpenId(
+          id = identityId,
+          userId = userId,
+          // COULD use d2e here, or n2e if I store Null instead of '-'.
+          OpenIdDetails(
+            oidEndpoint = rs.getString("OID_ENDPOINT"),
+            oidVersion = rs.getString("OID_VERSION"),
+            oidRealm = rs.getString("OID_REALM"),
+            oidClaimedId = anyClaimedOpenId.get,
+            oidOpLocalId = rs.getString("OID_OP_LOCAL_ID"),
+            firstName = rs.getString("i_first_name"),
+            email = email,
+            country = rs.getString("i_country")))
       }
-
-      dieIf(rs.next, "TyE53IK24", s"s$siteId: More that one matching identity, when" +
-         " looking up: "+ (anyUserId, anyOpenIdDetails, anyOpenAuthKey))
-
-      Some(identityInDb) -> Some(userInDb)
-    })
+      else if (anyOpenAuthProviderId.nonEmpty) {
+        OpenAuthIdentity(
+          id = identityId,
+          userId = userId,
+          openAuthDetails = OpenAuthDetails(
+            providerId = anyOpenAuthProviderId.get,
+            providerKey = rs.getString("SECURESOCIAL_USER_ID"),
+            firstName = Option(rs.getString("i_first_name")),
+            lastName = Option(rs.getString("i_last_name")),
+            fullName = Option(rs.getString("i_full_name")),
+            email = email,
+            avatarUrl = Option(rs.getString("i_avatar_url"))))
+      }
+      else {
+        die("TyE77GJ2", s"s$siteId: Unknown identity type, id: $identityId, user: $userId")
+      }
+    }
+    identityInDb
   }
 
 

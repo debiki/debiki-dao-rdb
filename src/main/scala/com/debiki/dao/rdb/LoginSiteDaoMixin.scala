@@ -34,7 +34,7 @@ object LoginSiteDaoMixin {
 
 
 trait LoginSiteDaoMixin extends SiteTransaction {
-  self: RdbSiteTransaction =>
+  self: RdbSiteTransaction with UserSiteDaoMixin =>
 
 
   override def tryLoginAsMember(loginAttempt: MemberLoginAttempt, requireVerifiedEmail: Boolean)
@@ -137,19 +137,20 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
   private def loginWithEmailId(loginAttempt: EmailLoginAttempt): MemberLoginGrant = {
     val emailId = loginAttempt.emailId
-    val email: Email = loadEmailById(emailId = emailId) match {
-      case Some(email) if email.toUserId.isDefined => email
-      case Some(email) => throw BadEmailTypeException(emailId)
-      case None => throw EmailNotFoundException(emailId)
+    val email: Email = loadEmailById(emailId = emailId) getOrElse {
+      throw EmailNotFoundException(emailId)
     }
-    val user = loadMember(email.toUserId.get) match {
-      case Some(user) => user
-      case None =>
-        die("TyEZ2XKW5", o"""s$siteId: User `${email.toUserId}"' not found
+
+    if (email.toUserId.isEmpty)
+      throw BadEmailTypeException(emailId)
+
+    val user = loadMember(email.toUserId.get) getOrElse {
+      die("TyEZ2XKW5", o"""s$siteId: User `${email.toUserId}"' not found
            when logging in with email id `$emailId'.""")
     }
+
     if (user.email != email.sentTo)
-      throw new EmailAddressChangedException(email, user)
+      throw EmailAddressChangedException(email, user)
 
     val idtyWithId = IdentityEmailId(id = emailId, userId = user.id, emailSent = Some(email))
     MemberLoginGrant(Some(idtyWithId), user, isNewIdentity = false, isNewMember = false)
@@ -230,32 +231,29 @@ trait LoginSiteDaoMixin extends SiteTransaction {
 
   private def loginOpenAuthImpl(loginAttempt: OpenAuthLoginAttempt)
         (connection: js.Connection): MemberLoginGrant = {
-    val (identityInDb: Option[Identity], userInDb: Option[Member]) =
-      _loadIdtyDetailsAndUser(
-        forOpenAuthProfile = loginAttempt.profileProviderAndKey)(connection)
 
-    val user = userInDb match {
-      case Some(u) => u
-      case None => throw IdentityNotFoundException
+    val identityInDb = loadOpenAuthIdentity(loginAttempt.profileProviderAndKey) getOrElse {
+      throw IdentityNotFoundException
+    }
+
+    val user: Member = loadMember(identityInDb.userId) getOrElse {
+      // There's a foreign key, so this cannot happen.
+      die(o"""s$siteId: User ${identityInDb.userId} missing for OpenAuth
+          identity ${identityInDb.id}""", "TyE4WKBQR")
     }
 
     // (For some unimportant comments, see the corresponding comment in loginOpenId() above.)
 
-    val identity: OpenAuthIdentity = identityInDb match {
-      case None => throw IdentityNotFoundException
-      case Some(old: OpenAuthIdentity) =>
-        val nev = OpenAuthIdentity(id = old.id, userId = user.id,
-          loginAttempt.openAuthDetails)
-        if (nev != old) {
-          updateOpenAuthIdentity(nev)(connection)
-        }
-        nev
-      case x =>
-        throwBadDatabaseData("DwE21GSh0", s"A non-SecureSocial identity found in database: $x")
-    }
+    val identity =
+      if (loginAttempt.openAuthDetails == identityInDb.openAuthDetails) identityInDb
+      else {
+        val updatedIdentity = OpenAuthIdentity(
+          identityInDb.id, userId = user.id, loginAttempt.openAuthDetails)
+        updateOpenAuthIdentity(updatedIdentity)(connection)
+        updatedIdentity
+      }
 
-    MemberLoginGrant(Some(identity), user, isNewIdentity = identityInDb.isEmpty,
-      isNewMember = userInDb.isEmpty)
+    MemberLoginGrant(Some(identity), user, isNewIdentity = false, isNewMember = false)
   }
 
 }
