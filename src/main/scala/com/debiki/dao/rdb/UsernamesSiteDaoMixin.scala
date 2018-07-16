@@ -77,8 +77,14 @@ trait UsernamesSiteDaoMixin extends SiteTransaction {
 
 
   def loadUsernameUsages(username: String): Seq[UsernameUsage] = {
-    val query = s"select * from usernames3 where site_id = ? and username_lowercase = ? $orderBy"
-    val values = List(siteId.asAnyRef, username.toLowerCase.asAnyRef)
+    // [CANONUN] Also search for canonical version of username, e.g. "us-er.na___me" —> "us_er_na_me".
+    //val canonicalUsername = User.makeUsernameCanonical(username)
+    val query = s"""
+      select * from usernames3
+      where site_id = ?
+        and username_lowercase = ? $orderBy"""
+        // and (username_lowercase = ? or username_lowercase = ?) $orderBy"""
+    val values = List(siteId.asAnyRef, username.toLowerCase)  // canonicalUsername)
     runQueryFindMany(query, values, readUsernameUsage)
   }
 
