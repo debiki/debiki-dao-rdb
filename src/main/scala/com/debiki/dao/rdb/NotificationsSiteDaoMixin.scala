@@ -31,6 +31,8 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
 
   def saveDeleteNotifications(notifications: Notifications) {
+    if (notifications.isEmpty)
+      return
     // Perhaps we'd better allow notifications to be created and deleted, so that any
     // site-over-quota notifications get sent.
     transactionAllowOverQuota { implicit connection =>
