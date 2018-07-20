@@ -24,7 +24,10 @@ import Rdb._
 import RdbUtil._
 
 
-/** Adds and removes post tags. Page tags = tags added to the page body post (post nr 1).
+/** Adds and removes post tags. Page tags = tags added to the page title post (post nr 1)
+  * — since the title post cannot be moved to another page.
+  * (Wouldn't make sense to move the title, right. Instead, one would edit it.
+  * However, the body post = nr 2: can in very rare cases make sense to move it.)
   */
 trait TagsSiteDaoMixin extends SiteTransaction {
   self: RdbSiteTransaction =>
