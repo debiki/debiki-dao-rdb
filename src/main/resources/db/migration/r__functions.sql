@@ -51,7 +51,7 @@ create or replace function is_valid_tag_label(text character varying) returns bo
     as $_$
 begin
     -- No whitespace, commas, ';' etcetera. Sync with Scala [7JES4R3]
-    return text ~ '^[^\s,;\|''"<>]+$' and length(text) between 1 and 100;
+    return text !~ bad_tag_label_char_regex() and length(text) between 1 and 100;
 end;
 $_$;
 
