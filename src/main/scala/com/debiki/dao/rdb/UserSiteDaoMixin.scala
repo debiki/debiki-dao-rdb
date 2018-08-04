@@ -144,6 +144,74 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadGroupMembers(groupId: UserId): Seq[User] = {
+    // Right now, there're only the built-in groups.
+    groupId match {
+      case Group.AdminsId =>
+        loadGroupMembersImpl(adminsOnly = true)
+      case Group.ModeratorsId =>
+        loadGroupMembersImpl(modsOnly = true)
+      case Group.StaffId =>
+        loadGroupMembersImpl(staffOnly = true)
+      case trustLevelGroupId if trustLevelGroupId >= Group.NewMembersId
+                              && trustLevelGroupId <= Group.CoreMembersId =>
+        loadGroupMembersImpl(builtInGroup = Some(trustLevelGroupId))
+      case _ =>
+        die("TyE2AKB7WU4", s"Bad group id: $groupId")
+    }
+  }
+
+
+  def loadGroupMembersImpl(
+        adminsOnly: Boolean = false, modsOnly: Boolean = false, staffOnly: Boolean = false,
+        builtInGroup: Option[UserId] = None): Seq[User] = {
+
+    UNTESTED
+
+    // Currently no good reason to load everyone (members and also *guests*).
+    unimplementedIf(builtInGroup is Group.EveryoneId,
+      "Loading Everyone group members [TyE2ABKR05]")
+
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef)
+
+    import Group.{AdminsId, ModeratorsId => ModsId}
+    val conditions =
+      if (adminsOnly) s"u.is_admin and u.user_id <> $AdminsId"
+      else if (modsOnly)  s"u.is_moderator and u.user_id <> $ModsId"
+      else if (staffOnly) s"(u.is_admin or u.is_moderator) and u.user_id not in ($AdminsId, $ModsId)"
+      else {
+        val groupId = builtInGroup getOrDie "TyE3QKB05W"
+        val trustLevel = TrustLevel.fromBuiltInGroupId(groupId) getOrElse {
+          return Nil
+        }
+        values.append(trustLevel.toInt.asAnyRef)
+        // This:  "Hello @new_members"  and "Hi @basic_members" sounds as if full members
+        // and trusted members and higher, are *not* supposed to be included.
+        // A 'trusted member' or a 'core member' is not a 'new member'. Instead, it's
+        // a *long time* member.
+        // However, this: "All @full_members, ..." — that also includes trusted members and
+        // up. Because all of them *are* full members.
+        // So, for new and basic members, load only exactly those trust levels.
+        // And for full member and higher, load that trust level, and all higher trust levels.
+        // This is the least confusing behavior, for people who don't know what trust levels are?
+        val eqOrGte = if (groupId <= Group.BasicMembersId) "=" else ">="
+        s"coalesce(u.locked_trust_level, u.trust_level) $eqOrGte ?"
+      }
+
+    val query = s"""
+      select $UserSelectListItemsNoGuests
+      from users3 u
+      where u.site_id = ?
+        and ($conditions)"""
+
+    runQueryFindMany(query, values.toList, rs => {
+      val user = _User(rs)
+      dieIf(user.isGuest, "TyE5ABK20A2")
+      user
+    })
+  }
+
+
   def insertGroup(group: Group) {
     val sql = """
       insert into users3(site_id, user_id, username, full_name, created_at)
@@ -495,23 +563,36 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
 
   def loadMemberByPrimaryEmailOrUsername(emailOrUsername: String): Option[Member] = {
-    loadMemberByPrimaryEmailOrUsernameImpl(emailOrUsername)(theOneAndOnlyConnection)
+    loadMemberByPrimaryEmailOrUsernameImpl(emailOrUsername, maybeEmail = true).map(_.toMemberOrThrow)
   }
 
 
-  private def loadMemberByPrimaryEmailOrUsernameImpl(emailOrUsername: String)
-        (implicit connection: js.Connection): Option[Member] = {
+  def loadMemberOrGroupByUsername(username: String): Option[User] = {
+    dieIf(username contains '@', "TyE2ABKJ40", s"Got an email address")
+    loadMemberByPrimaryEmailOrUsernameImpl(username, maybeEmail = false)
+  }
+
+
+  private def loadMemberByPrimaryEmailOrUsernameImpl(emailOrUsername: String, maybeEmail: Boolean)
+        : Option[User] = {
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef, emailOrUsername)
+    val emailEqOr = if (!maybeEmail) "" else {
+      values.append(emailOrUsername)
+      "u.primary_email_addr = ? or"
+    }
+
     // [UNPUNCT]
-    val sql = s"""
+    val query = s"""
       select $UserSelectListItemsNoGuests
       from users3 u
       where u.SITE_ID = ?
         and u.USER_ID >= $LowestNonGuestId
-        and (u.primary_email_addr = ? or lower(u.USERNAME) = lower(?))
+        and ($emailEqOr lower(u.USERNAME) = lower(?))
       """
-    val values = List(siteId.asAnyRef, emailOrUsername, emailOrUsername)
-    runQueryFindOneOrNone(sql, values, rs => {
-      _User(rs).toMemberOrThrow
+    runQueryFindOneOrNone(query, values.toList, rs => {
+      val user = _User(rs)
+      dieIf(user.isGuest, "TyE2AKB7F3")
+      user
     })
   }
 
