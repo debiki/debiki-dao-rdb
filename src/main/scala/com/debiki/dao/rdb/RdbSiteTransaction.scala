@@ -1071,10 +1071,22 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
-  def insertPageMetaMarkSectionPageStale(pageMeta: PageMeta) {
+  def insertPageMetaMarkSectionPageStale(pageMeta: PageMeta, isImporting: Boolean) {
     require(pageMeta.createdAt == pageMeta.updatedAt, "DwE2EGPF8")
-    pageMeta.publishedAt.foreach(publDati =>
-      require(pageMeta.createdAt.getTime <= publDati.getTime, "DwE6GKPE3"))
+
+    // Publ date can be in the future, also if creating new page.
+    pageMeta.publishedAt.foreach(publAt =>
+      require(pageMeta.createdAt.getTime <= publAt.getTime, "DwE6GKPE3"))
+
+    if (isImporting) {
+      pageMeta.bumpedAt.foreach(bumpedAt =>
+        require(pageMeta.createdAt.getTime <= bumpedAt.getTime, "TyEBMPD924B4"))
+    }
+    else {
+      // Page cannot have been bumped yet, since it's getting created now.
+      require(pageMeta.bumpedAt.isEmpty, "TyE2AKB40F")
+    }
+
     require(pageMeta.numOrigPostLikeVotes == 0, "DwE4KPE8")
     require(pageMeta.numOrigPostWrongVotes == 0, "DwE2PKFE9")
     require(pageMeta.numOrigPostBuryVotes == 0, "DwE44KP5")
