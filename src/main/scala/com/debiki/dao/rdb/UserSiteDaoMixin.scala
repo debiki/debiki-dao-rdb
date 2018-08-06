@@ -146,6 +146,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
   def loadGroupMembers(groupId: UserId): Seq[User] = {
     // Right now, there're only the built-in groups.
+    // In e2e test: TyT4AWJL208R
     groupId match {
       case Group.AdminsId =>
         loadGroupMembersImpl(adminsOnly = true)
@@ -162,13 +163,11 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadGroupMembersImpl(
+  private def loadGroupMembersImpl(
         adminsOnly: Boolean = false, modsOnly: Boolean = false, staffOnly: Boolean = false,
         builtInGroup: Option[UserId] = None): Seq[User] = {
 
-    UNTESTED
-
-    // Currently no good reason to load everyone (members and also *guests*).
+    // Currently no good reason to load everyone incl *guests*.
     unimplementedIf(builtInGroup is Group.EveryoneId,
       "Loading Everyone group members [TyE2ABKR05]")
 
@@ -176,6 +175,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
 
     import Group.{AdminsId, ModeratorsId => ModsId}
     val conditions =
+      // <> AdminsId means don't-load-the-Admins-*group*.
       if (adminsOnly) s"u.is_admin and u.user_id <> $AdminsId"
       else if (modsOnly)  s"u.is_moderator and u.user_id <> $ModsId"
       else if (staffOnly) s"(u.is_admin or u.is_moderator) and u.user_id not in ($AdminsId, $ModsId)"
