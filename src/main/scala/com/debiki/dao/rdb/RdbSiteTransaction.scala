@@ -684,6 +684,21 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   }
 
 
+  def updateHost(host: SiteHost) {
+    val newRoleChar = host.role match {
+      case SiteHost.RoleCanonical => "C"
+      case SiteHost.RoleDuplicate => "D"
+      case SiteHost.RoleRedirect => "R"
+      case SiteHost.RoleLink => "L"
+    }
+    val statement = s"""
+      update hosts3 set canonical = ?
+      where site_id = ? and host = ?
+      """
+    runUpdateExactlyOneRow(statement, List(newRoleChar, siteId.asAnyRef, host.hostname))
+  }
+
+
   def changeCanonicalHostRoleToExtra() {
     val statement = s"""
       update hosts3 set canonical = 'D'

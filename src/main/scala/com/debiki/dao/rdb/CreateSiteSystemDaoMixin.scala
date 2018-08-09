@@ -163,6 +163,10 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
   }
 
 
+  def loadSiteByName(name: String): Option[Site] = {
+    loadSites().find(_.name == name)
+  }
+
   def deleteSiteByName(name: String): Option[Site] = {
     require(SiteHost.isE2eTestHostname(name), "Can delete test sites only [EdE4PF0Y4]")
     val site = loadSites().find(_.name == name) getOrElse {
