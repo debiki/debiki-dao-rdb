@@ -828,6 +828,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       delete from review_tasks3
       delete from perms_on_pages3
       delete from settings3
+      delete from drafts3
       delete from post_read_stats3
       delete from notifications3
       delete from emails_out3

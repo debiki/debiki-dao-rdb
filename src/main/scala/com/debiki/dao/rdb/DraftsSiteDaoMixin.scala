@@ -148,7 +148,7 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
       else if (draftLocator.replyToPostNr.isDefined) {
         values.append(draftLocator.replyToPageId.get.asAnyRef)
         values.append(draftLocator.replyToPostNr.get.asAnyRef)
-        values.append(draftLocator.replyType.get.asAnyRef)
+        values.append(draftLocator.replyType.get.toInt.asAnyRef)
         o"""reply_to_page_id = ? and reply_to_post_nr = ? and reply_type = ?
             and reply_whisper_to_user_id is null"""
       }
@@ -168,8 +168,8 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
 
   override def listDraftsRecentlyEditedFirst(userId: UserId): immutable.Seq[Draft] = {
     val query = s"""
-      select * from drafts3 where site_id = ? and by_user_id = ?
-      -- Can use index drafts_byuser_editedat_i?
+      -- Can use index drafts_byuser_editedat_i ?
+      select * from drafts3 where site_id = ? and by_user_id = ? and deleted_at is null
       order by coalesce(last_edited_at, created_at) desc
       """
     runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef), readDraft)

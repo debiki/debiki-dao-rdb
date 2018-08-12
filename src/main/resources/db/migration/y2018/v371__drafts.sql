@@ -85,7 +85,10 @@ create table drafts3 (
 
 
 create index drafts_byuser_editedat_i on drafts3 (
-  site_id, by_user_id, coalesce(last_edited_at, created_at));
+  site_id, by_user_id, coalesce(last_edited_at, created_at)) where deleted_at is null;
+
+create index drafts_byuser_deldat_i on drafts3 (
+  site_id, by_user_id, deleted_at desc) where deleted_at is not null;
 
 
 create index drafts_category_i on drafts3 (site_id, new_topic_category_id);
