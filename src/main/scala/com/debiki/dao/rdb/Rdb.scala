@@ -125,6 +125,12 @@ object Rdb {
     if (value eq null) "" else value
   }
 
+  def getString(rs: js.ResultSet, column: String): String = {
+    val s = rs.getString(column)
+    dieIf(s eq null, "TyE5WKAB03R", s"Column value is null: $column")
+    s
+  }
+
   def getOptString(rs: js.ResultSet, column: String): Option[String] =
     getOptionalStringNotEmpty(rs, column)
 
@@ -177,6 +183,18 @@ object Rdb {
     var value = rs.getFloat(column)
     if (rs.wasNull) None
     else Some(value)
+  }
+
+  def getIntNot0(rs: js.ResultSet, column: String): Int = {
+    var value = rs.getInt(column)
+    dieIf(rs.wasNull, "TTyECOLINTISNL", s"Column int value is null: $column")
+    value
+  }
+
+  def getLongNot0(rs: js.ResultSet, column: String): Long = {
+    var value = rs.getLong(column)
+    dieIf(rs.wasNull, "TyECOLLNGISNL", s"Column long value is null: $column")
+    value
   }
 
   def getOptInt(rs: js.ResultSet, column: String): Option[Int] =

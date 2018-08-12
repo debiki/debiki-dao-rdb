@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015 Kaj Magnus Lindberg
+ * Copyright (c) 2015, 2018 Kaj Magnus Lindberg
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -27,7 +27,7 @@ import RdbUtil.makeInListFor
 
 /** Loads and saves ReviewTask:s.
   */
-trait ReviewsSiteDaoMixin extends SiteTransaction {
+trait ReviewTasksSiteDaoMixin extends SiteTransaction {
   self: RdbSiteTransaction =>
 
 
@@ -43,6 +43,7 @@ trait ReviewsSiteDaoMixin extends SiteTransaction {
 
 
   override def upsertReviewTask(reviewTask: ReviewTask) {
+    // Fix now?
     // Later, with Postgres 9.5, use its built-in upsert.
     val updateStatement = """
       update review_tasks3 set

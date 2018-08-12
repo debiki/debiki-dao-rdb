@@ -39,6 +39,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   extends SiteTransaction
   with PagesSiteDaoMixin
   with PostsSiteDaoMixin
+  with DraftsSiteDaoMixin
   with TagsSiteDaoMixin
   with PageUsersSiteDaoMixin
   with UploadsSiteDaoMixin
@@ -53,7 +54,7 @@ class RdbSiteTransaction(var siteId: SiteId, val daoFactory: RdbDaoFactory, val 
   with NotificationsSiteDaoMixin
   with SettingsSiteDaoMixin
   with BlocksSiteDaoMixin
-  with ReviewsSiteDaoMixin
+  with ReviewTasksSiteDaoMixin
   with PermsOnPagesRdbMixin
   with AuditLogSiteDaoMixin {
 

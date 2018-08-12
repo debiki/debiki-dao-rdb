@@ -190,6 +190,7 @@ trait CreateSiteSystemDaoMixin extends SystemTransaction {  // RENAME to SystemS
       delete from review_tasks3 where site_id = ?
       delete from perms_on_pages3 where site_id = ?
       delete from settings3 where site_id = ?
+      delete from drafts3 where site_id = ?
       delete from post_read_stats3 where site_id = ?
       delete from notifications3 where site_id = ?
       delete from emails_out3 where site_id = ?

@@ -46,7 +46,7 @@ object RdbUtil {
   def makeInListFor(values: Iterable[_]): String = {
     // makeInListFor(Seq[_]), when given an Iterable, appended only one single "?"
     // instead of many, why? Anyway, instead:
-    dieIf(values.isEmpty, "DwE7YME4")
+    dieIf(values.isEmpty, "TyESQL0INL")
     var result = "?"
     if (values.size >= 2) {
       result += ",?" * (values.size - 1)

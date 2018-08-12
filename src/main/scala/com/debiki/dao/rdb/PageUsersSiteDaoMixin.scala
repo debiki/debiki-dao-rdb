@@ -18,11 +18,9 @@
 package com.debiki.dao.rdb
 
 import com.debiki.core._
-import com.debiki.core.Prelude._
-import java.{sql => js, util => ju}
 import scala.collection.immutable
 import Rdb._
-import scala.collection.mutable.ArrayBuffer
+import RdbUtil.makeInListFor
 
 
 /** Loads and saves members of direct message conversations.
@@ -91,6 +89,7 @@ trait PageUsersSiteDaoMixin extends SiteTransaction {
     require(onlyPageRoles.nonEmpty, "EsE4G8U1")
     // Inline the page roles (rather than (?, ?, ?, ...)) because they'll always be the same
     // for each caller (hardcoded somewhere).
+    CLEAN_UP // what? why load page_role? remove?
     val query = s"""
       select tu.page_id, p.page_role
       from page_users3 tu inner join pages3 p
