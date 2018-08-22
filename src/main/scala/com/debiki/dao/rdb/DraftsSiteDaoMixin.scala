@@ -45,70 +45,64 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
 
   override def upsertDraft(draft: Draft) {
     // Probably the same person won't be editing the same draft, in two places at once,
-    // humans cannot do such things. So upsert, and overwriting = fine, as intended.
+    // humans cannot do such things. So upserting and overwriting = fine.
+    // Well actually, can happen if one has a text open in two browser tabs, and edits
+    // first in one tab, then forgets about that and edits in the 2nd tab instead. [5ABRQP0]
 
     val insertStatement = s"""
       insert into drafts3 (
         site_id,
         by_user_id,
         draft_nr,
+        draft_type,
         created_at,
         last_edited_at,
-        -- auto_post_at,
-        -- auto_post_publ_status,
         deleted_at,
-        new_topic_category_id,
-        new_topic_type,
-        message_to_user_id,
-        edit_post_id,
-        reply_to_page_id,
-        reply_to_post_nr,
-        reply_type,
-        -- reply_whisper_to_user_id,
+        category_id,
+        topic_type,
+        page_id,
+        post_nr,
+        post_id,
+        post_type,
+        to_user_id,
         title,
         text)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict (site_id, by_user_id, draft_nr)
       do update set
-        -- Use the new version, probably it's more recent.
-        -- (Checking last_edited_at = not worth the trouble?)
+        -- Use the new version, it should be more recent. [5ABRQP0]
+        draft_type = excluded.draft_type,
         created_at = least(drafts3.created_at, excluded.created_at),
         last_edited_at = excluded.last_edited_at,
-        -- auto_post_at = excluded.auto_post_at,  — later
-        -- auto_post_publ_status =  — later
         deleted_at = excluded.deleted_at,
-        new_topic_category_id = excluded.new_topic_category_id,
-        new_topic_type = excluded.new_topic_type,
-        message_to_user_id = excluded.message_to_user_id,
-        edit_post_id = excluded.edit_post_id,
-        reply_to_page_id = excluded.reply_to_page_id,
-        reply_to_post_nr = excluded.reply_to_post_nr,
-        reply_type = excluded.reply_type,
-        -- reply_whisper_to_user_id = excluded.reply_whisper_to_user_id,  — later
+        category_id = excluded.category_id,
+        topic_type = excluded.topic_type,
+        page_id = excluded.page_id,
+        post_nr = excluded.post_nr,
+        post_id = excluded.post_id,
+        post_type = excluded.post_type,
+        to_user_id = excluded.to_user_id,
         title = excluded.title,
         text = excluded.text
       """
 
     val locator = draft.forWhat
 
-    unimplementedIf(draft.autoPostAt.isDefined, "TyE25920ARKAAT")
-
     runUpdateSingleRow(insertStatement, List(
       siteId.asAnyRef,
       draft.byUserId.asAnyRef,
       draft.draftNr.asAnyRef,
+      locator.draftType.toInt.asAnyRef,
       draft.createdAt.asTimestamp,
       draft.lastEditedAt.orNullTimestamp,
-      // auto post at
-      // auto post publ status
       draft.deletedAt.orNullTimestamp,
-      locator.newTopicCategoryId.orNullInt,
-      draft.newTopicType.map(_.toInt).orNullInt,
-      locator.messageToUserId.orNullInt,
-      locator.editPostId.orNullInt,
-      locator.replyToPageId.orNullVarchar,
-      locator.replyToPostNr.orNullInt,
-      draft.replyType.map(_.toInt).orNullInt,
+      locator.categoryId.orNullInt,
+      draft.topicType.map(_.toInt).orNullInt,
+      locator.pageId.orNullVarchar,
+      locator.postNr.orNullInt,
+      locator.postId.orNullInt,
+      draft.postType.map(_.toInt).orNullInt,
+      locator.toUserId.orNullInt,
       draft.title,
       draft.text))
   }
@@ -132,36 +126,25 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
 
   override def loadDraftsByLocator(userId: UserId, draftLocator: DraftLocator): immutable.Seq[Draft] = {
     val values = ArrayBuffer[AnyRef](siteId.asAnyRef, userId.asAnyRef)
-    val locatorClauses =
-      if (draftLocator.newTopicCategoryId.isDefined) {
+    val locatorClauses = draftLocator.draftType match {
+      case DraftType.Topic =>
         // Load all new topic drafts, and show a dialog that lets the user choose which one
         // to continue composing.
-        "new_topic_category_id is not null"
-      }
-      else if (draftLocator.messageToUserId.isDefined) {
-        values.append(draftLocator.messageToUserId.get.asAnyRef)
-        "message_to_user_id = ?"
-      }
-      else if (draftLocator.editPostId.isDefined) {
-        values.append(draftLocator.editPostId.get.asAnyRef)
-        "edit_post_id = ?"
-      }
-      else if (draftLocator.replyToPostNr.isDefined) {
-        values.append(draftLocator.replyToPageId.get.asAnyRef)
-        values.append(draftLocator.replyToPostNr.get.asAnyRef)
-        o"""reply_to_page_id = ? and reply_to_post_nr = ?
-            and reply_whisper_to_user_id is null"""
-      }
-      else {
-        die("TyE4AKRRJ73")
-      }
+        "category_id is not null"
+      case DraftType.DirectMessage =>
+        values.append(draftLocator.toUserId.getOrDie("TyE2ABK47").asAnyRef)
+        "to_user_id = ?"
+      case DraftType.Reply | DraftType.Edit =>
+        values.append(draftLocator.postId.getOrDie("TyE2ABSL7").asAnyRef)
+        "post_id = ?"
+    }
 
     val query = s"""
       select * from drafts3
       where site_id = ?
         and by_user_id = ?
         and deleted_at is null
-        and $locatorClauses
+        and ($locatorClauses)
         order by coalesce(last_edited_at, created_at) desc"""
 
     runQueryFindMany(query, values.toList, readDraft)
@@ -180,22 +163,22 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
 
   private def readDraft(rs: js.ResultSet): Draft = {
     val draftLocator = DraftLocator(
-      newTopicCategoryId = getOptInt(rs, "new_topic_category_id"),
-      messageToUserId = getOptInt(rs, "message_to_user_id"),
-      editPostId = getOptInt(rs, "edit_post_id"),
-      replyToPageId = getOptString(rs, "reply_to_page_id"),
-      replyToPostNr = getOptInt(rs, "reply_to_post_nr"))
+      draftType = DraftType.fromInt(getInt(rs, "draft_type")).getOrElse(DraftType.Scratch),
+      categoryId = getOptInt(rs, "category_id"),
+      toUserId = getOptInt(rs, "to_user_id"),
+      postId = getOptInt(rs, "post_id"),
+      pageId = getOptString(rs, "page_id"),
+      postNr = getOptInt(rs, "post_nr"))
 
     Draft(
-      byUserId = getIntNot0(rs, "by_user_id"),
-      draftNr = getIntNot0(rs, "draft_nr"),
+      byUserId = getInt(rs, "by_user_id"),
+      draftNr = getInt(rs, "draft_nr"),
       forWhat = draftLocator,
       createdAt = getWhen(rs, "created_at"),
       lastEditedAt = getOptWhen(rs, "last_edited_at"),
-      autoPostAt = getOptWhen(rs, "auto_post_at"),
       deletedAt = getOptWhen(rs, "deleted_at"),
-      newTopicType = getOptInt(rs, "new_topic_type").flatMap(PageRole.fromInt),
-      replyType = getOptInt(rs, "reply_type").flatMap(PostType.fromInt),
+      topicType = getOptInt(rs, "topic_type").flatMap(PageRole.fromInt),
+      postType = getOptInt(rs, "post_type").flatMap(PostType.fromInt),
       title = getString(rs, "title"),
       text = getString(rs, "text"))
   }

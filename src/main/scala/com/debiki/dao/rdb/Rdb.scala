@@ -185,13 +185,13 @@ object Rdb {
     else Some(value)
   }
 
-  def getIntNot0(rs: js.ResultSet, column: String): Int = {
+  def getInt(rs: js.ResultSet, column: String): Int = {
     var value = rs.getInt(column)
     dieIf(rs.wasNull, "TTyECOLINTISNL", s"Column int value is null: $column")
     value
   }
 
-  def getLongNot0(rs: js.ResultSet, column: String): Long = {
+  def getLong(rs: js.ResultSet, column: String): Long = {
     var value = rs.getLong(column)
     dieIf(rs.wasNull, "TyECOLLNGISNL", s"Column long value is null: $column")
     value

@@ -43,8 +43,7 @@ trait ReviewTasksSiteDaoMixin extends SiteTransaction {
 
 
   override def upsertReviewTask(reviewTask: ReviewTask) {
-    // Fix now?
-    // Later, with Postgres 9.5, use its built-in upsert.
+    CLEAN_UP // now with Postgres >= 9.5, use its built-in upsert.
     val updateStatement = """
       update review_tasks3 set
         reasons = ?,
