@@ -67,13 +67,14 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
         to_user_id,
         title,
         text)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      values (?, ?, ?, ?, ?, null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict (site_id, by_user_id, draft_nr)
       do update set
         -- Use the new version, it should be more recent. [5ABRQP0]
         draft_type = excluded.draft_type,
         created_at = least(drafts3.created_at, excluded.created_at),
-        last_edited_at = excluded.last_edited_at,
+        -- If there's an older row, excluded.created_at is instead an *edit* date.
+        last_edited_at = excluded.created_at,
         deleted_at = excluded.deleted_at,
         category_id = excluded.category_id,
         topic_type = excluded.topic_type,
@@ -94,7 +95,6 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
       draft.draftNr.asAnyRef,
       locator.draftType.toInt.asAnyRef,
       draft.createdAt.asTimestamp,
-      draft.lastEditedAt.orNullTimestamp,
       draft.deletedAt.orNullTimestamp,
       locator.categoryId.orNullInt,
       draft.topicType.map(_.toInt).orNullInt,

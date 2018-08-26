@@ -253,7 +253,7 @@ trait PagesSiteDaoMixin extends SiteTransaction {
 
 
   override def loadPagePostNrsByPostIds(postIds: Iterable[PostId]): Map[PostId, PagePostNr] = {
-    TESTS_MISSING  // [7WKABZP2]
+    // Tested here: [7WKABZP2]
     if (postIds.isEmpty)
       return Map.empty
     val uniqueIds = postIds.toSet
