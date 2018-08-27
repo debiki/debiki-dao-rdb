@@ -43,17 +43,19 @@ create table drafts3 (
   constraint drafts_c_createdat_lte_lasteditedat check (created_at <= last_edited_at),
   constraint drafts_c_createdat_lte_deletedat    check (created_at <= deleted_at),
   constraint drafts_c_lasteditedat_lte_deletedat check (last_edited_at <= deleted_at),
-  constraint drafts_c_page_post_null_eq check ((page_id is null) = (post_nr is null)),
+  constraint drafts_c_postnr_has_pageid check ((post_nr is null) or (page_id is not null)),
 
   constraint drafts_c_title_len_lte_500 check (length(title) <= 500),
   constraint drafts_c_text_len_lte_500k check (length(text) <= 500*1000),
 
-	-- It an okay new-topic draft?
+  -- Draft type 1 = scratch, all fine.
+
+  -- Is an okay new-topic draft?
   constraint drafts_c_type_topic check (
     draft_type <> 2 or (
       category_id is not null and
       topic_type is not null and
-      page_id is null and
+      page_id is not null and
       post_nr is null and
       post_id is null and
       post_type is null and
