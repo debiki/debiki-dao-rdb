@@ -73,8 +73,12 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
         -- Use the new version, it should be more recent. [5ABRQP0]
         draft_type = excluded.draft_type,
         created_at = least(drafts3.created_at, excluded.created_at),
-        -- If there's an older row, excluded.created_at is instead an *edit* date.
-        last_edited_at = excluded.created_at,
+        -- If there's an older row, excluded.created_at is instead an *edit* date. [5AKJWX0]
+        last_edited_at = case
+          -- If got deleted, or undeleted, don't bump edit date. [TyT2ARDW3]
+          when excluded.deleted_at is null and drafts3.deleted_at is null then excluded.created_at
+          else drafts3.last_edited_at
+        end,
         deleted_at = excluded.deleted_at,
         category_id = excluded.category_id,
         topic_type = excluded.topic_type,
@@ -125,7 +129,9 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
 
 
   override def loadDraftsByLocator(userId: UserId, draftLocator: DraftLocator): immutable.Seq[Draft] = {
-    val values = ArrayBuffer[AnyRef](siteId.asAnyRef, userId.asAnyRef)
+    val values = ArrayBuffer[AnyRef](
+      siteId.asAnyRef, userId.asAnyRef, draftLocator.draftType.toInt.asAnyRef)
+
     val locatorClauses = draftLocator.draftType match {
       case DraftType.Topic =>
         // Load all new topic drafts, and show a dialog that lets the user choose which one
@@ -144,6 +150,7 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
       where site_id = ?
         and by_user_id = ?
         and deleted_at is null
+        and draft_type = ?
         and ($locatorClauses)
         order by coalesce(last_edited_at, created_at) desc"""
 
