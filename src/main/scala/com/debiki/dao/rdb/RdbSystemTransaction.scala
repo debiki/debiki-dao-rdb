@@ -850,6 +850,7 @@ class RdbSystemTransaction(val daoFactory: RdbDaoFactory, val now: When)
       delete from guest_prefs3
       delete from identities3
       delete from invites3
+      delete from api_secrets3
       delete from user_visit_stats3
       delete from user_stats3
       delete from usernames3

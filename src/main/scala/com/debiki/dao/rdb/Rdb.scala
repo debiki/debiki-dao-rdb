@@ -206,14 +206,20 @@ object Rdb {
   @deprecated("Use 'getIntOption' instead", "now")
   def getResultSetIntOption(rs: js.ResultSet, column: String): Option[Int] = {
     // rs.getInt() returns 0 instead of null.
-    var value = rs.getInt(column)
+    val value = rs.getInt(column)
     if (rs.wasNull) None
     else Some(value)
   }
 
+  def getBool(rs: js.ResultSet, column: String): Boolean = {
+    val value = rs.getBoolean(column)
+    dieIf(rs.wasNull, "TyECOLBOLISNL", s"Column boolean value is null: $column")
+    value
+  }
+
   def getOptBool(rs: js.ResultSet, column: String): Option[Boolean] = {
     // rs.getInt() returns 0 instead of null.
-    var value = rs.getBoolean(column)
+    val value = rs.getBoolean(column)
     if (rs.wasNull) None
     else Some(value)
   }

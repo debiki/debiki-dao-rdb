@@ -145,6 +145,7 @@ object RdbUtil {
     """u.USER_ID u_id,
       |u.full_name u_full_name,
       |u.USERNAME u_username,
+      |u.external_id u_external_id,
       |u.IS_APPROVED u_is_approved,
       |u.APPROVED_AT u_approved_at,
       |u.APPROVED_BY_ID u_approved_by_id,
@@ -256,6 +257,7 @@ object RdbUtil {
 
 
   val CompleteUserSelectListItemsNoUserId = i"""
+    |external_id,
     |full_name,
     |primary_email_addr,
     |about,
@@ -298,6 +300,14 @@ object RdbUtil {
     s"user_id, $CompleteUserSelectListItemsNoUserId"
 
 
+  def readMemberInclDetails(rs: js.ResultSet): MemberInclDetails = {
+    getCompleteUser(rs) match {
+      case m: MemberInclDetails => m
+      case g: Group => throw GotAGroupException(g.id)
+    }
+  }
+
+
   def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): MemberOrGroupInclDetails = {
     val theUserId = userId getOrElse rs.getInt("user_id")
     dieIf(User.isGuestId(theUserId), "DwE6P4K3")
@@ -314,6 +324,7 @@ object RdbUtil {
         trustLevel: TrustLevel): MemberInclDetails = {
     MemberInclDetails(
       id = theUserId,
+      externalId = getOptString(rs, "external_id"),
       fullName = Option(rs.getString("full_name")),
       username = rs.getString("username"),
       createdAt = getDate(rs, "created_at"),
