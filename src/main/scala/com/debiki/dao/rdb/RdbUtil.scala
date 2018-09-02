@@ -256,6 +256,7 @@ object RdbUtil {
 
 
   val CompleteUserSelectListItemsNoUserId = i"""
+    |external_id,
     |full_name,
     |primary_email_addr,
     |about,
@@ -314,6 +315,7 @@ object RdbUtil {
         trustLevel: TrustLevel): MemberInclDetails = {
     MemberInclDetails(
       id = theUserId,
+      externalId = getOptString(rs, "external_id"),
       fullName = Option(rs.getString("full_name")),
       username = rs.getString("username"),
       createdAt = getDate(rs, "created_at"),

@@ -283,7 +283,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
     try {
       runUpdate("""
         insert into users3(
-            SITE_ID, USER_ID, full_name, USERNAME, CREATED_AT,
+            SITE_ID, USER_ID, external_id, full_name, USERNAME, CREATED_AT,
             primary_email_addr, EMAIL_NOTFS, EMAIL_VERIFIED_AT, EMAIL_FOR_EVERY_NEW_POST, PASSWORD_HASH,
             IS_APPROVED, APPROVED_AT, APPROVED_BY_ID,
             COUNTRY, IS_OWNER, IS_ADMIN, IS_MODERATOR,
@@ -291,7 +291,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
             trust_level, locked_trust_level, threat_level, locked_threat_level,
             deactivated_at, deleted_at)
         values (
-            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?,
@@ -299,7 +299,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
             ?, ?, ?, ?,
             ?, ?)
         """,
-        List[AnyRef](siteId.asAnyRef, user.id.asAnyRef, user.fullName.orNullVarchar,
+        List[AnyRef](siteId.asAnyRef, user.id.asAnyRef, user.externalId.orNullVarchar,
+          user.fullName.orNullVarchar,
           user.username, user.createdAt, user.primaryEmailAddress.trimNullVarcharIfBlank,
           _toFlag(user.emailNotfPrefs), o2ts(user.emailVerifiedAt),
           user.emailForEveryNewPost.asTrueOrNull,
@@ -597,6 +598,17 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
+  def loadMemberByExternalId(externalId: String): Option[Member] = {
+    val query = s"""
+      select $UserSelectListItemsNoGuests
+      from users3 u
+      where u.site_id = ?
+        and u.external_id = ?
+        and u.user_id >= $LowestTalkToMemberId"""
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, externalId), readMember)
+  }
+
+
   def loadUser(userId: UserId): Option[User] =
     loadUsersAsSeq(userId::Nil).headOption
 
@@ -789,6 +801,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   def updateMemberInclDetails(user: MemberInclDetails): Boolean = {
     val statement = """
       update users3 set
+        external_id = ?,
         updated_at = now_utc(),
         full_name = ?,
         username = ?,
@@ -829,6 +842,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
       """
 
     val values = List(
+      user.externalId.orNullVarchar,
       user.fullName.orNullVarchar,
       user.username,
       user.primaryEmailAddress.trimNullVarcharIfBlank,
