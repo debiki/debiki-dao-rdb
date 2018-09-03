@@ -52,7 +52,7 @@ trait ApiSecretsSiteDaoMixin extends SiteTransaction {
     runUpdateSingleRow(statement, List(
       siteId.asAnyRef,
       secret.nr.asAnyRef,
-      secret.userId.asAnyRef,
+      secret.userId.orNullInt,
       secret.createdAt.asTimestamp,
       secret.deletedAt.orNullTimestamp,
       secret.isDeleted.asAnyRef,
