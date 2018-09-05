@@ -145,6 +145,7 @@ object RdbUtil {
     """u.USER_ID u_id,
       |u.full_name u_full_name,
       |u.USERNAME u_username,
+      |u.external_id u_external_id,
       |u.IS_APPROVED u_is_approved,
       |u.APPROVED_AT u_approved_at,
       |u.APPROVED_BY_ID u_approved_by_id,
