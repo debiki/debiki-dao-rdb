@@ -300,6 +300,14 @@ object RdbUtil {
     s"user_id, $CompleteUserSelectListItemsNoUserId"
 
 
+  def readMemberInclDetails(rs: js.ResultSet): MemberInclDetails = {
+    getCompleteUser(rs) match {
+      case m: MemberInclDetails => m
+      case g: Group => throw GotAGroupException(g.id)
+    }
+  }
+
+
   def getCompleteUser(rs: js.ResultSet, userId: Option[UserId] = None): MemberOrGroupInclDetails = {
     val theUserId = userId getOrElse rs.getInt("user_id")
     dieIf(User.isGuestId(theUserId), "DwE6P4K3")

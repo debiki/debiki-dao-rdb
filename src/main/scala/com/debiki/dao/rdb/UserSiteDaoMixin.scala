@@ -598,14 +598,24 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadMemberByExternalId(externalId: String): Option[Member] = {
+  def loadMemberInclDetailsByExternalId(externalId: String): Option[MemberInclDetails] = {
+    loadMemberInclDetailsImpl("external_id", externalId)
+  }
+
+
+  def loadMemberInclDetailsByEmailAddr(emailAddress: String): Option[MemberInclDetails] = {
+    loadMemberInclDetailsImpl("primary_email_addr", emailAddress)
+  }
+
+
+  def loadMemberInclDetailsImpl(columnName: String, value: AnyRef): Option[MemberInclDetails] = {
     val query = s"""
-      select $UserSelectListItemsNoGuests
+      select $CompleteUserSelectListItemsWithUserId
       from users3 u
       where u.site_id = ?
-        and u.external_id = ?
+        and u.$columnName = ?
         and u.user_id >= $LowestTalkToMemberId"""
-    runQueryFindOneOrNone(query, List(siteId.asAnyRef, externalId), readMember)
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, value.asAnyRef), readMemberInclDetails)
   }
 
 
