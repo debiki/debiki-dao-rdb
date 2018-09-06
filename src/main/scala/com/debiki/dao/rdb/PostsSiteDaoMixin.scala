@@ -217,13 +217,24 @@ trait PostsSiteDaoMixin extends SiteTransaction {
   } */
 
 
-  def loadPostsByAuthorSkipTitles(userId: UserId, limit: Int, orderBy: OrderBy): immutable.Seq[Post] = {
+  def loadPostsSkipTitles(limit: Int, orderBy: OrderBy, byUserId: Option[UserId])
+        : immutable.Seq[Post] = {
     dieIf(orderBy != OrderBy.MostRecentFirst, "EdE1DRJ7Y", "Unimpl")
+
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef)
+
+    val andAuthorEq = byUserId match {
+      case None => ""
+      case Some(authorId) =>
+        values.append(authorId.asAnyRef)
+        "and created_by_id = ?"
+    }
+
     val query = s"""
-      select * from posts3 where site_id = ? and created_by_id = ? and post_nr <> $TitleNr
+      select * from posts3 where site_id = ? $andAuthorEq and post_nr <> $TitleNr
       order by created_at desc limit $limit
       """
-    runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef), rs => {
+    runQueryFindMany(query, values.toList, rs => {
       readPost(rs)
     })
   }
