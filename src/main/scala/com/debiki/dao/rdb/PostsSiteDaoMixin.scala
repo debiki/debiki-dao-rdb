@@ -234,7 +234,7 @@ trait PostsSiteDaoMixin extends SiteTransaction {
       select * from posts3 where site_id = ? $andAuthorEq and post_nr <> $TitleNr
       order by created_at desc limit $limit
       """
-    runQueryFindMany(query, values, rs => {
+    runQueryFindMany(query, values.toList, rs => {
       readPost(rs)
     })
   }
