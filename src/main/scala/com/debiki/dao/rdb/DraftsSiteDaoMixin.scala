@@ -158,11 +158,12 @@ trait DraftsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def listDraftsRecentlyEditedFirst(userId: UserId): immutable.Seq[Draft] = {
+  override def listDraftsRecentlyEditedFirst(userId: UserId, limit: Int): immutable.Seq[Draft] = {
     val query = s"""
       -- Can use index drafts_byuser_editedat_i ?
       select * from drafts3 where site_id = ? and by_user_id = ? and deleted_at is null
       order by coalesce(last_edited_at, created_at) desc
+      limit $limit
       """
     runQueryFindMany(query, List(siteId.asAnyRef, userId.asAnyRef), readDraft)
   }
