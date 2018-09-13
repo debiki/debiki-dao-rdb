@@ -46,7 +46,7 @@ trait ApiSecretsSiteDaoMixin extends SiteTransaction {
       insert into api_secrets3 (
         site_id, secret_nr, user_id,
         created_at, deleted_at, is_deleted,
-        secret_value)
+        secret_key)
       values (?, ?, ?, ?, ?, ?, ?)
       """
     runUpdateSingleRow(statement, List(
@@ -56,7 +56,7 @@ trait ApiSecretsSiteDaoMixin extends SiteTransaction {
       secret.createdAt.asTimestamp,
       secret.deletedAt.orNullTimestamp,
       secret.isDeleted.asAnyRef,
-      secret.secretValue))
+      secret.secretKey))
   }
 
 
@@ -71,14 +71,14 @@ trait ApiSecretsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  override def loadApiSecretBySecretValue(secretValue: String): Option[ApiSecret] = {
+  override def loadApiSecretBySecretKey(secretKey: String): Option[ApiSecret] = {
     val query = s"""
       select * from api_secrets3
       where site_id = ?
-        and secret_value = ?
+        and secret_key = ?
         and not is_deleted
       """
-    runQueryFindOneOrNone(query, List(siteId.asAnyRef, secretValue), readApiSecret)
+    runQueryFindOneOrNone(query, List(siteId.asAnyRef, secretKey), readApiSecret)
   }
 
 
@@ -99,7 +99,7 @@ trait ApiSecretsSiteDaoMixin extends SiteTransaction {
       createdAt = getWhen(rs, "created_at"),
       deletedAt = getOptWhen(rs, "deleted_at"),
       isDeleted = getBool(rs, "is_deleted"),
-      secretValue = getString(rs, "secret_value"))
+      secretKey = getString(rs, "secret_key"))
   }
 
 }

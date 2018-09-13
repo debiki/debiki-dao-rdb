@@ -20,7 +20,7 @@ create table api_secrets3 (
   created_at timestamp not null,
   deleted_at timestamp,
   is_deleted boolean not null default false,
-  secret_value varchar not null,
+  secret_key varchar not null,
 
   constraint apisecrets_nr_p primary key (site_id, secret_nr),
 
@@ -30,8 +30,8 @@ create table api_secrets3 (
   constraint apisecrets_c_createdat_lte_deletedat check (created_at <= deleted_at),
   constraint apisecrets_c_deleted_has_deletedat check (not is_deleted or deleted_at is not null),
 
-  constraint apisecrets_c_value_len check (length(secret_value) between 20 and 200),
-  constraint apisecrets_c_value_alnum check (secret_value ~ '^[a-zA-Z0-9]+$')
+  constraint apisecrets_c_secretkey_len check (length(secret_key) between 20 and 200),
+  constraint apisecrets_c_secretkey_alnum check (secret_key ~ '^[a-zA-Z0-9]+$')
 );
 
 
