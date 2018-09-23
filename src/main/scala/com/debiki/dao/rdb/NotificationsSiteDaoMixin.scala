@@ -20,7 +20,7 @@ package com.debiki.dao.rdb
 import com.debiki.core._
 import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
-import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 import Rdb._
 
 
@@ -63,7 +63,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
       """
 
 
-    val values = mutable.ArrayBuffer[AnyRef](siteId.asAnyRef, notf.id.asAnyRef, d2ts(notf.createdAt),
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef, notf.id.asAnyRef, d2ts(notf.createdAt),
       notf.tyype.toInt.asAnyRef)
 
     notf match {
@@ -204,9 +204,31 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def markNotfAsSeenSkipEmail(userId: UserId, notfId: NotificationId) {
+  def markNotfsAsSeenSkipEmail(userId: UserId, anyNotfId: Option[NotificationId]) {
     // Include user id in case someone specified the notf id of another user's notification.
+    val values = ArrayBuffer[AnyRef](siteId.asAnyRef, userId.asAnyRef)
+    val notfIdEqOrNotSeeen = anyNotfId match {
+      case None =>
+        // Tested here: [TyT4KA2PU6]
+        "seen_at is null"
+      case Some(notfId) =>
+        TESTS_MISSING
+        values.append(notfId.asAnyRef)
+        "notf_id = ?"
+    }
     import NotfEmailStatus._
+
+    COULD_OPTIMIZE; EDIT_INDEX // and simplify: change this index:
+    // "dw1_ntfs_seen_createdat__i" btree ((
+    //   case
+    //     when seen_at is null then created_at + '100 years'::interval
+    //   else created_at
+    //   end) desc)
+    // to two indexes: one for  seen_at-is-null, and another where not-null,
+    // both sorted by created_at desc.
+    // And do two queries, to list notfs.
+    // That's simpler to understand than this  case-when-then — when will that index get used ??
+
     val statement = i"""
       update notifications3 set
         seen_at =
@@ -219,9 +241,9 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
             when email_status = ${Undecided.toInt} then ${Skipped.toInt}
             else email_status
           end
-      where site_id = ? and to_user_id = ? and notf_id = ?
+      where site_id = ? and to_user_id = ? and $notfIdEqOrNotSeeen
       """
-    runUpdate(statement, List(siteId.asAnyRef, userId.asAnyRef, notfId.asAnyRef))
+    runUpdate(statement, values.toList)
   }
 
 }
