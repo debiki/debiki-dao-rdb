@@ -210,13 +210,13 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def markNotfsForPostIdsAsSeenSkipEmail(userId: UserId, postIds: Set[PostId]) {
+  def markNotfsForPostIdsAsSeenSkipEmail(userId: UserId, postIds: Set[PostId]): Int = {
     markNotfsAsSeenSkipEmailImpl(userId: UserId, anyPostIds = Some(postIds))
   }
 
 
   private def markNotfsAsSeenSkipEmailImpl(userId: UserId, anyNotfId: Option[NotificationId] = None,
-        anyPostIds: Option[Set[PostId]] = None) {
+        anyPostIds: Option[Set[PostId]] = None): Int = {
 
     import NotfEmailStatus._
 
@@ -228,7 +228,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
       "notf_id = ?"
     }).orElse(anyPostIds.map({ postIds =>
       if (postIds.isEmpty)
-        return
+        return 0
       TESTS_MISSING
       values.appendAll(postIds.map(_.asAnyRef))
       s"unique_post_id in (${ makeInListFor(postIds) })"
