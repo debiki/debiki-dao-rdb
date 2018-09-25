@@ -22,6 +22,7 @@ import com.debiki.core.Prelude._
 import java.{sql => js, util => ju}
 import scala.collection.mutable.ArrayBuffer
 import Rdb._
+import RdbUtil.makeInListFor
 
 
 /** Saves and deletes notifications.
@@ -205,18 +206,36 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
 
   def markNotfsAsSeenSkipEmail(userId: UserId, anyNotfId: Option[NotificationId]) {
+    markNotfsAsSeenSkipEmailImpl(userId, anyNotfId = anyNotfId)
+  }
+
+
+  def markNotfsForPostIdsAsSeenSkipEmail(userId: UserId, postIds: Seq[PostId]) {
+    markNotfsAsSeenSkipEmailImpl(userId: UserId, anyPostIds = Some(postIds))
+  }
+
+
+  private def markNotfsAsSeenSkipEmailImpl(userId: UserId, anyNotfId: Option[NotificationId] = None,
+        anyPostIds: Option[Seq[PostId]] = None) {
+
+    import NotfEmailStatus._
+
     // Include user id in case someone specified the notf id of another user's notification.
     val values = ArrayBuffer[AnyRef](siteId.asAnyRef, userId.asAnyRef)
-    val notfIdEqOrNotSeeen = anyNotfId match {
-      case None =>
-        // Tested here: [TyT4KA2PU6]
-        "seen_at is null"
-      case Some(notfId) =>
-        TESTS_MISSING
-        values.append(notfId.asAnyRef)
-        "notf_id = ?"
-    }
-    import NotfEmailStatus._
+    val differentTests = anyNotfId.map({ notfId =>
+      TESTS_MISSING
+      values.append(notfId.asAnyRef)
+      "notf_id = ?"
+    }).orElse(anyPostIds.map({ postIds =>
+      if (postIds.isEmpty)
+        return
+      TESTS_MISSING
+      values.appendAll(postIds.map(_.asAnyRef))
+      s"unique_post_id in (${ makeInListFor(postIds) })"
+    })).getOrElse({
+      // Tested here: [TyT4KA2PU6]
+      ""
+    })
 
     COULD_OPTIMIZE; EDIT_INDEX // and simplify: change this index:
     // "dw1_ntfs_seen_createdat__i" btree ((
@@ -241,7 +260,10 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
             when email_status = ${Undecided.toInt} then ${Skipped.toInt}
             else email_status
           end
-      where site_id = ? and to_user_id = ? and $notfIdEqOrNotSeeen
+      where site_id = ?
+        and to_user_id = ?
+        and (seen_at is null or email_status = ${Undecided.toInt})
+        and ($differentTests)
       """
     runUpdate(statement, values.toList)
   }
