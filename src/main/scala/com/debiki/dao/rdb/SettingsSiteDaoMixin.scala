@@ -78,7 +78,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         double_type_password,
         beg_for_email_address,
         enable_sso,
-        debug_sso,
         sso_url,
         sso_not_approved_url,
         forum_main_view,
@@ -120,7 +119,7 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
         html_tag_css_classes)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?)
+          ?, ?, ?, ?)
       """
     val values = List(
       siteId.asAnyRef,
@@ -145,7 +144,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       editedSettings2.doubleTypePassword.getOrElse(None).orNullBoolean,
       editedSettings2.begForEmailAddress.getOrElse(None).orNullBoolean,
       editedSettings2.enableSso.getOrElse(None).orNullBoolean,
-      editedSettings2.debugSso.getOrElse(None).orNullBoolean,
       editedSettings2.ssoUrl.getOrElse(None).orNullVarchar,
       editedSettings2.ssoNotApprovedUrl.getOrElse(None).orNullVarchar,
       editedSettings2.forumMainView.getOrElse(None).orNullVarchar,
@@ -225,7 +223,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
     maybeSet("double_type_password", s.doubleTypePassword.map(_.orNullBoolean))
     maybeSet("beg_for_email_address", s.begForEmailAddress.map(_.orNullBoolean))
     maybeSet("enable_sso", s.enableSso.map(_.orNullBoolean))
-    maybeSet("debug_sso", s.debugSso.map(_.orNullBoolean))
     maybeSet("sso_url", s.ssoUrl.map(_.orNullVarchar))
     maybeSet("sso_not_approved_url", s.ssoNotApprovedUrl.map(_.orNullVarchar))
     maybeSet("forum_main_view", s.forumMainView.map(_.orNullVarchar))
@@ -305,7 +302,6 @@ trait SettingsSiteDaoMixin extends SiteTransaction {
       minPasswordLength = None,
       begForEmailAddress = getOptBoolean(rs, "beg_for_email_address"),
       enableSso = getOptBoolean(rs, "enable_sso"),
-      debugSso = getOptBoolean(rs, "debug_sso"),
       ssoUrl = getOptString(rs, "sso_url"),
       ssoNotApprovedUrl = getOptString(rs, "sso_not_approved_url"),
       forumMainView = getOptString(rs, "forum_main_view"),
