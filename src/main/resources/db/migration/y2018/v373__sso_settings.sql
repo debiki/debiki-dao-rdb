@@ -5,6 +5,14 @@ alter table settings3 add column enable_sso boolean;
 alter table settings3 add column sso_url varchar;
 alter table settings3 add column sso_not_approved_url varchar;
 
+alter table settings3 add constraint settings_c_featureflags_len check (length(feature_flags) < 10000);
+alter table settings3 add constraint settings_c_ssourl_len check (length(sso_url) < 200);
+alter table settings3 add constraint settings_c_ssonotappr_len check (length(sso_not_approved_url) < 200);
+
+alter table settings3 add constraint settings_c_enablesso_ssourl check (
+  not enable_sso or sso_url is not null);
+
+
 
 -- Forgot to add the Sysbot user to new sites.
 insert into users3(
