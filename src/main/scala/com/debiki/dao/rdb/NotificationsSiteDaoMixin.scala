@@ -229,12 +229,12 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
     }).orElse(anyPostIds.map({ postIds =>
       if (postIds.isEmpty)
         return 0
-      TESTS_MISSING
+      TESTS_MISSING // no not missing — tested here, right:  notfs-mark-seen-as-seen  TyT2AKBR0T ?
       values.appendAll(postIds.map(_.asAnyRef))
       s"unique_post_id in (${ makeInListFor(postIds) })"
     })).getOrElse({
       // Tested here: [TyT4KA2PU6]
-      ""
+      "true"
     })
 
     COULD_OPTIMIZE; EDIT_INDEX // and simplify: change this index:
