@@ -36,6 +36,3 @@ insert into user_stats3 (site_id, user_id, last_seen_at, first_seen_at, topics_n
   on conflict do nothing;
 
 
--- Really old, not in use, got replaced with settings3, ok to delete now.
--- drop table dw1_settings;
-
