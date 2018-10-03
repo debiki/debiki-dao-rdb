@@ -211,7 +211,7 @@ trait NotificationsSiteDaoMixin extends SiteTransaction {
 
 
   def markNotfsForPostIdsAsSeenSkipEmail(userId: UserId, postIds: Set[PostId]): Int = {
-    markNotfsAsSeenSkipEmailImpl(userId: UserId, anyPostIds = Some(postIds))
+    markNotfsAsSeenSkipEmailImpl(userId, anyPostIds = Some(postIds))
   }
 
 
