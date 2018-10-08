@@ -49,17 +49,8 @@ trait UserSiteDaoMixin extends SiteTransaction {
     val values = List(
       siteId.asAnyRef, invite.secretKey, invite.emailAddress,
       invite.createdById.asAnyRef, invite.createdAt.asTimestamp)
-    try {
-      runUpdate(statement, values)
-    }
-    catch {
-      case ex: js.SQLException =>
-        // Invited-email + inviter-id is unique. [5GPJ4A0]
-        if (isUniqueConstrViolation(ex) && uniqueConstrViolatedIs("dw2_invites_email__u", ex))
-          throw DbDao.DuplicateUserEmail(invite.emailAddress)
 
-        throw ex
-    }
+    runUpdate(statement, values)
   }
 
 
@@ -100,7 +91,7 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadInvite(secretKey: String): Option[Invite] = {
+  def loadInviteBySecretKey(secretKey: String): Option[Invite] = {
     val query = s"""
       select $InviteSelectListItems
       from invites3
@@ -113,29 +104,38 @@ trait UserSiteDaoMixin extends SiteTransaction {
   }
 
 
-  def loadInvites(createdById: UserId): immutable.Seq[Invite] = {
+  def loadInvitesSentTo(emailAddress: String): immutable.Seq[Invite] = {
+    loadInvitesImpl(sentToAddr = Some(emailAddress), limit = 999)
+  }
+
+
+  def loadInvitesCreatedBy(createdById: UserId): immutable.Seq[Invite] = {
     loadInvitesImpl(createdById = Some(createdById), limit = 999)
   }
 
 
   def loadAllInvites(limit: Int): immutable.Seq[Invite] = {
-    loadInvitesImpl(createdById = None, limit = limit)
+    loadInvitesImpl(limit = limit)
   }
 
 
-  private def loadInvitesImpl(createdById: Option[UserId], limit: Int): immutable.Seq[Invite] = {
+  private def loadInvitesImpl(createdById: Option[UserId] = None, sentToAddr: Option[String] = None,
+        limit: Int): immutable.Seq[Invite] = {
     val values = ArrayBuffer[AnyRef](siteId.asAnyRef)
-    val andSentBy = createdById match {
-      case Some(id) =>
-        values.append(id.asAnyRef)
-        "and created_by_id = ?"
-      case None =>
-        ""
+    val andTest = createdById map { id =>
+      values.append(id.asAnyRef)
+      "and created_by_id = ?"
+    } orElse sentToAddr map { addr =>
+      values.append(addr)
+      "and email_address = ?"
+    } getOrElse {
+      ""
     }
+
     val query = s"""
       select $InviteSelectListItems
       from invites3
-      where site_id = ? $andSentBy
+      where site_id = ? $andTest
       order by created_at desc
       """
     runQueryFindMany(query, values.toList, rs => {
