@@ -122,15 +122,15 @@ trait UserSiteDaoMixin extends SiteTransaction {
   private def loadInvitesImpl(createdById: Option[UserId] = None, sentToAddr: Option[String] = None,
         limit: Int): immutable.Seq[Invite] = {
     val values = ArrayBuffer[AnyRef](siteId.asAnyRef)
-    val andTest = createdById map { id =>
+    val andTest = createdById.map({ id =>
       values.append(id.asAnyRef)
       "and created_by_id = ?"
-    } orElse sentToAddr map { addr =>
+    }).getOrElse(sentToAddr.map({ addr =>
       values.append(addr)
       "and email_address = ?"
-    } getOrElse {
+    }).getOrElse({
       ""
-    }
+    }))
 
     val query = s"""
       select $InviteSelectListItems
